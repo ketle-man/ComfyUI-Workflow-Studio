@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Studio</title>
+    <link rel="stylesheet" href="/wfm_static/css/main.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="wfm-header">
+        <div class="wfm-header-left">
+            <h1 class="wfm-title">Workflow Studio</h1>
+        </div>
+        <nav class="wfm-tabs">
+            <button class="wfm-tab active" data-tab="workflow">Workflow</button>
+            <button class="wfm-tab" data-tab="generate">GenerateUI</button>
+            <button class="wfm-tab" data-tab="prompt">Prompt</button>
+            <button class="wfm-tab" data-tab="settings">Settings</button>
+        </nav>
+    </header>
+
+    <!-- Tab Contents -->
+    <main class="wfm-main">
+        <!-- Workflow Tab -->
+        <section id="wfm-tab-workflow" class="wfm-tab-content active">
+            <div class="wfm-toolbar">
+                <!-- Row 1: Filter buttons -->
+                <div class="wfm-toolbar-row">
+                    <div class="wfm-filter-group" id="wfm-model-filters">
+                        <button class="wfm-filter-btn" data-filter="FAVORITE">&#9733;</button>
+                        <button class="wfm-filter-btn active" data-filter="ALL">ALL</button>
+                    </div>
+                </div>
+                <!-- Row 2: Search, group filter, actions -->
+                <div class="wfm-toolbar-row">
+                    <input type="text" id="wfm-search" class="wfm-search-input" placeholder="Search...">
+                    <select id="wfm-group-filter" class="wfm-select wfm-toolbar-select">
+                        <option value="">All Groups</option>
+                    </select>
+                    <button id="wfm-list-load-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" disabled title="Select a card first">Load in GenerateUI</button>
+                    <button id="wfm-list-open-comfyui-btn" class="wfm-btn wfm-btn-sm" disabled title="Select a card first">Open in ComfyUI</button>
+                    <div class="wfm-view-btns">
+                        <button class="wfm-view-btn active" data-view="thumb" title="Thumbnail">&#8862;</button>
+                        <button class="wfm-view-btn" data-view="card" title="Card">&#9776;</button>
+                        <button class="wfm-view-btn" data-view="table" title="Table">&#8801;</button>
+                    </div>
+                    <button id="wfm-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                    <button id="wfm-reanalyze-btn" class="wfm-btn wfm-btn-sm" title="Re-analyze all workflows">Reanalyze All</button>
+                    <label class="wfm-btn wfm-btn-sm" style="cursor:pointer;">
+                        Import
+                        <input type="file" id="wfm-import-input" multiple accept=".json,.png" style="display:none">
+                    </label>
+                    <div class="wfm-badge-settings-wrap">
+                        <button id="wfm-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge color settings">&#9881;</button>
+                        <div id="wfm-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="wfm-workflow-area">
+                <div id="wfm-workflow-grid" class="wfm-grid wfm-view-thumb">
+                    <p class="wfm-placeholder">Loading workflows...</p>
+                </div>
+                <!-- Side Panel -->
+                <div id="wfm-side-panel" class="wfm-side-panel" style="display:none;">
+                    <div class="wfm-side-panel-header">
+                        <span id="wfm-side-panel-title" class="wfm-side-panel-title"></span>
+                        <button id="wfm-side-panel-close" class="wfm-side-panel-close">&times;</button>
+                    </div>
+                    <div class="wfm-side-tab-nav">
+                        <button class="wfm-side-tab-btn active" data-side-tab="json">JSON</button>
+                        <button class="wfm-side-tab-btn" data-side-tab="group">Group</button>
+                    </div>
+                    <!-- JSON Tab -->
+                    <div id="wfm-side-tab-json" class="wfm-side-tab-content active">
+                        <div class="wfm-side-json-meta">
+                            <span id="wfm-json-format-badge" class="wfm-format-badge"></span>
+                            <button id="wfm-json-copy-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Copy</button>
+                        </div>
+                        <pre id="wfm-json-content" class="wfm-json-content"></pre>
+                    </div>
+                    <!-- Group Tab -->
+                    <div id="wfm-side-tab-group" class="wfm-side-tab-content" style="display:none;">
+                        <div class="wfm-group-panel">
+                            <div class="wfm-group-section">
+                                <div class="wfm-group-section-title">Properties</div>
+                                <div id="wfm-grp-prop-name" class="wfm-group-prop">No selection</div>
+                                <div id="wfm-grp-prop-group" class="wfm-group-prop"></div>
+                            </div>
+                            <hr class="wfm-group-divider">
+                            <div class="wfm-group-section">
+                                <div class="wfm-group-section-title">Group Management</div>
+                                <div style="display:flex;gap:4px;margin-bottom:6px;">
+                                    <input type="text" id="wfm-group-name-input" class="wfm-input" placeholder="Group name" style="flex:1;min-width:0;padding:4px 6px;font-size:12px;">
+                                    <button id="wfm-group-add-btn" class="wfm-btn wfm-btn-sm" title="Create group">Add</button>
+                                </div>
+                                <div style="display:flex;gap:4px;margin-bottom:6px;">
+                                    <select id="wfm-group-select" class="wfm-select" style="flex:1;min-width:0;padding:4px 6px;font-size:12px;">
+                                        <option value="">Select group</option>
+                                    </select>
+                                    <button id="wfm-group-rename-btn" class="wfm-btn wfm-btn-sm" title="Rename group">&#9998;</button>
+                                    <button id="wfm-group-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" title="Delete group" style="padding:4px 8px;font-size:12px;">&times;</button>
+                                </div>
+                            </div>
+                            <hr class="wfm-group-divider">
+                            <div class="wfm-group-section">
+                                <div class="wfm-group-section-title">Workflow Actions</div>
+                                <button id="wfm-assign-group-btn" class="wfm-btn wfm-btn-sm" style="width:100%;margin-bottom:4px;" disabled>Add to Group</button>
+                                <button id="wfm-remove-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" style="width:100%;margin-bottom:4px;font-size:12px;" disabled>Remove from Group</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GenerateUI Tab -->
+        <section id="wfm-tab-generate" class="wfm-tab-content">
+            <!-- Header Row -->
+            <div class="wfm-toolbar">
+                <div class="wfm-toolbar-left" style="display:flex;align-items:center;gap:8px;">
+                    <span id="wfm-gen-status" class="wfm-gen-status disconnected">Disconnected</span>
+                    <button id="wfm-gen-connect-btn" class="wfm-btn wfm-btn-sm">Connect</button>
+                    <button id="wfm-gen-model-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh Models</button>
+                </div>
+                <div class="wfm-toolbar-right" style="display:flex;align-items:center;gap:8px;">
+                    <span id="wfm-gen-wf-name" style="color:var(--wfm-text-secondary);font-size:13px;">No workflow loaded</span>
+                </div>
+            </div>
+
+            <!-- Editor Layout -->
+            <div class="wfm-gen-layout">
+                <!-- Left Column: Parameter Editor -->
+                <div class="wfm-gen-left">
+                    <!-- Subtab Navigation -->
+                    <div class="wfm-gen-subtab-nav">
+                        <button class="wfm-gen-subtab-btn active" data-subtab="prompt">Prompt</button>
+                        <button class="wfm-gen-subtab-btn" data-subtab="image">Image</button>
+                        <button class="wfm-gen-subtab-btn" data-subtab="model">Model</button>
+                        <button class="wfm-gen-subtab-btn" data-subtab="settings">Settings</button>
+                        <button class="wfm-gen-subtab-btn" data-subtab="raw">Raw JSON</button>
+                    </div>
+
+                    <!-- Subtab: Prompt -->
+                    <div id="wfm-gen-subtab-prompt" class="wfm-gen-subtab-content active">
+                        <div id="wfm-gen-prompt-fields">
+                            <p class="wfm-placeholder">Load a workflow to edit prompts</p>
+                        </div>
+                    </div>
+
+                    <!-- Subtab: Image Input -->
+                    <div id="wfm-gen-subtab-image" class="wfm-gen-subtab-content">
+                        <div id="wfm-gen-image-fields">
+                            <p class="wfm-placeholder">Load a workflow to set input images</p>
+                        </div>
+                    </div>
+
+                    <!-- Subtab: Model -->
+                    <div id="wfm-gen-subtab-model" class="wfm-gen-subtab-content">
+                        <div id="wfm-gen-model-fields">
+                            <p class="wfm-placeholder">Load a workflow to edit models</p>
+                        </div>
+                    </div>
+
+                    <!-- Subtab: Settings -->
+                    <div id="wfm-gen-subtab-settings" class="wfm-gen-subtab-content">
+                        <div id="wfm-gen-settings-fields">
+                            <p class="wfm-placeholder">Load a workflow to edit settings</p>
+                        </div>
+                    </div>
+
+                    <!-- Subtab: Raw JSON -->
+                    <div id="wfm-gen-subtab-raw" class="wfm-gen-subtab-content">
+                        <div style="margin-bottom:8px;">
+                            <button id="wfm-gen-apply-raw-btn" class="wfm-btn wfm-btn-sm">Apply JSON</button>
+                        </div>
+                        <div class="wfm-json-container" style="height:500px;">
+                            <pre id="wfm-gen-raw-json-highlight" class="wfm-json-highlight"></pre>
+                            <textarea id="wfm-gen-raw-json" class="wfm-json-editor" spellcheck="false" placeholder="Paste workflow JSON here..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Generation Controls & Results -->
+                <div class="wfm-gen-right">
+                    <!-- Generation Panel -->
+                    <div class="wfm-gen-panel">
+                        <div style="display:flex;gap:8px;margin-bottom:8px;">
+                            <button id="wfm-gen-generate-btn" class="wfm-btn wfm-btn-primary" disabled style="flex:1;">Generate</button>
+                            <button id="wfm-gen-interrupt-btn" class="wfm-btn wfm-btn-danger" style="display:none;">Stop</button>
+                        </div>
+
+                        <!-- Progress -->
+                        <div class="wfm-gen-progress-container">
+                            <div class="wfm-gen-progress-track">
+                                <div id="wfm-gen-progress-bar" class="wfm-gen-progress-bar"></div>
+                            </div>
+                            <span id="wfm-gen-progress-text" class="wfm-gen-progress-text">Ready</span>
+                        </div>
+
+                        <!-- Seed -->
+                        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+                            <label style="font-size:12px;color:var(--wfm-text-secondary);white-space:nowrap;">Seed:</label>
+                            <input type="number" id="wfm-gen-seed-value" class="wfm-input" value="-1" style="width:140px;">
+                            <select id="wfm-gen-seed-mode" class="wfm-select" style="width:auto;">
+                                <option value="random">Random</option>
+                                <option value="fixed">Fixed</option>
+                                <option value="increment">Increment</option>
+                                <option value="decrement">Decrement</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Result Display -->
+                    <div class="wfm-gen-result">
+                        <img id="wfm-gen-result-img" style="display:none;max-width:100%;border-radius:6px;">
+                        <div id="wfm-gen-result-thumbs" class="wfm-gen-thumbs"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Prompt Tab -->
+        <section id="wfm-tab-prompt" class="wfm-tab-content">
+            <div class="wfm-prompt-subtab-nav">
+                <button class="wfm-prompt-subtab-btn active" data-prompt-subtab="assistant">Assistant</button>
+                <button class="wfm-prompt-subtab-btn" data-prompt-subtab="presets">Presets</button>
+            </div>
+
+            <!-- Assistant Subtab -->
+            <div id="wfm-prompt-subtab-assistant" class="wfm-prompt-subtab-content active">
+                <div class="wfm-ollama-assistant">
+                    <div class="wfm-ollama-controls">
+                        <select id="wfm-ollama-model" class="wfm-select" style="flex:1;min-width:120px;">
+                            <option value="">Loading models...</option>
+                        </select>
+                        <button id="wfm-ollama-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                        <button id="wfm-ollama-test-btn" class="wfm-btn wfm-btn-sm">Test</button>
+                        <span id="wfm-ollama-status" class="wfm-ollama-status">Disconnected</span>
+                    </div>
+                    <div class="wfm-ollama-controls" style="margin-top:6px;">
+                        <button id="wfm-ollama-attach-btn" class="wfm-btn wfm-btn-sm">Attach Image</button>
+                        <input type="file" id="wfm-ollama-file-input" accept="image/*" style="display:none">
+                        <button id="wfm-ollama-clear-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Clear Chat</button>
+                    </div>
+                    <div id="wfm-ollama-attachments" class="wfm-ollama-attachments"></div>
+                    <div id="wfm-ollama-chat" class="wfm-ollama-chat">
+                        <div class="wfm-ollama-welcome">
+                            <p>AI Assistant (Ollama)</p>
+                            <p>Attach images, generate prompts, translate, or ask for improvements.</p>
+                        </div>
+                    </div>
+                    <div class="wfm-ollama-translate-row">
+                        <span style="font-size:12px;color:var(--wfm-text-secondary);">Translate:</span>
+                        <button id="wfm-ollama-ja2en-btn" class="wfm-btn wfm-btn-sm">JA→EN</button>
+                        <button id="wfm-ollama-en2ja-btn" class="wfm-btn wfm-btn-sm">EN→JA</button>
+                        <button id="wfm-ollama-zh2en-btn" class="wfm-btn wfm-btn-sm">ZH→EN</button>
+                        <button id="wfm-ollama-en2zh-btn" class="wfm-btn wfm-btn-sm">EN→ZH</button>
+                    </div>
+                    <div class="wfm-ollama-input-wrap">
+                        <textarea id="wfm-ollama-input" class="wfm-textarea" rows="3" placeholder="Ask AI... (Enter to send, Shift+Enter for newline)"></textarea>
+                        <button id="wfm-ollama-send-btn" class="wfm-btn wfm-btn-primary" style="width:72px;align-self:flex-end;">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Presets Subtab -->
+            <div id="wfm-prompt-subtab-presets" class="wfm-prompt-subtab-content">
+                <div class="wfm-preset-panel">
+                    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
+                        <select id="wfm-preset-select" class="wfm-select" style="flex:1;">
+                            <option value="">New Preset (none selected)</option>
+                        </select>
+                        <button id="wfm-preset-apply-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Apply to GenerateUI</button>
+                        <button id="wfm-preset-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger">Delete</button>
+                    </div>
+                    <div class="wfm-form-group">
+                        <label>Preset Name</label>
+                        <input type="text" id="wfm-preset-name" class="wfm-input" placeholder="Enter preset name...">
+                    </div>
+                    <div class="wfm-form-group">
+                        <label>Positive Prompt</label>
+                        <textarea id="wfm-preset-pos" class="wfm-textarea" rows="4" placeholder="Positive prompt..."></textarea>
+                    </div>
+                    <div class="wfm-form-group">
+                        <label>Negative Prompt</label>
+                        <textarea id="wfm-preset-neg" class="wfm-textarea" rows="3" placeholder="Negative prompt..."></textarea>
+                    </div>
+                    <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="width:100%;">Save Preset</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Tab -->
+        <section id="wfm-tab-settings" class="wfm-tab-content">
+            <div class="wfm-settings-container">
+            </div>
+        </section>
+    </main>
+
+    <!-- Workflow Detail Modal -->
+    <div id="wfm-modal-overlay" class="wfm-modal-overlay" style="display:none">
+        <div class="wfm-modal">
+            <div class="wfm-modal-header">
+                <h2 id="wfm-modal-title">Workflow Detail</h2>
+                <input type="text" id="wfm-modal-title-input" class="wfm-modal-title-input" style="display:none">
+                <button class="wfm-modal-close">&times;</button>
+            </div>
+            <div class="wfm-modal-body" id="wfm-modal-body">
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="wfm-toast" class="wfm-toast" style="display:none"></div>
+
+    <script type="module" src="/wfm_static/js/app.js"></script>
+</body>
+</html>
