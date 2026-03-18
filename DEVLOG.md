@@ -85,7 +85,49 @@ ComfyUI-Workflow-Studio/
 └── data/                     # ワークフロー・メタデータ・設定
 ```
 
-### 次のステップ
-- Promptタブの実装完了 (CSS・app.js登録)
-- GitHub公開準備
-- ComfyUI Manager登録
+---
+
+## 2026-03-18: JSONシンタックスハイライト
+
+### 概要
+ワークフロータブ・生成UIタブのJSON表示にシンタックスハイライトを追加
+
+### 色分け (eagle_comic_creater_webと同じOne Atomテーマ風)
+- 黄 `#e5c07b` — name, scheduler
+- ピンク `#c678dd` — title
+- 緑 `#98c379` — width, height
+- 水色 `#61afef` — text, prompt
+- 赤 `#e06c75` — image, file
+- ベース `#abb2bf` — その他
+
+### 変更ファイル
+- `static/js/json-highlight.js` — 新規: `highlightJSON`, `syncJsonHighlight`, `syncScroll`
+- `static/js/workflow-tab.js` — サイドパネルJSON表示に `highlightJSON` 適用
+- `templates/index.html` — Raw JSONを `<pre>` + `<textarea>` レイヤー構造に変更
+- `static/js/generate-tab.js` — ハイライト同期、input/scrollイベント追加
+- `static/js/comfyui-editor.js` — `_syncRawJson` にハイライト同期追加
+- `static/css/main.css` — `.wfm-json-container`, `.wfm-json-highlight`, `.json-key-*` スタイル追加
+
+---
+
+## 2026-03-18: プロンプトタブ 中国語↔英語翻訳追加
+
+### 概要
+プロンプトタブの翻訳機能に ZH→EN / EN→ZH を追加
+
+### 変更ファイル
+- `templates/index.html` — `ZH→EN` / `EN→ZH` ボタン追加
+- `static/js/prompt-tab.js` — `sendTranslate` に `zh2en` / `en2zh` プロンプト追加、イベントリスナー追加
+
+---
+
+## 2026-03-18: v0.1.0 リリース
+
+### 概要
+GitHub公開・ComfyUI Manager登録・初回リリース
+
+### 実施内容
+- GitHub リポジトリ作成: https://github.com/ketle-man/ComfyUI-Workflow-Studio
+- README.md 作成（スクリーンショット4枚付き）
+- ComfyUI Manager 登録PR: https://github.com/Comfy-Org/ComfyUI-Manager/pull/2706
+- GitHub Release v0.1.0: https://github.com/ketle-man/ComfyUI-Workflow-Studio/releases/tag/v0.1.0
