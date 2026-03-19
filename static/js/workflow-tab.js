@@ -458,6 +458,9 @@ async function showSidePanel(wf, cardEl) {
     );
     if (cardEl) cardEl.classList.add("wfm-card-selected");
 
+    // Update thumbnail tab
+    sidePanelThumbUpdate(wf);
+
     // Update group tab
     sidePanelGroupUpdate();
 
@@ -493,6 +496,34 @@ function closeSidePanel() {
     const listOpenComfyBtn = document.getElementById("wfm-list-open-comfyui-btn");
     if (listOpenComfyBtn) { listOpenComfyBtn.disabled = true; listOpenComfyBtn.title = t("selectCardFirst"); }
     sidePanelGroupUpdate();
+}
+
+// ============================================
+// Thumbnail Tab in Side Panel
+// ============================================
+
+function sidePanelThumbUpdate(wf) {
+    const imgWrap = document.getElementById("wfm-side-thumb-img-wrap");
+    const nameEl = document.getElementById("wfm-side-thumb-name");
+    const metaEl = document.getElementById("wfm-side-thumb-meta");
+    if (!imgWrap) return;
+
+    if (wf && wf.thumbnail) {
+        imgWrap.innerHTML = `<img src="${wf.thumbnail}" alt="${wf.filename}" />`;
+    } else {
+        imgWrap.innerHTML = `<span class="wfm-side-thumb-placeholder">${t("noImage")}</span>`;
+    }
+
+    if (nameEl) {
+        nameEl.textContent = wf ? wf.filename.replace(/\.json$/, "") : "";
+    }
+    if (metaEl && wf) {
+        const badges = (wf.analysis.modelTypes || []).map((mt) => badgeHtml(mt)).join(" ");
+        const io = `P:${wf.analysis.inputs?.prompts || 0} I:${wf.analysis.inputs?.images || 0} → ${wf.analysis.outputs?.images || 0}`;
+        metaEl.innerHTML = `${badges} <span style="margin-left:4px;">${io}</span>`;
+    } else if (metaEl) {
+        metaEl.innerHTML = "";
+    }
 }
 
 // ============================================
@@ -646,7 +677,14 @@ function openDetailModal(wf) {
     const overrideText = (meta.modelTypesOverride || []).join(", ");
     const isFav = !!meta.favorite;
 
+    const thumbSrc = wf.thumbnail || "";
     const html = `
+        <div class="wfm-modal-thumb-section">
+            ${thumbSrc
+                ? `<img src="${thumbSrc}" class="wfm-modal-thumb-img" />`
+                : `<div class="wfm-modal-thumb-placeholder">${t("noImage")}</div>`
+            }
+        </div>
         <div class="wfm-modal-two-col">
             <div class="wfm-modal-left">
                 <section>
@@ -893,6 +931,14 @@ function openDetailModal(wf) {
                 const cached = state.workflows.find((w) => w.filename === wf.filename);
                 if (cached) cached.thumbnail = newUrl;
                 renderGrid();
+                sidePanelThumbUpdate(wf);
+                // Update modal thumbnail if visible
+                const modalThumbImg = document.querySelector(".wfm-modal-thumb-img");
+                if (modalThumbImg) modalThumbImg.src = newUrl;
+                const modalThumbPlaceholder = document.querySelector(".wfm-modal-thumb-placeholder");
+                if (modalThumbPlaceholder) {
+                    modalThumbPlaceholder.outerHTML = `<img src="${newUrl}" class="wfm-modal-thumb-img" />`;
+                }
                 showToast(t("thumbnailChanged"), "success");
             } catch (err) {
                 showToast(t("thumbnailError") + ": " + err.message, "error");

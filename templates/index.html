@@ -69,11 +69,24 @@
                         <button id="wfm-side-panel-close" class="wfm-side-panel-close">&times;</button>
                     </div>
                     <div class="wfm-side-tab-nav">
-                        <button class="wfm-side-tab-btn active" data-side-tab="json">JSON</button>
+                        <button class="wfm-side-tab-btn active" data-side-tab="thumb">Thumbnail</button>
+                        <button class="wfm-side-tab-btn" data-side-tab="json">JSON</button>
                         <button class="wfm-side-tab-btn" data-side-tab="group">Group</button>
                     </div>
+                    <!-- Thumbnail Tab -->
+                    <div id="wfm-side-tab-thumb" class="wfm-side-tab-content active">
+                        <div class="wfm-side-thumb-container">
+                            <div id="wfm-side-thumb-img-wrap" class="wfm-side-thumb-img-wrap">
+                                <span class="wfm-side-thumb-placeholder">No thumbnail</span>
+                            </div>
+                            <div class="wfm-side-thumb-info">
+                                <div id="wfm-side-thumb-name" class="wfm-side-thumb-name"></div>
+                                <div id="wfm-side-thumb-meta" class="wfm-side-thumb-meta"></div>
+                            </div>
+                        </div>
+                    </div>
                     <!-- JSON Tab -->
-                    <div id="wfm-side-tab-json" class="wfm-side-tab-content active">
+                    <div id="wfm-side-tab-json" class="wfm-side-tab-content" style="display:none;">
                         <div class="wfm-side-json-meta">
                             <span id="wfm-json-format-badge" class="wfm-format-badge"></span>
                             <button id="wfm-json-copy-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Copy</button>

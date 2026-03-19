@@ -27,6 +27,9 @@ def setup_routes(app: web.Application):
     app.router.add_post(
         "/api/wfm/workflows/change-thumbnail", handle_change_thumbnail
     )
+    app.router.add_post(
+        "/api/wfm/workflows/save-canvas-image", handle_save_canvas_image
+    )
 
 
 async def handle_list(request: web.Request) -> web.Response:
@@ -154,6 +157,44 @@ async def handle_reanalyze_all(request: web.Request) -> web.Response:
         return web.json_response(result)
     except Exception as e:
         logger.error("Error reanalyzing workflows: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_save_canvas_image(request: web.Request) -> web.Response:
+    """POST /api/wfm/workflows/save-canvas-image - Import canvas PNG as workflow + thumbnail."""
+    try:
+        reader = await request.multipart()
+        filename = None
+        image_data = None
+
+        while True:
+            part = await reader.next()
+            if part is None:
+                break
+            if part.name == "filename":
+                filename = (await part.read()).decode("utf-8")
+            elif part.name == "image":
+                image_data = await part.read()
+
+        if not filename or not _service._validate_filename(filename):
+            return web.json_response({"error": "invalid filename"}, status=400)
+        if image_data is None:
+            return web.json_response({"error": "image required"}, status=400)
+
+        # Use import_files to extract workflow from PNG and save both JSON + thumbnail
+        stem = filename[:-5] if filename.endswith(".json") else filename
+        png_name = stem + ".png"
+        results = await asyncio.to_thread(
+            _service.import_files, [(png_name, image_data)]
+        )
+
+        if results and results[0].get("status") == "success":
+            return web.json_response({"status": "ok", "filename": results[0].get("name", filename)})
+        else:
+            error_msg = results[0].get("message", "Import failed") if results else "Import failed"
+            return web.json_response({"error": error_msg}, status=400)
+    except Exception as e:
+        logger.error("Error saving canvas image: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
