@@ -302,18 +302,6 @@ function renderPresets() {
 // ============================================
 
 export function initPromptTab() {
-    // Subtab switching
-    document.querySelectorAll(".wfm-prompt-subtab-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            document.querySelectorAll(".wfm-prompt-subtab-btn").forEach((b) => b.classList.remove("active"));
-            btn.classList.add("active");
-            const tab = btn.dataset.promptSubtab;
-            document.querySelectorAll(".wfm-prompt-subtab-content").forEach((c) => {
-                c.classList.toggle("active", c.id === `wfm-prompt-subtab-${tab}`);
-            });
-        });
-    });
-
     // Ollama model refresh
     async function refreshModels() {
         const select = document.getElementById("wfm-ollama-model");

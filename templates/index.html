@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Workflow Studio</title>
+    <link rel="icon" type="image/svg+xml" href="/wfm_static/favicon.svg">
     <link rel="stylesheet" href="/wfm_static/css/main.css">
 </head>
 <body>
@@ -222,71 +223,70 @@
 
         <!-- Prompt Tab -->
         <section id="wfm-tab-prompt" class="wfm-tab-content">
-            <div class="wfm-prompt-subtab-nav">
-                <button class="wfm-prompt-subtab-btn active" data-prompt-subtab="assistant">Assistant</button>
-                <button class="wfm-prompt-subtab-btn" data-prompt-subtab="presets">Presets</button>
-            </div>
-
-            <!-- Assistant Subtab -->
-            <div id="wfm-prompt-subtab-assistant" class="wfm-prompt-subtab-content active">
-                <div class="wfm-ollama-assistant">
-                    <div class="wfm-ollama-controls">
-                        <select id="wfm-ollama-model" class="wfm-select" style="flex:1;min-width:120px;">
-                            <option value="">Loading models...</option>
-                        </select>
-                        <button id="wfm-ollama-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
-                        <button id="wfm-ollama-test-btn" class="wfm-btn wfm-btn-sm">Test</button>
-                        <span id="wfm-ollama-status" class="wfm-ollama-status">Disconnected</span>
-                    </div>
-                    <div class="wfm-ollama-controls" style="margin-top:6px;">
-                        <button id="wfm-ollama-attach-btn" class="wfm-btn wfm-btn-sm">Attach Image</button>
-                        <input type="file" id="wfm-ollama-file-input" accept="image/*" style="display:none">
-                        <button id="wfm-ollama-clear-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Clear Chat</button>
-                    </div>
-                    <div id="wfm-ollama-attachments" class="wfm-ollama-attachments"></div>
-                    <div id="wfm-ollama-chat" class="wfm-ollama-chat">
-                        <div class="wfm-ollama-welcome">
-                            <p>AI Assistant (Ollama)</p>
-                            <p>Attach images, generate prompts, translate, or ask for improvements.</p>
+            <div class="wfm-prompt-split">
+                <!-- Left: Assistant -->
+                <div class="wfm-prompt-split-left">
+                    <div class="wfm-prompt-split-header">Assistant</div>
+                    <div class="wfm-ollama-assistant">
+                        <div class="wfm-ollama-controls">
+                            <select id="wfm-ollama-model" class="wfm-select" style="flex:1;min-width:120px;">
+                                <option value="">Loading models...</option>
+                            </select>
+                            <button id="wfm-ollama-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                            <button id="wfm-ollama-test-btn" class="wfm-btn wfm-btn-sm">Test</button>
+                            <span id="wfm-ollama-status" class="wfm-ollama-status">Disconnected</span>
+                        </div>
+                        <div class="wfm-ollama-controls" style="margin-top:6px;">
+                            <button id="wfm-ollama-attach-btn" class="wfm-btn wfm-btn-sm">Attach Image</button>
+                            <input type="file" id="wfm-ollama-file-input" accept="image/*" style="display:none">
+                            <button id="wfm-ollama-clear-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Clear Chat</button>
+                        </div>
+                        <div id="wfm-ollama-attachments" class="wfm-ollama-attachments"></div>
+                        <div id="wfm-ollama-chat" class="wfm-ollama-chat">
+                            <div class="wfm-ollama-welcome">
+                                <p>AI Assistant (Ollama)</p>
+                                <p>Attach images, generate prompts, translate, or ask for improvements.</p>
+                            </div>
+                        </div>
+                        <div class="wfm-ollama-translate-row">
+                            <span style="font-size:12px;color:var(--wfm-text-secondary);">Translate:</span>
+                            <button id="wfm-ollama-ja2en-btn" class="wfm-btn wfm-btn-sm">JA→EN</button>
+                            <button id="wfm-ollama-en2ja-btn" class="wfm-btn wfm-btn-sm">EN→JA</button>
+                            <button id="wfm-ollama-zh2en-btn" class="wfm-btn wfm-btn-sm">ZH→EN</button>
+                            <button id="wfm-ollama-en2zh-btn" class="wfm-btn wfm-btn-sm">EN→ZH</button>
+                        </div>
+                        <div class="wfm-ollama-input-wrap">
+                            <textarea id="wfm-ollama-input" class="wfm-textarea" rows="3" placeholder="Ask AI... (Enter to send, Shift+Enter for newline)"></textarea>
+                            <button id="wfm-ollama-send-btn" class="wfm-btn wfm-btn-primary" style="width:72px;align-self:flex-end;">Send</button>
                         </div>
                     </div>
-                    <div class="wfm-ollama-translate-row">
-                        <span style="font-size:12px;color:var(--wfm-text-secondary);">Translate:</span>
-                        <button id="wfm-ollama-ja2en-btn" class="wfm-btn wfm-btn-sm">JA→EN</button>
-                        <button id="wfm-ollama-en2ja-btn" class="wfm-btn wfm-btn-sm">EN→JA</button>
-                        <button id="wfm-ollama-zh2en-btn" class="wfm-btn wfm-btn-sm">ZH→EN</button>
-                        <button id="wfm-ollama-en2zh-btn" class="wfm-btn wfm-btn-sm">EN→ZH</button>
-                    </div>
-                    <div class="wfm-ollama-input-wrap">
-                        <textarea id="wfm-ollama-input" class="wfm-textarea" rows="3" placeholder="Ask AI... (Enter to send, Shift+Enter for newline)"></textarea>
-                        <button id="wfm-ollama-send-btn" class="wfm-btn wfm-btn-primary" style="width:72px;align-self:flex-end;">Send</button>
-                    </div>
                 </div>
-            </div>
 
-            <!-- Presets Subtab -->
-            <div id="wfm-prompt-subtab-presets" class="wfm-prompt-subtab-content">
-                <div class="wfm-preset-panel">
-                    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
-                        <select id="wfm-preset-select" class="wfm-select" style="flex:1;">
-                            <option value="">New Preset (none selected)</option>
-                        </select>
-                        <button id="wfm-preset-apply-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Apply to GenerateUI</button>
-                        <button id="wfm-preset-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger">Delete</button>
+                <!-- Right: Presets -->
+                <div class="wfm-prompt-split-right">
+                    <div class="wfm-prompt-split-header">Presets</div>
+                    <div class="wfm-preset-panel">
+                        <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
+                            <select id="wfm-preset-select" class="wfm-select" style="flex:1;">
+                                <option value="">New Preset (none selected)</option>
+                            </select>
+                            <button id="wfm-preset-apply-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Apply to GenerateUI</button>
+                            <button id="wfm-preset-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger">Delete</button>
+                        </div>
+                        <div class="wfm-form-group">
+                            <label>Preset Name</label>
+                            <input type="text" id="wfm-preset-name" class="wfm-input" placeholder="Enter preset name...">
+                        </div>
+                        <div class="wfm-form-group">
+                            <label>Positive Prompt</label>
+                            <textarea id="wfm-preset-pos" class="wfm-textarea" rows="4" placeholder="Positive prompt..."></textarea>
+                        </div>
+                        <div class="wfm-form-group">
+                            <label>Negative Prompt</label>
+                            <textarea id="wfm-preset-neg" class="wfm-textarea" rows="3" placeholder="Negative prompt..."></textarea>
+                        </div>
+                        <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="width:100%;">Save Preset</button>
                     </div>
-                    <div class="wfm-form-group">
-                        <label>Preset Name</label>
-                        <input type="text" id="wfm-preset-name" class="wfm-input" placeholder="Enter preset name...">
-                    </div>
-                    <div class="wfm-form-group">
-                        <label>Positive Prompt</label>
-                        <textarea id="wfm-preset-pos" class="wfm-textarea" rows="4" placeholder="Positive prompt..."></textarea>
-                    </div>
-                    <div class="wfm-form-group">
-                        <label>Negative Prompt</label>
-                        <textarea id="wfm-preset-neg" class="wfm-textarea" rows="3" placeholder="Negative prompt..."></textarea>
-                    </div>
-                    <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="width:100%;">Save Preset</button>
                 </div>
             </div>
         </section>

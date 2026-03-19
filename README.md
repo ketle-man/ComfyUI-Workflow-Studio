@@ -39,6 +39,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
 ### Prompt Tab
+- **Split-panel layout** — AI assistant and presets displayed side-by-side for simultaneous use
 - **AI chat assistant** — powered by [Ollama](https://ollama.com/), generate and refine prompts interactively
 - **Image attachment** — attach reference images for vision-capable models
 - **Translation** — JA/EN/ZH translation buttons for multilingual prompt creation
@@ -137,6 +138,7 @@ ComfyUI-Workflow-Studio/
 ├── templates/
 │   └── index.html               # SPA template
 ├── static/
+│   ├── favicon.svg              # Browser tab icon (W+S Wave)
 │   ├── css/main.css             # Styles
 │   └── js/
 │       ├── app.js               # App initialization & routing

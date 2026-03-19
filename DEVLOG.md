@@ -1,5 +1,30 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-19: v0.1.1 リリース
+
+### 概要
+- ファビコン追加
+- プロンプトタブをサブタブ切り替え方式から左右2分割レイアウトに変更
+
+### 変更内容
+
+#### ファビコン追加
+- `static/favicon.svg` — 起動ボタンと同じ W + S Wave デザインの SVG ファビコンを新規作成
+- `templates/index.html` — `<link rel="icon">` タグ追加
+
+#### プロンプトタブ 2分割レイアウト
+- **課題:** Assistant / Presets のサブタブ切り替え方式では画面幅が広い場合に視点移動が大きく使いづらい
+- **対応:** サブタブナビゲーションを廃止し、左パネル（AIアシスタント）・右パネル（プリセット）の同時表示レイアウトに変更
+- `templates/index.html` — サブタブ構造を `.wfm-prompt-split` 左右分割構造に変更
+- `static/css/main.css` — `.wfm-prompt-subtab-*` スタイルを `.wfm-prompt-split` / `.wfm-prompt-split-header` に置換
+- `static/js/prompt-tab.js` — サブタブ切り替えイベントリスナー削除
+- `static/js/app.js` — 翻訳対象をサブタブボタンからパネルヘッダーに変更
+
+### スクリーンショット
+![Prompt Tab](docs/screenshot_prompt.png)
+
+---
+
 ## 2026-03-18: プロジェクトリネーム & アイコン適用
 
 ### 概要

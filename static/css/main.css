@@ -1315,46 +1315,34 @@ body {
    ============================================ */
 
 /* Subtab navigation */
-.wfm-prompt-subtab-nav {
+.wfm-prompt-split {
     display: flex;
+    flex: 1;
+    min-height: 0;
     gap: 0;
-    border-bottom: 1px solid var(--wfm-border);
-    background: var(--wfm-surface);
-    flex-shrink: 0;
 }
 
-.wfm-prompt-subtab-btn {
+.wfm-prompt-split-left,
+.wfm-prompt-split-right {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.wfm-prompt-split-left {
+    border-right: 1px solid var(--wfm-border);
+}
+
+.wfm-prompt-split-header {
     padding: 8px 12px;
     font-size: 13px;
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: transparent;
-    color: var(--wfm-text-secondary);
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-}
-
-.wfm-prompt-subtab-btn:hover {
-    color: var(--wfm-text);
-}
-
-.wfm-prompt-subtab-btn.active {
-    color: var(--wfm-text);
-    border-bottom-color: var(--wfm-primary);
     font-weight: bold;
-}
-
-.wfm-prompt-subtab-content {
-    display: none;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-    min-height: 0;
-}
-
-.wfm-prompt-subtab-content.active {
-    display: flex;
+    color: var(--wfm-text);
+    background: var(--wfm-surface);
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
 }
 
 /* Ollama Assistant */
