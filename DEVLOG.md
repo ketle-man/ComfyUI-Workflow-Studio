@@ -1,5 +1,44 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-19: v0.1.2 リリース
+
+### 概要
+- キャンバススナップショット機能追加（ComfyUIトップバーにカメラボタン）
+- ワークフローサイドパネル・モーダルにサムネイルプレビュー追加
+
+### 変更内容
+
+#### Canvas Snapshot（キャンバススナップショット）
+- **課題:** ワークフローのキャンバス画像を保存するにはComfyUIのエクスポート機能を使い手動でファイル管理する必要があった
+- **対応:** ComfyUIトップバーにカメラボタンを追加し、ワンクリックでキャンバスをPNGキャプチャ→ワークフローデータフォルダに自動保存
+- `web/comfyui/top_menu_extension.js`:
+  - カメラアイコンボタン追加（actionBarButtons API / legacy ComfyButtonGroup 両対応）
+  - `captureCanvasSnapshot()` — LiteGraphキャンバスの状態保存→ノード範囲計算→レンダリング→Blob化→復元
+  - PNG tEXtチャンク埋め込み (`n2b`, `joinArrayBuffer`, `crc32`, `embedWorkflowInPng`) — ComfyUIのドラッグ＆ドロップインポート互換
+  - タイムスタンプファイル名 `wf_YYYYMMDDHHmmss.json` 形式で自動生成
+- `py/routes/workflow_routes.py`:
+  - `POST /api/wfm/workflows/save-canvas-image` ルート追加
+  - `import_files` を利用してPNGからワークフローJSON抽出＋サムネイル保存＋自動インポート
+- 参考実装: [pythongosssss/ComfyUI-Custom-Scripts](https://github.com/pythongosssss/ComfyUI-Custom-Scripts) の workflowImage.js
+
+#### サムネイルプレビュー
+- `templates/index.html` — サイドパネルにThumbnailタブ追加（デフォルトアクティブ）
+- `static/js/workflow-tab.js`:
+  - `sidePanelThumbUpdate()` — 選択ワークフローのサムネイル・メタ情報表示
+  - モーダル上部にサムネイルセクション追加
+  - サムネイル変更時にサイドパネル・モーダル両方を同期更新
+- `static/css/main.css` — `.wfm-side-thumb-*` / `.wfm-modal-thumb-*` スタイル追加
+
+### スクリーンショット
+| Workflow Tab | ComfyUI Top Bar |
+|:---:|:---:|
+| ![Workflow](docs/screenshot_workflow.png) | ![TopBar](docs/screenshot_comfyui_topbar.png) |
+
+### リリース
+- GitHub Release v0.1.2: https://github.com/ketle-man/ComfyUI-Workflow-Studio/releases/tag/v0.1.2
+
+---
+
 ## 2026-03-19: v0.1.1 リリース
 
 ### 概要
