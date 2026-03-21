@@ -400,6 +400,30 @@ export function initPromptTab() {
         }
     });
 
+    // Copy positive prompt to clipboard
+    document.getElementById("wfm-preset-copy-pos-btn")?.addEventListener("click", () => {
+        const text = presetPos?.value || "";
+        if (!text.trim()) {
+            showToast(t("noTextToCopy"), "error");
+            return;
+        }
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(t("copiedToClipboard"), "success");
+        });
+    });
+
+    // Copy negative prompt to clipboard
+    document.getElementById("wfm-preset-copy-neg-btn")?.addEventListener("click", () => {
+        const text = presetNeg?.value || "";
+        if (!text.trim()) {
+            showToast(t("noTextToCopy"), "error");
+            return;
+        }
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(t("copiedToClipboard"), "success");
+        });
+    });
+
     // Save preset
     document.getElementById("wfm-preset-save-btn")?.addEventListener("click", () => {
         const name = presetName?.value.trim();

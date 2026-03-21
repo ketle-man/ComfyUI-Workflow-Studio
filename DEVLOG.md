@@ -1,5 +1,37 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-22: v0.1.4 App形式対応・プリセットコピー・分析バグ修正
+
+### 概要
+- ComfyUI App形式（`.app.json`）ワークフローの識別・表示対応
+- プリセットタブにポジティブ/ネガティブプロンプトのクリップボードコピーボタン追加
+- ワークフロー分析のクラッシュバグ修正
+
+### 変更内容
+
+#### App形式ワークフロー対応
+- **背景:** ComfyUIの最新アップデートでAppモード（ノードを簡略化したWebアプリ風UI）が追加され、`.app.json`拡張子で保存される
+- **対応:**
+  - `static/js/comfyui-workflow.js` — `detectFormat()`にファイル名ベースのApp形式判定を追加
+  - `static/js/workflow-tab.js` — サイドパネルJSONタブのフォーマットバッジに「App形式」表示を追加
+  - `static/js/generate-tab.js` — App形式ワークフローの生成UI読み込みをブロックし、「ComfyUIで開く」への誘導メッセージを表示
+  - `static/css/main.css` — `.wfm-format-badge--app` スタイル追加（オレンジ色）
+  - `static/js/i18n.js` — `appFormat` / `appFormatNotSupported` 翻訳キー追加（EN/JA/ZH）
+
+#### プリセット クリップボードコピーボタン
+- **課題:** プリセットのプロンプトをComfyUI本体で使う際に手動コピーが必要だった
+- **対応:**
+  - `templates/index.html` — プリセット保存ボタン行に「PP コピー」「NP コピー」ボタンを追加（flex:2/2/1比率）
+  - `static/js/prompt-tab.js` — クリップボードコピー処理（`navigator.clipboard.writeText`）追加
+  - `static/js/app.js` — コピーボタンのi18n適用
+  - `static/js/i18n.js` — `copyPositivePrompt` / `copyNegativePrompt` / `copiedToClipboard` / `noTextToCopy` 翻訳キー追加
+
+#### ワークフロー分析バグ修正
+- **問題:** UI形式ワークフローの`widgets_values[0]`が整数（例: EmptyLatentImageの`768`）の場合、`.lower()`で`AttributeError`が発生し、例外キャッチにより全分析結果がゼロになる
+- **修正:** `py/services/workflow_analyzer.py` — `_model_name_from_ui_node()`に`isinstance(val, str)`型チェックを追加
+
+---
+
 ## 2026-03-21: v0.1.3 ヘルプ＆サポートタブ追加
 
 ### 概要

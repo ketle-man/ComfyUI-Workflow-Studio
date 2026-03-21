@@ -1018,6 +1018,11 @@ body {
     color: var(--wfm-primary);
 }
 
+.wfm-format-badge--app {
+    background: rgba(255, 165, 0, 0.15);
+    color: #ff9800;
+}
+
 .wfm-json-content {
     flex: 1;
     overflow: auto;

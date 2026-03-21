@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.1.3-green)
+![Version](https://img.shields.io/badge/version-0.1.4-green)
 
 ## Screenshots
 
@@ -56,6 +56,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Image attachment** — attach reference images for vision-capable models
 - **Translation** — JA/EN/ZH translation buttons for multilingual prompt creation
 - **Prompt presets** — save/load reusable prompt templates (positive & negative)
+- **Clipboard copy** — copy positive/negative prompts individually for use in ComfyUI
 - **Apply to GenerateUI** — send prompts directly to the generation interface
 
 ### Settings Tab
@@ -139,6 +140,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.1.4
+- **App format support** — detect `.app.json` workflows (ComfyUI App mode), show "App Format" badge, block loading in GenerateUI with guidance message
+- **Preset clipboard copy** — added PP Copy / NP Copy buttons to copy positive/negative prompts to clipboard
+- **Analysis bugfix** — fixed workflow analysis crash when `widgets_values` contains non-string values (e.g. integers)
 
 ### v0.1.3
 - Added **Help & Support tab** — feature list, tips, and support links (GitHub, Ko-fi)

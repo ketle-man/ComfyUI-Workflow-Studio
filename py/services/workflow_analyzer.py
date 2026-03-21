@@ -7,7 +7,8 @@ import re
 def _model_name_from_ui_node(node):
     """Extract model filename from UI format node (lowercase)."""
     widgets = node.get("widgets_values", [])
-    return (widgets[0] if widgets else "").lower()
+    val = widgets[0] if widgets else ""
+    return val.lower() if isinstance(val, str) else ""
 
 
 def _model_name_from_api_node(node):

@@ -72,9 +72,12 @@ function updateStatus(connected) {
 
 export async function loadWorkflowIntoEditor(workflow, filename) {
     let apiWorkflow = workflow;
-    const format = comfyWorkflow.detectFormat(workflow);
+    const format = comfyWorkflow.detectFormat(workflow, filename);
 
-    if (format === "ui") {
+    if (format === "app") {
+        showToast(t("appFormatNotSupported"), "error");
+        return;
+    } else if (format === "ui") {
         apiWorkflow = await comfyWorkflow.convertUiToApi(workflow);
     } else if (format === "unknown") {
         showToast("Unknown workflow format", "error");

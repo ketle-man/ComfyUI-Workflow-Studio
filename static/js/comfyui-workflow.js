@@ -250,8 +250,10 @@ function _flattenSubgraphs(workflow) {
 }
 
 export const comfyWorkflow = {
-    detectFormat(workflow) {
+    detectFormat(workflow, filename) {
         if (!workflow || typeof workflow !== "object") return "unknown";
+        // App format: detected by .app.json filename extension
+        if (filename && /\.app\.json$/i.test(filename)) return "app";
         if (Array.isArray(workflow.nodes) && workflow.links !== undefined) return "ui";
         // API format: top-level keys are node IDs with class_type
         const keys = Object.keys(workflow);

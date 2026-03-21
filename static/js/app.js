@@ -167,6 +167,10 @@ function applyI18nToHtml() {
     if (presetDeleteBtn) presetDeleteBtn.textContent = t("deletePreset");
     const presetSaveBtn = document.getElementById("wfm-preset-save-btn");
     if (presetSaveBtn) presetSaveBtn.textContent = t("savePreset");
+    const presetCopyPosBtn = document.getElementById("wfm-preset-copy-pos-btn");
+    if (presetCopyPosBtn) presetCopyPosBtn.textContent = t("copyPositivePrompt");
+    const presetCopyNegBtn = document.getElementById("wfm-preset-copy-neg-btn");
+    if (presetCopyNegBtn) presetCopyNegBtn.textContent = t("copyNegativePrompt");
 
     // Group panel labels
     const propTitle = document.querySelector("#wfm-side-tab-group .wfm-group-section-title");

@@ -468,8 +468,9 @@ async function showSidePanel(wf, cardEl) {
     try {
         const data = await getRawWorkflow(wf.filename);
         if (badgeEl) {
-            const fmt = comfyWorkflow.detectFormat(data);
-            badgeEl.textContent = fmt === "ui" ? t("uiFormat") : t("apiFormat");
+            const fmt = comfyWorkflow.detectFormat(data, wf.filename);
+            const formatLabels = { ui: t("uiFormat"), api: t("apiFormat"), app: t("appFormat") };
+            badgeEl.textContent = formatLabels[fmt] || fmt;
             badgeEl.className = "wfm-format-badge wfm-format-badge--" + fmt;
         }
         const jsonStr = JSON.stringify(data, null, 2);

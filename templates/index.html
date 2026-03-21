@@ -299,7 +299,11 @@
                             <label>Negative Prompt</label>
                             <textarea id="wfm-preset-neg" class="wfm-textarea" rows="3" placeholder="Negative prompt..."></textarea>
                         </div>
-                        <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="width:100%;">Save Preset</button>
+                        <div style="display:flex; gap:4px;">
+                            <button id="wfm-preset-copy-pos-btn" class="wfm-btn" style="flex:2;" title="Copy Positive Prompt">PP Copy</button>
+                            <button id="wfm-preset-copy-neg-btn" class="wfm-btn" style="flex:2;" title="Copy Negative Prompt">NP Copy</button>
+                            <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Save</button>
+                        </div>
                     </div>
                 </div>
             </div>
