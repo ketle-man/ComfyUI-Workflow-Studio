@@ -1,5 +1,33 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-21: v0.1.3 ヘルプ＆サポートタブ追加
+
+### 概要
+- ヘルプ＆サポートタブを新規追加（機能一覧 + サポートリンク）
+
+### 変更内容
+
+#### ヘルプ＆サポートタブ
+- **課題:** プラグインの機能概要を確認する場所がなく、サポートへの導線もなかった
+- **対応:** 新しいメインタブ「Help」を追加し、機能一覧とサポートセクションを設置
+
+##### 機能一覧セクション
+- 各タブ（Workflow / GenerateUI / Prompt / Settings）の主要機能をカード形式で表示
+- Tipsセクション（ドラッグ＆ドロップ、お気に入り、デフォルトワークフロー）
+
+##### サポートセクション
+- GitHubリンク（バグ報告・機能リクエスト・コントリビュート）
+- Ko-fiリンク（開発支援）
+- SVGアイコン付きのリンクカード
+
+#### 変更ファイル
+- `templates/index.html` — Helpタブボタン追加、ヘルプ＆サポートセクションのHTML構造
+- `static/js/i18n.js` — 3言語（EN/JA/ZH）のヘルプ関連翻訳キー30項目追加
+- `static/js/app.js` — タブマップにhelp追加、`applyI18nToHtml()`にヘルプタブのi18n適用ロジック追加
+- `static/css/main.css` — `.wfm-help-*` スタイル追加（コンテナ、セクション、カード、リンク）
+
+---
+
 ## 2026-03-19: v0.1.2 リリース
 
 ### 概要
@@ -143,7 +171,7 @@ ComfyUI-Workflow-Studio/
 │   ├── config.py             # パス設定
 │   ├── routes/               # APIルート
 │   └── services/             # ビジネスロジック
-├── templates/index.html      # SPA (Workflow/GenerateUI/Prompt/Settings)
+├── templates/index.html      # SPA (Workflow/GenerateUI/Prompt/Settings/Help)
 ├── static/                   # CSS/JS
 ├── web/comfyui/              # ComfyUIメニュー拡張
 └── data/                     # ワークフロー・メタデータ・設定

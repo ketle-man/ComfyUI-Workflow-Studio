@@ -1733,3 +1733,123 @@ body {
     font-size: 13px;
     color: var(--wfm-text-secondary);
 }
+
+/* ============================================
+   Help & Support Tab
+   ============================================ */
+
+.wfm-help-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 24px 20px;
+    overflow-y: auto;
+    height: 100%;
+}
+
+.wfm-help-section {
+    margin-bottom: 32px;
+}
+
+.wfm-help-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--wfm-text);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--wfm-primary);
+}
+
+.wfm-help-card {
+    background: var(--wfm-surface);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius);
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.wfm-help-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--wfm-primary);
+    margin-bottom: 8px;
+}
+
+.wfm-help-card ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.wfm-help-card li {
+    font-size: 13px;
+    color: var(--wfm-text-secondary);
+    line-height: 1.8;
+}
+
+.wfm-help-support-card {
+    text-align: center;
+    padding: 24px;
+}
+
+.wfm-help-support-card > p {
+    font-size: 14px;
+    color: var(--wfm-text-secondary);
+    margin-bottom: 20px;
+}
+
+.wfm-help-links {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.wfm-help-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    border-radius: var(--wfm-radius);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    min-width: 260px;
+}
+
+.wfm-help-link-github {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--wfm-border);
+    color: var(--wfm-text);
+}
+
+.wfm-help-link-github:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--wfm-text-secondary);
+}
+
+.wfm-help-link-kofi {
+    background: rgba(255, 95, 95, 0.08);
+    border: 1px solid rgba(255, 95, 95, 0.3);
+    color: var(--wfm-text);
+}
+
+.wfm-help-link-kofi:hover {
+    background: rgba(255, 95, 95, 0.15);
+    border-color: rgba(255, 95, 95, 0.5);
+}
+
+.wfm-help-link-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.wfm-help-link-desc {
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+    margin-top: 2px;
+}
+
+.wfm-help-thanks {
+    font-size: 13px;
+    color: var(--wfm-text-secondary);
+    font-style: italic;
+}

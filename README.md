@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.1.2-green)
+![Version](https://img.shields.io/badge/version-0.1.3-green)
 
 ## Screenshots
 
@@ -17,9 +17,9 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 |:---:|:---:|
 | ![Prompt](docs/screenshot_prompt.png) | ![Settings](docs/screenshot_settings.png) |
 
-| ComfyUI Integration |
-|:---:|
-| ![ComfyUI Top Bar](docs/screenshot_comfyui_topbar.png) |
+| Help & Support Tab | ComfyUI Integration |
+|:---:|:---:|
+| ![Help](docs/screenshot_help.png) | ![ComfyUI Top Bar](docs/screenshot_comfyui_topbar.png) |
 
 ---
 
@@ -64,6 +64,11 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Ollama connection** — configure Ollama server URL
 - **Badge display** — toggle metadata badges on workflow cards
 - **Language** — English / Japanese / Chinese
+
+### Help & Support Tab (v0.1.3)
+- **Feature list** — overview of all features organized by tab
+- **Tips** — quick tips for drag & drop import, favorites, and default workflow
+- **Support links** — GitHub repository and Ko-fi donation page
 
 ---
 
@@ -135,6 +140,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.1.3
+- Added **Help & Support tab** — feature list, tips, and support links (GitHub, Ko-fi)
+- Multi-language support (EN/JA/ZH) for all help content
+
 ### v0.1.2
 - Added **Canvas Snapshot** button to ComfyUI top bar — capture workflow canvas as PNG thumbnail with embedded workflow metadata
 - Added **Thumbnail tab** to the workflow side panel for quick visual preview
@@ -165,7 +174,7 @@ ComfyUI-Workflow-Studio/
 │       ├── settings_service.py  # Settings persistence
 │       └── png_extractor.py     # PNG metadata extraction
 ├── templates/
-│   └── index.html               # SPA template
+│   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Settings/Help)
 ├── static/
 │   ├── favicon.svg              # Browser tab icon (W+S Wave)
 │   ├── css/main.css             # Styles

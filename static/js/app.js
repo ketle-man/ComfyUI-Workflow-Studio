@@ -90,7 +90,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", generate: "tabGenerate", prompt: "tabPrompt", settings: "tabSettings" };
+    const tabMap = { workflow: "tabWorkflow", generate: "tabGenerate", prompt: "tabPrompt", settings: "tabSettings", help: "tabHelp" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -193,6 +193,32 @@ function applyI18nToHtml() {
 
     const removeBtn = document.getElementById("wfm-remove-group-btn");
     if (removeBtn) removeBtn.textContent = t("removeFromGroup");
+
+    // Help & Support tab
+    const helpManualTitle = document.getElementById("wfm-help-manual-title");
+    if (helpManualTitle) helpManualTitle.textContent = t("helpManualTitle");
+
+    const helpIdMap = {
+        "wfm-help-wf-1": "helpWf1", "wfm-help-wf-2": "helpWf2", "wfm-help-wf-3": "helpWf3",
+        "wfm-help-wf-4": "helpWf4", "wfm-help-wf-5": "helpWf5",
+        "wfm-help-gen-1": "helpGen1", "wfm-help-gen-2": "helpGen2",
+        "wfm-help-gen-3": "helpGen3", "wfm-help-gen-4": "helpGen4",
+        "wfm-help-prompt-1": "helpPrompt1", "wfm-help-prompt-2": "helpPrompt2",
+        "wfm-help-prompt-3": "helpPrompt3", "wfm-help-prompt-4": "helpPrompt4",
+        "wfm-help-settings-1": "helpSettings1", "wfm-help-settings-2": "helpSettings2",
+        "wfm-help-settings-3": "helpSettings3", "wfm-help-settings-4": "helpSettings4",
+        "wfm-help-tips-title": "helpTipsTitle",
+        "wfm-help-tips-1": "helpTips1", "wfm-help-tips-2": "helpTips2", "wfm-help-tips-3": "helpTips3",
+        "wfm-help-support-title": "helpSupportTitle",
+        "wfm-help-support-desc": "helpSupportDesc",
+        "wfm-help-github-desc": "helpGithubDesc",
+        "wfm-help-kofi-desc": "helpKofiDesc",
+        "wfm-help-thanks": "helpThanks",
+    };
+    for (const [id, key] of Object.entries(helpIdMap)) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = t(key);
+    }
 }
 
 // ============================================
