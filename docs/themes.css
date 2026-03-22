@@ -1,0 +1,461 @@
+/* ============================================
+   Workflow Studio - Theme Definitions
+   ============================================
+
+   各テーマは :root の CSS変数を上書きすることで適用される。
+   body の font-family も各テーマで変更する。
+
+   現在のデフォルトテーマ (Deep Ocean Dark) の変数:
+     --wfm-bg: #1a1a2e
+     --wfm-bg-secondary: #16213e
+     --wfm-bg-tertiary: #0f3460
+     --wfm-surface: #1e2a4a
+     --wfm-surface-hover: #253358
+     --wfm-border: #2a3a5c
+     --wfm-text: #e0e0e0
+     --wfm-text-secondary: #a0a0b0
+     --wfm-primary: #4a9eff
+     --wfm-primary-hover: #3a8eef
+     --wfm-danger: #ff4757
+     --wfm-success: #2ed573
+     --wfm-warning: #ffa502
+     --wfm-accent: #7c5cfc
+     --wfm-radius: 8px
+     --wfm-radius-sm: 4px
+     --wfm-shadow: 0 2px 8px rgba(0,0,0,0.3)
+   ============================================ */
+
+
+/* ============================================
+   1. Pop & Vibrant (ポップ調)
+   明るく楽しく、クリエイティビティを刺激するデザイン
+   ============================================ */
+
+[data-theme="pop-vibrant"] {
+    --wfm-bg: #F8F9FA;
+    --wfm-bg-secondary: #FFFFFF;
+    --wfm-bg-tertiary: #EEF0F2;
+    --wfm-surface: #FFFFFF;
+    --wfm-surface-hover: #F0F4FF;
+    --wfm-border: #E0E0E0;
+    --wfm-text: #2D2D2D;
+    --wfm-text-secondary: #666666;
+    --wfm-primary: #FF6B6B;
+    --wfm-primary-hover: #FF5252;
+    --wfm-danger: #FF4757;
+    --wfm-success: #2ED573;
+    --wfm-warning: #FFA502;
+    --wfm-accent: #00D2D3;
+    --wfm-radius: 16px;
+    --wfm-radius-sm: 8px;
+    --wfm-shadow: 0 4px 16px rgba(255, 107, 107, 0.15);
+    /* 追加テーマ変数 */
+    --wfm-tag-sdxl: #FF6B6B;
+    --wfm-tag-sd15: #00D2D3;
+    --wfm-tag-flux: #FFC048;
+    --wfm-tag-default: #A55EEA;
+}
+
+[data-theme="pop-vibrant"] body {
+    font-family: 'Zen Maru Gothic', 'Rounded Mplus 1c', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+
+/* ============================================
+   2. Light Minimalist (クリーン＆ライト)
+   現代的でノイズのない、コンテンツ集中型デザイン
+   ============================================ */
+
+[data-theme="light-minimalist"] {
+    --wfm-bg: #FFFFFF;
+    --wfm-bg-secondary: #F5F5F5;
+    --wfm-bg-tertiary: #FAFAFA;
+    --wfm-surface: #FFFFFF;
+    --wfm-surface-hover: #F0F4FF;
+    --wfm-border: #EEEEEE;
+    --wfm-text: #333333;
+    --wfm-text-secondary: #888888;
+    --wfm-primary: #4A9EFF;
+    --wfm-primary-hover: #3A8EEF;
+    --wfm-danger: #EF4444;
+    --wfm-success: #22C55E;
+    --wfm-warning: #F59E0B;
+    --wfm-accent: #6366F1;
+    --wfm-radius: 8px;
+    --wfm-radius-sm: 4px;
+    --wfm-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light-minimalist"] body {
+    font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+
+/* ============================================
+   3. Cyberpunk / Hacker (サイバーパンク)
+   SF映画のようなハッカー感・ギーク感
+   ============================================ */
+
+[data-theme="cyberpunk"] {
+    --wfm-bg: #000000;
+    --wfm-bg-secondary: #0A0A0A;
+    --wfm-bg-tertiary: #111111;
+    --wfm-surface: #0D0D0D;
+    --wfm-surface-hover: #1A1A1A;
+    --wfm-border: #00FF4130;
+    --wfm-text: #00FF41;
+    --wfm-text-secondary: #00CC33;
+    --wfm-primary: #FF00FF;
+    --wfm-primary-hover: #CC00CC;
+    --wfm-danger: #FF073A;
+    --wfm-success: #00FF41;
+    --wfm-warning: #FFD300;
+    --wfm-accent: #00FFFF;
+    --wfm-radius: 0px;
+    --wfm-radius-sm: 0px;
+    --wfm-shadow: 0 0 12px rgba(0, 255, 65, 0.3);
+    /* ネオン発光ボーダー用 */
+    --wfm-glow-primary: 0 0 8px rgba(255, 0, 255, 0.6);
+    --wfm-glow-accent: 0 0 8px rgba(0, 255, 255, 0.6);
+    /* JSONパネル用 */
+    --wfm-code-text: #00FF41;
+    --wfm-code-bg: #000000;
+}
+
+[data-theme="cyberpunk"] body {
+    font-family: 'Space Mono', 'Fira Code', 'Courier New', monospace;
+}
+
+
+/* ============================================
+   4. Glassmorphism (グラスモーフィズム)
+   半透明の洗練された未来的デザイン
+   ============================================ */
+
+[data-theme="glassmorphism"] {
+    --wfm-bg: #1A0533;
+    --wfm-bg-secondary: rgba(255, 255, 255, 0.08);
+    --wfm-bg-tertiary: rgba(255, 255, 255, 0.04);
+    --wfm-surface: rgba(255, 255, 255, 0.10);
+    --wfm-surface-hover: rgba(255, 255, 255, 0.16);
+    --wfm-border: rgba(255, 255, 255, 0.18);
+    --wfm-text: #F0F0F0;
+    --wfm-text-secondary: #C0C0D0;
+    --wfm-primary: #7B68EE;
+    --wfm-primary-hover: #6A5ACD;
+    --wfm-danger: #FF6B6B;
+    --wfm-success: #69DB7C;
+    --wfm-warning: #FFD43B;
+    --wfm-accent: #DA77F2;
+    --wfm-radius: 12px;
+    --wfm-radius-sm: 8px;
+    --wfm-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    /* Glassmorphism用追加変数 */
+    --wfm-glass-blur: blur(12px);
+    --wfm-glass-bg: rgba(255, 255, 255, 0.10);
+    /* 背景メッシュグラデーション */
+    --wfm-mesh-gradient: linear-gradient(135deg, #1A0533 0%, #0D1B3E 25%, #1A0533 50%, #2D1054 75%, #0D1B3E 100%);
+}
+
+[data-theme="glassmorphism"] body {
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+
+/* ============================================
+   5. Neumorphism (ニューモーフィズム)
+   柔らかく立体的な凸凹表現
+   ============================================ */
+
+[data-theme="neumorphism"] {
+    --wfm-bg: #D1D9E6;
+    --wfm-bg-secondary: #D1D9E6;
+    --wfm-bg-tertiary: #C8D0DD;
+    --wfm-surface: #D1D9E6;
+    --wfm-surface-hover: #D8E0ED;
+    --wfm-border: transparent;
+    --wfm-text: #4A5568;
+    --wfm-text-secondary: #718096;
+    --wfm-primary: #6C8EBF;
+    --wfm-primary-hover: #5A7CAD;
+    --wfm-danger: #E57373;
+    --wfm-success: #81C784;
+    --wfm-warning: #FFB74D;
+    --wfm-accent: #7986CB;
+    --wfm-radius: 12px;
+    --wfm-radius-sm: 8px;
+    /* ニューモーフィズム用の光と影 */
+    --wfm-shadow: 6px 6px 12px #B8C0CC, -6px -6px 12px #EAF2FF;
+    --wfm-shadow-inset: inset 4px 4px 8px #B8C0CC, inset -4px -4px 8px #EAF2FF;
+}
+
+[data-theme="neumorphism"] body {
+    font-family: 'Nunito', 'Quicksand', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+
+/* ============================================
+   6. Retro 8-bit / Pixel (レトロゲーム調)
+   遊び心満載のファミコン風デザイン
+   ============================================ */
+
+[data-theme="retro-pixel"] {
+    --wfm-bg: #2C2C34;
+    --wfm-bg-secondary: #3A3A44;
+    --wfm-bg-tertiary: #24242C;
+    --wfm-surface: #3A3A44;
+    --wfm-surface-hover: #4A4A54;
+    --wfm-border: #000000;
+    --wfm-text: #F0F0E0;
+    --wfm-text-secondary: #B0B0A0;
+    --wfm-primary: #5B8FD4;
+    --wfm-primary-hover: #4A7EC3;
+    --wfm-danger: #D94848;
+    --wfm-success: #48A848;
+    --wfm-warning: #D4A017;
+    --wfm-accent: #D45BD4;
+    --wfm-radius: 0px;
+    --wfm-radius-sm: 0px;
+    /* 太い黒ボーダー + ベタ塗り影 */
+    --wfm-shadow: 4px 4px 0px #000000;
+    --wfm-border-width: 3px;
+}
+
+[data-theme="retro-pixel"] body {
+    font-family: 'DotGothic16', 'Press Start 2P', 'Courier New', monospace;
+}
+
+
+/* ============================================
+   7. Pastel Dream (パステルドリーム)
+   柔らかく優しい、目に優しいデザイン
+   ============================================ */
+
+[data-theme="pastel-dream"] {
+    --wfm-bg: #F0E6FF;
+    --wfm-bg-secondary: #E8F5E9;
+    --wfm-bg-tertiary: #F3E5F5;
+    --wfm-surface: #FFFFFF;
+    --wfm-surface-hover: #FFF3E0;
+    --wfm-border: #E1BEE7;
+    --wfm-text: #5D4E75;
+    --wfm-text-secondary: #8E7CA8;
+    --wfm-primary: #B39DDB;
+    --wfm-primary-hover: #9575CD;
+    --wfm-danger: #F48FB1;
+    --wfm-success: #A5D6A7;
+    --wfm-warning: #FFE082;
+    --wfm-accent: #80DEEA;
+    --wfm-radius: 20px;
+    --wfm-radius-sm: 12px;
+    --wfm-shadow: 0 4px 16px rgba(179, 157, 219, 0.2);
+    /* パステルタグカラー */
+    --wfm-tag-sdxl: #FFAB91;
+    --wfm-tag-sd15: #A5D6A7;
+    --wfm-tag-flux: #90CAF9;
+    --wfm-tag-default: #CE93D8;
+}
+
+[data-theme="pastel-dream"] body {
+    font-family: 'M PLUS Rounded 1c', 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+
+/* ============================================
+   8. Brutalism / High Contrast (ブルータリズム)
+   大胆で前衛的なハイコントラストデザイン
+   ============================================ */
+
+[data-theme="brutalism"] {
+    --wfm-bg: #FFFFFF;
+    --wfm-bg-secondary: #FFFFFF;
+    --wfm-bg-tertiary: #F0F0F0;
+    --wfm-surface: #FFFFFF;
+    --wfm-surface-hover: #CCFF00;
+    --wfm-border: #000000;
+    --wfm-text: #000000;
+    --wfm-text-secondary: #333333;
+    --wfm-primary: #CCFF00;
+    --wfm-primary-hover: #BBEE00;
+    --wfm-danger: #FF0000;
+    --wfm-success: #00FF00;
+    --wfm-warning: #FFFF00;
+    --wfm-accent: #CCFF00;
+    --wfm-radius: 0px;
+    --wfm-radius-sm: 0px;
+    /* 極太ボーダー + ベタ影 */
+    --wfm-shadow: 6px 6px 0px #000000;
+    --wfm-border-width: 3px;
+}
+
+[data-theme="brutalism"] body {
+    font-family: 'Arial Black', 'Impact', 'Helvetica Neue', sans-serif;
+}
+
+
+/* ============================================
+   9. Earthy / Nature (アースカラー)
+   落ち着いたオーガニックなナチュラルデザイン
+   ============================================ */
+
+[data-theme="earthy"] {
+    --wfm-bg: #F5E6D3;
+    --wfm-bg-secondary: #EDE0D4;
+    --wfm-bg-tertiary: #E8D5C0;
+    --wfm-surface: #FFF8F0;
+    --wfm-surface-hover: #F5EDE4;
+    --wfm-border: #D4B896;
+    --wfm-text: #3E2723;
+    --wfm-text-secondary: #6D4C41;
+    --wfm-primary: #8D6E63;
+    --wfm-primary-hover: #795548;
+    --wfm-danger: #C0392B;
+    --wfm-success: #6B8E23;
+    --wfm-warning: #D4A017;
+    --wfm-accent: #BF6830;
+    --wfm-radius: 8px;
+    --wfm-radius-sm: 4px;
+    --wfm-shadow: 0 2px 8px rgba(62, 39, 35, 0.12);
+    /* アースカラータグ */
+    --wfm-tag-sdxl: #6B8E23;
+    --wfm-tag-sd15: #BF6830;
+    --wfm-tag-flux: #D4A017;
+    --wfm-tag-default: #8D6E63;
+}
+
+[data-theme="earthy"] body {
+    font-family: 'Noto Sans JP', 'Noto Serif JP', Georgia, serif;
+}
+
+
+/* ============================================
+   10. Material UI (マテリアルデザイン風)
+   Googleライクな直感的デザイン
+   ============================================ */
+
+[data-theme="material"] {
+    --wfm-bg: #FAFAFA;
+    --wfm-bg-secondary: #FFFFFF;
+    --wfm-bg-tertiary: #F5F5F5;
+    --wfm-surface: #FFFFFF;
+    --wfm-surface-hover: #E8EAF6;
+    --wfm-border: #E0E0E0;
+    --wfm-text: #212121;
+    --wfm-text-secondary: #757575;
+    --wfm-primary: #3F51B5;
+    --wfm-primary-hover: #303F9F;
+    --wfm-danger: #F44336;
+    --wfm-success: #4CAF50;
+    --wfm-warning: #FF9800;
+    --wfm-accent: #FF4081;
+    --wfm-radius: 4px;
+    --wfm-radius-sm: 2px;
+    /* マテリアルシャドウ (Elevation 2) */
+    --wfm-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+}
+
+[data-theme="material"] body {
+    font-family: 'Roboto', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+
+/* ============================================
+   11. Monotone + One Accent (モノトーン＋ワンアクセント)
+   スタイリッシュなプロツール感
+   ============================================ */
+
+[data-theme="monotone-accent"] {
+    --wfm-bg: #F7F7F7;
+    --wfm-bg-secondary: #FFFFFF;
+    --wfm-bg-tertiary: #EBEBEB;
+    --wfm-surface: #FFFFFF;
+    --wfm-surface-hover: #F0F0F0;
+    --wfm-border: #D0D0D0;
+    --wfm-text: #1A1A1A;
+    --wfm-text-secondary: #808080;
+    --wfm-primary: #FF6B35;
+    --wfm-primary-hover: #E85D2A;
+    --wfm-danger: #CC0000;
+    --wfm-success: #555555;
+    --wfm-warning: #888888;
+    --wfm-accent: #FF6B35;
+    --wfm-radius: 6px;
+    --wfm-radius-sm: 3px;
+    --wfm-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="monotone-accent"] body {
+    font-family: 'Helvetica Neue', 'Arial', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+
+/* ============================================
+   12. Corporate Trust (コーポレート・トラスト)
+   信頼感と堅牢性のあるBtoB向けデザイン
+   ============================================ */
+
+[data-theme="corporate"] {
+    --wfm-bg: #F0F4F8;
+    --wfm-bg-secondary: #FFFFFF;
+    --wfm-bg-tertiary: #E2E8F0;
+    --wfm-surface: #FFFFFF;
+    --wfm-surface-hover: #EBF0F6;
+    --wfm-border: #CBD5E1;
+    --wfm-text: #1E293B;
+    --wfm-text-secondary: #64748B;
+    --wfm-primary: #2563EB;
+    --wfm-primary-hover: #1D4ED8;
+    --wfm-danger: #DC2626;
+    --wfm-success: #16A34A;
+    --wfm-warning: #D97706;
+    --wfm-accent: #7C3AED;
+    --wfm-radius: 4px;
+    --wfm-radius-sm: 2px;
+    --wfm-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="corporate"] body {
+    font-family: 'Noto Sans JP', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+
+/* ============================================
+   テーマ適用方法のメモ
+   ============================================
+
+   HTMLの <html> タグに data-theme 属性を設定して切り替える:
+
+     <html data-theme="cyberpunk">
+     <html data-theme="pastel-dream">
+     <html data-theme="brutalism">
+     ...
+
+   JavaScriptでの切り替え例:
+
+     document.documentElement.setAttribute('data-theme', 'cyberpunk');
+
+   テーマをリセットしてデフォルトに戻す場合:
+
+     document.documentElement.removeAttribute('data-theme');
+
+   ============================================
+
+   テーマ一覧:
+
+   | ID                | 名前                          | 系統     |
+   |-------------------|-------------------------------|----------|
+   | (default)         | Deep Ocean Dark               | ダーク   |
+   | pop-vibrant       | Pop & Vibrant                 | ライト   |
+   | light-minimalist  | Light Minimalist              | ライト   |
+   | cyberpunk         | Cyberpunk / Hacker            | ダーク   |
+   | glassmorphism     | Glassmorphism                 | ダーク   |
+   | neumorphism       | Neumorphism                   | ライト   |
+   | retro-pixel       | Retro 8-bit / Pixel           | ダーク   |
+   | pastel-dream      | Pastel Dream                  | ライト   |
+   | brutalism         | Brutalism / High Contrast     | ライト   |
+   | earthy            | Earthy / Nature               | ライト   |
+   | material          | Material UI                   | ライト   |
+   | monotone-accent   | Monotone + One Accent         | ライト   |
+   | corporate         | Corporate Trust               | ライト   |
+
+   ============================================ */

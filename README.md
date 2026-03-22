@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.1.4-green)
+![Version](https://img.shields.io/badge/version-0.1.5-green)
 
 ## Screenshots
 
@@ -60,6 +60,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Apply to GenerateUI** — send prompts directly to the generation interface
 
 ### Settings Tab
+- **Theme selection** — 13 built-in themes with visual swatch preview (Dark, Pop, Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro Pixel, Pastel, Brutalism, Earthy, Material, Monotone, Corporate)
 - **Workflows directory** — configure which folder to scan for workflows
 - **Eagle connection** — set Eagle API endpoint for auto-save
 - **Ollama connection** — configure Ollama server URL
@@ -83,7 +84,7 @@ Search for **Workflow Studio** in ComfyUI Manager and install.
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/your-username/ComfyUI-Workflow-Studio.git
+git clone https://github.com/ketle-man/ComfyUI-Workflow-Studio.git
 ```
 
 Restart ComfyUI after installation.
@@ -140,6 +141,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.1.5
+- **Theme system** — 13 built-in themes selectable from Settings tab with instant preview (Deep Ocean Dark, Pop & Vibrant, Light Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro 8-bit, Pastel Dream, Brutalism, Earthy, Material UI, Monotone + Accent, Corporate Trust)
+- Theme preference persisted in localStorage and restored on page load (no flash)
+- Special CSS effects per theme: neon glow (Cyberpunk), backdrop blur (Glassmorphism), dual shadow (Neumorphism), pixel borders (Retro/Brutalism)
 
 ### v0.1.4
 - **App format support** — detect `.app.json` workflows (ComfyUI App mode), show "App Format" badge, block loading in GenerateUI with guidance message

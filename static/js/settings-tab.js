@@ -50,6 +50,35 @@ function buildLangOptions(optionsMap, selectedValue) {
         .join("");
 }
 
+// Theme definitions with swatch colors for preview
+const THEMES = [
+    { id: "",                 key: "themeDefault",        colors: ["#1a1a2e", "#16213e", "#4a9eff", "#7c5cfc"] },
+    { id: "pop-vibrant",      key: "themePopVibrant",     colors: ["#F8F9FA", "#FFFFFF", "#FF6B6B", "#00D2D3"] },
+    { id: "light-minimalist", key: "themeLightMinimalist", colors: ["#FFFFFF", "#F5F5F5", "#4A9EFF", "#6366F1"] },
+    { id: "cyberpunk",        key: "themeCyberpunk",      colors: ["#000000", "#0A0A0A", "#FF00FF", "#00FFFF"] },
+    { id: "glassmorphism",    key: "themeGlassmorphism",  colors: ["#1A0533", "#0D1B3E", "#7B68EE", "#DA77F2"] },
+    { id: "neumorphism",      key: "themeNeumorphism",    colors: ["#D1D9E6", "#D1D9E6", "#6C8EBF", "#7986CB"] },
+    { id: "retro-pixel",      key: "themeRetroPixel",     colors: ["#2C2C34", "#3A3A44", "#5B8FD4", "#D45BD4"] },
+    { id: "pastel-dream",     key: "themePastelDream",    colors: ["#F0E6FF", "#E8F5E9", "#B39DDB", "#80DEEA"] },
+    { id: "brutalism",        key: "themeBrutalism",      colors: ["#FFFFFF", "#FFFFFF", "#CCFF00", "#000000"] },
+    { id: "earthy",           key: "themeEarthy",         colors: ["#F5E6D3", "#EDE0D4", "#8D6E63", "#BF6830"] },
+    { id: "material",         key: "themeMaterial",       colors: ["#FAFAFA", "#FFFFFF", "#3F51B5", "#FF4081"] },
+    { id: "monotone-accent",  key: "themeMonotoneAccent", colors: ["#F7F7F7", "#FFFFFF", "#FF6B35", "#1A1A1A"] },
+    { id: "corporate",        key: "themeCorporate",      colors: ["#F0F4F8", "#FFFFFF", "#2563EB", "#7C3AED"] },
+];
+
+export function applyTheme(themeId) {
+    if (themeId) {
+        document.documentElement.setAttribute("data-theme", themeId);
+    } else {
+        document.documentElement.removeAttribute("data-theme");
+    }
+}
+
+export function getSavedTheme() {
+    return loadLocalSettings().theme || "";
+}
+
 export async function initSettingsTab() {
     const container = document.querySelector("#wfm-tab-settings .wfm-settings-container");
     if (!container) return;
@@ -88,6 +117,21 @@ export async function initSettingsTab() {
                 <small style="color:var(--wfm-warning);font-size:11px;display:block;margin-top:4px;">
                     ⚠ ${t("summaryLangNote")}
                 </small>
+            </div>
+        </div>
+
+        <!-- Theme -->
+        <div style="border:1px solid var(--wfm-border);border-radius:var(--wfm-radius);padding:16px;margin-bottom:20px;">
+            <h3 style="font-size:15px;margin-bottom:12px;">${t("themeLabel")}</h3>
+            <div class="wfm-theme-grid" id="wfm-theme-grid">
+                ${THEMES.map(th => `
+                    <div class="wfm-theme-card ${(settings.theme || "") === th.id ? "active" : ""}" data-theme-id="${th.id}">
+                        <div class="wfm-theme-swatch">
+                            ${th.colors.map(c => `<span style="background:${c};"></span>`).join("")}
+                        </div>
+                        <div class="wfm-theme-card-label">${t(th.key)}</div>
+                    </div>
+                `).join("")}
             </div>
         </div>
 
@@ -194,6 +238,19 @@ export async function initSettingsTab() {
         <!-- Save Button -->
         <button class="wfm-btn wfm-btn-primary" id="wfm-settings-save" style="min-width:120px;">${t("saveSettings")}</button>
     `;
+
+    // --- Theme change handler ---
+    document.getElementById("wfm-theme-grid")?.addEventListener("click", (e) => {
+        const card = e.target.closest(".wfm-theme-card");
+        if (!card) return;
+        const themeId = card.dataset.themeId;
+        applyTheme(themeId);
+        saveLocalSettings({ theme: themeId });
+        // Update active state
+        document.querySelectorAll(".wfm-theme-card").forEach(c => c.classList.remove("active"));
+        card.classList.add("active");
+        showToast(t("settingsSaved"), "success");
+    });
 
     // --- Language change handlers ---
     document.getElementById("wfm-settings-ui-lang")?.addEventListener("change", (e) => {
@@ -361,6 +418,7 @@ export async function initSettingsTab() {
             eagleAutoSave: document.getElementById("wfm-settings-eagle-auto-save")?.checked || false,
             uiLang: getLang(),
             summaryLang: getSummaryLang(),
+            theme: document.documentElement.getAttribute("data-theme") || "",
         };
 
         saveLocalSettings(patch);

@@ -1,5 +1,49 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-22: v0.1.5 テーマシステム追加
+
+### 概要
+- 13種類のビルトインテーマを設定タブから切り替え可能に
+- テーマごとにカラー・フォント・角丸・影・特殊効果を変更
+- 選択テーマはlocalStorageに保存、ページ読み込み時にフラッシュなく復元
+
+### 変更内容
+
+#### テーマ定義（CSS）
+- `static/css/main.css` — 12テーマの`[data-theme="xxx"]`変数定義を末尾に追加
+  - Pop & Vibrant / Light Minimalist / Cyberpunk / Glassmorphism / Neumorphism / Retro 8-bit / Pastel Dream / Brutalism / Earthy / Material UI / Monotone + Accent / Corporate Trust
+- テーマ固有の特殊効果CSS:
+  - Cyberpunk: ネオン発光ボーダー（`box-shadow`）、JSON構文ハイライト色変更
+  - Glassmorphism: `backdrop-filter: blur(12px)` + メッシュグラデーション背景
+  - Neumorphism: ダブルシャドウ（凸凹表現）、insetシャドウボタン
+  - Retro-pixel / Brutalism: 太い黒ボーダー（`border: 3px solid #000`）
+- `.wfm-theme-grid` / `.wfm-theme-card` / `.wfm-theme-swatch` — テーマ選択UIスタイル
+
+#### テーマ選択UI（JavaScript）
+- `static/js/settings-tab.js`:
+  - `THEMES` 配列: テーマID・i18nキー・プレビュー用4色スウォッチを定義
+  - `applyTheme(themeId)` — `<html>`の`data-theme`属性を設定/解除
+  - `getSavedTheme()` — localStorageから保存テーマを取得
+  - 設定タブにカラースウォッチ付きグリッドUIを生成（言語設定の直下）
+  - クリックで即座にテーマ適用 + localStorage保存 + activeクラス更新
+- `static/js/app.js`:
+  - `applyTheme` / `getSavedTheme` をインポート
+  - `DOMContentLoaded`の前にテーマ復元を実行（テーマフラッシュ防止）
+
+#### 多言語対応
+- `static/js/i18n.js` — 3言語（EN/JA/ZH）に `themeLabel` + 13テーマ名の翻訳キー追加
+
+#### その他
+- `templates/index.html` — ヘルプページのGitHubリンクURL修正
+- `README.md` — v0.1.5更新、テーマ機能記載、git clone URL修正
+
+### スクリーンショット
+| Workflow Tab (Pastel Dream) | Settings Tab (Theme) |
+|:---:|:---:|
+| ![Workflow](docs/screenshot_workflow.png) | ![Settings](docs/screenshot_settings.png) |
+
+---
+
 ## 2026-03-22: v0.1.4 App形式対応・プリセットコピー・分析バグ修正
 
 ### 概要

@@ -269,7 +269,10 @@ function initModal() {
 import { initWorkflowTab } from "./workflow-tab.js";
 import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
-import { initSettingsTab } from "./settings-tab.js";
+import { initSettingsTab, applyTheme, getSavedTheme } from "./settings-tab.js";
+
+// Apply saved theme immediately to prevent flash of default theme
+applyTheme(getSavedTheme());
 
 document.addEventListener("DOMContentLoaded", () => {
     applyI18nToHtml();
