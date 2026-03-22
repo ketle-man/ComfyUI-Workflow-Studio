@@ -867,10 +867,10 @@ function openDetailModal(wf) {
     document.getElementById("wfm-detail-load").addEventListener("click", async () => {
         try {
             const wfData = await getRawWorkflow(wf.filename);
-            await loadWorkflowIntoEditor(wfData, wf.filename);
+            const loaded = await loadWorkflowIntoEditor(wfData, wf.filename);
+            if (loaded === false) return;
             document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
             closeModal();
-            showToast(`${t("loaded")}: ${wf.filename}`, "success");
         } catch (err) {
             showToast(t("loadError") + ": " + err.message, "error");
         }
@@ -1202,9 +1202,9 @@ export function initWorkflowTab() {
         if (!state.selectedWf) return;
         try {
             const wfData = await getRawWorkflow(state.selectedWf.filename);
-            await loadWorkflowIntoEditor(wfData, state.selectedWf.filename);
+            const loaded = await loadWorkflowIntoEditor(wfData, state.selectedWf.filename);
+            if (loaded === false) return;
             document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
-            showToast(`${t("loaded")}: ${state.selectedWf.filename}`, "success");
         } catch (err) {
             showToast(t("loadError") + ": " + err.message, "error");
         }

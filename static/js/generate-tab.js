@@ -76,12 +76,12 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
 
     if (format === "app") {
         showToast(t("appFormatNotSupported"), "error");
-        return;
+        return false;
     } else if (format === "ui") {
         apiWorkflow = await comfyWorkflow.convertUiToApi(workflow);
     } else if (format === "unknown") {
         showToast("Unknown workflow format", "error");
-        return;
+        return false;
     }
 
     comfyUI.currentWorkflow = apiWorkflow;
@@ -110,6 +110,7 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
     if (genBtn) genBtn.disabled = !comfyUI.connected;
 
     showToast(`Workflow loaded: ${filename || ""}`, "success");
+    return true;
 }
 
 // ============================================
