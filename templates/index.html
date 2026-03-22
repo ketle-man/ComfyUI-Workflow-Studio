@@ -323,52 +323,80 @@
                     <h2 class="wfm-help-section-title" id="wfm-help-manual-title">Features</h2>
 
                     <div class="wfm-help-card">
+                        <h3 id="wfm-help-about-title">About</h3>
+                        <p id="wfm-help-about-desc">A centralized control UI for managing ComfyUI workflow JSON files, generating images via API, and assisting with prompt creation.</p>
+                        <ul>
+                            <li id="wfm-help-about-1">Install via ComfyUI Manager or git clone to custom_nodes</li>
+                            <li id="wfm-help-about-2">Launch from the Workflow Studio button in the ComfyUI toolbar, or open http://127.0.0.1:8188/wfm</li>
+                        </ul>
+                    </div>
+
+                    <div class="wfm-help-card">
                         <h3>Workflow Tab</h3>
                         <ul>
-                            <li id="wfm-help-wf-1">Browse, search, and filter your workflow collection</li>
-                            <li id="wfm-help-wf-2">Import workflows from JSON or PNG files</li>
-                            <li id="wfm-help-wf-3">Organize workflows into groups</li>
-                            <li id="wfm-help-wf-4">View thumbnails, JSON details, and properties</li>
-                            <li id="wfm-help-wf-5">Click a card to open the detail modal for analysis, tagging, and summarization</li>
+                            <li id="wfm-help-wf-1">Switch between Thumbnail, Card, and Table view modes</li>
+                            <li id="wfm-help-wf-2">Search, category filter, favorites filter, and group filter</li>
+                            <li id="wfm-help-wf-3">Create, rename, delete groups and assign/remove workflows</li>
+                            <li id="wfm-help-wf-4">Import JSON/PNG files via button or drag &amp; drop</li>
+                            <li id="wfm-help-wf-5">Side panel: thumbnail, JSON viewer (format badge: UI/API/App), clipboard copy, group management</li>
+                            <li id="wfm-help-wf-6">Detail modal: rename, favorite, thumbnail change, analysis, category override, tags, memo, AI summary, open in ComfyUI, load in GenerateUI, set as default, delete</li>
+                            <li id="wfm-help-wf-7">Customize badge colors per category</li>
+                            <li id="wfm-help-wf-8">Batch re-analysis of all workflow I/O (P: prompt nodes, I: image nodes, output: save nodes)</li>
                         </ul>
                     </div>
 
                     <div class="wfm-help-card">
                         <h3>GenerateUI Tab</h3>
                         <ul>
-                            <li id="wfm-help-gen-1">Load a workflow and edit parameters (prompts, images, models, settings)</li>
-                            <li id="wfm-help-gen-2">Connect to ComfyUI and generate images directly</li>
-                            <li id="wfm-help-gen-3">Control seed behavior (random, fixed, increment, decrement)</li>
-                            <li id="wfm-help-gen-4">View generated results with thumbnail history</li>
+                            <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
+                            <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported)</li>
+                            <li id="wfm-help-gen-3">Edit parameters: Prompt, Image (drag &amp; drop), Model (checkpoint/VAE/LoRA/ControlNet with filter), Settings (steps/CFG/sampler/scheduler/resolution), Raw JSON</li>
+                            <li id="wfm-help-gen-4">Seed control: random, fixed, increment, decrement</li>
+                            <li id="wfm-help-gen-5">Generate, progress display, and stop</li>
+                            <li id="wfm-help-gen-6">View results with main image and thumbnail history</li>
+                            <li id="wfm-help-gen-7">Eagle integration: auto-save generated images to Eagle</li>
                         </ul>
                     </div>
 
                     <div class="wfm-help-card">
                         <h3>Prompt Tab</h3>
                         <ul>
-                            <li id="wfm-help-prompt-1">Chat with AI assistant (Ollama) for prompt ideas and improvements</li>
-                            <li id="wfm-help-prompt-2">Translate prompts between Japanese, English, and Chinese</li>
-                            <li id="wfm-help-prompt-3">Save and manage prompt presets</li>
-                            <li id="wfm-help-prompt-4">Apply presets directly to GenerateUI</li>
+                            <li id="wfm-help-prompt-1">AI assistant (Ollama): model selection, chat for prompt consultation, image attachment (vision models)</li>
+                            <li id="wfm-help-prompt-2">Apply AI responses to GenerateUI prompts</li>
+                            <li id="wfm-help-prompt-3">Translation: JA&#8596;EN, ZH&#8596;EN</li>
+                            <li id="wfm-help-prompt-4">Preset management: create, edit, delete, apply, clipboard copy (PP/NP)</li>
                         </ul>
                     </div>
 
                     <div class="wfm-help-card">
                         <h3>Settings Tab</h3>
                         <ul>
-                            <li id="wfm-help-settings-1">Configure ComfyUI connection URL</li>
-                            <li id="wfm-help-settings-2">Set up Ollama API for AI assistant features</li>
-                            <li id="wfm-help-settings-3">Change UI language and summary language</li>
-                            <li id="wfm-help-settings-4">Configure workflow data folder and Eagle integration</li>
+                            <li id="wfm-help-settings-1">UI language and summary language</li>
+                            <li id="wfm-help-settings-2">Workflow data folder path</li>
+                            <li id="wfm-help-settings-3">ComfyUI connection URL and test</li>
+                            <li id="wfm-help-settings-4">Ollama URL, default model, and connection test</li>
+                            <li id="wfm-help-settings-5">Default workflow setting</li>
+                            <li id="wfm-help-settings-6">Eagle integration URL and auto-save toggle</li>
                         </ul>
                     </div>
 
                     <div class="wfm-help-card">
-                        <h3 id="wfm-help-tips-title">Tips</h3>
+                        <h3 id="wfm-help-shortcuts-title">Keyboard Shortcuts</h3>
                         <ul>
-                            <li id="wfm-help-tips-1">Drag &amp; drop PNG files with embedded workflow data to import them</li>
-                            <li id="wfm-help-tips-2">Use the star button to mark favorite workflows for quick access</li>
-                            <li id="wfm-help-tips-3">Set a default workflow to auto-load on startup from the detail modal</li>
+                            <li id="wfm-help-shortcuts-1">Escape: Close modal/panel</li>
+                            <li id="wfm-help-shortcuts-2">Enter: Confirm rename, send chat</li>
+                            <li id="wfm-help-shortcuts-3">Shift+Enter: New line in chat</li>
+                            <li id="wfm-help-shortcuts-4">Double-click: Open detail modal</li>
+                        </ul>
+                    </div>
+
+                    <div class="wfm-help-card">
+                        <h3 id="wfm-help-trouble-title">Troubleshooting</h3>
+                        <ul>
+                            <li id="wfm-help-trouble-1">Cannot connect to ComfyUI: Check if ComfyUI can generate images, verify URL in Settings, try refreshing or restarting</li>
+                            <li id="wfm-help-trouble-2">Cannot connect to Ollama: Use connection test button, check if Ollama is running and models are downloaded</li>
+                            <li id="wfm-help-trouble-3">Workflows not showing: Click refresh button, check if loadable in ComfyUI, try restarting browser/ComfyUI</li>
+                            <li id="wfm-help-trouble-4">Image generation fails: Check if specified models exist in ComfyUI, verify connection, try restarting</li>
                         </ul>
                     </div>
                 </div>
