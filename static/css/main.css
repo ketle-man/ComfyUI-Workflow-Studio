@@ -2290,13 +2290,74 @@ body {
 }
 
 .wfm-node-card .wfm-card-body {
-    min-height: 80px;
+    min-height: 0;
+    padding: 8px 10px;
+}
+
+.wfm-node-card .wfm-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    padding-right: 24px;
+}
+
+.wfm-node-card .wfm-fav-btn {
+    font-size: 18px;
+    opacity: 0.6;
+}
+
+.wfm-node-card:hover .wfm-fav-btn {
+    opacity: 1;
+}
+
+/* Node grid: wider cards for readability */
+#wfm-nodes-grid.wfm-view-card {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+}
+
+/* Node table row selection highlight */
+.wfm-nodes-table-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.wfm-nodes-table-row:hover {
+    background: var(--wfm-surface);
+}
+
+.wfm-nodes-table-row.wfm-card-selected {
+    background: color-mix(in srgb, var(--wfm-primary) 15%, var(--wfm-bg));
+    outline: 1px solid var(--wfm-primary);
+}
+
+.wfm-nodes-table-row .wfm-fav-btn {
+    position: static;
+    opacity: 0.7;
 }
 
 .wfm-node-card-io {
     font-size: 11px;
     color: var(--wfm-text-secondary);
     margin-top: 4px;
+}
+
+/* Pagination */
+.wfm-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px;
+    border-top: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-pagination-info {
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+    min-width: 80px;
+    text-align: center;
 }
 
 .wfm-card-tags {

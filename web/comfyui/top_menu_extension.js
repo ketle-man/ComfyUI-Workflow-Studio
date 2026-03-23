@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { togglePanel, getNodeSetsIcon, NODE_SETS_TOOLTIP, saveSelectedAsNodeSet } from "./node_sets_menu.js";
 
 const BUTTON_TOOLTIP = "Launch Workflow Studio (Shift+Click opens in new window)";
 const SNAPSHOT_TOOLTIP = "Save workflow canvas image as thumbnail";
@@ -383,15 +384,47 @@ const createSnapshotButton = async () => {
     return button;
 };
 
+const createNodeSetsButton = async () => {
+    const { ComfyButton } = await import("../../scripts/ui/components/button.js");
+
+    const button = new ComfyButton({
+        icon: "node-sets",
+        tooltip: NODE_SETS_TOOLTIP,
+        app,
+        enabled: true,
+        classList: "comfyui-button comfyui-menu-mobile-collapse wfm-node-sets-btn",
+    });
+
+    button.element.setAttribute("aria-label", NODE_SETS_TOOLTIP);
+    button.element.title = NODE_SETS_TOOLTIP;
+
+    if (button.iconElement) {
+        button.iconElement.innerHTML = getNodeSetsIcon();
+        button.iconElement.style.width = "1.2rem";
+        button.iconElement.style.height = "1.2rem";
+    }
+
+    button.element.addEventListener("click", (e) => {
+        e.stopPropagation();
+        togglePanel();
+    });
+
+    return button;
+};
+
 const attachTopMenuButton = async (attempt = 0) => {
     if (document.querySelector(`.${BUTTON_GROUP_CLASS}`)) {
         return;
     }
 
+    // Try settingsGroup first (legacy ComfyUI)
     const settingsGroup = app.menu?.settingsGroup;
-    if (!settingsGroup?.element?.parentElement) {
+    // Fallback: find the legacy topbar container used by newer ComfyUI
+    const legacyContainer = document.querySelector('[data-testid="legacy-topbar-container"] .flex');
+
+    if (!settingsGroup?.element?.parentElement && !legacyContainer) {
         if (attempt >= MAX_ATTACH_ATTEMPTS) {
-            console.warn("Workflow Studio: unable to locate the ComfyUI settings button group.");
+            console.warn("Workflow Studio: unable to locate the ComfyUI menu container.");
             return;
         }
 
@@ -401,109 +434,129 @@ const attachTopMenuButton = async (attempt = 0) => {
 
     const wfmButton = await createTopMenuButton();
     const snapshotButton = await createSnapshotButton();
+    const nodeSetsButton = await createNodeSetsButton();
     const { ComfyButtonGroup } = await import("../../scripts/ui/components/buttonGroup.js");
 
-    const buttonGroup = new ComfyButtonGroup(wfmButton, snapshotButton);
+    const buttonGroup = new ComfyButtonGroup(wfmButton, snapshotButton, nodeSetsButton);
     buttonGroup.element.classList.add(BUTTON_GROUP_CLASS);
 
-    settingsGroup.element.before(buttonGroup.element);
-};
-
-const createExtensionObject = (useActionBar) => {
-    const extensionObj = {
-        name: "WorkflowStudio.TopMenu",
-        async setup() {
-            if (!useActionBar) {
-                console.log("Workflow Studio: using legacy button attachment (frontend version < 1.33.9)");
-                await attachTopMenuButton();
-            } else {
-                console.log("Workflow Studio: using actionBarButtons API (frontend version >= 1.33.9)");
-            }
-
-            const injectStyles = () => {
-                const styleId = "wfm-top-menu-button-styles";
-                if (document.getElementById(styleId)) return;
-
-                const style = document.createElement("style");
-                style.id = styleId;
-                style.textContent = `
-                    button[aria-label="${BUTTON_TOOLTIP}"].wfm-top-menu-button {
-                        transition: all 0.2s ease;
-                        border: 1px solid transparent;
-                    }
-                    button[aria-label="${BUTTON_TOOLTIP}"].wfm-top-menu-button:hover {
-                        background-color: var(--primary-hover-bg) !important;
-                    }
-                    button[aria-label="${SNAPSHOT_TOOLTIP}"].wfm-snapshot-button {
-                        transition: all 0.2s ease;
-                        border: 1px solid transparent;
-                    }
-                    button[aria-label="${SNAPSHOT_TOOLTIP}"].wfm-snapshot-button:hover {
-                        background-color: var(--primary-hover-bg) !important;
-                    }
-                `;
-                document.head.appendChild(style);
-            };
-            injectStyles();
-
-            const replaceButtonIcon = () => {
-                // WFM launch button
-                const wfmButtons = document.querySelectorAll(`button[aria-label="${BUTTON_TOOLTIP}"]`);
-                wfmButtons.forEach((button) => {
-                    button.classList.add("wfm-top-menu-button");
-                    button.innerHTML = getWfmIcon();
-                    button.style.borderRadius = "4px";
-                    button.style.padding = "6px";
-                    button.style.backgroundColor = "var(--primary-bg)";
-                    const svg = button.querySelector("svg");
-                    if (svg) {
-                        svg.style.width = "20px";
-                        svg.style.height = "20px";
-                    }
-                });
-
-                // Snapshot button
-                const snapButtons = document.querySelectorAll(`button[aria-label="${SNAPSHOT_TOOLTIP}"]`);
-                snapButtons.forEach((button) => {
-                    button.classList.add("wfm-snapshot-button");
-                    button.innerHTML = getSnapshotIcon();
-                    button.style.borderRadius = "4px";
-                    button.style.padding = "6px";
-                    const svg = button.querySelector("svg");
-                    if (svg) {
-                        svg.style.width = "20px";
-                        svg.style.height = "20px";
-                    }
-                });
-
-                if (wfmButtons.length === 0) {
-                    requestAnimationFrame(replaceButtonIcon);
-                }
-            };
-            requestAnimationFrame(replaceButtonIcon);
-        },
-    };
-
-    if (useActionBar) {
-        extensionObj.actionBarButtons = [
-            {
-                icon: "icon-[mdi--file-document-multiple] size-4",
-                tooltip: BUTTON_TOOLTIP,
-                onClick: openWorkflowStudio,
-            },
-            {
-                icon: "icon-[mdi--camera] size-4",
-                tooltip: SNAPSHOT_TOOLTIP,
-                onClick: saveCanvasToWorkflowStudio,
-            },
-        ];
+    if (settingsGroup?.element?.parentElement) {
+        settingsGroup.element.before(buttonGroup.element);
+    } else if (legacyContainer) {
+        legacyContainer.prepend(buttonGroup.element);
     }
-
-    return extensionObj;
 };
 
-(async () => {
-    const useActionBar = await supportsActionBarButtons();
-    const extensionObj = createExtensionObject(useActionBar);
-    app.registerExtension(extensionObj);
-})();
+app.registerExtension({
+    name: "WorkflowStudio.TopMenu",
+    actionBarButtons: [
+        {
+            icon: "icon-[mdi--file-document-multiple] size-4",
+            tooltip: BUTTON_TOOLTIP,
+            onClick: openWorkflowStudio,
+        },
+        {
+            icon: "icon-[mdi--camera] size-4",
+            tooltip: SNAPSHOT_TOOLTIP,
+            onClick: saveCanvasToWorkflowStudio,
+        },
+        {
+            icon: "icon-[mdi--view-grid-plus] size-4",
+            tooltip: NODE_SETS_TOOLTIP,
+            onClick: () => togglePanel(),
+        },
+    ],
+    beforeRegisterNodeDef(nodeType, _nodeData, _app) {
+        const origGetExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
+        nodeType.prototype.getExtraMenuOptions = function (_, options) {
+            origGetExtraMenuOptions?.apply(this, arguments);
+            const selectedCount = Object.keys(app.canvas.selected_nodes || {}).length;
+            options.push(null);
+            options.push({
+                content: `Save as Node Set${selectedCount > 1 ? ` (${selectedCount} nodes)` : ""}`,
+                callback: saveSelectedAsNodeSet,
+            });
+        };
+    },
+    async setup() {
+        const injectStyles = () => {
+            const styleId = "wfm-top-menu-button-styles";
+            if (document.getElementById(styleId)) return;
+
+            const style = document.createElement("style");
+            style.id = styleId;
+            style.textContent = `
+                button[aria-label="${BUTTON_TOOLTIP}"].wfm-top-menu-button {
+                    transition: all 0.2s ease;
+                    border: 1px solid transparent;
+                }
+                button[aria-label="${BUTTON_TOOLTIP}"].wfm-top-menu-button:hover {
+                    background-color: var(--primary-hover-bg) !important;
+                }
+                button[aria-label="${SNAPSHOT_TOOLTIP}"].wfm-snapshot-button {
+                    transition: all 0.2s ease;
+                    border: 1px solid transparent;
+                }
+                button[aria-label="${SNAPSHOT_TOOLTIP}"].wfm-snapshot-button:hover {
+                    background-color: var(--primary-hover-bg) !important;
+                }
+                button[aria-label="${NODE_SETS_TOOLTIP}"].wfm-node-sets-btn {
+                    transition: all 0.2s ease;
+                    border: 1px solid transparent;
+                }
+                button[aria-label="${NODE_SETS_TOOLTIP}"].wfm-node-sets-btn:hover {
+                    background-color: var(--primary-hover-bg) !important;
+                }
+            `;
+            document.head.appendChild(style);
+        };
+        injectStyles();
+
+        const replaceButtonIcon = () => {
+            const wfmButtons = document.querySelectorAll(`button[aria-label="${BUTTON_TOOLTIP}"]`);
+            wfmButtons.forEach((button) => {
+                button.classList.add("wfm-top-menu-button");
+                button.innerHTML = getWfmIcon();
+                button.style.borderRadius = "4px";
+                button.style.padding = "6px";
+                button.style.backgroundColor = "var(--primary-bg)";
+                const svg = button.querySelector("svg");
+                if (svg) {
+                    svg.style.width = "20px";
+                    svg.style.height = "20px";
+                }
+            });
+
+            const snapButtons = document.querySelectorAll(`button[aria-label="${SNAPSHOT_TOOLTIP}"]`);
+            snapButtons.forEach((button) => {
+                button.classList.add("wfm-snapshot-button");
+                button.innerHTML = getSnapshotIcon();
+                button.style.borderRadius = "4px";
+                button.style.padding = "6px";
+                const svg = button.querySelector("svg");
+                if (svg) {
+                    svg.style.width = "20px";
+                    svg.style.height = "20px";
+                }
+            });
+
+            const nsButtons = document.querySelectorAll(`button[aria-label="${NODE_SETS_TOOLTIP}"]`);
+            nsButtons.forEach((button) => {
+                button.classList.add("wfm-node-sets-btn");
+                button.innerHTML = getNodeSetsIcon();
+                button.style.borderRadius = "4px";
+                button.style.padding = "6px";
+                const svg = button.querySelector("svg");
+                if (svg) {
+                    svg.style.width = "20px";
+                    svg.style.height = "20px";
+                }
+            });
+
+            if (wfmButtons.length === 0) {
+                requestAnimationFrame(replaceButtonIcon);
+            }
+        };
+        requestAnimationFrame(replaceButtonIcon);
+    },
+});

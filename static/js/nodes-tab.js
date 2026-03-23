@@ -8,6 +8,8 @@ import { t } from "./i18n.js";
 
 // ── State ─────────────────────────────────────────────────
 
+const NODES_PER_PAGE = 100;
+
 const state = {
     allNodes: [],
     nodeMetadata: {},
@@ -23,6 +25,7 @@ const state = {
     selectedNode: null,
     activeSubView: "browser",
     loaded: false,
+    currentPage: 0,
 };
 
 // ── Helpers ───────────────────────────────────────────────
@@ -121,17 +124,21 @@ async function createNodeSet(data) {
     return await res.json();
 }
 
+async function updateNodeSet(id, updates) {
+    const res = await fetch("/api/wfm/node-sets/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...updates }),
+    });
+    return await res.json();
+}
+
 async function deleteNodeSet(id) {
     await fetch("/api/wfm/node-sets/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
     });
-}
-
-async function exportNodeSet(id) {
-    const res = await fetch(`/api/wfm/node-sets/export?id=${encodeURIComponent(id)}`);
-    return res.ok ? await res.json() : null;
 }
 
 // ── Filtering ─────────────────────────────────────────────
@@ -250,17 +257,26 @@ function renderNodeGrid() {
 
     if (filtered.length === 0) {
         grid.innerHTML = `<p class="wfm-placeholder">${t("noNodesFound")}</p>`;
+        removePagination();
         return;
     }
 
     if (state.viewMode === "table") {
         renderNodeTableView(grid, filtered);
+        removePagination();
         return;
     }
 
-    // Card view
+    // Card view with pagination
+    const totalPages = Math.ceil(filtered.length / NODES_PER_PAGE);
+    if (state.currentPage >= totalPages) state.currentPage = totalPages - 1;
+    if (state.currentPage < 0) state.currentPage = 0;
+
+    const start = state.currentPage * NODES_PER_PAGE;
+    const pageItems = filtered.slice(start, start + NODES_PER_PAGE);
+
     grid.innerHTML = "";
-    filtered.forEach(node => {
+    pageItems.forEach(node => {
         const meta = state.nodeMetadata[node.name] || {};
         const card = document.createElement("div");
         card.className = "wfm-card wfm-node-card";
@@ -295,6 +311,56 @@ function renderNodeGrid() {
         card.addEventListener("click", () => showNodeSidePanel(node));
         grid.appendChild(card);
     });
+
+    renderPagination(filtered.length, totalPages);
+}
+
+function renderPagination(totalItems, totalPages) {
+    removePagination();
+    if (totalPages <= 1) return;
+
+    const grid = document.getElementById("wfm-nodes-grid");
+    if (!grid) return;
+
+    const pager = document.createElement("div");
+    pager.id = "wfm-nodes-pagination";
+    pager.className = "wfm-pagination";
+
+    const prevBtn = document.createElement("button");
+    prevBtn.className = "wfm-btn wfm-btn-sm";
+    prevBtn.textContent = "\u25C0";
+    prevBtn.disabled = state.currentPage === 0;
+    prevBtn.addEventListener("click", () => {
+        if (state.currentPage > 0) { state.currentPage--; renderNodeGrid(); scrollGridToTop(); }
+    });
+
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "wfm-btn wfm-btn-sm";
+    nextBtn.textContent = "\u25B6";
+    nextBtn.disabled = state.currentPage >= totalPages - 1;
+    nextBtn.addEventListener("click", () => {
+        if (state.currentPage < totalPages - 1) { state.currentPage++; renderNodeGrid(); scrollGridToTop(); }
+    });
+
+    const info = document.createElement("span");
+    info.className = "wfm-pagination-info";
+    const start = state.currentPage * NODES_PER_PAGE + 1;
+    const end = Math.min((state.currentPage + 1) * NODES_PER_PAGE, totalItems);
+    info.textContent = `${start}-${end} / ${totalItems}`;
+
+    pager.appendChild(prevBtn);
+    pager.appendChild(info);
+    pager.appendChild(nextBtn);
+
+    grid.parentElement.insertBefore(pager, grid.nextSibling);
+}
+
+function removePagination() {
+    document.getElementById("wfm-nodes-pagination")?.remove();
+}
+
+function scrollGridToTop() {
+    document.getElementById("wfm-nodes-grid")?.scrollTo(0, 0);
 }
 
 function renderNodeTableView(grid, filtered) {
@@ -312,6 +378,8 @@ function renderNodeTableView(grid, filtered) {
     filtered.forEach(node => {
         const meta = state.nodeMetadata[node.name] || {};
         const tr = document.createElement("tr");
+        tr.className = "wfm-nodes-table-row";
+        tr.dataset.nodeName = node.name;
         if (state.selectedNode && state.selectedNode.name === node.name) {
             tr.classList.add("wfm-card-selected");
         }
@@ -386,9 +454,12 @@ function renderSideDetails(node) {
     if (node.deprecated) flags.push(`<span class="wfm-badge" style="background:var(--wfm-danger)">${t("nodesDeprecated")}</span>`);
 
     el.innerHTML = `
-        <div class="wfm-node-detail-section">
-            <div class="wfm-node-detail-label">${t("nodesClassName")}</div>
-            <div class="wfm-node-detail-value" style="font-family:monospace;font-size:12px;">${escapeHtml(node.name)}</div>
+        <div class="wfm-node-detail-section" style="display:flex;align-items:center;gap:6px;">
+            <div style="flex:1;">
+                <div class="wfm-node-detail-label">${t("nodesClassName")}</div>
+                <div class="wfm-node-detail-value" style="font-family:monospace;font-size:12px;">${escapeHtml(node.name)}</div>
+            </div>
+            <button id="wfm-node-copy-name-btn" class="wfm-btn wfm-btn-sm" title="${t("nodesCopyClassName")}">&#128203;</button>
         </div>
         <div class="wfm-node-detail-section">
             <div class="wfm-node-detail-label">${t("nodesPackage")}</div>
@@ -409,6 +480,15 @@ function renderSideDetails(node) {
                 value="${escapeHtml((meta.tags || []).join(", "))}"
                 placeholder="${t("nodesEditTags")}">
         </div>`;
+
+    // Copy class name button
+    const copyNameBtn = document.getElementById("wfm-node-copy-name-btn");
+    if (copyNameBtn) {
+        copyNameBtn.addEventListener("click", async () => {
+            await navigator.clipboard.writeText(node.name);
+            showToast(t("nodesCopiedClassName"), "success");
+        });
+    }
 
     const tagInput = document.getElementById("wfm-nodes-tag-input");
     if (tagInput) {
@@ -597,25 +677,18 @@ function renderNodeSets() {
                 </div>
             </div>
             <div class="wfm-node-set-actions">
-                <button class="wfm-btn wfm-btn-sm wfm-btn-primary wfm-node-set-copy" title="${t("nodesCopyToClipboard")}">&#128203; ${t("copy")}</button>
                 <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-node-set-delete" title="${t("nodesDeleteSet")}">&#128465;</button>
             </div>`;
 
-        card.querySelector(".wfm-node-set-copy").addEventListener("click", async () => {
-            const data = await exportNodeSet(set.id);
-            if (data) {
-                await navigator.clipboard.writeText(JSON.stringify(data.prompt, null, 2));
-                showToast(t("nodesCopied"), "success");
-            }
-        });
-
-        card.querySelector(".wfm-node-set-delete").addEventListener("click", async () => {
+        card.querySelector(".wfm-node-set-delete").addEventListener("click", async (e) => {
+            e.stopPropagation();
             if (!confirm(t("nodesDeleteSetConfirm"))) return;
             await deleteNodeSet(set.id);
             state.nodeSets = state.nodeSets.filter(s => s.id !== set.id);
             renderNodeSets();
         });
 
+        card.addEventListener("click", () => showEditSetModal(set));
         grid.appendChild(card);
     });
 }
@@ -645,6 +718,11 @@ function showCreateSetModal() {
             <label>${t("nodesSetNodes")}</label>
             <div id="wfm-set-nodes-list"></div>
             <button id="wfm-set-add-node" class="wfm-btn wfm-btn-sm" style="margin-top:4px;">+ ${t("nodesAddNode")}</button>
+        </div>
+        <div class="wfm-form-group">
+            <label>${t("nodesSetLinks")}</label>
+            <div id="wfm-set-links-list"></div>
+            <button id="wfm-set-add-link" class="wfm-btn wfm-btn-sm" style="margin-top:4px;">+ ${t("nodesAddLink")}</button>
         </div>
         <div style="margin-top:12px;text-align:right;">
             <button id="wfm-set-save" class="wfm-btn wfm-btn-primary">${t("save")}</button>
@@ -686,6 +764,33 @@ function showCreateSetModal() {
 
     document.getElementById("wfm-set-add-node").addEventListener("click", addNodeRow);
 
+    // Link rows
+    const linksList = document.getElementById("wfm-set-links-list");
+    let linkRows = [];
+
+    function addLinkRow() {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:4px;margin-bottom:4px;align-items:center;font-size:12px;";
+        row.innerHTML = `
+            <span>From #</span>
+            <input type="number" class="wfm-input wfm-set-link-from" style="width:50px;" min="0" value="0">
+            <span>slot</span>
+            <input type="number" class="wfm-input wfm-set-link-from-slot" style="width:50px;" min="0" value="0">
+            <span>→ To #</span>
+            <input type="number" class="wfm-input wfm-set-link-to" style="width:50px;" min="0" value="1">
+            <span>slot</span>
+            <input type="number" class="wfm-input wfm-set-link-to-slot" style="width:50px;" min="0" value="0">
+            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-set-remove-link">&times;</button>`;
+        row.querySelector(".wfm-set-remove-link").addEventListener("click", () => {
+            linkRows = linkRows.filter(r => r !== row);
+            row.remove();
+        });
+        linksList.appendChild(row);
+        linkRows.push(row);
+    }
+
+    document.getElementById("wfm-set-add-link").addEventListener("click", addLinkRow);
+
     document.getElementById("wfm-set-save").addEventListener("click", async () => {
         const name = document.getElementById("wfm-set-name").value.trim();
         if (!name) return;
@@ -704,7 +809,17 @@ function showCreateSetModal() {
         });
         if (nodes.length === 0) return;
 
-        const result = await createNodeSet({ name, description, tags, nodes, links: [] });
+        // Collect links
+        const links = [];
+        linkRows.forEach(row => {
+            const fromNode = parseInt(row.querySelector(".wfm-set-link-from").value) || 0;
+            const fromSlot = parseInt(row.querySelector(".wfm-set-link-from-slot").value) || 0;
+            const toNode = parseInt(row.querySelector(".wfm-set-link-to").value) || 0;
+            const toSlot = parseInt(row.querySelector(".wfm-set-link-to-slot").value) || 0;
+            links.push({ from_node: fromNode, from_slot: fromSlot, to_node: toNode, to_slot: toSlot });
+        });
+
+        const result = await createNodeSet({ name, description, tags, nodes, links });
         if (result.nodeSet) {
             state.nodeSets.push(result.nodeSet);
         } else {
@@ -712,6 +827,160 @@ function showCreateSetModal() {
         }
         renderNodeSets();
         modal.style.display = "none";
+    });
+
+    modal.style.display = "flex";
+}
+
+function showEditSetModal(set) {
+    const modal = document.getElementById("wfm-modal-overlay");
+    if (!modal) return;
+
+    const allNodeNames = state.allNodes.map(n => n.name).sort();
+
+    modal.querySelector(".wfm-modal-header h2").textContent = t("nodesEditSet");
+    const body = modal.querySelector(".wfm-modal-body");
+    body.innerHTML = `
+        <div class="wfm-form-group">
+            <label>${t("nodesSetName")}</label>
+            <input type="text" id="wfm-set-name" class="wfm-input" style="width:100%;">
+        </div>
+        <div class="wfm-form-group">
+            <label>${t("nodesSetDescription")}</label>
+            <textarea id="wfm-set-desc" class="wfm-textarea" style="width:100%;"></textarea>
+        </div>
+        <div class="wfm-form-group">
+            <label>${t("nodesEditTags")}</label>
+            <input type="text" id="wfm-set-tags" class="wfm-input" style="width:100%;" placeholder="tag1, tag2">
+        </div>
+        <div class="wfm-form-group">
+            <label>${t("nodesSetNodes")} <small style="color:var(--wfm-text-secondary);">(#0, #1, ...)</small></label>
+            <div id="wfm-set-nodes-list"></div>
+            <button id="wfm-set-add-node" class="wfm-btn wfm-btn-sm" style="margin-top:4px;">+ ${t("nodesAddNode")}</button>
+        </div>
+        <div class="wfm-form-group">
+            <label>${t("nodesSetLinks")}</label>
+            <div id="wfm-set-links-list"></div>
+            <button id="wfm-set-add-link" class="wfm-btn wfm-btn-sm" style="margin-top:4px;">+ ${t("nodesAddLink")}</button>
+        </div>
+        <div style="margin-top:12px;text-align:right;">
+            <button id="wfm-set-save" class="wfm-btn wfm-btn-primary">${t("save")}</button>
+        </div>`;
+
+    // Fill existing values
+    document.getElementById("wfm-set-name").value = set.name || "";
+    document.getElementById("wfm-set-desc").value = set.description || "";
+    document.getElementById("wfm-set-tags").value = (set.tags || []).join(", ");
+
+    const nodesList = document.getElementById("wfm-set-nodes-list");
+    let nodeRows = [];
+
+    // Datalist for autocomplete
+    if (!document.getElementById("wfm-node-datalist")) {
+        const dl = document.createElement("datalist");
+        dl.id = "wfm-node-datalist";
+        allNodeNames.forEach(n => {
+            const opt = document.createElement("option");
+            opt.value = n;
+            dl.appendChild(opt);
+        });
+        document.body.appendChild(dl);
+    }
+
+    function addNodeRow(classType, title, relPos) {
+        const idx = nodeRows.length;
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:4px;margin-bottom:4px;align-items:center;";
+        row.innerHTML = `
+            <span style="font-size:11px;color:var(--wfm-text-secondary);min-width:20px;">#${idx}</span>
+            <input type="text" class="wfm-input wfm-set-node-class" style="flex:1;" list="wfm-node-datalist" placeholder="Node class type" value="${escapeHtml(classType || "")}">
+            <input type="text" class="wfm-set-node-title wfm-input" style="width:80px;" placeholder="Title" value="${escapeHtml(title || "")}">
+            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-set-remove-node">&times;</button>`;
+        row.querySelector(".wfm-set-remove-node").addEventListener("click", () => {
+            nodeRows = nodeRows.filter((_, i) => i !== idx);
+            row.remove();
+        });
+        nodesList.appendChild(row);
+        nodeRows.push(row);
+    }
+
+    // Populate existing nodes
+    (set.nodes || []).forEach((n, i) => {
+        addNodeRow(n.class_type, n.title, n.rel_pos);
+    });
+    if ((set.nodes || []).length === 0) {
+        addNodeRow("", "", null);
+    }
+
+    document.getElementById("wfm-set-add-node").addEventListener("click", () => addNodeRow("", "", null));
+
+    // Link rows
+    const linksList = document.getElementById("wfm-set-links-list");
+    let linkRows = [];
+
+    function addLinkRow(fromNode, fromSlot, toNode, toSlot) {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:4px;margin-bottom:4px;align-items:center;font-size:12px;";
+        row.innerHTML = `
+            <span>From #</span>
+            <input type="number" class="wfm-input wfm-set-link-from" style="width:50px;" min="0" value="${fromNode ?? 0}">
+            <span>slot</span>
+            <input type="number" class="wfm-input wfm-set-link-from-slot" style="width:50px;" min="0" value="${fromSlot ?? 0}">
+            <span>→ To #</span>
+            <input type="number" class="wfm-input wfm-set-link-to" style="width:50px;" min="0" value="${toNode ?? 1}">
+            <span>slot</span>
+            <input type="number" class="wfm-input wfm-set-link-to-slot" style="width:50px;" min="0" value="${toSlot ?? 0}">
+            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-set-remove-link">&times;</button>`;
+        row.querySelector(".wfm-set-remove-link").addEventListener("click", () => {
+            linkRows = linkRows.filter(r => r !== row);
+            row.remove();
+        });
+        linksList.appendChild(row);
+        linkRows.push(row);
+    }
+
+    // Populate existing links
+    (set.links || []).forEach(lk => {
+        addLinkRow(lk.from_node, lk.from_slot, lk.to_node, lk.to_slot);
+    });
+
+    document.getElementById("wfm-set-add-link").addEventListener("click", () => addLinkRow(0, 0, 1, 0));
+
+    // Save (update)
+    document.getElementById("wfm-set-save").addEventListener("click", async () => {
+        const name = document.getElementById("wfm-set-name").value.trim();
+        if (!name) return;
+        const description = document.getElementById("wfm-set-desc").value.trim();
+        const tags = document.getElementById("wfm-set-tags").value.split(",").map(s => s.trim()).filter(Boolean);
+        const nodes = [];
+        nodesList.querySelectorAll(".wfm-set-node-class").forEach((input, i) => {
+            const classType = input.value.trim();
+            if (!classType) return;
+            const titleInput = nodesList.querySelectorAll(".wfm-set-node-title")[i];
+            nodes.push({
+                class_type: classType,
+                title: titleInput?.value?.trim() || "",
+                rel_pos: [i * 300, 0],
+            });
+        });
+        if (nodes.length === 0) return;
+
+        const links = [];
+        linkRows.forEach(row => {
+            const fromNode = parseInt(row.querySelector(".wfm-set-link-from").value) || 0;
+            const fromSlot = parseInt(row.querySelector(".wfm-set-link-from-slot").value) || 0;
+            const toNode = parseInt(row.querySelector(".wfm-set-link-to").value) || 0;
+            const toSlot = parseInt(row.querySelector(".wfm-set-link-to-slot").value) || 0;
+            links.push({ from_node: fromNode, from_slot: fromSlot, to_node: toNode, to_slot: toSlot });
+        });
+
+        await updateNodeSet(set.id, { name, description, tags, nodes, links });
+
+        // Refresh local state
+        state.nodeSets = await fetchNodeSets();
+        renderNodeSets();
+        modal.style.display = "none";
+        showToast(t("nodesSetUpdated"), "success");
     });
 
     modal.style.display = "flex";
@@ -782,6 +1051,7 @@ export function initNodesTab() {
     if (searchInput) {
         searchInput.addEventListener("input", () => {
             state.searchText = searchInput.value;
+            state.currentPage = 0;
             renderNodeGrid();
         });
     }
@@ -789,18 +1059,22 @@ export function initNodesTab() {
     // Filters
     document.getElementById("wfm-nodes-category-filter")?.addEventListener("change", e => {
         state.categoryFilter = e.target.value;
+        state.currentPage = 0;
         renderNodeGrid();
     });
     document.getElementById("wfm-nodes-package-filter")?.addEventListener("change", e => {
         state.packageFilter = e.target.value;
+        state.currentPage = 0;
         renderNodeGrid();
     });
     document.getElementById("wfm-nodes-tag-filter")?.addEventListener("change", e => {
         state.tagFilter = e.target.value;
+        state.currentPage = 0;
         renderNodeGrid();
     });
     document.getElementById("wfm-nodes-group-filter")?.addEventListener("change", e => {
         state.groupFilter = e.target.value;
+        state.currentPage = 0;
         renderNodeGrid();
     });
 
@@ -808,6 +1082,7 @@ export function initNodesTab() {
     document.getElementById("wfm-nodes-fav-btn")?.addEventListener("click", e => {
         state.showFavoritesOnly = !state.showFavoritesOnly;
         e.currentTarget.classList.toggle("active", state.showFavoritesOnly);
+        state.currentPage = 0;
         renderNodeGrid();
     });
 
