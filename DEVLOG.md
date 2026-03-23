@@ -1,5 +1,30 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-23: v0.1.6 パストラバーサル脆弱性修正
+
+### 概要
+- ComfyUI-Manager PR #2706 のレビューで指摘されたセキュリティ脆弱性を修正
+- `workflow_service.py` で任意のファイルパスへのアクセスが可能だった問題を解消
+
+### 背景
+- ltdrdata（ComfyUI-Manager メンテナー）から `import_files` メソッド内のパス構築が安全でないとの指摘
+- `original_name` に `../../etc/passwd` のようなパストラバーサル文字列を送ることで、`workflows_dir` 外のファイルを読み書きできる状態だった
+
+### 変更内容
+
+#### `py/services/workflow_service.py`
+- **`_validate_filename()` 強化** — `"."`, `".."`, null バイト (`\x00`) のチェックを追加
+- **`_safe_path()` メソッド新規追加** — ファイル名バリデーション + `resolve()` でパスを正規化し、`workflows_dir` 配下にあることを検証。違反時は `ValueError` を送出
+- **全公開メソッドに `_safe_path()` 適用:**
+  - `import_files` — ループ冒頭で `_validate_filename` チェック追加、パス構築を `_safe_path` に変更
+  - `get_raw` — `_safe_path` に変更
+  - `rename` — old/new 両パスを `_safe_path` に変更
+  - `delete` — `_safe_path` に変更
+  - `analyze` — `_safe_path` に変更
+  - `change_thumbnail` — `_safe_path` に変更
+
+---
+
 ## 2026-03-22: v0.1.5 テーマシステム追加
 
 ### 概要
