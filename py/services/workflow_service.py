@@ -42,7 +42,22 @@ class WorkflowService:
         """Validate filename has no path traversal."""
         if not fname or "/" in fname or "\\" in fname:
             return False
+        if fname in (".", "..") or "\x00" in fname:
+            return False
         return True
+
+    def _safe_path(self, filename):
+        """Resolve path and ensure it stays within workflows_dir.
+
+        Raises ValueError if path traversal is detected.
+        """
+        if not self._validate_filename(filename):
+            raise ValueError(f"Invalid filename: {filename}")
+        resolved = (self.workflows_dir / filename).resolve()
+        workflows_resolved = self.workflows_dir.resolve()
+        if not str(resolved).startswith(str(workflows_resolved) + os.sep) and resolved != workflows_resolved:
+            raise ValueError(f"Path traversal detected: {filename}")
+        return resolved
 
     def _now_iso(self):
         return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -106,7 +121,7 @@ class WorkflowService:
 
     def get_raw(self, filename):
         """Get raw workflow JSON content."""
-        fpath = self.workflows_dir / filename
+        fpath = self._safe_path(filename)
         if not fpath.is_file():
             return None
         with open(fpath, "r", encoding="utf-8") as f:
@@ -132,10 +147,16 @@ class WorkflowService:
             ext = os.path.splitext(original_name)[1].lower()
             base = os.path.splitext(original_name)[0]
 
+            if not self._validate_filename(original_name):
+                results.append(
+                    {"name": original_name, "status": "error", "message": "Invalid filename"}
+                )
+                continue
+
             if ext == ".json":
                 try:
                     wf_data = json.loads(file_data.decode("utf-8"))
-                    out_path = self.workflows_dir / original_name
+                    out_path = self._safe_path(original_name)
                     with open(out_path, "w", encoding="utf-8") as f:
                         json.dump(wf_data, f, ensure_ascii=False, indent=2)
                     results.append({"name": original_name, "status": "success"})
@@ -158,13 +179,13 @@ class WorkflowService:
                     try:
                         # Save PNG as thumbnail
                         with open(
-                            self.workflows_dir / original_name, "wb"
+                            self._safe_path(original_name), "wb"
                         ) as f:
                             f.write(file_data)
                         # Save extracted workflow as JSON
                         json_name = base + ".json"
                         with open(
-                            self.workflows_dir / json_name, "w", encoding="utf-8"
+                            self._safe_path(json_name), "w", encoding="utf-8"
                         ) as f:
                             json.dump(wf_data, f, ensure_ascii=False, indent=2)
                         results.append({"name": json_name, "status": "success"})
@@ -190,8 +211,8 @@ class WorkflowService:
     def rename(self, old_name, new_stem):
         """Rename workflow and its associated thumbnail."""
         new_name = new_stem + ".json"
-        old_json = self.workflows_dir / old_name
-        new_json = self.workflows_dir / new_name
+        old_json = self._safe_path(old_name)
+        new_json = self._safe_path(new_name)
 
         if not old_json.is_file():
             return {"error": "file not found"}, 404
@@ -203,8 +224,8 @@ class WorkflowService:
         # Rename associated thumbnail
         old_stem = old_name[:-5] if old_name.endswith(".json") else old_name
         for ext in (".png", ".webp"):
-            old_thumb = self.workflows_dir / (old_stem + ext)
-            new_thumb = self.workflows_dir / (new_stem + ext)
+            old_thumb = self._safe_path(old_stem + ext)
+            new_thumb = self._safe_path(new_stem + ext)
             if old_thumb.is_file():
                 os.rename(old_thumb, new_thumb)
 
@@ -218,13 +239,13 @@ class WorkflowService:
 
     def delete(self, filename):
         """Delete workflow JSON and associated thumbnail."""
-        json_path = self.workflows_dir / filename
+        json_path = self._safe_path(filename)
         if json_path.is_file():
             os.remove(json_path)
 
         base = filename[:-5] if filename.endswith(".json") else filename
         for ext in (".png", ".webp"):
-            thumb_path = self.workflows_dir / (base + ext)
+            thumb_path = self._safe_path(base + ext)
             if thumb_path.is_file():
                 os.remove(thumb_path)
 
@@ -235,7 +256,7 @@ class WorkflowService:
 
     def analyze(self, filename):
         """Re-analyze a workflow and save results to metadata."""
-        fpath = self.workflows_dir / filename
+        fpath = self._safe_path(filename)
         if not fpath.is_file():
             return None
 
@@ -280,6 +301,7 @@ class WorkflowService:
 
     def change_thumbnail(self, filename, image_data, original_image_name):
         """Change workflow thumbnail image."""
+        self._safe_path(filename)  # validate filename
         orig_name_lower = original_image_name.lower()
         if orig_name_lower.endswith(".webp"):
             new_ext = ".webp"
@@ -292,15 +314,15 @@ class WorkflowService:
 
         # Backup existing thumbnails
         for ext in (".png", ".webp", ".jpg", ".jpeg"):
-            old_thumb = self.workflows_dir / (stem + ext)
+            old_thumb = self._safe_path(stem + ext)
             if old_thumb.is_file():
-                backup = self.workflows_dir / ("old_" + stem + ext)
+                backup = self._safe_path("old_" + stem + ext)
                 if backup.is_file():
                     os.remove(backup)
                 os.rename(old_thumb, backup)
 
         # Save new thumbnail
-        new_thumb_path = self.workflows_dir / (stem + new_ext)
+        new_thumb_path = self._safe_path(stem + new_ext)
         with open(new_thumb_path, "wb") as f:
             f.write(image_data)
 
