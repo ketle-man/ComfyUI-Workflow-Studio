@@ -8,7 +8,7 @@ import { t } from "./i18n.js";
 
 // ── State ─────────────────────────────────────────────────
 
-const NODES_PER_PAGE = 100;
+const NODES_PER_PAGE = 50;
 
 const state = {
     allNodes: [],

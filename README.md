@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.1.5-green)
+![Version](https://img.shields.io/badge/version-0.1.7-green)
 
 ## Screenshots
 
@@ -66,6 +66,16 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Ollama connection** — configure Ollama server URL
 - **Badge display** — toggle metadata badges on workflow cards
 - **Language** — English / Japanese / Chinese
+
+### Nodes Tab (v0.1.7)
+- **Node Browser** — browse all installed ComfyUI nodes from `/object_info` API with Card/Table views
+- **Search & Filter** — full-text search, filter by category, package, tags, groups, and favorites
+- **Package badges** — color-coded badges generated from package names
+- **Node detail panel** — view I/O specifications, edit tags, manage groups
+- **Node Sets** — save multiple nodes + connections as reusable sets from the ComfyUI canvas
+- **Right-click context menu** — "Save as Node Set" option on any node in ComfyUI
+- **Node Library side panel** — Favorites, Sets, and Groups tabs accessible from ComfyUI's top bar
+- **Drag & drop** — place node sets onto the canvas via drag and drop
 
 ### Help & Support Tab (v0.1.3)
 - **Feature list** — overview of all features organized by tab
@@ -142,6 +152,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.1.7
+- **Nodes tab** — browse, search, and filter all installed ComfyUI nodes with Card/Table views, pagination (50 nodes/page), package color badges, and node detail side panel with I/O specs
+- **Node Sets** — save selected nodes + connections from ComfyUI canvas as reusable sets via right-click context menu
+- **Node Library side panel** — accessible from ComfyUI top bar with Favorites, Sets, and Groups tabs, drag & drop placement
+- **3 top bar buttons** — Workflow Studio, Canvas Snapshot, and Node Library buttons in ComfyUI's action bar
+
+### v0.1.6
+- **Security fix** — path traversal vulnerability in `workflow_service.py` (reported via ComfyUI-Manager PR review)
+
 ### v0.1.5
 - **Theme system** — 13 built-in themes selectable from Settings tab with instant preview (Deep Ocean Dark, Pop & Vibrant, Light Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro 8-bit, Pastel Dream, Brutalism, Earthy, Material UI, Monotone + Accent, Corporate Trust)
 - Theme preference persisted in localStorage and restored on page load (no flash)
@@ -177,11 +196,13 @@ ComfyUI-Workflow-Studio/
 │   ├── config.py                # Path configuration
 │   ├── routes/
 │   │   ├── workflow_routes.py   # Workflow CRUD & analysis API
+│   │   ├── nodes_routes.py      # Nodes metadata & node sets API
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
 │   │   └── eagle_routes.py      # Eagle integration API
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
+│       ├── nodes_service.py     # Node metadata & node sets
 │       ├── workflow_analyzer.py # Model/node detection
 │       ├── settings_service.py  # Settings persistence
 │       └── png_extractor.py     # PNG metadata extraction
@@ -197,12 +218,14 @@ ComfyUI-Workflow-Studio/
 │       ├── prompt-tab.js        # AI assistant & presets
 │       ├── settings-tab.js      # Settings panel
 │       ├── comfyui-client.js    # ComfyUI WebSocket/API client
+│       ├── nodes-tab.js          # Node browser & node sets
 │       ├── comfyui-workflow.js  # UI-to-API format conversion
 │       ├── comfyui-editor.js    # Dynamic parameter editor
 │       ├── json-highlight.js    # JSON syntax highlighting
 │       └── i18n.js              # Internationalization
 ├── web/comfyui/
-│   └── top_menu_extension.js    # ComfyUI menu bar integration
+│   ├── top_menu_extension.js    # ComfyUI menu bar integration
+│   └── node_sets_menu.js        # Node Library side panel
 └── data/                        # Metadata & settings storage
 ```
 

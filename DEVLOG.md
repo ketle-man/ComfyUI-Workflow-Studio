@@ -1,5 +1,57 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-23: v0.1.7 Nodes タブ追加
+
+### 概要
+- ComfyUI にインストールされた全ノードをブラウジング・整理・管理する「Nodes」タブを追加
+- ノードセット機能：複数ノード＋接続情報をセットとして保存し、再利用可能に
+
+### 変更内容
+
+#### 新規ファイル
+- **`py/services/nodes_service.py`** — ノードメタデータ（お気に入り、タグ、グループ）とノードセットの CRUD サービス
+- **`py/routes/nodes_routes.py`** — 9つの API エンドポイント（metadata, groups, node-sets の GET/POST/update/delete/export）
+- **`static/js/nodes-tab.js`** — Nodes タブのメインロジック（Node Browser + Node Sets サブビュー）
+- **`web/comfyui/node_sets_menu.js`** — ComfyUI キャンバス内サイドパネル（Favorites/Sets/Groups タブ、ドラッグ&ドロップ配置）
+
+#### 既存ファイル修正
+- **`py/wfm.py`** — `nodes_routes.setup_routes(app)` 追加
+- **`py/config.py`** — `NODE_METADATA_FILE`, `NODE_SETS_FILE` 定数追加
+- **`static/js/app.js`** — Nodes タブ登録、`initNodesTab()` 呼び出し
+- **`static/js/i18n.js`** — EN/JA/ZH に Nodes タブ関連 ~35 キー追加
+- **`static/js/comfyui-client.js`** — `fetchAllObjectInfo()` メソッド追加
+- **`static/css/main.css`** — ノードタブ固有スタイル（カード、テーブル、バッジ、ページネーション等）
+- **`templates/index.html`** — Nodes タブの HTML 構造追加
+- **`web/comfyui/top_menu_extension.js`** — Node Library ボタン＋右クリック "Save as Node Set" コンテキストメニュー追加
+
+### 機能詳細
+
+#### Node Browser（Sub-view 1）
+- ComfyUI `/object_info` API から全ノード取得（遅延読み込み）
+- Card / Table の2ビュー切り替え
+- フィルタ: カテゴリ、パッケージ、タグ、グループ、お気に入り
+- 全文検索: name, display_name, description, search_aliases, tags
+- パッケージ名カラーバッジ（ハッシュベース色生成）
+- サイドパネル: ノード詳細（I/O仕様テーブル、タグ編集、グループ管理）
+- 1ページ50ノード表示（ページネーション）
+
+#### Node Sets（Sub-view 2）
+- ComfyUI キャンバスで選択したノード＋接続をセットとして保存
+- 右クリックコンテキストメニュー "Save as Node Set" から保存
+- セット一覧表示（名前、説明、ノード数、タグ）
+- 作成・編集・削除
+- ComfyUI 互換 JSON としてクリップボードにコピー
+
+#### ComfyUI トップバー統合
+- 3ボタン: Workflow Studio / Snapshot / Node Library
+- Node Library ボタンでサイドパネル開閉
+
+### バグ修正
+- `node_sets_menu.js` で `const saveSelectedAsNodeSet` が二重定義されていた ESM SyntaxError を修正（Vite preload wrapper により完全にサイレントだった）
+- デバッグ用 `console.log` 削除
+
+---
+
 ## 2026-03-23: v0.1.6 パストラバーサル脆弱性修正
 
 ### 概要
