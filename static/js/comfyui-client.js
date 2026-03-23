@@ -70,10 +70,16 @@ export const comfyUI = {
         });
     },
 
-    // Model fetching
+    // Node info fetching
     async fetchObjectInfo(nodeClass) {
         const res = await fetch(`${this.baseUrl}/object_info/${nodeClass}`);
         if (!res.ok) return null;
+        return await res.json();
+    },
+
+    async fetchAllObjectInfo() {
+        const res = await fetch(`${this.baseUrl}/object_info`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
     },
 

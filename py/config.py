@@ -55,3 +55,5 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Metadata file path
 METADATA_FILE = DATA_DIR / "metadata.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
+NODE_METADATA_FILE = DATA_DIR / "node_metadata.json"
+NODE_SETS_FILE = DATA_DIR / "node_sets.json"

@@ -90,7 +90,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", generate: "tabGenerate", prompt: "tabPrompt", settings: "tabSettings", help: "tabHelp" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", generate: "tabGenerate", prompt: "tabPrompt", settings: "tabSettings", help: "tabHelp" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -141,6 +141,27 @@ function applyI18nToHtml() {
 
     const copyBtn = document.getElementById("wfm-json-copy-btn");
     if (copyBtn) copyBtn.textContent = t("copy");
+
+    // Nodes tab
+    const nodesSubBtns = document.querySelectorAll(".wfm-nodes-subview-btn");
+    nodesSubBtns.forEach(btn => {
+        if (btn.dataset.subview === "browser") btn.textContent = t("nodesAllNodes");
+        if (btn.dataset.subview === "sets") btn.textContent = t("nodesNodeSets");
+    });
+    const nodesSearch = document.getElementById("wfm-nodes-search");
+    if (nodesSearch) nodesSearch.placeholder = t("nodesSearchPlaceholder");
+    const nodesRefreshBtn = document.getElementById("wfm-nodes-refresh-btn");
+    if (nodesRefreshBtn) nodesRefreshBtn.textContent = t("nodesRefresh");
+    const nodeSetCreateBtn = document.getElementById("wfm-node-set-create-btn");
+    if (nodeSetCreateBtn) nodeSetCreateBtn.textContent = t("nodesCreateSet");
+    const nodesSideTabBtns = document.querySelectorAll(".wfm-nodes-side-tab-btn");
+    nodesSideTabBtns.forEach(btn => {
+        if (btn.dataset.sideTab === "details") btn.textContent = t("nodesDetails");
+        if (btn.dataset.sideTab === "io") btn.textContent = t("nodesIoSpec");
+        if (btn.dataset.sideTab === "nodegroup") btn.textContent = t("nodesGroups");
+    });
+    const nodesPlaceholder = document.getElementById("wfm-nodes-placeholder");
+    if (nodesPlaceholder) nodesPlaceholder.textContent = t("nodesClickToLoad");
 
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
@@ -267,6 +288,7 @@ function initModal() {
 // ============================================
 
 import { initWorkflowTab } from "./workflow-tab.js";
+import { initNodesTab } from "./nodes-tab.js";
 import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
 import { initSettingsTab, applyTheme, getSavedTheme } from "./settings-tab.js";
@@ -280,6 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initModal();
     initSettingsTab(); // Settings first (applies saved URL)
     initWorkflowTab();
+    initNodesTab();
     initGenerateTab();
     initPromptTab();
 

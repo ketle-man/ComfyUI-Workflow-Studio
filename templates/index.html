@@ -15,6 +15,7 @@
         </div>
         <nav class="wfm-tabs">
             <button class="wfm-tab active" data-tab="workflow">Workflow</button>
+            <button class="wfm-tab" data-tab="nodes">Nodes</button>
             <button class="wfm-tab" data-tab="generate">GenerateUI</button>
             <button class="wfm-tab" data-tab="prompt">Prompt</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
@@ -125,6 +126,69 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Nodes Tab -->
+        <section id="wfm-tab-nodes" class="wfm-tab-content">
+            <!-- Sub-view toggle + Toolbar -->
+            <div class="wfm-toolbar">
+                <div class="wfm-toolbar-row" style="gap:8px;">
+                    <div class="wfm-nodes-subview-nav">
+                        <button class="wfm-nodes-subview-btn active" data-subview="browser">All Nodes</button>
+                        <button class="wfm-nodes-subview-btn" data-subview="sets">Node Sets</button>
+                    </div>
+                </div>
+                <!-- Browser toolbar -->
+                <div id="wfm-nodes-browser-toolbar" class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;">
+                    <button class="wfm-filter-btn" id="wfm-nodes-fav-btn" title="Favorites">&#9733;</button>
+                    <input type="text" id="wfm-nodes-search" class="wfm-search-input" placeholder="Search nodes...">
+                    <select id="wfm-nodes-category-filter" class="wfm-select wfm-toolbar-select"><option value="">All Categories</option></select>
+                    <select id="wfm-nodes-package-filter" class="wfm-select wfm-toolbar-select"><option value="">All Packages</option></select>
+                    <select id="wfm-nodes-tag-filter" class="wfm-select wfm-toolbar-select"><option value="">All Tags</option></select>
+                    <select id="wfm-nodes-group-filter" class="wfm-select wfm-toolbar-select"><option value="">All Groups</option></select>
+                    <div class="wfm-view-btns">
+                        <button class="wfm-view-btn active" data-nodes-view="card" title="Card">&#9776;</button>
+                        <button class="wfm-view-btn" data-nodes-view="table" title="Table">&#8801;</button>
+                    </div>
+                    <span id="wfm-nodes-count" class="wfm-nodes-count"></span>
+                    <button id="wfm-nodes-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                </div>
+            </div>
+
+            <!-- Browser sub-view -->
+            <div id="wfm-nodes-browser" class="wfm-workflow-area">
+                <div id="wfm-nodes-grid" class="wfm-grid wfm-view-card">
+                    <p class="wfm-placeholder" id="wfm-nodes-placeholder">Click to load nodes...</p>
+                </div>
+                <!-- Side Panel -->
+                <div id="wfm-nodes-side-panel" class="wfm-side-panel" style="display:none;">
+                    <div class="wfm-side-panel-header">
+                        <span id="wfm-nodes-panel-title" class="wfm-side-panel-title"></span>
+                        <button id="wfm-nodes-panel-close" class="wfm-side-panel-close">&times;</button>
+                    </div>
+                    <div class="wfm-side-tab-nav">
+                        <button class="wfm-nodes-side-tab-btn active" data-side-tab="details">Details</button>
+                        <button class="wfm-nodes-side-tab-btn" data-side-tab="io">I/O Spec</button>
+                        <button class="wfm-nodes-side-tab-btn" data-side-tab="nodegroup">Groups</button>
+                    </div>
+                    <div id="wfm-nodes-side-details" class="wfm-nodes-side-content active" style="overflow-y:auto;padding:12px;">
+                    </div>
+                    <div id="wfm-nodes-side-io" class="wfm-nodes-side-content" style="display:none;overflow-y:auto;padding:12px;">
+                    </div>
+                    <div id="wfm-nodes-side-group" class="wfm-nodes-side-content" style="display:none;overflow-y:auto;padding:12px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Node Sets sub-view -->
+            <div id="wfm-nodes-sets" class="wfm-workflow-area" style="display:none;">
+                <div style="padding:8px 0;">
+                    <button id="wfm-node-set-create-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Create Node Set</button>
+                </div>
+                <div id="wfm-node-sets-grid" class="wfm-grid wfm-view-card">
+                    <p class="wfm-placeholder">No node sets yet.</p>
                 </div>
             </div>
         </section>

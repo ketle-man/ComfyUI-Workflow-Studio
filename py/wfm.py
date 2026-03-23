@@ -61,11 +61,12 @@ class WorkflowStudio:
         app.router.add_get("/wfm", serve_index_page)
 
         # API routes
-        from .routes import workflow_routes, settings_routes, ollama_routes, eagle_routes
+        from .routes import workflow_routes, settings_routes, ollama_routes, eagle_routes, nodes_routes
 
         workflow_routes.setup_routes(app)
         settings_routes.setup_routes(app)
         ollama_routes.setup_routes(app)
         eagle_routes.setup_routes(app)
+        nodes_routes.setup_routes(app)
 
         logger.info("Workflow Studio: Routes registered successfully")
