@@ -252,9 +252,12 @@ function _flattenSubgraphs(workflow) {
 export const comfyWorkflow = {
     detectFormat(workflow, filename) {
         if (!workflow || typeof workflow !== "object") return "unknown";
-        // App format: detected by .app.json filename extension
-        if (filename && /\.app\.json$/i.test(filename)) return "app";
-        if (Array.isArray(workflow.nodes) && workflow.links !== undefined) return "ui";
+        if (Array.isArray(workflow.nodes) && workflow.links !== undefined) {
+            // App format: UI-based structure with definitions (subgraphs) or linearMode
+            if (workflow.definitions || workflow.extra?.linearMode === true) return "app";
+            if (filename && /\.app\.json$/i.test(filename)) return "app";
+            return "ui";
+        }
         // API format: top-level keys are node IDs with class_type
         const keys = Object.keys(workflow);
         if (keys.length > 0 && keys.every((k) => workflow[k]?.class_type)) return "api";

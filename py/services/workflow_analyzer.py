@@ -111,10 +111,18 @@ def analyze_workflow(workflow_data, filename=""):
             outputs["videos"] += 1
 
     # Detect workflow format
-    if filename and filename.lower().endswith(".app.json"):
-        wf_format = "app"
-    elif raw_nodes is not None:
-        wf_format = "ui"
+    if raw_nodes is not None:
+        # App format: UI-based structure with definitions (subgraphs) or linearMode
+        extra = workflow_data.get("extra", {})
+        if (
+            "definitions" in workflow_data
+            or extra.get("linearMode") is True
+        ):
+            wf_format = "app"
+        elif filename and filename.lower().endswith(".app.json"):
+            wf_format = "app"
+        else:
+            wf_format = "ui"
     else:
         # Check if all top-level values have class_type (API format)
         has_class = any(

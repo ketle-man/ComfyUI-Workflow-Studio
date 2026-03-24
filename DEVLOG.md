@@ -38,10 +38,13 @@
 
 #### `py/services/workflow_analyzer.py` — ワークフロー形式検出
 - `analyze_workflow()` の返却値に `format` フィールドを追加
-  - `"app"`: `.app.json` ファイル名
-  - `"ui"`: `nodes` 配列 + `links` 存在
+  - `"app"`: `definitions`（サブグラフ）キー存在 or `extra.linearMode === true`、フォールバックで `.app.json` ファイル名
+  - `"ui"`: `nodes` 配列 + `links` 存在（App特徴なし）
   - `"api"`: 全トップレベル値に `class_type` 存在
   - `"unknown"`: 判定不能
+
+#### `static/js/comfyui-workflow.js` — フロントエンド形式検出も構造ベースに変更
+- `detectFormat()` をファイル名依存から `definitions` / `extra.linearMode` による構造判定に変更
 
 #### `static/js/workflow-tab.js` — グループクリーンアップ
 - `loadWorkflows()` でワークフロー取得後にグループの不要エントリを自動削除
