@@ -84,6 +84,7 @@ class WorkflowService:
                     "modelTypes": [],
                     "inputs": {"prompts": 0, "images": 0, "videos": 0},
                     "outputs": {"images": 0, "videos": 0},
+                    "format": "unknown",
                 }
 
             stat = fpath.stat()
