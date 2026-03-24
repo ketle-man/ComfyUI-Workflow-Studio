@@ -1,5 +1,53 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-24: v0.1.9 サイドパネルUI改善・保存ダイアログ・バグ修正
+
+### 概要
+- サイドパネルのサブタブを2段構成に変更、全ワークフロー/全ノード表示タブを追加
+- キャンバススナップショット保存時にファイル名編集ダイアログを表示
+- API/App形式バッジをワークフロー一覧に表示
+- グループ内の削除済みワークフロー（Not found）を自動クリーンアップ
+
+### 変更内容
+
+#### `web/comfyui/node_sets_menu.js` — サイドパネルサブタブ2段化
+- **Workflows サブタブ:**
+  - 1段目: Workflows（全WF一覧）/ ★ Favorites / 📁 Groups
+  - 2段目: ◦ Model Type
+- **Nodes サブタブ:**
+  - 1段目: Nodes（全ノード一覧）/ ✳ Favorites / 📁 Groups
+  - 2段目: ☰ Sets
+- **State 変更:** `wfSubTab2`, `activeTab2` を追加（2段目タブの排他制御用）
+- **新レンダリング関数:**
+  - `renderWfAll()` — 全ワークフロー一覧表示
+  - `renderWfFavorites()` — お気に入りワークフロー一覧（タブとして復活）
+  - `renderAllNodes()` — `LiteGraph.registered_node_types` から全ノード一覧表示
+- **API/App形式バッジ:** `createDraggableWfItem()` でAPI形式（赤）・App形式（オレンジ）のバッジをファイル名前に表示
+- **グループ自動クリーンアップ:** `loadWfData()` でワークフロー一覧取得時に、存在しないファイルをグループから自動除去し localStorage を更新
+- **Not found 表示削除:** `renderWfGroups()` から削除済みワークフローの灰色表示コードを除去
+- **CSS 追加:**
+  - `.wfm-nlp-subtabs-row2` — 2段目サブタブ行
+  - `.wfm-nlp-fmt-badge`, `.wfm-nlp-fmt-api`, `.wfm-nlp-fmt-app` — 形式バッジスタイル
+
+#### `web/comfyui/top_menu_extension.js` — 保存ダイアログ追加
+- **`showSaveDialog(defaultName)`** — モーダルダイアログでファイル名を編集可能に
+  - タイムスタンプ形式のデフォルト名がプレースホルダーとして全選択状態で表示
+  - Enter/Saveボタンで確定、Escape/Cancel/オーバーレイクリックでキャンセル
+  - `.json` 拡張子は自動付与
+- **`saveCanvasToWorkflowStudio()`** — 自動保存からダイアログ経由の保存に変更
+
+#### `py/services/workflow_analyzer.py` — ワークフロー形式検出
+- `analyze_workflow()` の返却値に `format` フィールドを追加
+  - `"app"`: `.app.json` ファイル名
+  - `"ui"`: `nodes` 配列 + `links` 存在
+  - `"api"`: 全トップレベル値に `class_type` 存在
+  - `"unknown"`: 判定不能
+
+#### `static/js/workflow-tab.js` — グループクリーンアップ
+- `loadWorkflows()` でワークフロー取得後にグループの不要エントリを自動削除
+
+---
+
 ## 2026-03-24: v0.1.8 WF & Node Library サイドパネル拡張
 
 ### 概要

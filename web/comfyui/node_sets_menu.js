@@ -22,14 +22,16 @@ const state = {
     // Top-level tab
     topTab: "workflows",           // "workflows" | "nodes"
     // Node sub-tabs (existing)
-    activeTab: "favorites",        // favorites | sets | groups
+    activeTab: "all",              // all | favorites | groups
+    activeTab2: null,              // 2nd row: "sets" (or null when 1st row active)
     favorites: [],                 // [{name, display_name}]
     nodeSets: [],
     groups: {},                    // {groupName: [nodeName, ...]}
     metadata: {},
     loaded: false,
     // Workflow sub-tabs (new)
-    wfSubTab: "wf-favorites",     // "wf-favorites" | "wf-modeltype" | "wf-groups"
+    wfSubTab: "wf-all",           // "wf-all" | "wf-favorites" | "wf-groups"
+    wfSubTab2: null,               // 2nd row: "wf-modeltype" (or null when 1st row active)
     wfList: [],                    // full workflow array from API
     wfFavorites: [],               // metadata.favorite === true
     wfModelTypes: [],              // unique model type strings
@@ -118,10 +120,22 @@ const loadWfData = async () => {
     }
     state.wfModelTypes = [...typeSet].sort();
 
-    // Load groups from localStorage
+    // Load groups from localStorage and clean up stale entries
     try {
         state.wfGroups = JSON.parse(localStorage.getItem("wfm_groups") || "{}");
     } catch { state.wfGroups = {}; }
+
+    // Remove filenames that no longer exist from groups
+    const validFiles = new Set(workflows.map(w => w.filename));
+    let groupsDirty = false;
+    for (const groupName of Object.keys(state.wfGroups)) {
+        const before = state.wfGroups[groupName].length;
+        state.wfGroups[groupName] = state.wfGroups[groupName].filter(fn => validFiles.has(fn));
+        if (state.wfGroups[groupName].length !== before) groupsDirty = true;
+    }
+    if (groupsDirty) {
+        localStorage.setItem("wfm_groups", JSON.stringify(state.wfGroups));
+    }
 
     state.wfLoaded = true;
 };
@@ -290,6 +304,7 @@ const createPanel = () => {
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="nodes">Nodes</button>
         </div>
         <div class="wfm-nlp-subtabs"></div>
+        <div class="wfm-nlp-subtabs wfm-nlp-subtabs-row2"></div>
         <div class="wfm-nlp-search">
             <input type="text" class="wfm-nlp-search-input" placeholder="Search workflows...">
         </div>
@@ -356,48 +371,95 @@ const createPanel = () => {
 // ============================================
 
 const rebuildSubTabs = () => {
-    const container = panelEl?.querySelector(".wfm-nlp-subtabs");
-    if (!container) return;
+    const row1 = panelEl?.querySelector(".wfm-nlp-subtabs:not(.wfm-nlp-subtabs-row2)");
+    const row2 = panelEl?.querySelector(".wfm-nlp-subtabs-row2");
+    if (!row1 || !row2) return;
 
-    container.innerHTML = "";
+    row1.innerHTML = "";
+    row2.innerHTML = "";
+
+    const updateAllActive = () => {
+        row1.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
+        row2.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
+    };
 
     if (state.topTab === "workflows") {
-        const tabs = [
+        const row1Tabs = [
+            { key: "wf-all", label: "Workflows" },
             { key: "wf-favorites", label: "\u2605 Favorites" },
-            { key: "wf-modeltype", label: "\u25a6 Model Type" },
             { key: "wf-groups", label: "\ud83d\udcc1 Groups" },
         ];
-        for (const t of tabs) {
+        const row2Tabs = [
+            { key: "wf-modeltype", label: "\u25a6 Model Type" },
+        ];
+
+        const activeKey = state.wfSubTab2 || state.wfSubTab;
+
+        for (const t of row1Tabs) {
             const btn = document.createElement("button");
-            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (state.wfSubTab === t.key ? " active" : "");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
             btn.dataset.subtab = t.key;
             btn.textContent = t.label;
             btn.addEventListener("click", () => {
                 state.wfSubTab = t.key;
-                container.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
+                state.wfSubTab2 = null;
+                updateAllActive();
                 btn.classList.add("active");
                 renderContent();
             });
-            container.appendChild(btn);
+            row1.appendChild(btn);
+        }
+        for (const t of row2Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.wfSubTab2 = t.key;
+                updateAllActive();
+                btn.classList.add("active");
+                renderContent();
+            });
+            row2.appendChild(btn);
         }
     } else {
-        const tabs = [
+        const row1Tabs = [
+            { key: "all", label: "Nodes" },
             { key: "favorites", label: "\u2733 Favorites" },
-            { key: "sets", label: "\u2630 Sets" },
             { key: "groups", label: "\ud83d\udcc1 Groups" },
         ];
-        for (const t of tabs) {
+        const row2Tabs = [
+            { key: "sets", label: "\u2630 Sets" },
+        ];
+
+        const activeKey = state.activeTab2 || state.activeTab;
+
+        for (const t of row1Tabs) {
             const btn = document.createElement("button");
-            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (state.activeTab === t.key ? " active" : "");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
             btn.dataset.subtab = t.key;
             btn.textContent = t.label;
             btn.addEventListener("click", () => {
                 state.activeTab = t.key;
-                container.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
+                state.activeTab2 = null;
+                updateAllActive();
                 btn.classList.add("active");
                 renderContent();
             });
-            container.appendChild(btn);
+            row1.appendChild(btn);
+        }
+        for (const t of row2Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.activeTab2 = t.key;
+                updateAllActive();
+                btn.classList.add("active");
+                renderContent();
+            });
+            row2.appendChild(btn);
         }
     }
 };
@@ -415,7 +477,9 @@ const renderContent = () => {
             content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
             return;
         }
-        switch (state.wfSubTab) {
+        const key = state.wfSubTab2 || state.wfSubTab;
+        switch (key) {
+            case "wf-all": renderWfAll(content); break;
             case "wf-favorites": renderWfFavorites(content); break;
             case "wf-modeltype": renderWfModelType(content); break;
             case "wf-groups": renderWfGroups(content); break;
@@ -425,7 +489,9 @@ const renderContent = () => {
             content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
             return;
         }
-        switch (state.activeTab) {
+        const key = state.activeTab2 || state.activeTab;
+        switch (key) {
+            case "all": renderAllNodes(content); break;
             case "favorites": renderFavorites(content); break;
             case "sets": renderSets(content); break;
             case "groups": renderGroups(content); break;
@@ -447,12 +513,16 @@ const createDraggableWfItem = (wf) => {
     const displayName = wf.filename.replace(/\.json$/i, "");
     const types = getWfModelTypes(wf);
     const badge = types.length ? types.join(", ") : "";
+    const fmt = wf.analysis?.format || "";
+    const fmtBadge = (fmt === "api" || fmt === "app")
+        ? `<span class="wfm-nlp-fmt-badge wfm-nlp-fmt-${fmt}">${fmt.toUpperCase()}</span>`
+        : "";
 
     const el = document.createElement("div");
     el.className = "wfm-nlp-item";
     el.draggable = true;
     el.innerHTML = `
-        <div class="wfm-nlp-item-label">${esc(displayName)}</div>
+        <div class="wfm-nlp-item-label">${fmtBadge}${esc(displayName)}</div>
         ${badge ? `<div class="wfm-nlp-item-sub">${esc(badge)}</div>` : ""}
     `;
 
@@ -478,6 +548,20 @@ const matchesWfSearch = (wf) => {
     if (wf.metadata?.memo?.toLowerCase().includes(s)) return true;
     if (wf.metadata?.summary?.toLowerCase().includes(s)) return true;
     return false;
+};
+
+const renderWfAll = (container) => {
+    let items = state.wfList.filter(matchesWfSearch);
+
+    if (items.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No matches</div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    for (const wf of items) {
+        container.appendChild(createDraggableWfItem(wf));
+    }
 };
 
 const renderWfFavorites = (container) => {
@@ -587,13 +671,6 @@ const renderWfGroups = (container) => {
             const wf = state.wfList.find(w => w.filename === fn);
             if (wf) {
                 list.appendChild(createDraggableWfItem(wf));
-            } else {
-                const el = document.createElement("div");
-                el.className = "wfm-nlp-item";
-                el.style.opacity = "0.4";
-                el.innerHTML = `<div class="wfm-nlp-item-label">${esc(fn.replace(/\.json$/i, ""))}</div>
-                    <div class="wfm-nlp-item-sub">Not found</div>`;
-                list.appendChild(el);
             }
         }
         section.appendChild(list);
@@ -608,6 +685,27 @@ const renderWfGroups = (container) => {
 // ============================================
 // Render – Node sub-tabs (existing)
 // ============================================
+
+const renderAllNodes = (container) => {
+    const registered = typeof LiteGraph !== "undefined" ? LiteGraph.registered_node_types : {};
+    let nodeNames = Object.keys(registered).sort();
+
+    if (state.searchText) {
+        nodeNames = nodeNames.filter(n => n.toLowerCase().includes(state.searchText));
+    }
+
+    if (nodeNames.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No matches</div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    for (const name of nodeNames) {
+        const el = createDraggableItem(name, "single", { classType: name });
+        el.addEventListener("dblclick", () => placeSingleNode(name));
+        container.appendChild(el);
+    }
+};
 
 const renderFavorites = (container) => {
     let items = state.favorites;
@@ -980,6 +1078,9 @@ const injectStyles = () => {
             border-bottom: 1px solid var(--border-color, #4e4e4e);
             flex-shrink: 0;
         }
+        .wfm-nlp-subtabs-row2 {
+            border-bottom: 1px solid var(--border-color, #4e4e4e);
+        }
         .wfm-nlp-search-input {
             width: 100%;
             padding: 6px 8px;
@@ -1034,6 +1135,24 @@ const injectStyles = () => {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+        .wfm-nlp-fmt-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin-right: 4px;
+            vertical-align: middle;
+            line-height: 1.2;
+        }
+        .wfm-nlp-fmt-api {
+            background: #e74c3c;
+            color: #fff;
+        }
+        .wfm-nlp-fmt-app {
+            background: #e67e22;
+            color: #fff;
         }
         .wfm-nlp-badge {
             display: inline-block;

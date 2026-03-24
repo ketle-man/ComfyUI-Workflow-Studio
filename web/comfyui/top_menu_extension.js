@@ -168,8 +168,101 @@ const captureCanvasSnapshot = () => {
     });
 };
 
+const showSaveDialog = (defaultName) => {
+    return new Promise((resolve) => {
+        // Remove existing dialog if any
+        const existing = document.getElementById("wfm-save-dialog-overlay");
+        if (existing) existing.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "wfm-save-dialog-overlay";
+        Object.assign(overlay.style, {
+            position: "fixed",
+            inset: "0",
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: "99999",
+        });
+
+        const dialog = document.createElement("div");
+        Object.assign(dialog.style, {
+            background: "var(--comfy-menu-bg, #2a2a2a)",
+            border: "1px solid var(--border-color, #4e4e4e)",
+            borderRadius: "8px",
+            padding: "16px 20px",
+            minWidth: "360px",
+            maxWidth: "480px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+            color: "var(--input-text, #ddd)",
+            fontFamily: "sans-serif",
+        });
+
+        const stem = defaultName.replace(/\.json$/, "");
+
+        dialog.innerHTML = `
+            <div style="font-size:14px;font-weight:bold;margin-bottom:12px;">Save Workflow</div>
+            <label style="font-size:12px;color:var(--descrip-text,#999);display:block;margin-bottom:4px;">Filename</label>
+            <input type="text" id="wfm-save-dialog-input" value="${stem}" style="
+                width:100%;padding:8px 10px;font-size:13px;
+                background:var(--comfy-input-bg,#1a1a1a);
+                border:1px solid var(--border-color,#4e4e4e);
+                border-radius:4px;color:var(--input-text,#ddd);
+                outline:none;box-sizing:border-box;
+            " />
+            <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
+                <button id="wfm-save-dialog-cancel" style="
+                    padding:6px 16px;font-size:12px;border-radius:4px;cursor:pointer;
+                    background:transparent;border:1px solid var(--border-color,#4e4e4e);
+                    color:var(--input-text,#ddd);
+                ">Cancel</button>
+                <button id="wfm-save-dialog-ok" style="
+                    padding:6px 16px;font-size:12px;border-radius:4px;cursor:pointer;
+                    background:var(--p-button-background,#4a9eff);border:none;
+                    color:#fff;font-weight:bold;
+                ">Save</button>
+            </div>
+        `;
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        const input = dialog.querySelector("#wfm-save-dialog-input");
+        const okBtn = dialog.querySelector("#wfm-save-dialog-ok");
+        const cancelBtn = dialog.querySelector("#wfm-save-dialog-cancel");
+
+        const cleanup = () => overlay.remove();
+
+        const confirm = () => {
+            const val = input.value.trim();
+            cleanup();
+            if (val) {
+                resolve(val.endsWith(".json") ? val : val + ".json");
+            } else {
+                resolve(null);
+            }
+        };
+
+        const cancel = () => { cleanup(); resolve(null); };
+
+        okBtn.addEventListener("click", confirm);
+        cancelBtn.addEventListener("click", cancel);
+        overlay.addEventListener("click", (e) => { if (e.target === overlay) cancel(); });
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); confirm(); }
+            if (e.key === "Escape") cancel();
+        });
+
+        input.focus();
+        input.select();
+    });
+};
+
 const saveCanvasToWorkflowStudio = async () => {
-    const filename = getWorkflowFilename();
+    const defaultFilename = getWorkflowFilename();
+    const filename = await showSaveDialog(defaultFilename);
+    if (!filename) return; // cancelled
 
     try {
         showNotification("Capturing workflow image...", "info");

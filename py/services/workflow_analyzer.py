@@ -110,8 +110,22 @@ def analyze_workflow(workflow_data, filename=""):
         if ntype in ("SaveVideo", "VH_VideoCombine"):
             outputs["videos"] += 1
 
+    # Detect workflow format
+    if filename and filename.lower().endswith(".app.json"):
+        wf_format = "app"
+    elif raw_nodes is not None:
+        wf_format = "ui"
+    else:
+        # Check if all top-level values have class_type (API format)
+        has_class = any(
+            isinstance(v, dict) and "class_type" in v
+            for v in workflow_data.values()
+        )
+        wf_format = "api" if has_class else "unknown"
+
     return {
         "modelTypes": sorted(model_types),
         "inputs": inputs,
         "outputs": outputs,
+        "format": wf_format,
     }

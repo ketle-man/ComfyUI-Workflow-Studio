@@ -1003,6 +1003,17 @@ function openDetailModal(wf) {
 async function loadWorkflows() {
     try {
         state.workflows = await fetchWorkflows();
+
+        // Clean up stale group entries (deleted workflows)
+        const validFiles = new Set(state.workflows.map(w => w.filename));
+        let groupsDirty = false;
+        for (const g of Object.keys(groups.data)) {
+            const before = groups.data[g].length;
+            groups.data[g] = groups.data[g].filter(fn => validFiles.has(fn));
+            if (groups.data[g].length !== before) groupsDirty = true;
+        }
+        if (groupsDirty) groups.save();
+
         renderModelFilters();
         renderGrid();
     } catch (err) {

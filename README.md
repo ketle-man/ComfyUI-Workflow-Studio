@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.1.8-green)
+![Version](https://img.shields.io/badge/version-0.1.9-green)
 
 ## Screenshots
 
@@ -161,6 +161,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.1.9
+- **Side panel 2-row sub-tabs** — Workflows: row 1 (Workflows / Favorites / Groups), row 2 (Model Type); Nodes: row 1 (Nodes / Favorites / Groups), row 2 (Sets)
+- **Save dialog** — canvas snapshot now shows a filename edit dialog instead of auto-naming
+- **API/App format badge** — workflow items in side panel show red (API) or orange (APP) badge
+- **Group auto-cleanup** — deleted workflows are automatically removed from groups on refresh
 
 ### v0.1.8
 - **WF & Node Library side panel** — renamed from "Node Library", added two top-level tabs (Workflows / Nodes) accessible from ComfyUI top bar
