@@ -1,5 +1,76 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-24: v0.1.8 WF & Node Library サイドパネル拡張
+
+### 概要
+- ComfyUI キャンバス右側の「Node Library」サイドパネルを「WF & Node Library」に拡張
+- ワークフローをサイドパネルからキャンバスにドラッグ＆ドロップで読み込み可能に
+- ヘルプタブに Nodes Tab / WF & Node Library の機能一覧を追加
+
+### 変更内容
+
+#### `web/comfyui/node_sets_menu.js` — サイドパネル全面改修
+- **パネル名変更:** "Node Library" → "WF & Node Library"
+- **2階層タブ構造:** トップレベル（Workflows / Nodes）+ サブタブ
+  - Workflows サブタブ: Favorites（お気に入り）、Model Type（モデル種別）、Groups（グループ）
+  - Nodes サブタブ: 既存の Favorites / Sets / Groups をそのまま維持
+- **State 拡張:** `topTab`, `wfSubTab`, `wfList`, `wfFavorites`, `wfModelTypes`, `wfGroups`, `wfLoaded` を追加
+- **API 追加:**
+  - `fetchWorkflows()` — `GET /api/wfm/workflows`（既存エンドポイント流用）
+  - `fetchWorkflowRaw(filename)` — `GET /api/wfm/workflows/raw`（既存エンドポイント流用）
+  - `loadWfData()` — ワークフロー一覧取得 + favorites/modelTypes/groups 抽出
+- **ワークフロー読み込み:**
+  - `loadWorkflowOnCanvas(filename)` — raw JSON 取得 → `app.loadGraphData(data)` でキャンバスに読み込み
+  - 新 MIME タイプ `application/x-wfm-workflow` によるドラッグ＆ドロップ
+  - ダブルクリックでもワークフロー読み込み可能
+- **ドロップハンドラー拡張:** `installCanvasDropHandler()` で `application/x-wfm-workflow` を追加受付
+- **レンダリング関数追加:**
+  - `createDraggableWfItem(wf)` — ワークフロー名 + モデルタイプバッジ表示
+  - `renderWfFavorites()` — お気に入りワークフロー一覧
+  - `renderWfModelType()` — モデルタイプ別折りたたみセクション（初期: 折りたたみ状態）
+  - `renderWfGroups()` — localStorage グループ別折りたたみセクション（初期: 折りたたみ状態）
+  - `matchesWfSearch()` — filename, tags, memo, summary に対する検索フィルタ
+- **折りたたみ初期状態:** Model Type / Groups（WF・Node 両方）を初期状態で折りたたみ表示に変更
+- **CSS 追加:**
+  - `.wfm-nlp-subtabs` — サブタブ行（背景色で視覚区別）
+  - `.wfm-nlp-top-tab` — トップタブ（大きめフォント 12px, font-weight 600）
+  - `.wfm-nlp-sub-tab` — サブタブ（小さめフォント 10px）
+  - `.wfm-nlp-item-label` に `text-overflow: ellipsis` 追加（長いファイル名対応）
+- **tooltip 更新:** `NODE_SETS_TOOLTIP` → `"WF & Node Library – Browse & drag workflows/nodes onto canvas"`
+
+#### `web/comfyui/top_menu_extension.js` — 変更なし
+- `NODE_SETS_TOOLTIP` を import しているため、tooltip 変更が自動反映
+
+#### ヘルプタブ更新
+- **`templates/index.html`:**
+  - Nodes Tab カード追加（6項目: ノードブラウザ、表示モード、お気に入り/タグ、グループ、サイドパネル、ノードセット）
+  - WF & Node Library カード追加（7項目: ボタン起動、WFタブ、Nodesタブ、WFドラッグ、ノードドラッグ、ダブルクリック、検索）
+  - About 説明文にノード管理を追記
+- **`static/js/i18n.js`:**
+  - EN/JA/ZH に `helpNodes1`〜`helpNodes6`（6キー × 3言語）追加
+  - EN/JA/ZH に `helpSidepanel1`〜`helpSidepanel7` + `helpSidepanelTitle`（8キー × 3言語）追加
+  - 各言語の `helpAboutDesc` にノード管理の記述を追記
+- **`static/js/app.js`:**
+  - `helpIdMap` に Nodes（6エントリ）+ Sidepanel（8エントリ）のマッピング追加
+
+#### README.md 更新
+- バージョンバッジ: `0.1.7` → `0.1.8`
+- Screenshots セクション: Nodes Tab + WF & Node Library の行を追加（3行→4行、4枚→6枚）
+- ComfyUI Integration 画像をツールバー3ボタンにフォーカスした画像に差し替え
+- Features セクション: 新セクション「WF & Node Library (ComfyUI Side Panel) (v0.1.8)」追加
+- Changelog: v0.1.8 エントリ追加、v0.1.7 のサイドパネル記載を元に戻し
+- Project Structure: `node_sets_menu.js` の説明を更新
+
+#### スクリーンショット追加
+- `docs/screenshot_nodes.png` — Nodes タブ（カードビュー + サイドパネル）
+- `docs/screenshot_wf_node_library.png` — ComfyUI 上の WF & Node Library サイドパネル
+- `docs/screenshot_comfyui_topbar.png` — ツールバー3ボタンにフォーカスした画像に差し替え
+
+### バックエンド変更
+- なし（既存の `/api/wfm/workflows` と `/api/wfm/workflows/raw` を流用）
+
+---
+
 ## 2026-03-23: v0.1.7 Nodes タブ追加
 
 ### 概要

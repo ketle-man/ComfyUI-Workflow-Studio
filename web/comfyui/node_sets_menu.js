@@ -1,15 +1,17 @@
 /**
- * Node Library Sidebar Panel
+ * WF & Node Library Sidebar Panel
  *
  * Fixed sidebar panel injected into ComfyUI DOM.
- * Three tabs: Favorites (single nodes), Node Sets (multi-node), Groups.
+ * Two top-level tabs: Workflows / Nodes
+ *   Workflows sub-tabs: Favorites, Model Type, Groups
+ *   Nodes sub-tabs:     Favorites, Sets, Groups
  * Items are draggable onto the canvas or click-to-place.
  */
 console.log("[WFM] node_sets_menu.js loading...");
 import { app } from "../../scripts/app.js";
 console.log("[WFM] node_sets_menu.js: app imported");
 
-export const NODE_SETS_TOOLTIP = "Node Library – Browse & drag nodes onto canvas";
+export const NODE_SETS_TOOLTIP = "WF & Node Library \u2013 Browse & drag workflows/nodes onto canvas";
 
 // ============================================
 // State
@@ -17,17 +19,28 @@ export const NODE_SETS_TOOLTIP = "Node Library – Browse & drag nodes onto canv
 
 const state = {
     visible: false,
-    activeTab: "favorites",   // favorites | sets | groups
-    favorites: [],             // [{name, display_name}]
+    // Top-level tab
+    topTab: "workflows",           // "workflows" | "nodes"
+    // Node sub-tabs (existing)
+    activeTab: "favorites",        // favorites | sets | groups
+    favorites: [],                 // [{name, display_name}]
     nodeSets: [],
-    groups: {},                // {groupName: [nodeName, ...]}
+    groups: {},                    // {groupName: [nodeName, ...]}
     metadata: {},
-    searchText: "",
     loaded: false,
+    // Workflow sub-tabs (new)
+    wfSubTab: "wf-favorites",     // "wf-favorites" | "wf-modeltype" | "wf-groups"
+    wfList: [],                    // full workflow array from API
+    wfFavorites: [],               // metadata.favorite === true
+    wfModelTypes: [],              // unique model type strings
+    wfGroups: {},                  // from localStorage "wfm_groups"
+    wfLoaded: false,
+    // Shared
+    searchText: "",
 };
 
 // ============================================
-// API
+// API – Nodes
 // ============================================
 
 const fetchNodeSets = async () => {
@@ -68,6 +81,49 @@ const loadData = async () => {
         }
     }
     state.loaded = true;
+};
+
+// ============================================
+// API – Workflows
+// ============================================
+
+const fetchWorkflows = async () => {
+    try {
+        const res = await fetch("/api/wfm/workflows");
+        return res.ok ? await res.json() : [];
+    } catch { return []; }
+};
+
+const fetchWorkflowRaw = async (filename) => {
+    try {
+        const res = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(filename)}`);
+        return res.ok ? await res.json() : null;
+    } catch { return null; }
+};
+
+const loadWfData = async () => {
+    const workflows = await fetchWorkflows();
+    state.wfList = workflows;
+
+    // Extract favorites
+    state.wfFavorites = workflows.filter(w => w.metadata?.favorite);
+
+    // Extract unique model types
+    const typeSet = new Set();
+    for (const wf of workflows) {
+        const types = wf.metadata?.modelTypesOverride?.length
+            ? wf.metadata.modelTypesOverride
+            : (wf.analysis?.modelTypes || []);
+        types.forEach(t => typeSet.add(t));
+    }
+    state.wfModelTypes = [...typeSet].sort();
+
+    // Load groups from localStorage
+    try {
+        state.wfGroups = JSON.parse(localStorage.getItem("wfm_groups") || "{}");
+    } catch { state.wfGroups = {}; }
+
+    state.wfLoaded = true;
 };
 
 // ============================================
@@ -143,6 +199,26 @@ const placeNodeSet = (nodeSet, pos) => {
 };
 
 // ============================================
+// Workflow canvas loading
+// ============================================
+
+const loadWorkflowOnCanvas = async (filename) => {
+    const displayName = filename.replace(/\.json$/i, "");
+    showToast(`Loading "${displayName}"...`, "info");
+    const data = await fetchWorkflowRaw(filename);
+    if (!data) {
+        showToast("Failed to load workflow", "error");
+        return;
+    }
+    try {
+        await app.loadGraphData(data);
+        showToast(`Loaded: ${displayName}`, "success");
+    } catch (err) {
+        showToast("Failed to load: " + err.message, "error");
+    }
+};
+
+// ============================================
 // Drag & Drop onto canvas
 // ============================================
 
@@ -156,13 +232,24 @@ const installCanvasDropHandler = () => {
     if (!canvasEl) return;
 
     canvasEl.addEventListener("dragover", (e) => {
-        if (e.dataTransfer.types.includes("application/x-wfm-node")) {
+        if (e.dataTransfer.types.includes("application/x-wfm-node") ||
+            e.dataTransfer.types.includes("application/x-wfm-workflow")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
         }
     });
 
     canvasEl.addEventListener("drop", (e) => {
+        // Handle workflow drop
+        const wfRaw = e.dataTransfer.getData("application/x-wfm-workflow");
+        if (wfRaw) {
+            e.preventDefault();
+            const { filename } = JSON.parse(wfRaw);
+            loadWorkflowOnCanvas(filename);
+            return;
+        }
+
+        // Handle node drop
         const raw = e.dataTransfer.getData("application/x-wfm-node");
         if (!raw) return;
         e.preventDefault();
@@ -194,17 +281,17 @@ const createPanel = () => {
     panel.id = PANEL_ID;
     panel.innerHTML = `
         <div class="wfm-nlp-header">
-            <span class="wfm-nlp-title">Node Library</span>
+            <span class="wfm-nlp-title">WF & Node Library</span>
             <button class="wfm-nlp-refresh" title="Refresh">&#8635;</button>
             <button class="wfm-nlp-close" title="Close">&times;</button>
         </div>
         <div class="wfm-nlp-tabs">
-            <button class="wfm-nlp-tab active" data-tab="favorites">&#9733; Favorites</button>
-            <button class="wfm-nlp-tab" data-tab="sets">&#9776; Sets</button>
-            <button class="wfm-nlp-tab" data-tab="groups">&#128193; Groups</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab active" data-toptab="workflows">Workflows</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="nodes">Nodes</button>
         </div>
+        <div class="wfm-nlp-subtabs"></div>
         <div class="wfm-nlp-search">
-            <input type="text" class="wfm-nlp-search-input" placeholder="Search...">
+            <input type="text" class="wfm-nlp-search-input" placeholder="Search workflows...">
         </div>
         <div class="wfm-nlp-content"></div>
     `;
@@ -212,12 +299,29 @@ const createPanel = () => {
     document.body.appendChild(panel);
     panelEl = panel;
 
-    // Tab switching
-    panel.querySelectorAll(".wfm-nlp-tab").forEach(btn => {
-        btn.addEventListener("click", () => {
-            state.activeTab = btn.dataset.tab;
-            panel.querySelectorAll(".wfm-nlp-tab").forEach(b => b.classList.remove("active"));
+    // Top-level tab switching
+    panel.querySelectorAll(".wfm-nlp-top-tab").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const tab = btn.dataset.toptab;
+            if (state.topTab === tab) return;
+            state.topTab = tab;
+            state.searchText = "";
+            const searchInput = panel.querySelector(".wfm-nlp-search-input");
+            if (searchInput) {
+                searchInput.value = "";
+                searchInput.placeholder = tab === "workflows" ? "Search workflows..." : "Search nodes...";
+            }
+            panel.querySelectorAll(".wfm-nlp-top-tab").forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
+
+            // Load data if needed
+            if (tab === "workflows" && !state.wfLoaded) {
+                await loadWfData();
+            } else if (tab === "nodes" && !state.loaded) {
+                await loadData();
+            }
+
+            rebuildSubTabs();
             renderContent();
         });
     });
@@ -233,13 +337,69 @@ const createPanel = () => {
 
     // Refresh
     panel.querySelector(".wfm-nlp-refresh").addEventListener("click", async () => {
-        await loadData();
+        if (state.topTab === "workflows") {
+            await loadWfData();
+        } else {
+            await loadData();
+        }
         renderContent();
-        showToast("Node Library refreshed", "success");
+        showToast("Library refreshed", "success");
     });
 
     injectStyles();
+    rebuildSubTabs();
     return panel;
+};
+
+// ============================================
+// Sub-tab management
+// ============================================
+
+const rebuildSubTabs = () => {
+    const container = panelEl?.querySelector(".wfm-nlp-subtabs");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (state.topTab === "workflows") {
+        const tabs = [
+            { key: "wf-favorites", label: "\u2605 Favorites" },
+            { key: "wf-modeltype", label: "\u25a6 Model Type" },
+            { key: "wf-groups", label: "\ud83d\udcc1 Groups" },
+        ];
+        for (const t of tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (state.wfSubTab === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.wfSubTab = t.key;
+                container.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                renderContent();
+            });
+            container.appendChild(btn);
+        }
+    } else {
+        const tabs = [
+            { key: "favorites", label: "\u2733 Favorites" },
+            { key: "sets", label: "\u2630 Sets" },
+            { key: "groups", label: "\ud83d\udcc1 Groups" },
+        ];
+        for (const t of tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (state.activeTab === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.activeTab = t.key;
+                container.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                renderContent();
+            });
+            container.appendChild(btn);
+        }
+    }
 };
 
 // ============================================
@@ -250,17 +410,204 @@ const renderContent = () => {
     const content = panelEl?.querySelector(".wfm-nlp-content");
     if (!content) return;
 
-    if (!state.loaded) {
-        content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+    if (state.topTab === "workflows") {
+        if (!state.wfLoaded) {
+            content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+            return;
+        }
+        switch (state.wfSubTab) {
+            case "wf-favorites": renderWfFavorites(content); break;
+            case "wf-modeltype": renderWfModelType(content); break;
+            case "wf-groups": renderWfGroups(content); break;
+        }
+    } else {
+        if (!state.loaded) {
+            content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+            return;
+        }
+        switch (state.activeTab) {
+            case "favorites": renderFavorites(content); break;
+            case "sets": renderSets(content); break;
+            case "groups": renderGroups(content); break;
+        }
+    }
+};
+
+// ============================================
+// Render – Workflow sub-tabs
+// ============================================
+
+const getWfModelTypes = (wf) => {
+    return wf.metadata?.modelTypesOverride?.length
+        ? wf.metadata.modelTypesOverride
+        : (wf.analysis?.modelTypes || []);
+};
+
+const createDraggableWfItem = (wf) => {
+    const displayName = wf.filename.replace(/\.json$/i, "");
+    const types = getWfModelTypes(wf);
+    const badge = types.length ? types.join(", ") : "";
+
+    const el = document.createElement("div");
+    el.className = "wfm-nlp-item";
+    el.draggable = true;
+    el.innerHTML = `
+        <div class="wfm-nlp-item-label">${esc(displayName)}</div>
+        ${badge ? `<div class="wfm-nlp-item-sub">${esc(badge)}</div>` : ""}
+    `;
+
+    el.addEventListener("dragstart", (e) => {
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("application/x-wfm-workflow",
+            JSON.stringify({ filename: wf.filename }));
+        el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+
+    // Double-click to load
+    el.addEventListener("dblclick", () => loadWorkflowOnCanvas(wf.filename));
+
+    return el;
+};
+
+const matchesWfSearch = (wf) => {
+    if (!state.searchText) return true;
+    const s = state.searchText;
+    if (wf.filename.toLowerCase().includes(s)) return true;
+    if ((wf.metadata?.tags || []).some(t => t.toLowerCase().includes(s))) return true;
+    if (wf.metadata?.memo?.toLowerCase().includes(s)) return true;
+    if (wf.metadata?.summary?.toLowerCase().includes(s)) return true;
+    return false;
+};
+
+const renderWfFavorites = (container) => {
+    let items = state.wfFavorites.filter(matchesWfSearch);
+
+    if (items.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">
+            ${state.wfFavorites.length === 0
+                ? "No favorite workflows.<br><small>Star workflows in Workflow Studio</small>"
+                : "No matches"}
+        </div>`;
         return;
     }
 
-    switch (state.activeTab) {
-        case "favorites": renderFavorites(content); break;
-        case "sets": renderSets(content); break;
-        case "groups": renderGroups(content); break;
+    container.innerHTML = "";
+    for (const wf of items) {
+        container.appendChild(createDraggableWfItem(wf));
     }
 };
+
+const renderWfModelType = (container) => {
+    container.innerHTML = "";
+
+    if (state.wfModelTypes.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">
+            No model types detected.<br><small>Analyze workflows in Workflow Studio</small>
+        </div>`;
+        return;
+    }
+
+    for (const modelType of state.wfModelTypes) {
+        const wfs = state.wfList.filter(w => {
+            const types = getWfModelTypes(w);
+            return types.includes(modelType);
+        }).filter(matchesWfSearch);
+
+        if (state.searchText && wfs.length === 0) continue;
+
+        const section = document.createElement("div");
+        section.className = "wfm-nlp-group-section";
+
+        const header = document.createElement("div");
+        header.className = "wfm-nlp-group-header collapsed";
+        header.innerHTML = `<span>${esc(modelType)}</span> <span class="wfm-nlp-badge">${wfs.length}</span>`;
+        header.addEventListener("click", () => {
+            const list = section.querySelector(".wfm-nlp-group-list");
+            list.style.display = list.style.display === "none" ? "block" : "none";
+            header.classList.toggle("collapsed");
+        });
+        section.appendChild(header);
+
+        const list = document.createElement("div");
+        list.className = "wfm-nlp-group-list";
+        list.style.display = "none";
+        for (const wf of wfs) {
+            list.appendChild(createDraggableWfItem(wf));
+        }
+        section.appendChild(list);
+        container.appendChild(section);
+    }
+
+    if (container.children.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No matches</div>`;
+    }
+};
+
+const renderWfGroups = (container) => {
+    const groupNames = Object.keys(state.wfGroups).sort();
+
+    if (groupNames.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">
+            No groups.<br><small>Create groups in Workflow Studio</small>
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+
+    let filtered = groupNames;
+    if (state.searchText) {
+        filtered = groupNames.filter(g =>
+            g.toLowerCase().includes(state.searchText) ||
+            (state.wfGroups[g] || []).some(f => f.toLowerCase().includes(state.searchText))
+        );
+    }
+
+    for (const groupName of filtered) {
+        const filenames = state.wfGroups[groupName] || [];
+
+        const section = document.createElement("div");
+        section.className = "wfm-nlp-group-section";
+
+        const header = document.createElement("div");
+        header.className = "wfm-nlp-group-header collapsed";
+        header.innerHTML = `<span>${esc(groupName)}</span> <span class="wfm-nlp-badge">${filenames.length}</span>`;
+        header.addEventListener("click", () => {
+            const list = section.querySelector(".wfm-nlp-group-list");
+            list.style.display = list.style.display === "none" ? "block" : "none";
+            header.classList.toggle("collapsed");
+        });
+        section.appendChild(header);
+
+        const list = document.createElement("div");
+        list.className = "wfm-nlp-group-list";
+        list.style.display = "none";
+        for (const fn of filenames) {
+            const wf = state.wfList.find(w => w.filename === fn);
+            if (wf) {
+                list.appendChild(createDraggableWfItem(wf));
+            } else {
+                const el = document.createElement("div");
+                el.className = "wfm-nlp-item";
+                el.style.opacity = "0.4";
+                el.innerHTML = `<div class="wfm-nlp-item-label">${esc(fn.replace(/\.json$/i, ""))}</div>
+                    <div class="wfm-nlp-item-sub">Not found</div>`;
+                list.appendChild(el);
+            }
+        }
+        section.appendChild(list);
+        container.appendChild(section);
+    }
+
+    if (container.children.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No matches</div>`;
+    }
+};
+
+// ============================================
+// Render – Node sub-tabs (existing)
+// ============================================
 
 const renderFavorites = (container) => {
     let items = state.favorites;
@@ -270,7 +617,7 @@ const renderFavorites = (container) => {
 
     if (items.length === 0) {
         container.innerHTML = `<div class="wfm-nlp-empty">
-            ${state.favorites.length === 0 ? "No favorites yet.<br><small>Star nodes in Workflow Studio → Nodes tab</small>" : "No matches"}
+            ${state.favorites.length === 0 ? "No favorites yet.<br><small>Star nodes in Workflow Studio \u2192 Nodes tab</small>" : "No matches"}
         </div>`;
         return;
     }
@@ -296,7 +643,7 @@ const renderSets = (container) => {
 
     if (items.length === 0) {
         container.innerHTML = `<div class="wfm-nlp-empty">
-            ${state.nodeSets.length === 0 ? "No node sets.<br><small>Create sets in Workflow Studio → Nodes tab</small>" : "No matches"}
+            ${state.nodeSets.length === 0 ? "No node sets.<br><small>Create sets in Workflow Studio \u2192 Nodes tab</small>" : "No matches"}
         </div>`;
         return;
     }
@@ -322,7 +669,7 @@ const renderGroups = (container) => {
 
     if (groupNames.length === 0) {
         container.innerHTML = `<div class="wfm-nlp-empty">
-            No groups.<br><small>Create groups in Workflow Studio → Nodes tab</small>
+            No groups.<br><small>Create groups in Workflow Studio \u2192 Nodes tab</small>
         </div>`;
         return;
     }
@@ -343,7 +690,7 @@ const renderGroups = (container) => {
         section.className = "wfm-nlp-group-section";
 
         const header = document.createElement("div");
-        header.className = "wfm-nlp-group-header";
+        header.className = "wfm-nlp-group-header collapsed";
         header.innerHTML = `<span>${esc(groupName)}</span> <span class="wfm-nlp-badge">${nodes.length}</span>`;
         header.addEventListener("click", () => {
             const list = section.querySelector(".wfm-nlp-group-list");
@@ -354,6 +701,7 @@ const renderGroups = (container) => {
 
         const list = document.createElement("div");
         list.className = "wfm-nlp-group-list";
+        list.style.display = "none";
         for (const nodeName of nodes) {
             const el = createDraggableItem(nodeName, "single", { classType: nodeName });
             el.addEventListener("dblclick", () => placeSingleNode(nodeName));
@@ -365,7 +713,7 @@ const renderGroups = (container) => {
 };
 
 // ============================================
-// Draggable item factory
+// Draggable item factory (nodes)
 // ============================================
 
 const createDraggableItem = (label, type, data, subtitle) => {
@@ -399,8 +747,13 @@ export const togglePanel = async () => {
     state.visible = !state.visible;
     panel.style.display = state.visible ? "flex" : "none";
 
-    if (state.visible && !state.loaded) {
-        await loadData();
+    if (state.visible) {
+        // Load data for current top tab
+        if (state.topTab === "workflows" && !state.wfLoaded) {
+            await loadWfData();
+        } else if (state.topTab === "nodes" && !state.loaded) {
+            await loadData();
+        }
         renderContent();
     }
 
@@ -589,6 +942,12 @@ const injectStyles = () => {
             border-bottom: 1px solid var(--border-color, #4e4e4e);
             flex-shrink: 0;
         }
+        .wfm-nlp-subtabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color, #4e4e4e);
+            flex-shrink: 0;
+            background: var(--comfy-input-bg, #2a2a2a);
+        }
         .wfm-nlp-tab {
             flex: 1;
             padding: 8px 4px;
@@ -606,6 +965,15 @@ const injectStyles = () => {
         .wfm-nlp-tab.active {
             opacity: 1;
             border-bottom-color: var(--p-button-background, #4a9eff);
+        }
+        .wfm-nlp-top-tab {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 9px 4px;
+        }
+        .wfm-nlp-sub-tab {
+            font-size: 10px;
+            padding: 6px 4px;
         }
         .wfm-nlp-search {
             padding: 8px;
@@ -655,6 +1023,9 @@ const injectStyles = () => {
         .wfm-nlp-item-label {
             font-size: 12px;
             line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .wfm-nlp-item-sub {
             font-size: 10px;
@@ -718,4 +1089,3 @@ const injectStyles = () => {
     `;
     document.head.appendChild(style);
 };
-

@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.1.7-green)
+![Version](https://img.shields.io/badge/version-0.1.8-green)
 
 ## Screenshots
 
@@ -17,9 +17,13 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 |:---:|:---:|
 | ![Prompt](docs/screenshot_prompt.png) | ![Settings](docs/screenshot_settings.png) |
 
-| Help & Support Tab | ComfyUI Integration |
+| Nodes Tab | Help & Support Tab |
 |:---:|:---:|
-| ![Help](docs/screenshot_help.png) | ![ComfyUI Top Bar](docs/screenshot_comfyui_topbar.png) |
+| ![Nodes](docs/screenshot_nodes.png) | ![Help](docs/screenshot_help.png) |
+
+| WF & Node Library (ComfyUI) | ComfyUI Integration |
+|:---:|:---:|
+| ![WF & Node Library](docs/screenshot_wf_node_library.png) | ![ComfyUI Top Bar](docs/screenshot_comfyui_topbar.png) |
 
 ---
 
@@ -74,8 +78,14 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Node detail panel** — view I/O specifications, edit tags, manage groups
 - **Node Sets** — save multiple nodes + connections as reusable sets from the ComfyUI canvas
 - **Right-click context menu** — "Save as Node Set" option on any node in ComfyUI
-- **Node Library side panel** — Favorites, Sets, and Groups tabs accessible from ComfyUI's top bar
-- **Drag & drop** — place node sets onto the canvas via drag and drop
+
+### WF & Node Library (ComfyUI Side Panel) (v0.1.8)
+- **Workflows tab** — browse favorite workflows, filter by model type, filter by group
+- **Nodes tab** — browse favorite nodes, node sets, and node groups
+- **Drag & drop workflows** — drag a workflow onto the canvas to load it
+- **Drag & drop nodes** — drag nodes/node sets onto the canvas to place them
+- **Double-click** — load workflows or place nodes without dragging
+- **Search** — search within each sub-tab to quickly find items
 
 ### Help & Support Tab (v0.1.3)
 - **Feature list** — overview of all features organized by tab
@@ -152,6 +162,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.1.8
+- **WF & Node Library side panel** — renamed from "Node Library", added two top-level tabs (Workflows / Nodes) accessible from ComfyUI top bar
+- **Workflows tab** — browse favorite workflows, filter by model type, filter by group with collapsible sections
+- **Workflow drag & drop** — drag workflows from the side panel onto the canvas to load them instantly
+- **Help tab update** — added Nodes Tab and WF & Node Library sections to the feature list
+
 ### v0.1.7
 - **Nodes tab** — browse, search, and filter all installed ComfyUI nodes with Card/Table views, pagination (50 nodes/page), package color badges, and node detail side panel with I/O specs
 - **Node Sets** — save selected nodes + connections from ComfyUI canvas as reusable sets via right-click context menu
@@ -225,7 +241,7 @@ ComfyUI-Workflow-Studio/
 │       └── i18n.js              # Internationalization
 ├── web/comfyui/
 │   ├── top_menu_extension.js    # ComfyUI menu bar integration
-│   └── node_sets_menu.js        # Node Library side panel
+│   └── node_sets_menu.js        # WF & Node Library side panel
 └── data/                        # Metadata & settings storage
 ```
 
