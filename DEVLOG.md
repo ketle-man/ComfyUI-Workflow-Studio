@@ -1,5 +1,25 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-26: トップバーボタンアイコン修正・Appモードバッジ調査
+
+### 概要
+- トップバーの3つのボタン（Workflow Studio / Snapshot / Library）のアイコンが表示されない問題を修正
+- ComfyUI Appモード（linearMode）のワークフローJSON構造を調査、バッジ表示対応は保留
+
+### 変更内容
+
+#### `web/comfyui/top_menu_extension.js` — アイコン置換ロジック修正
+- **問題:** `setup()` 内の `replaceButtonIcon()` が `requestAnimationFrame` でボタンを見つけてSVGを注入するが、ComfyUIのVueフレームワークが再レンダリングして元の `<i class="icon-[mdi--...]">` に戻してしまう。リトライ条件が `wfmButtons.length === 0`（ボタン未検出時のみ）のため、一度見つかった後は再注入されなかった
+- **修正:** `MutationObserver` でボタンの親コンテナ（`.actionbar-container`）を監視し、DOMが変更されるたびにSVGアイコンを再注入するように変更
+- `applyButtonIcon()`: ボタンに既にSVGがあればスキップ（無限ループ防止）、なければSVG注入
+- `waitAndObserve()`: ボタンがDOMに現れるまで `requestAnimationFrame` で待機し、見つかったらアイコン置換＋`MutationObserver`監視開始
+
+### Appモードバッジ表示について（保留）
+- ComfyUI Appモード（BETA機能）のワークフローJSON構造を調査
+- `extra.linearMode: true` と `extra.linearData` （inputs/outputs配列）でappモード情報が格納される
+- appモード削除後も `linearData`/`linearMode` キーは残り中身が空配列になるだけ、拡張子 `.app.json` も維持される
+- **結論:** Appモード自体がBETA機能のため、バッジ表示対応は現状維持とする
+
 ## 2026-03-25: v0.2.0 プロンプトプリセット機能・Workflow Studio Library
 
 ### 概要

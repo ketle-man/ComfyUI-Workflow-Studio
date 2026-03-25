@@ -605,51 +605,50 @@ app.registerExtension({
         };
         injectStyles();
 
-        const replaceButtonIcon = () => {
-            const wfmButtons = document.querySelectorAll(`button[aria-label="${BUTTON_TOOLTIP}"]`);
-            wfmButtons.forEach((button) => {
-                button.classList.add("wfm-top-menu-button");
-                button.innerHTML = getWfmIcon();
-                button.style.borderRadius = "4px";
-                button.style.padding = "6px";
-                button.style.backgroundColor = "var(--primary-bg)";
-                const svg = button.querySelector("svg");
-                if (svg) {
-                    svg.style.width = "20px";
-                    svg.style.height = "20px";
-                }
-            });
-
-            const snapButtons = document.querySelectorAll(`button[aria-label="${SNAPSHOT_TOOLTIP}"]`);
-            snapButtons.forEach((button) => {
-                button.classList.add("wfm-snapshot-button");
-                button.innerHTML = getSnapshotIcon();
-                button.style.borderRadius = "4px";
-                button.style.padding = "6px";
-                const svg = button.querySelector("svg");
-                if (svg) {
-                    svg.style.width = "20px";
-                    svg.style.height = "20px";
-                }
-            });
-
-            const nsButtons = document.querySelectorAll(`button[aria-label="${NODE_SETS_TOOLTIP}"]`);
-            nsButtons.forEach((button) => {
-                button.classList.add("wfm-node-sets-btn");
-                button.innerHTML = getNodeSetsIcon();
-                button.style.borderRadius = "4px";
-                button.style.padding = "6px";
-                const svg = button.querySelector("svg");
-                if (svg) {
-                    svg.style.width = "20px";
-                    svg.style.height = "20px";
-                }
-            });
-
-            if (wfmButtons.length === 0) {
-                requestAnimationFrame(replaceButtonIcon);
+        const applyButtonIcon = (button, className, getIconFn, extraStyles) => {
+            if (button.querySelector("svg")) return;
+            button.classList.add(className);
+            button.innerHTML = getIconFn();
+            button.style.borderRadius = "4px";
+            button.style.padding = "6px";
+            if (extraStyles) Object.assign(button.style, extraStyles);
+            const svg = button.querySelector("svg");
+            if (svg) {
+                svg.style.width = "20px";
+                svg.style.height = "20px";
             }
         };
-        requestAnimationFrame(replaceButtonIcon);
+
+        const buttonConfigs = [
+            { tooltip: BUTTON_TOOLTIP, className: "wfm-top-menu-button", getIcon: getWfmIcon, styles: { backgroundColor: "var(--primary-bg)" } },
+            { tooltip: SNAPSHOT_TOOLTIP, className: "wfm-snapshot-button", getIcon: getSnapshotIcon, styles: null },
+            { tooltip: NODE_SETS_TOOLTIP, className: "wfm-node-sets-btn", getIcon: getNodeSetsIcon, styles: null },
+        ];
+
+        const replaceAllIcons = () => {
+            for (const cfg of buttonConfigs) {
+                document.querySelectorAll(`button[aria-label="${cfg.tooltip}"]`).forEach((btn) => {
+                    applyButtonIcon(btn, cfg.className, cfg.getIcon, cfg.styles);
+                });
+            }
+        };
+
+        const waitAndObserve = () => {
+            const firstBtn = document.querySelector(`button[aria-label="${BUTTON_TOOLTIP}"]`);
+            if (!firstBtn) {
+                requestAnimationFrame(waitAndObserve);
+                return;
+            }
+            replaceAllIcons();
+
+            const container = firstBtn.closest(".actionbar-container") || firstBtn.parentElement;
+            if (container) {
+                new MutationObserver(() => replaceAllIcons()).observe(container, {
+                    childList: true,
+                    subtree: true,
+                });
+            }
+        };
+        requestAnimationFrame(waitAndObserve);
     },
 });
