@@ -1,17 +1,18 @@
 /**
- * WF & Node Library Sidebar Panel
+ * Workflow Studio Library Sidebar Panel
  *
  * Fixed sidebar panel injected into ComfyUI DOM.
- * Two top-level tabs: Workflows / Nodes
+ * Three top-level tabs: Workflows / Nodes / Prompts
  *   Workflows sub-tabs: Favorites, Model Type, Groups
  *   Nodes sub-tabs:     Favorites, Sets, Groups
+ *   Prompts sub-tabs:   Favorites, Categories
  * Items are draggable onto the canvas or click-to-place.
  */
 console.log("[WFM] node_sets_menu.js loading...");
 import { app } from "../../scripts/app.js";
 console.log("[WFM] node_sets_menu.js: app imported");
 
-export const NODE_SETS_TOOLTIP = "WF & Node Library \u2013 Browse & drag workflows/nodes onto canvas";
+export const NODE_SETS_TOOLTIP = "Workflow Studio Library \u2013 Browse & drag workflows/nodes/prompts onto canvas";
 
 // ============================================
 // State
@@ -20,7 +21,7 @@ export const NODE_SETS_TOOLTIP = "WF & Node Library \u2013 Browse & drag workflo
 const state = {
     visible: false,
     // Top-level tab
-    topTab: "workflows",           // "workflows" | "nodes"
+    topTab: "workflows",           // "workflows" | "nodes" | "prompts"
     // Node sub-tabs (existing)
     activeTab: "all",              // all | favorites | groups
     activeTab2: null,              // 2nd row: "sets" (or null when 1st row active)
@@ -37,6 +38,12 @@ const state = {
     wfModelTypes: [],              // unique model type strings
     wfGroups: {},                  // from localStorage "wfm_groups"
     wfLoaded: false,
+    // Prompts sub-tabs
+    promptSubTab: "prompt-all",    // "prompt-all" | "prompt-favorites" | "prompt-categories"
+    promptList: [],                // full prompt array from API
+    promptFavorites: [],           // favorite === true
+    promptCategories: [],          // unique category strings
+    promptLoaded: false,
     // Shared
     searchText: "",
 };
@@ -83,6 +90,31 @@ const loadData = async () => {
         }
     }
     state.loaded = true;
+};
+
+// ============================================
+// API – Prompts
+// ============================================
+
+const fetchPrompts = async () => {
+    try {
+        const res = await fetch("/api/wfm/prompts");
+        return res.ok ? await res.json() : [];
+    } catch { return []; }
+};
+
+const loadPromptData = async () => {
+    const prompts = await fetchPrompts();
+    state.promptList = prompts;
+    state.promptFavorites = prompts.filter(p => p.favorite);
+
+    const catSet = new Set();
+    for (const p of prompts) {
+        const c = (p.category || "").trim();
+        if (c) catSet.add(c);
+    }
+    state.promptCategories = [...catSet].sort();
+    state.promptLoaded = true;
 };
 
 // ============================================
@@ -213,6 +245,37 @@ const placeNodeSet = (nodeSet, pos) => {
 };
 
 // ============================================
+// Prompt → Text node placement
+// ============================================
+
+const placePromptNode = (posText, negText, promptName, pos) => {
+    const graph = app.graph;
+    if (!graph) return;
+
+    const node = LiteGraph.createNode("WFS_PromptText");
+    if (!node) {
+        showToast("WFS_PromptText node not found. Please restart ComfyUI.", "error");
+        return;
+    }
+
+    node.pos = pos || [100, 100];
+    if (promptName) node.title = promptName;
+
+    graph.add(node);
+
+    // Set positive and negative widget values
+    if (node.widgets) {
+        const posWidget = node.widgets.find(w => w.name === "positive");
+        if (posWidget) posWidget.value = posText || "";
+        const negWidget = node.widgets.find(w => w.name === "negative");
+        if (negWidget) negWidget.value = negText || "";
+    }
+
+    app.canvas.setDirty(true, true);
+    showToast(`Placed: ${promptName || "Prompt"}`, "success");
+};
+
+// ============================================
 // Workflow canvas loading
 // ============================================
 
@@ -247,13 +310,24 @@ const installCanvasDropHandler = () => {
 
     canvasEl.addEventListener("dragover", (e) => {
         if (e.dataTransfer.types.includes("application/x-wfm-node") ||
-            e.dataTransfer.types.includes("application/x-wfm-workflow")) {
+            e.dataTransfer.types.includes("application/x-wfm-workflow") ||
+            e.dataTransfer.types.includes("application/x-wfm-prompt")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
         }
     });
 
     canvasEl.addEventListener("drop", (e) => {
+        // Handle prompt drop
+        const promptRaw = e.dataTransfer.getData("application/x-wfm-prompt");
+        if (promptRaw) {
+            e.preventDefault();
+            const data = JSON.parse(promptRaw);
+            const pos = getCanvasDropPos(e);
+            placePromptNode(data.text, data.negText, data.name, pos);
+            return;
+        }
+
         // Handle workflow drop
         const wfRaw = e.dataTransfer.getData("application/x-wfm-workflow");
         if (wfRaw) {
@@ -295,13 +369,14 @@ const createPanel = () => {
     panel.id = PANEL_ID;
     panel.innerHTML = `
         <div class="wfm-nlp-header">
-            <span class="wfm-nlp-title">WF & Node Library</span>
+            <span class="wfm-nlp-title">Workflow Studio Library</span>
             <button class="wfm-nlp-refresh" title="Refresh">&#8635;</button>
             <button class="wfm-nlp-close" title="Close">&times;</button>
         </div>
         <div class="wfm-nlp-tabs">
             <button class="wfm-nlp-tab wfm-nlp-top-tab active" data-toptab="workflows">Workflows</button>
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="nodes">Nodes</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="prompts">Prompts</button>
         </div>
         <div class="wfm-nlp-subtabs"></div>
         <div class="wfm-nlp-subtabs wfm-nlp-subtabs-row2"></div>
@@ -324,7 +399,8 @@ const createPanel = () => {
             const searchInput = panel.querySelector(".wfm-nlp-search-input");
             if (searchInput) {
                 searchInput.value = "";
-                searchInput.placeholder = tab === "workflows" ? "Search workflows..." : "Search nodes...";
+                const placeholders = { workflows: "Search workflows...", nodes: "Search nodes...", prompts: "Search prompts..." };
+                searchInput.placeholder = placeholders[tab] || "Search...";
             }
             panel.querySelectorAll(".wfm-nlp-top-tab").forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
@@ -334,6 +410,8 @@ const createPanel = () => {
                 await loadWfData();
             } else if (tab === "nodes" && !state.loaded) {
                 await loadData();
+            } else if (tab === "prompts" && !state.promptLoaded) {
+                await loadPromptData();
             }
 
             rebuildSubTabs();
@@ -354,6 +432,8 @@ const createPanel = () => {
     panel.querySelector(".wfm-nlp-refresh").addEventListener("click", async () => {
         if (state.topTab === "workflows") {
             await loadWfData();
+        } else if (state.topTab === "prompts") {
+            await loadPromptData();
         } else {
             await loadData();
         }
@@ -383,7 +463,30 @@ const rebuildSubTabs = () => {
         row2.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
     };
 
-    if (state.topTab === "workflows") {
+    if (state.topTab === "prompts") {
+        const row1Tabs = [
+            { key: "prompt-all", label: "All" },
+            { key: "prompt-favorites", label: "\u2605 Favorites" },
+            { key: "prompt-categories", label: "\ud83d\udcc1 Categories" },
+        ];
+
+        const activeKey = state.promptSubTab;
+
+        for (const t of row1Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.promptSubTab = t.key;
+                updateAllActive();
+                btn.classList.add("active");
+                renderContent();
+            });
+            row1.appendChild(btn);
+        }
+        // No row2 tabs for prompts
+    } else if (state.topTab === "workflows") {
         const row1Tabs = [
             { key: "wf-all", label: "Workflows" },
             { key: "wf-favorites", label: "\u2605 Favorites" },
@@ -472,7 +575,17 @@ const renderContent = () => {
     const content = panelEl?.querySelector(".wfm-nlp-content");
     if (!content) return;
 
-    if (state.topTab === "workflows") {
+    if (state.topTab === "prompts") {
+        if (!state.promptLoaded) {
+            content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+            return;
+        }
+        switch (state.promptSubTab) {
+            case "prompt-all": renderPromptAll(content); break;
+            case "prompt-favorites": renderPromptFavorites(content); break;
+            case "prompt-categories": renderPromptCategories(content); break;
+        }
+    } else if (state.topTab === "workflows") {
         if (!state.wfLoaded) {
             content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
             return;
@@ -683,6 +796,190 @@ const renderWfGroups = (container) => {
 };
 
 // ============================================
+// Render – Prompt sub-tabs
+// ============================================
+
+const matchesPromptSearch = (p) => {
+    if (!state.searchText) return true;
+    const s = state.searchText;
+    if ((p.name || "").toLowerCase().includes(s)) return true;
+    if ((p.text || "").toLowerCase().includes(s)) return true;
+    if ((p.category || "").toLowerCase().includes(s)) return true;
+    if ((p.tags || []).some(t => t.toLowerCase().includes(s))) return true;
+    return false;
+};
+
+const createDraggablePromptItem = (prompt) => {
+    const el = document.createElement("div");
+    el.className = "wfm-nlp-item wfm-nlp-prompt-item";
+    el.draggable = true;
+
+    const previewText = (prompt.text || "").length > 60
+        ? prompt.text.substring(0, 60) + "..."
+        : (prompt.text || "");
+
+    const hasNeg = (prompt.negText || "").trim();
+
+    el.innerHTML = `
+        <div class="wfm-nlp-item-row">
+            <div class="wfm-nlp-item-body">
+                <div class="wfm-nlp-item-label">${prompt.favorite ? '<span style="color:#ffd700;margin-right:3px;">\u2605</span>' : ""}${esc(prompt.name)}</div>
+                <div class="wfm-nlp-item-sub">${esc(previewText)}</div>
+            </div>
+            <div class="wfm-nlp-copy-btns">
+                <button class="wfm-nlp-copy-btn wfm-nlp-copy-pos" title="Copy Positive">P</button>
+                ${hasNeg ? '<button class="wfm-nlp-copy-btn wfm-nlp-copy-neg" title="Copy Negative">N</button>' : ""}
+            </div>
+        </div>
+    `;
+
+    // Copy positive
+    el.querySelector(".wfm-nlp-copy-pos").addEventListener("click", (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(prompt.text || "").then(() => {
+            showToast("Positive copied", "success");
+        }).catch(() => {
+            showToast("Failed to copy", "error");
+        });
+    });
+
+    // Copy negative
+    if (hasNeg) {
+        el.querySelector(".wfm-nlp-copy-neg").addEventListener("click", (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(prompt.negText || "").then(() => {
+                showToast("Negative copied", "success");
+            }).catch(() => {
+                showToast("Failed to copy", "error");
+            });
+        });
+    }
+
+    el.addEventListener("dragstart", (e) => {
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("application/x-wfm-prompt",
+            JSON.stringify({ id: prompt.id, text: prompt.text, negText: prompt.negText || "", name: prompt.name }));
+        el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+
+    // Double-click to place on canvas
+    el.addEventListener("dblclick", () => placePromptNode(prompt.text, prompt.negText || "", prompt.name));
+
+    return el;
+};
+
+const renderPromptAll = (container) => {
+    let items = state.promptList.filter(matchesPromptSearch);
+
+    if (items.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">
+            ${state.promptList.length === 0
+                ? 'No prompts yet.<br><small>Create prompts in Workflow Studio</small>'
+                : 'No matches'}
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    for (const p of items) {
+        container.appendChild(createDraggablePromptItem(p));
+    }
+};
+
+const renderPromptFavorites = (container) => {
+    let items = state.promptFavorites.filter(matchesPromptSearch);
+
+    if (items.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">
+            ${state.promptFavorites.length === 0
+                ? 'No favorite prompts.<br><small>Star prompts to add them here</small>'
+                : 'No matches'}
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    for (const p of items) {
+        container.appendChild(createDraggablePromptItem(p));
+    }
+};
+
+const renderPromptCategories = (container) => {
+    container.innerHTML = "";
+
+    if (state.promptCategories.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">
+            No categories.<br><small>Set categories when creating prompts</small>
+        </div>`;
+        return;
+    }
+
+    for (const cat of state.promptCategories) {
+        const prompts = state.promptList
+            .filter(p => (p.category || "").trim() === cat)
+            .filter(matchesPromptSearch);
+
+        if (state.searchText && prompts.length === 0) continue;
+
+        const section = document.createElement("div");
+        section.className = "wfm-nlp-group-section";
+
+        const header = document.createElement("div");
+        header.className = "wfm-nlp-group-header collapsed";
+        header.innerHTML = `<span>${esc(cat)}</span> <span class="wfm-nlp-badge">${prompts.length}</span>`;
+        header.addEventListener("click", () => {
+            const list = section.querySelector(".wfm-nlp-group-list");
+            list.style.display = list.style.display === "none" ? "block" : "none";
+            header.classList.toggle("collapsed");
+        });
+        section.appendChild(header);
+
+        const list = document.createElement("div");
+        list.className = "wfm-nlp-group-list";
+        list.style.display = "none";
+        for (const p of prompts) {
+            list.appendChild(createDraggablePromptItem(p));
+        }
+        section.appendChild(list);
+        container.appendChild(section);
+    }
+
+    // Uncategorized prompts
+    const uncategorized = state.promptList
+        .filter(p => !(p.category || "").trim())
+        .filter(matchesPromptSearch);
+
+    if (uncategorized.length > 0) {
+        const section = document.createElement("div");
+        section.className = "wfm-nlp-group-section";
+
+        const header = document.createElement("div");
+        header.className = "wfm-nlp-group-header collapsed";
+        header.innerHTML = `<span>Uncategorized</span> <span class="wfm-nlp-badge">${uncategorized.length}</span>`;
+        header.addEventListener("click", () => {
+            const list = section.querySelector(".wfm-nlp-group-list");
+            list.style.display = list.style.display === "none" ? "block" : "none";
+            header.classList.toggle("collapsed");
+        });
+        section.appendChild(header);
+
+        const list = document.createElement("div");
+        list.className = "wfm-nlp-group-list";
+        list.style.display = "none";
+        for (const p of uncategorized) {
+            list.appendChild(createDraggablePromptItem(p));
+        }
+        section.appendChild(list);
+        container.appendChild(section);
+    }
+
+    if (container.children.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No matches</div>`;
+    }
+};
+
+// ============================================
 // Render – Node sub-tabs (existing)
 // ============================================
 
@@ -851,6 +1148,8 @@ export const togglePanel = async () => {
             await loadWfData();
         } else if (state.topTab === "nodes" && !state.loaded) {
             await loadData();
+        } else if (state.topTab === "prompts" && !state.promptLoaded) {
+            await loadPromptData();
         }
         renderContent();
     }
@@ -1205,6 +1504,47 @@ const injectStyles = () => {
             opacity: 0.7;
         }
         .wfm-nlp-refresh:hover { opacity: 1; }
+        .wfm-nlp-item-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .wfm-nlp-item-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .wfm-nlp-copy-btns {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .wfm-nlp-prompt-item:hover .wfm-nlp-copy-btns {
+            opacity: 1;
+        }
+        .wfm-nlp-copy-btn {
+            background: none;
+            border: 1px solid var(--border-color, #555);
+            color: var(--descrip-text, #888);
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 1px 5px;
+            border-radius: 3px;
+            transition: background 0.15s, color 0.15s;
+            line-height: 1.4;
+        }
+        .wfm-nlp-copy-pos:hover {
+            background: rgba(46,213,115,0.25);
+            color: #2ed573;
+            border-color: #2ed573;
+        }
+        .wfm-nlp-copy-neg:hover {
+            background: rgba(255,71,87,0.25);
+            color: #ff4757;
+            border-color: #ff4757;
+        }
     `;
     document.head.appendChild(style);
 };

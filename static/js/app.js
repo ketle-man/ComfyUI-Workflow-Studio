@@ -184,8 +184,6 @@ function applyI18nToHtml() {
     if (en2jaBtn) en2jaBtn.textContent = t("en2ja");
     const presetApplyBtn = document.getElementById("wfm-preset-apply-btn");
     if (presetApplyBtn) presetApplyBtn.textContent = t("applyPreset");
-    const presetDeleteBtn = document.getElementById("wfm-preset-delete-btn");
-    if (presetDeleteBtn) presetDeleteBtn.textContent = t("deletePreset");
     const presetSaveBtn = document.getElementById("wfm-preset-save-btn");
     if (presetSaveBtn) presetSaveBtn.textContent = t("savePreset");
     const presetCopyPosBtn = document.getElementById("wfm-preset-copy-pos-btn");
@@ -235,6 +233,8 @@ function applyI18nToHtml() {
         "wfm-help-gen-5": "helpGen5", "wfm-help-gen-6": "helpGen6", "wfm-help-gen-7": "helpGen7",
         "wfm-help-prompt-1": "helpPrompt1", "wfm-help-prompt-2": "helpPrompt2",
         "wfm-help-prompt-3": "helpPrompt3", "wfm-help-prompt-4": "helpPrompt4",
+        "wfm-help-prompt-5": "helpPrompt5", "wfm-help-prompt-6": "helpPrompt6",
+        "wfm-help-prompt-7": "helpPrompt7",
         "wfm-help-settings-1": "helpSettings1", "wfm-help-settings-2": "helpSettings2",
         "wfm-help-settings-3": "helpSettings3", "wfm-help-settings-4": "helpSettings4",
         "wfm-help-settings-5": "helpSettings5", "wfm-help-settings-6": "helpSettings6",
@@ -245,7 +245,8 @@ function applyI18nToHtml() {
         "wfm-help-sidepanel-1": "helpSidepanel1", "wfm-help-sidepanel-2": "helpSidepanel2",
         "wfm-help-sidepanel-3": "helpSidepanel3", "wfm-help-sidepanel-4": "helpSidepanel4",
         "wfm-help-sidepanel-5": "helpSidepanel5", "wfm-help-sidepanel-6": "helpSidepanel6",
-        "wfm-help-sidepanel-7": "helpSidepanel7",
+        "wfm-help-sidepanel-7": "helpSidepanel7", "wfm-help-sidepanel-8": "helpSidepanel8",
+        "wfm-help-sidepanel-9": "helpSidepanel9", "wfm-help-sidepanel-10": "helpSidepanel10",
         "wfm-help-shortcuts-title": "helpShortcutsTitle",
         "wfm-help-shortcuts-1": "helpShortcuts1", "wfm-help-shortcuts-2": "helpShortcuts2",
         "wfm-help-shortcuts-3": "helpShortcuts3", "wfm-help-shortcuts-4": "helpShortcuts4",

@@ -301,10 +301,10 @@
 
         <!-- Prompt Tab -->
         <section id="wfm-tab-prompt" class="wfm-tab-content">
-            <div class="wfm-prompt-split">
-                <!-- Left: Assistant -->
-                <div class="wfm-prompt-split-left">
-                    <div class="wfm-prompt-split-header">Assistant</div>
+            <div class="wfm-prompt-split wfm-prompt-split-3col">
+                <!-- Col 1: AI Assistant -->
+                <div class="wfm-prompt-split-col">
+                    <div class="wfm-prompt-split-header">AI Assistant</div>
                     <div class="wfm-ollama-assistant">
                         <div class="wfm-ollama-controls">
                             <select id="wfm-ollama-model" class="wfm-select" style="flex:1;min-width:120px;">
@@ -340,34 +340,61 @@
                     </div>
                 </div>
 
-                <!-- Right: Presets -->
-                <div class="wfm-prompt-split-right">
+                <!-- Col 2: Preset Editor -->
+                <div class="wfm-prompt-split-col">
                     <div class="wfm-prompt-split-header">Presets</div>
                     <div class="wfm-preset-panel">
                         <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
                             <select id="wfm-preset-select" class="wfm-select" style="flex:1;">
                                 <option value="">New Preset (none selected)</option>
                             </select>
-                            <button id="wfm-preset-apply-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Apply to GenerateUI</button>
-                            <button id="wfm-preset-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger">Delete</button>
+                            <button id="wfm-preset-apply-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">GenUI Set</button>
                         </div>
                         <div class="wfm-form-group">
                             <label>Preset Name</label>
                             <input type="text" id="wfm-preset-name" class="wfm-input" placeholder="Enter preset name...">
                         </div>
                         <div class="wfm-form-group">
-                            <label>Positive Prompt</label>
-                            <textarea id="wfm-preset-pos" class="wfm-textarea" rows="4" placeholder="Positive prompt..."></textarea>
+                            <label>Category</label>
+                            <input type="text" id="wfm-preset-category" class="wfm-input" placeholder="e.g. Portrait, Landscape...">
                         </div>
-                        <div class="wfm-form-group">
+                        <div class="wfm-form-group" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+                            <label>Positive Prompt</label>
+                            <textarea id="wfm-preset-pos" class="wfm-textarea" style="flex:1;" placeholder="Positive prompt..."></textarea>
+                        </div>
+                        <div class="wfm-form-group" style="flex:1;min-height:0;display:flex;flex-direction:column;">
                             <label>Negative Prompt</label>
-                            <textarea id="wfm-preset-neg" class="wfm-textarea" rows="3" placeholder="Negative prompt..."></textarea>
+                            <textarea id="wfm-preset-neg" class="wfm-textarea" style="flex:1;" placeholder="Negative prompt..."></textarea>
                         </div>
                         <div style="display:flex; gap:4px;">
                             <button id="wfm-preset-copy-pos-btn" class="wfm-btn" style="flex:2;" title="Copy Positive Prompt">PP Copy</button>
                             <button id="wfm-preset-copy-neg-btn" class="wfm-btn" style="flex:2;" title="Copy Negative Prompt">NP Copy</button>
                             <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Save</button>
                         </div>
+                        <div style="display:flex; gap:4px; margin-top:4px;">
+                            <select id="wfm-preset-group-select" class="wfm-select" style="flex:1;">
+                                <option value="">Select group...</option>
+                            </select>
+                            <button id="wfm-preset-add-to-group-btn" class="wfm-btn wfm-btn-sm">Add to Group</button>
+                            <button id="wfm-preset-new-group-btn" class="wfm-btn wfm-btn-sm">+ Group</button>
+                            <button id="wfm-preset-del-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" title="Delete selected group">Del Group</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Col 3: Preset Manager (list, favorites, groups) -->
+                <div class="wfm-prompt-split-col">
+                    <div class="wfm-prompt-split-header">Preset Manager</div>
+                    <div class="wfm-preset-manager">
+                        <div class="wfm-pm-tabs">
+                            <button class="wfm-pm-tab active" data-pmtab="all">All</button>
+                            <button class="wfm-pm-tab" data-pmtab="favorites">&#9733;</button>
+                            <button class="wfm-pm-tab" data-pmtab="groups">Groups</button>
+                        </div>
+                        <div class="wfm-pm-search">
+                            <input type="text" id="wfm-pm-search-input" class="wfm-input" placeholder="Search presets...">
+                        </div>
+                        <div id="wfm-pm-list" class="wfm-pm-list"></div>
                     </div>
                 </div>
             </div>
@@ -428,7 +455,10 @@
                             <li id="wfm-help-prompt-1">AI assistant (Ollama): model selection, chat for prompt consultation, image attachment (vision models)</li>
                             <li id="wfm-help-prompt-2">Apply AI responses to GenerateUI prompts</li>
                             <li id="wfm-help-prompt-3">Translation: JA&#8596;EN, ZH&#8596;EN</li>
-                            <li id="wfm-help-prompt-4">Preset management: create, edit, delete, apply, clipboard copy (PP/NP)</li>
+                            <li id="wfm-help-prompt-4">Preset management: create, edit, positive/negative prompt clipboard copy (PP/NP)</li>
+                            <li id="wfm-help-prompt-5">Preset Manager: browse all presets, favorites, and group-based filtering</li>
+                            <li id="wfm-help-prompt-6">Group management: create groups, assign/remove presets, delete groups</li>
+                            <li id="wfm-help-prompt-7">GenUI Set: apply preset prompts directly to GenerateUI</li>
                         </ul>
                     </div>
 
@@ -457,15 +487,18 @@
                     </div>
 
                     <div class="wfm-help-card">
-                        <h3 id="wfm-help-sidepanel-title">WF &amp; Node Library (ComfyUI Side Panel)</h3>
+                        <h3 id="wfm-help-sidepanel-title">Workflow Studio Library (ComfyUI Side Panel)</h3>
                         <ul>
-                            <li id="wfm-help-sidepanel-1">Open from the WF &amp; Node Library button in the ComfyUI toolbar</li>
+                            <li id="wfm-help-sidepanel-1">Open from the Workflow Studio Library button in the ComfyUI toolbar</li>
                             <li id="wfm-help-sidepanel-2">Workflows tab: browse favorite workflows, filter by model type, and filter by group</li>
                             <li id="wfm-help-sidepanel-3">Nodes tab: browse favorite nodes, node sets, and node groups</li>
-                            <li id="wfm-help-sidepanel-4">Drag &amp; drop workflows onto the canvas to load them</li>
-                            <li id="wfm-help-sidepanel-5">Drag &amp; drop nodes/node sets onto the canvas to place them</li>
-                            <li id="wfm-help-sidepanel-6">Double-click items to load/place without dragging</li>
-                            <li id="wfm-help-sidepanel-7">Search within each sub-tab to quickly find items</li>
+                            <li id="wfm-help-sidepanel-4">Prompts tab: browse prompt presets with All/Favorites/Categories sub-tabs</li>
+                            <li id="wfm-help-sidepanel-5">Drag &amp; drop workflows onto the canvas to load them</li>
+                            <li id="wfm-help-sidepanel-6">Drag &amp; drop nodes/node sets onto the canvas to place them</li>
+                            <li id="wfm-help-sidepanel-7">Drag &amp; drop prompt presets to create WFS_PromptText nodes with positive/negative prompts</li>
+                            <li id="wfm-help-sidepanel-8">Copy individual positive (P) or negative (N) prompts from sidebar items</li>
+                            <li id="wfm-help-sidepanel-9">Double-click items to load/place without dragging</li>
+                            <li id="wfm-help-sidepanel-10">Search within each sub-tab to quickly find items</li>
                         </ul>
                     </div>
 

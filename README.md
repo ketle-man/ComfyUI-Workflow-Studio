@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.1.9-green)
+![Version](https://img.shields.io/badge/version-0.2.0-green)
 
 ## Screenshots
 
@@ -21,9 +21,9 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 |:---:|:---:|
 | ![Nodes](docs/screenshot_nodes.png) | ![Help](docs/screenshot_help.png) |
 
-| WF & Node Library (ComfyUI) | ComfyUI Integration |
+| Workflow Studio Library (ComfyUI) | ComfyUI Integration |
 |:---:|:---:|
-| ![WF & Node Library](docs/screenshot_wf_node_library.png) | ![ComfyUI Top Bar](docs/screenshot_comfyui_topbar.png) |
+| ![Workflow Studio Library](docs/screenshot_wf_node_library.png) | ![ComfyUI Top Bar](docs/screenshot_comfyui_topbar.png) |
 
 ---
 
@@ -55,13 +55,15 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
 ### Prompt Tab
-- **Split-panel layout** — AI assistant and presets displayed side-by-side for simultaneous use
+- **3-column layout** — AI Assistant, Presets editor, and Preset Manager displayed side-by-side
 - **AI chat assistant** — powered by [Ollama](https://ollama.com/), generate and refine prompts interactively
 - **Image attachment** — attach reference images for vision-capable models
 - **Translation** — JA/EN/ZH translation buttons for multilingual prompt creation
-- **Prompt presets** — save/load reusable prompt templates (positive & negative)
-- **Clipboard copy** — copy positive/negative prompts individually for use in ComfyUI
-- **Apply to GenerateUI** — send prompts directly to the generation interface
+- **Prompt presets** — save/load reusable prompt templates (positive & negative) with category support
+- **Preset Manager** — browse all presets, favorites, and group-based filtering with search
+- **Group management** — create groups, assign/remove presets, delete groups from the Presets panel
+- **Clipboard copy** — copy positive/negative prompts individually (PP Copy / NP Copy)
+- **GenUI Set** — apply preset prompts directly to the GenerateUI interface
 
 ### Settings Tab
 - **Theme selection** — 13 built-in themes with visual swatch preview (Dark, Pop, Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro Pixel, Pastel, Brutalism, Earthy, Material, Monotone, Corporate)
@@ -79,11 +81,14 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Node Sets** — save multiple nodes + connections as reusable sets from the ComfyUI canvas
 - **Right-click context menu** — "Save as Node Set" option on any node in ComfyUI
 
-### WF & Node Library (ComfyUI Side Panel) (v0.1.8)
+### Workflow Studio Library (ComfyUI Side Panel) (v0.1.8)
 - **Workflows tab** — browse favorite workflows, filter by model type, filter by group
 - **Nodes tab** — browse favorite nodes, node sets, and node groups
+- **Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
 - **Drag & drop workflows** — drag a workflow onto the canvas to load it
 - **Drag & drop nodes** — drag nodes/node sets onto the canvas to place them
+- **Drag & drop prompts** — drag a preset onto the canvas to create a WFS_PromptText node with positive/negative prompts
+- **Copy prompts** — copy individual positive (P) or negative (N) prompts from sidebar items
 - **Double-click** — load workflows or place nodes without dragging
 - **Search** — search within each sub-tab to quickly find items
 
@@ -162,6 +167,17 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.2.0
+- **Prompt presets in sidebar** — added Prompts tab to Workflow Studio Library (ComfyUI side panel) with All / Favorites / Categories sub-tabs
+- **WFS_PromptText custom node** — drag prompt presets onto the canvas to create nodes with positive/negative prompt outputs
+- **Preset Manager** — 3-column layout in Prompt tab: AI Assistant | Presets editor | Preset Manager (All / Favorites / Groups)
+- **Group management** — create groups, assign/remove presets, delete groups from the Presets panel
+- **GenUI Set** — renamed "Apply" button to clarify its purpose (applies presets to GenerateUI)
+- **Sidebar P/N copy buttons** — copy positive or negative prompts individually from sidebar items
+- **Panel renamed** — "WF & Node Library" renamed to "Workflow Studio Library"
+- **Backend API for presets** — presets migrated from localStorage to server-side API with one-time migration
+- **Help tab updated** — Prompt Tab and Workflow Studio Library sections reflect new features
+
 ### v0.1.9
 - **Side panel 2-row sub-tabs** — Workflows: row 1 (Workflows / Favorites / Groups), row 2 (Model Type); Nodes: row 1 (Nodes / Favorites / Groups), row 2 (Sets)
 - **Save dialog** — canvas snapshot now shows a filename edit dialog instead of auto-naming
@@ -216,15 +232,19 @@ ComfyUI-Workflow-Studio/
 ├── py/
 │   ├── wfm.py                   # Main class & route registration
 │   ├── config.py                # Path configuration
+│   ├── nodes/
+│   │   └── prompt_text.py       # WFS_PromptText custom node (positive/negative prompt)
 │   ├── routes/
 │   │   ├── workflow_routes.py   # Workflow CRUD & analysis API
 │   │   ├── nodes_routes.py      # Nodes metadata & node sets API
+│   │   ├── prompts_routes.py    # Prompt presets CRUD API
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
 │   │   └── eagle_routes.py      # Eagle integration API
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
 │       ├── nodes_service.py     # Node metadata & node sets
+│       ├── prompts_service.py   # Prompt presets persistence
 │       ├── workflow_analyzer.py # Model/node detection
 │       ├── settings_service.py  # Settings persistence
 │       └── png_extractor.py     # PNG metadata extraction
@@ -247,8 +267,8 @@ ComfyUI-Workflow-Studio/
 │       └── i18n.js              # Internationalization
 ├── web/comfyui/
 │   ├── top_menu_extension.js    # ComfyUI menu bar integration
-│   └── node_sets_menu.js        # WF & Node Library side panel
-└── data/                        # Metadata & settings storage
+│   └── node_sets_menu.js        # Workflow Studio Library side panel
+└── data/                        # Metadata & settings storage (incl. prompts.json)
 ```
 
 ---
