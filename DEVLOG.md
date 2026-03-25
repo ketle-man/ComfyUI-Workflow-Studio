@@ -1,5 +1,102 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-25: v0.2.0 プロンプトプリセット機能・Workflow Studio Library
+
+### 概要
+- プロンプトプリセット機能を追加：サイドパネルからドラッグ＆ドロップでWFS_PromptTextカスタムノードを作成
+- Workflow Studio SPAのPromptタブを3カラムレイアウトに刷新（AIアシスタント｜プリセット編集｜プリセットマネージャー）
+- プリセットのバックエンドAPI化（localStorage→サーバーサイド保存）
+- サイドパネル名を「WF & Node Library」→「Workflow Studio Library」に変更
+
+### 変更内容
+
+#### `py/nodes/prompt_text.py` — WFS_PromptTextカスタムノード（新規）
+- **WFS_PromptText**: ポジティブ/ネガティブの2つのSTRING入力とSTRING出力を持つカスタムノード
+- `INPUT_TYPES`: `positive`（multiline）, `negative`（multiline）
+- `RETURN_TYPES`: `("STRING", "STRING")`, `RETURN_NAMES`: `("positive", "negative")`
+- `CATEGORY`: `"Workflow Studio"`
+
+#### `py/nodes/__init__.py` — パッケージ初期化（新規）
+- 空ファイル（Pythonパッケージ認識用）
+
+#### `__init__.py` — カスタムノード登録
+- `_NODE_MODULES` に `WFS_PromptText` を追加（分離読み込みパターン）
+- `NODE_DISPLAY_NAME_MAPPINGS` に `"Prompt Text (WFS)"` を追加
+
+#### `py/services/prompts_service.py` — プリセットCRUDサービス（新規）
+- `list_prompts()`: 全プリセット一覧取得
+- `create_prompt(data)`: 新規作成（name, text, negText, category, tags, favorite）
+- `update_prompt(id, updates)`: 更新（name, text, negText, category, tags, favorite）
+- `delete_prompt(id)`: 削除
+- `list_categories()`: カテゴリ一覧取得
+- データ永続化: `data/prompts.json`
+
+#### `py/routes/prompts_routes.py` — プリセットAPIエンドポイント（新規）
+- `GET /api/wfm/prompts` — 一覧取得
+- `POST /api/wfm/prompts` — 新規作成
+- `POST /api/wfm/prompts/update` — 更新
+- `POST /api/wfm/prompts/delete` — 削除
+
+#### `py/config.py` — 設定追加
+- `PROMPTS_FILE = DATA_DIR / "prompts.json"` を追加
+
+#### `py/wfm.py` — ルート登録
+- `prompts_routes` のインポートと `prompts_routes.setup_routes(app)` を追加
+
+#### `web/comfyui/node_sets_menu.js` — サイドパネルにPromptsタブ追加
+- **トップタブ:** Workflows / Nodes / **Prompts** の3タブ構成
+- **Promptsサブタブ:** All / ★ Favorites / 📁 Categories
+- **State追加:** `promptSubTab`, `promptList`, `promptFavorites`, `promptCategories`, `promptLoaded`
+- **API関数:** `fetchPrompts()`, `loadPromptData()`
+- **レンダリング:** `renderPromptAll()`, `renderPromptFavorites()`, `renderPromptCategories()`
+- **ドラッグ＆ドロップ:** `application/x-wfm-prompt` MIMEタイプ、`placePromptNode(posText, negText, promptName, pos)` でWFS_PromptTextノード作成
+- **P/Nコピーボタン:** 各プリセットアイテムにポジティブ(P)・ネガティブ(N)の個別コピーボタン（Nはテキスト空の場合非表示）
+- **パネル名変更:** ツールチップ・タイトルを「Workflow Studio Library」に更新
+- **CSS追加:** `.wfm-nlp-copy-btns`, `.wfm-nlp-copy-pos`（緑ホバー）, `.wfm-nlp-copy-neg`（赤ホバー）
+
+#### `templates/index.html` — Promptタブ3カラムレイアウト
+- 2カラム（AI Assistant | Presets）→ 3カラム（AI Assistant | Presets | Preset Manager）に変更
+- **Presetsパネル:** Deleteボタン削除、Apply→「GenUI Set」、Category入力欄追加、下部にグループ管理行（Select group + Add to Group + + Group + Del Group）
+- **Preset Managerパネル:** All / ★ / Groupsタブ、検索、スクロール可能なリスト
+- **ヘルプタブ:** helpPrompt5〜7追加、helpSidepanel4・7〜10追加（Promptsタブ・ドラッグ＆ドロップ・P/Nコピー）
+- サイドパネルタイトルを「Workflow Studio Library」に更新
+
+#### `static/css/main.css` — スタイル追加（約150行）
+- `.wfm-prompt-split-3col` — 3カラムFlexboxレイアウト
+- `.wfm-prompt-split-col` — 各カラムのスタイル
+- `.wfm-preset-manager` — プリセットマネージャーパネル
+- `.wfm-pm-tabs`, `.wfm-pm-tab` — マネージャータブ
+- `.wfm-pm-list`, `.wfm-pm-item` — アイテムリスト
+- `.wfm-pm-item-actions`, `.wfm-pm-action-btn` — お気に入り(★)・削除(✕)ボタン
+- `.wfm-pm-group-header` — グループヘッダー
+
+#### `static/js/prompt-tab.js` — 全面リライト
+- **API化:** `fetchPresets()`, `apiCreatePreset()`, `apiUpdatePreset()`, `apiDeletePreset()`
+- **localStorage移行:** `migrateLocalStoragePresets()` — 一回限りの自動移行
+- **プリセット管理:** `renderPresetSelect()`, `renderGroupSelect()`, `selectPresetInEditor(preset)`
+- **Preset Manager:** `renderPresetManager()`, `renderPmAll()`, `renderPmFavorites()`, `renderPmGroups()`
+- **`createPmItem()`:** お気に入りトグル(★)と削除(✕)ボタン（コピーボタンなし — Presetsパネル側にPP/NP Copyあり）
+- **グループ管理:** Presetsパネル下部のnew-group, add-to-group, del-groupボタン
+- **Save:** API経由でnegTextフィールドを含むプリセットの作成/更新
+
+#### `static/js/i18n.js` — 翻訳更新
+- `applyPreset` → `"GenUI Set"`（英/日/中 全3言語）
+- `deletePreset` キー削除（全3言語）
+- ヘルプ: `helpPrompt5`〜`helpPrompt7`, `helpSidepanel8`〜`helpSidepanel10` 追加（全3言語）
+- サイドパネルタイトル: `helpSidepanelTitle` → `"Workflow Studio Library"` に更新（全3言語）
+
+#### `static/js/app.js` — i18nマッピング更新
+- `helpIdMap` に `helpPrompt5`〜`7`, `helpSidepanel8`〜`10` を追加
+- `deletePreset` 適用コード削除
+
+#### `README.md` — v0.2.0更新
+- バージョンバッジ: `0.1.9` → `0.2.0`
+- Prompt Tab: 3カラムレイアウト、Preset Manager、グループ管理、GenUI Set
+- Workflow Studio Library: Promptsタブ、ドラッグ＆ドロップ、P/Nコピー
+- Project Structure: `py/nodes/`, `prompts_routes.py`, `prompts_service.py` 追加
+- Changelog: v0.2.0エントリ追加
+- スクリーンショット全8枚差し替え
+
 ## 2026-03-24: v0.1.9 サイドパネルUI改善・保存ダイアログ・バグ修正
 
 ### 概要
