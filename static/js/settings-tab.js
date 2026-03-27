@@ -259,18 +259,20 @@ function applyCustomOverrides(custom) {
             const tileSize = s + gap;
             let tiledSvg;
             if (gap > 0) {
-                // Wrap: set viewBox to include gap as transparent margin
-                // Replace the root <svg> width/height/viewBox to add padding
+                // Extract the original viewBox to preserve it in the inner SVG
+                const vbMatch = svgStr.match(/viewBox="([^"]*)"/i);
+                const origViewBox = vbMatch ? vbMatch[1] : `0 0 ${s} ${s}`;
+                // Wrap: outer SVG with tileSize, inner SVG with original viewBox
                 tiledSvg = svgStr.replace(
                     /<svg([^>]*)>/i,
                     (match, attrs) => {
-                        // Remove existing width/height/viewBox
+                        // Remove existing width/height/viewBox from outer
                         let clean = attrs
                             .replace(/\s*width="[^"]*"/gi, '')
                             .replace(/\s*height="[^"]*"/gi, '')
                             .replace(/\s*viewBox="[^"]*"/gi, '');
                         return `<svg${clean} width="${tileSize}" height="${tileSize}" viewBox="0 0 ${tileSize} ${tileSize}">
-                            <svg width="${s}" height="${s}" x="0" y="0">`;
+                            <svg width="${s}" height="${s}" x="0" y="0" viewBox="${origViewBox}">`;
                     }
                 ) + '</svg>';
             } else {
