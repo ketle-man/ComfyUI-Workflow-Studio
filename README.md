@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.0-green)
+![Version](https://img.shields.io/badge/version-0.2.1-green)
 
 ## Screenshots
 
@@ -66,11 +66,13 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **GenUI Set** — apply preset prompts directly to the GenerateUI interface
 
 ### Settings Tab
+- **Collapsible sections** — all settings organized in accordion panels for a clean layout
 - **Theme selection** — 13 built-in themes with visual swatch preview (Dark, Pop, Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro Pixel, Pastel, Brutalism, Earthy, Material, Monotone, Corporate)
+- **Theme customization** — override colors (background, surface, text, primary, accent), add background patterns (horizontal/vertical/diagonal stripes, polka dot, checkerboard, custom SVG tiling with color/opacity/scale/gap controls), and select from 16 fonts including Japanese display fonts (Google Fonts)
 - **Workflows directory** — configure which folder to scan for workflows
 - **Eagle connection** — set Eagle API endpoint for auto-save
 - **Ollama connection** — configure Ollama server URL
-- **Badge display** — toggle metadata badges on workflow cards
+- **Default workflow** — set a workflow to auto-load on startup
 - **Language** — English / Japanese / Chinese
 
 ### Nodes Tab (v0.1.7)
