@@ -16,6 +16,7 @@
         <nav class="wfm-tabs">
             <button class="wfm-tab active" data-tab="workflow">Workflow</button>
             <button class="wfm-tab" data-tab="nodes">Nodes</button>
+            <button class="wfm-tab" data-tab="models">Models</button>
             <button class="wfm-tab" data-tab="generate">GenerateUI</button>
             <button class="wfm-tab" data-tab="prompt">Prompt</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
@@ -58,6 +59,7 @@
                         <button id="wfm-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge color settings">&#9881;</button>
                         <div id="wfm-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
                     </div>
+                    <div id="wfm-workflow-pagination" class="wfm-pagination-inline"></div>
                 </div>
             </div>
             <div class="wfm-workflow-area">
@@ -154,6 +156,7 @@
                     </div>
                     <span id="wfm-nodes-count" class="wfm-nodes-count"></span>
                     <button id="wfm-nodes-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                    <div id="wfm-nodes-pagination" class="wfm-pagination-inline"></div>
                 </div>
             </div>
 
@@ -189,6 +192,72 @@
                 </div>
                 <div id="wfm-node-sets-grid" class="wfm-grid wfm-view-card">
                     <p class="wfm-placeholder">No node sets yet.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Models Tab -->
+        <section id="wfm-tab-models" class="wfm-tab-content">
+            <div class="wfm-toolbar">
+                <!-- Row 1: Model type sub-tabs -->
+                <div class="wfm-toolbar-row" style="gap:8px;">
+                    <div class="wfm-models-type-nav">
+                        <button class="wfm-models-type-btn active" data-model-type="checkpoint">Checkpoint</button>
+                        <button class="wfm-models-type-btn" data-model-type="lora">LoRA</button>
+                        <button class="wfm-models-type-btn" data-model-type="vae">VAE</button>
+                        <button class="wfm-models-type-btn" data-model-type="controlnet">ControlNet</button>
+                        <button class="wfm-models-type-btn" data-model-type="unet">UNET</button>
+                        <button class="wfm-models-type-btn" data-model-type="textencoder">TextEncoder</button>
+                    </div>
+                </div>
+                <!-- Row 2: Search / filter toolbar -->
+                <div id="wfm-models-toolbar" class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;">
+                    <button class="wfm-filter-btn" id="wfm-models-fav-btn" title="Favorites">&#9733;</button>
+                    <input type="text" id="wfm-models-search" class="wfm-search-input" placeholder="Search models...">
+                    <select id="wfm-models-tag-filter" class="wfm-select wfm-toolbar-select"><option value="">All Tags</option></select>
+                    <select id="wfm-models-group-filter" class="wfm-select wfm-toolbar-select"><option value="">All Groups</option></select>
+                    <div class="wfm-view-btns">
+                        <button class="wfm-view-btn active" data-models-view="thumb" title="Thumbnail">&#8862;</button>
+                        <button class="wfm-view-btn" data-models-view="card" title="Card">&#9776;</button>
+                        <button class="wfm-view-btn" data-models-view="table" title="Table">&#8801;</button>
+                    </div>
+                    <span id="wfm-models-count" class="wfm-nodes-count"></span>
+                    <button id="wfm-models-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                    <button id="wfm-models-civitai-batch-btn" class="wfm-btn wfm-btn-sm" title="Fetch CivitAI info for all models">CivitAI</button>
+                    <span id="wfm-models-civitai-progress" style="font-size:12px;color:var(--wfm-text-secondary);"></span>
+                    <div class="wfm-badge-settings-wrap">
+                        <button id="wfm-models-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge color settings">&#9881;</button>
+                        <div id="wfm-models-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
+                    </div>
+                    <div id="wfm-models-pagination" class="wfm-pagination-inline"></div>
+                </div>
+            </div>
+
+            <!-- Grid + Side Panel -->
+            <div class="wfm-workflow-area">
+                <div id="wfm-models-grid" class="wfm-grid wfm-view-thumb">
+                    <p class="wfm-placeholder" id="wfm-models-placeholder">Click Refresh to load models...</p>
+                </div>
+                <!-- Side Panel -->
+                <div id="wfm-models-side-panel" class="wfm-side-panel" style="display:none;">
+                    <div class="wfm-side-panel-header">
+                        <span id="wfm-models-panel-title" class="wfm-side-panel-title"></span>
+                        <button id="wfm-models-panel-close" class="wfm-side-panel-close">&times;</button>
+                    </div>
+                    <div class="wfm-side-tab-nav">
+                        <button class="wfm-models-side-tab-btn active" data-side-tab="info">Info</button>
+                        <button class="wfm-models-side-tab-btn" data-side-tab="group">Group</button>
+                        <button class="wfm-models-side-tab-btn" data-side-tab="civitai">CivitAI</button>
+                    </div>
+                    <!-- Info Tab -->
+                    <div id="wfm-models-side-info" class="wfm-models-side-content active" style="overflow-y:auto;padding:12px;">
+                    </div>
+                    <!-- Group Tab -->
+                    <div id="wfm-models-side-group" class="wfm-models-side-content" style="display:none;overflow-y:auto;padding:12px;">
+                    </div>
+                    <!-- CivitAI Tab -->
+                    <div id="wfm-models-side-civitai" class="wfm-models-side-content" style="display:none;overflow-y:auto;padding:12px;">
+                    </div>
                 </div>
             </div>
         </section>
@@ -485,6 +554,19 @@
                             <li id="wfm-help-nodes-4">Create, rename, delete node groups and assign/remove nodes</li>
                             <li id="wfm-help-nodes-5">Side panel: Details (class name, package, category, description, flags), I/O Spec (inputs/outputs with types and defaults), Groups management</li>
                             <li id="wfm-help-nodes-6">Node Sets: create reusable node collections with descriptions, tags, and link definitions between nodes</li>
+                        </ul>
+                    </div>
+
+                    <div class="wfm-help-card">
+                        <h3>Models Tab</h3>
+                        <ul>
+                            <li id="wfm-help-models-1">Browse installed models: Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder with sub-tab switching</li>
+                            <li id="wfm-help-models-2">Thumbnail, Card, and Table view modes with pagination</li>
+                            <li id="wfm-help-models-3">Search, tag filter, group filter, and favorites filter</li>
+                            <li id="wfm-help-models-4">Side panel: Info (file path, tags, memo), Groups management, CivitAI integration</li>
+                            <li id="wfm-help-models-5">CivitAI integration: fetch model info by SHA256 hash, batch fetch per model type</li>
+                            <li id="wfm-help-models-6">Detail modal: preview image, CivitAI info (base model, trained words, tags), thumbnail change</li>
+                            <li id="wfm-help-models-7">Group management: create, rename, delete groups and assign/remove models</li>
                         </ul>
                     </div>
 

@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.1-green)
+![Version](https://img.shields.io/badge/version-0.2.2-green)
 
 ## Screenshots
 
@@ -17,9 +17,13 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 |:---:|:---:|
 | ![Prompt](docs/screenshot_prompt.png) | ![Settings](docs/screenshot_settings.png) |
 
-| Nodes Tab | Help & Support Tab |
+| Nodes Tab | Models Tab |
 |:---:|:---:|
-| ![Nodes](docs/screenshot_nodes.png) | ![Help](docs/screenshot_help.png) |
+| ![Nodes](docs/screenshot_nodes.png) | ![Models](docs/screenshot_models.png) |
+
+| Help & Support Tab | |
+|:---:|:---:|
+| ![Help](docs/screenshot_help.png) | |
 
 | Workflow Studio Library (ComfyUI) | ComfyUI Integration |
 |:---:|:---:|
@@ -82,6 +86,18 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Node detail panel** — view I/O specifications, edit tags, manage groups
 - **Node Sets** — save multiple nodes + connections as reusable sets from the ComfyUI canvas
 - **Right-click context menu** — "Save as Node Set" option on any node in ComfyUI
+
+### Models Tab (v0.2.2)
+- **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder) with sub-tab switching
+- **Thumbnail / Card / Table views** — switch between view modes with pagination (24 items per page)
+- **Search & Filter** — full-text search, filter by tags, groups, and favorites
+- **Side panel tabs** — Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
+- **CivitAI integration** — fetch model metadata by SHA256 hash, view base model, trained words, tags, and model page link
+- **Batch CivitAI fetch** — one-click batch fetch for all models of a type with SSE progress streaming
+- **Detail modal** — preview image, CivitAI info, thumbnail change via file upload
+- **Group management** — create, rename, delete groups and assign/remove models
+- **Table view memo** — memo column displayed in table view for quick reference
+- **Preview images** — auto-detect `{model_stem}.preview.png` next to model files
 
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.1.8)
 - **Workflows tab** — browse favorite workflows, filter by model type, filter by group
@@ -169,6 +185,18 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.2.2
+- **Models tab** — browse, search, and manage all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder) with Thumbnail/Card/Table views
+- **CivitAI integration** — fetch model metadata by SHA256 hash (individual or batch per model type) with SSE progress streaming
+- **Model groups** — create, rename, delete groups and assign/remove models for organization
+- **Model metadata** — persistent favorites, tags, memo, and SHA256 hash per model
+- **Preview images** — auto-detect and display preview images, change via file upload in detail modal
+- **Table view memo column** — memo displayed in table view with compact subdir/extension columns
+- **Side panel file path** — display full file path with click-to-copy in model info panel
+- **Node card redesign** — removed package badge, added left border color-coding by package
+- **Toolbar pagination** — pagination controls moved to toolbar for all tabs (Models, Workflows, Nodes)
+- **Help tab updated** — Models Tab section added to feature list
+
 ### v0.2.0
 - **Prompt presets in sidebar** — added Prompts tab to Workflow Studio Library (ComfyUI side panel) with All / Favorites / Categories sub-tabs
 - **WFS_PromptText custom node** — drag prompt presets onto the canvas to create nodes with positive/negative prompt outputs
@@ -239,6 +267,7 @@ ComfyUI-Workflow-Studio/
 │   ├── routes/
 │   │   ├── workflow_routes.py   # Workflow CRUD & analysis API
 │   │   ├── nodes_routes.py      # Nodes metadata & node sets API
+│   │   ├── models_routes.py     # Model metadata, preview, CivitAI API
 │   │   ├── prompts_routes.py    # Prompt presets CRUD API
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
@@ -246,12 +275,14 @@ ComfyUI-Workflow-Studio/
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
 │       ├── nodes_service.py     # Node metadata & node sets
+│       ├── models_service.py    # Model metadata & preview images
+│       ├── civitai_service.py   # CivitAI API integration & cache
 │       ├── prompts_service.py   # Prompt presets persistence
 │       ├── workflow_analyzer.py # Model/node detection
 │       ├── settings_service.py  # Settings persistence
 │       └── png_extractor.py     # PNG metadata extraction
 ├── templates/
-│   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Settings/Help)
+│   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Settings/Nodes/Models/Help)
 ├── static/
 │   ├── favicon.svg              # Browser tab icon (W+S Wave)
 │   ├── css/main.css             # Styles
@@ -263,6 +294,7 @@ ComfyUI-Workflow-Studio/
 │       ├── settings-tab.js      # Settings panel
 │       ├── comfyui-client.js    # ComfyUI WebSocket/API client
 │       ├── nodes-tab.js          # Node browser & node sets
+│       ├── models-tab.js         # Model browser & CivitAI integration
 │       ├── comfyui-workflow.js  # UI-to-API format conversion
 │       ├── comfyui-editor.js    # Dynamic parameter editor
 │       ├── json-highlight.js    # JSON syntax highlighting
@@ -270,7 +302,7 @@ ComfyUI-Workflow-Studio/
 ├── web/comfyui/
 │   ├── top_menu_extension.js    # ComfyUI menu bar integration
 │   └── node_sets_menu.js        # Workflow Studio Library side panel
-└── data/                        # Metadata & settings storage (incl. prompts.json)
+└── data/                        # Metadata & settings storage (incl. prompts.json, model_metadata.json, civitai_cache.json)
 ```
 
 ---

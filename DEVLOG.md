@@ -1,5 +1,89 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-28: v0.2.2 Modelsタブ・CivitAI連携
+
+### 概要
+- ComfyUIにインストールされたモデル（Checkpoint、LoRA、VAE、ControlNet、UNET、TextEncoder）を一覧・管理する「Models」タブを新規追加
+- CivitAI API連携（SHA256ハッシュによるモデル情報取得、一括取得）
+- モデルグループ管理、プレビュー画像表示・変更、メタデータ永続化
+- ノードカードビュー改善、全タブのページネーションをツールバーに移動
+
+### 新規ファイル
+
+#### `py/services/models_service.py` — モデルメタデータサービス
+- `_get_model_dirs()`: ComfyUIの`folder_paths.get_folder_paths()`でモデルディレクトリを解決
+- `ModelsService`: メタデータのCRUD（お気に入り、タグ、メモ、SHA256）
+- `find_preview_image()`: `{stem}.preview.png`等のプレビュー画像を自動検出
+- `get_model_groups()` / `save_model_groups()`: グループの永続化（`model_metadata.json`の`_groups`キー）
+
+#### `py/services/civitai_service.py` — CivitAI API連携
+- `calculate_sha256()`: モデルファイルのSHA256ハッシュ計算
+- `fetch_by_hash()`: CivitAI APIからモデル情報取得（キャッシュ付き）
+- `batch_fetch()`: 複数モデルの一括取得（プログレスコールバック対応）
+- `_extract_info()`: APIレスポンスから必要フィールドを抽出（modelName, baseModel, trainedWords, images等）
+- キャッシュ: `civitai_cache.json`に保存
+
+#### `py/routes/models_routes.py` — モデル管理APIルート
+- `GET/POST /api/wfm/models/metadata` — メタデータCRUD
+- `GET /api/wfm/models/preview` — プレビュー画像配信
+- `GET/POST /api/wfm/models/groups` — グループ管理
+- `POST /api/wfm/models/civitai/fetch` — 個別CivitAI取得
+- `GET /api/wfm/models/civitai/cache` — CivitAIキャッシュ取得
+- `POST /api/wfm/models/civitai/batch` — SSEストリーミング一括取得
+- `POST /api/wfm/models/change-preview` — プレビュー画像アップロード
+- `GET /api/wfm/models/filepath` — モデルファイルのフルパス取得
+
+#### `static/js/models-tab.js` — フロントエンドモジュール
+- state管理: `modelsByType`, `modelMetadata`, `modelGroups`, `civitaiCache`, `activeModelType`
+- サブタブ切り替え（6タイプ）、サムネイル/カード/テーブル表示
+- サイドパネル: Info（ファイルパス表示、タグ、メモ）、Group管理、CivitAI情報表示
+- 詳細モーダル: プレビュー画像、CivitAI情報、サムネイル変更
+- 一括CivitAI取得ボタン（SSEプログレス付き）
+- テーブルビューにメモ列表示
+
+### 変更ファイル
+
+#### `py/config.py`
+- `MODEL_METADATA_FILE = DATA_DIR / "model_metadata.json"` 追加
+
+#### `py/wfm.py`
+- `models_routes`のインポートとルート登録追加
+
+#### `templates/index.html`
+- Modelsタブボタン・セクション追加（サブタブナビ、ツールバー、グリッド、サイドパネル）
+- ヘルプタブにModels Tabセクション追加
+
+#### `static/js/app.js`
+- `models-tab.js`のimportと`initModelsTab()`呼び出し追加
+- i18nマッピングにModelsタブ・ヘルプ用キー追加
+
+#### `static/js/nodes-tab.js`
+- カードビュー: パッケージバッジ削除、カード左端にパッケージ色のボーダー追加
+- カードビュー: 入出力カウント表示を削除
+- ページネーションをツールバーに移動
+
+#### `static/js/workflow-tab.js`
+- ページネーションをツールバーに移動
+- 1ページ24件表示
+
+#### `static/css/main.css`
+- `.wfm-grid`: `grid-template-columns: repeat(auto-fill, 161px)`、カード161×162px固定
+- `.wfm-node-card`: 左ボーダー3pxスタイル追加
+- `.wfm-pagination-inline`: ツールバー内ページネーション
+- サブタブナビ（`.wfm-models-type-nav`）、テーブル列幅調整
+
+#### `static/js/i18n.js` — 翻訳追加（EN/JA/ZH）
+- Modelsタブ関連: ~50キー（モデルタイプ、フィルタ、サイドパネル、CivitAI、グループ等）
+- ヘルプModelsセクション: `helpModels1`〜`helpModels7`
+- ファイルパス関連: `modelsFilePath`, `modelsCopyPath`, `modelsCopiedPath`
+
+### 技術的な判断
+- **プレビュー画像判定**: HEADリクエストではなく`img.onload/onerror`パターンを採用（404コンソールスパム回避）
+- **CivitAI一括取得**: ブロッキングリクエストではなくSSE（Server-Sent Events）でリアルタイムプログレス表示
+- **aiohttp HEAD自動登録**: `add_get`が自動でHEADも登録するため、明示的なHEADルート追加は不要（重複RuntimeError回避）
+- **テーブルビューメモ列**: `max-width: 200px`＋`text-overflow: ellipsis`で長文を省略表示
+- **ファイルパス表示**: バックエンドAPIでフルパスを解決し、クリックでクリップボードコピー
+
 ## 2026-03-27: テーマカスタマイズ機能・設定タブ改善
 
 ### 概要

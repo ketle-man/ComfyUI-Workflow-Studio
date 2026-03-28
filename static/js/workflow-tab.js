@@ -21,11 +21,14 @@ const state = {
     viewMode: localStorage.getItem("wfm_default_view") || "thumb", // thumb | card | table
     selectedWf: null,
     groupFilter: "", // empty = all groups
+    currentPage: 0,
     badgeColors: (() => {
         try { return JSON.parse(localStorage.getItem("wfm_badge_colors") || "{}"); }
         catch { return {}; }
     })(),
 };
+
+const WF_PER_PAGE = 24;
 
 const BADGE_DEFAULT_COLORS = {
     "SD1.5": "#e67e22",
@@ -242,6 +245,7 @@ function renderModelFilters() {
     container.querySelectorAll(".wfm-filter-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
             state.activeModel = btn.dataset.filter;
+            state.currentPage = 0;
             renderModelFilters();
             renderGrid();
         });
@@ -297,17 +301,27 @@ function renderGrid() {
     if (filtered.length === 0) {
         grid.innerHTML =
             '<p class="wfm-placeholder">No workflows found</p>';
+        updateWfPagination(0);
         return;
     }
 
     if (state.viewMode === "table") {
         renderTableView(grid, filtered);
+        updateWfPagination(0);
         return;
     }
 
-    // Thumbnail / Card view
+    // Thumbnail / Card view with pagination
+    const totalPages = Math.ceil(filtered.length / WF_PER_PAGE);
+    if (state.currentPage >= totalPages) state.currentPage = totalPages - 1;
+    if (state.currentPage < 0) state.currentPage = 0;
+    const start = state.currentPage * WF_PER_PAGE;
+    const pageItems = filtered.slice(start, start + WF_PER_PAGE);
+
+    updateWfPagination(totalPages);
+
     grid.innerHTML = "";
-    filtered.forEach((wf) => {
+    pageItems.forEach((wf) => {
         const card = document.createElement("div");
         card.className = "wfm-card";
         card.dataset.filename = wf.filename;
@@ -355,6 +369,23 @@ function renderGrid() {
         const sel = grid.querySelector(`[data-filename="${state.selectedWf.filename}"]`);
         if (sel) sel.classList.add("wfm-card-selected");
     }
+}
+
+function updateWfPagination(totalPages) {
+    const container = document.getElementById("wfm-workflow-pagination");
+    if (!container) return;
+    if (totalPages <= 1) { container.innerHTML = ""; return; }
+    container.innerHTML = `
+        <button class="wfm-btn wfm-btn-sm" ${state.currentPage === 0 ? "disabled" : ""} data-page="prev">&laquo;</button>
+        <span>${state.currentPage + 1} / ${totalPages}</span>
+        <button class="wfm-btn wfm-btn-sm" ${state.currentPage >= totalPages - 1 ? "disabled" : ""} data-page="next">&raquo;</button>
+    `;
+    container.querySelector('[data-page="prev"]').addEventListener("click", () => {
+        if (state.currentPage > 0) { state.currentPage--; renderGrid(); }
+    });
+    container.querySelector('[data-page="next"]').addEventListener("click", () => {
+        if (state.currentPage < totalPages - 1) { state.currentPage++; renderGrid(); }
+    });
 }
 
 function renderTableView(grid, filtered) {
@@ -1070,6 +1101,7 @@ export function initWorkflowTab() {
     if (searchInput) {
         searchInput.addEventListener("input", () => {
             state.searchText = searchInput.value;
+            state.currentPage = 0;
             renderGrid();
         });
     }
@@ -1205,6 +1237,7 @@ export function initWorkflowTab() {
     // Toolbar: group filter dropdown
     document.getElementById("wfm-group-filter")?.addEventListener("change", (e) => {
         state.groupFilter = e.target.value;
+        state.currentPage = 0;
         renderGrid();
     });
 

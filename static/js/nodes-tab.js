@@ -257,13 +257,13 @@ function renderNodeGrid() {
 
     if (filtered.length === 0) {
         grid.innerHTML = `<p class="wfm-placeholder">${t("noNodesFound")}</p>`;
-        removePagination();
+        clearPagination();
         return;
     }
 
     if (state.viewMode === "table") {
         renderNodeTableView(grid, filtered);
-        removePagination();
+        clearPagination();
         return;
     }
 
@@ -284,6 +284,7 @@ function renderNodeGrid() {
             card.classList.add("wfm-card-selected");
         }
         card.dataset.nodeName = node.name;
+        card.style.borderLeft = `3px solid ${packageColor(node.package)}`;
 
         const inputCount = Object.keys(node.input.required || {}).length +
                            Object.keys(node.input.optional || {}).length;
@@ -296,10 +297,8 @@ function renderNodeGrid() {
             <div class="wfm-card-body">
                 <div class="wfm-card-title" title="${escapeHtml(node.name)}">${escapeHtml(node.display_name)}</div>
                 <div class="wfm-card-meta">
-                    ${packageBadgeHtml(node.package)}
                     ${categoryBadgeHtml(node.category)}
                 </div>
-                <div class="wfm-node-card-io">In: ${inputCount} / Out: ${outputCount}</div>
                 ${tags ? `<div class="wfm-card-tags">${tags}</div>` : ""}
             </div>
             <button class="${favClass}" title="Favorite">${favStar}</button>`;
@@ -316,47 +315,28 @@ function renderNodeGrid() {
 }
 
 function renderPagination(totalItems, totalPages) {
-    removePagination();
-    if (totalPages <= 1) return;
+    const container = document.getElementById("wfm-nodes-pagination");
+    if (!container) return;
+    if (totalPages <= 1) { container.innerHTML = ""; return; }
 
-    const grid = document.getElementById("wfm-nodes-grid");
-    if (!grid) return;
-
-    const pager = document.createElement("div");
-    pager.id = "wfm-nodes-pagination";
-    pager.className = "wfm-pagination";
-
-    const prevBtn = document.createElement("button");
-    prevBtn.className = "wfm-btn wfm-btn-sm";
-    prevBtn.textContent = "\u25C0";
-    prevBtn.disabled = state.currentPage === 0;
-    prevBtn.addEventListener("click", () => {
-        if (state.currentPage > 0) { state.currentPage--; renderNodeGrid(); scrollGridToTop(); }
-    });
-
-    const nextBtn = document.createElement("button");
-    nextBtn.className = "wfm-btn wfm-btn-sm";
-    nextBtn.textContent = "\u25B6";
-    nextBtn.disabled = state.currentPage >= totalPages - 1;
-    nextBtn.addEventListener("click", () => {
-        if (state.currentPage < totalPages - 1) { state.currentPage++; renderNodeGrid(); scrollGridToTop(); }
-    });
-
-    const info = document.createElement("span");
-    info.className = "wfm-pagination-info";
     const start = state.currentPage * NODES_PER_PAGE + 1;
     const end = Math.min((state.currentPage + 1) * NODES_PER_PAGE, totalItems);
-    info.textContent = `${start}-${end} / ${totalItems}`;
-
-    pager.appendChild(prevBtn);
-    pager.appendChild(info);
-    pager.appendChild(nextBtn);
-
-    grid.parentElement.insertBefore(pager, grid.nextSibling);
+    container.innerHTML = `
+        <button class="wfm-btn wfm-btn-sm" ${state.currentPage === 0 ? "disabled" : ""} data-page="prev">&laquo;</button>
+        <span>${start}-${end} / ${totalItems}</span>
+        <button class="wfm-btn wfm-btn-sm" ${state.currentPage >= totalPages - 1 ? "disabled" : ""} data-page="next">&raquo;</button>
+    `;
+    container.querySelector('[data-page="prev"]').addEventListener("click", () => {
+        if (state.currentPage > 0) { state.currentPage--; renderNodeGrid(); scrollGridToTop(); }
+    });
+    container.querySelector('[data-page="next"]').addEventListener("click", () => {
+        if (state.currentPage < totalPages - 1) { state.currentPage++; renderNodeGrid(); scrollGridToTop(); }
+    });
 }
 
-function removePagination() {
-    document.getElementById("wfm-nodes-pagination")?.remove();
+function clearPagination() {
+    const container = document.getElementById("wfm-nodes-pagination");
+    if (container) container.innerHTML = "";
 }
 
 function scrollGridToTop() {

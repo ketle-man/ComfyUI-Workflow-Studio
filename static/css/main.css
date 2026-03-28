@@ -250,7 +250,7 @@ body {
 
 .wfm-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, 161px);
     gap: 10px;
     padding: 10px;
     flex: 1;
@@ -263,6 +263,8 @@ body {
    ============================================ */
 
 .wfm-card {
+    width: 161px;
+    min-width: 161px;
     background: var(--wfm-surface);
     border: 1px solid var(--wfm-border);
     border-radius: var(--wfm-radius);
@@ -278,8 +280,8 @@ body {
 }
 
 .wfm-card-thumb {
-    width: 100%;
-    aspect-ratio: 1 / 1;
+    width: 161px;
+    height: 162px;
     background: var(--wfm-bg-tertiary);
     display: flex;
     align-items: center;
@@ -2727,6 +2729,13 @@ body {
     gap: 8px;
 }
 
+/* Node card: package color left border, auto width */
+.wfm-node-card {
+    width: auto;
+    min-width: auto;
+    border-left-width: 3px !important;
+}
+
 /* Node table row selection highlight */
 .wfm-nodes-table-row {
     cursor: pointer;
@@ -2860,6 +2869,170 @@ body {
 
 /* Side panel content for nodes */
 .wfm-nodes-side-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* ========================================
+   Models Tab
+   ======================================== */
+
+.wfm-models-type-nav {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.wfm-models-type-btn {
+    padding: 6px 16px;
+    border: 1px solid var(--wfm-border);
+    background: var(--wfm-bg-secondary);
+    cursor: pointer;
+    border-radius: var(--wfm-radius-sm);
+    font-size: 13px;
+    color: var(--wfm-text);
+    transition: background 0.15s, color 0.15s;
+}
+
+.wfm-models-type-btn:hover {
+    background: var(--wfm-surface-hover);
+}
+
+.wfm-models-type-btn.active {
+    background: var(--wfm-accent);
+    color: #fff;
+    border-color: var(--wfm-accent);
+}
+
+/* Model card (card view, no thumbnail) */
+.wfm-model-card {
+    position: relative;
+}
+
+.wfm-model-card .wfm-card-body {
+    position: relative;
+}
+
+/* Badge: subdirectory (italic, muted) */
+.wfm-badge-dir {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+/* Favorite button in model card (active state color) */
+.wfm-model-side-fav.wfm-model-fav-active {
+    color: #f5a623;
+}
+
+/* Model table */
+.wfm-models-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.wfm-models-table th,
+.wfm-models-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--wfm-border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+.wfm-models-table th {
+    background: var(--wfm-bg-secondary);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.wfm-models-table-row {
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.wfm-models-table-row:hover {
+    background: var(--wfm-surface-hover);
+}
+
+.wfm-models-table-row.wfm-card-selected {
+    background: var(--wfm-accent-light, rgba(var(--wfm-accent-rgb, 99, 102, 241), 0.1));
+}
+
+.wfm-models-table-fav {
+    cursor: pointer;
+    text-align: center !important;
+    width: 30px;
+}
+
+.wfm-table-th-subdir,
+.wfm-table-td-subdir {
+    width: 80px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wfm-table-th-ext,
+.wfm-table-td-ext {
+    width: 60px;
+    max-width: 60px;
+}
+
+.wfm-table-td-memo {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--wfm-text-muted, #888);
+    font-size: 0.9em;
+}
+
+/* Textarea (shared - used by models memo and workflow detail) */
+.wfm-textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius-sm);
+    background: var(--wfm-bg-secondary);
+    color: var(--wfm-text);
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.wfm-textarea:focus {
+    outline: none;
+    border-color: var(--wfm-accent);
+}
+
+/* Clickable model name (copy to clipboard) */
+.wfm-model-name-copy {
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.wfm-model-name-copy:hover {
+    color: var(--wfm-accent);
+}
+
+/* Inline pagination (in toolbar) */
+.wfm-pagination-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--wfm-text-secondary);
+}
+
+/* Side panel content for models */
+.wfm-models-side-content {
     flex: 1;
     overflow-y: auto;
 }

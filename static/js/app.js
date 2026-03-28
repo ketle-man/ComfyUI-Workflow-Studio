@@ -90,7 +90,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", generate: "tabGenerate", prompt: "tabPrompt", settings: "tabSettings", help: "tabHelp" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", settings: "tabSettings", help: "tabHelp" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -162,6 +162,31 @@ function applyI18nToHtml() {
     });
     const nodesPlaceholder = document.getElementById("wfm-nodes-placeholder");
     if (nodesPlaceholder) nodesPlaceholder.textContent = t("nodesClickToLoad");
+
+    // Models tab
+    const modelsTypeBtns = document.querySelectorAll(".wfm-models-type-btn");
+    modelsTypeBtns.forEach(btn => {
+        const key = "models" + btn.dataset.modelType.charAt(0).toUpperCase() + btn.dataset.modelType.slice(1);
+        const label = t(key);
+        if (label && label !== key) btn.textContent = label;
+    });
+    const modelsSearch = document.getElementById("wfm-models-search");
+    if (modelsSearch) modelsSearch.placeholder = t("modelsSearchPlaceholder");
+    const modelsRefreshBtn = document.getElementById("wfm-models-refresh-btn");
+    if (modelsRefreshBtn) modelsRefreshBtn.textContent = t("modelsRefresh");
+    const modelsPlaceholder = document.getElementById("wfm-models-placeholder");
+    if (modelsPlaceholder) modelsPlaceholder.textContent = t("modelsClickToLoad");
+    const modelsTagFilter = document.getElementById("wfm-models-tag-filter");
+    if (modelsTagFilter) {
+        const firstOpt = modelsTagFilter.querySelector("option[value='']");
+        if (firstOpt) firstOpt.textContent = t("modelsAllTags");
+    }
+    const modelsSideTabBtns = document.querySelectorAll(".wfm-models-side-tab-btn");
+    modelsSideTabBtns.forEach(btn => {
+        if (btn.dataset.sideTab === "info") btn.textContent = t("modelsSideInfo");
+        if (btn.dataset.sideTab === "group") btn.textContent = t("modelsSideGroup");
+        if (btn.dataset.sideTab === "civitai") btn.textContent = t("modelsSideCivitai");
+    });
 
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
@@ -242,6 +267,10 @@ function applyI18nToHtml() {
         "wfm-help-nodes-1": "helpNodes1", "wfm-help-nodes-2": "helpNodes2",
         "wfm-help-nodes-3": "helpNodes3", "wfm-help-nodes-4": "helpNodes4",
         "wfm-help-nodes-5": "helpNodes5", "wfm-help-nodes-6": "helpNodes6",
+        "wfm-help-models-1": "helpModels1", "wfm-help-models-2": "helpModels2",
+        "wfm-help-models-3": "helpModels3", "wfm-help-models-4": "helpModels4",
+        "wfm-help-models-5": "helpModels5", "wfm-help-models-6": "helpModels6",
+        "wfm-help-models-7": "helpModels7",
         "wfm-help-sidepanel-title": "helpSidepanelTitle",
         "wfm-help-sidepanel-1": "helpSidepanel1", "wfm-help-sidepanel-2": "helpSidepanel2",
         "wfm-help-sidepanel-3": "helpSidepanel3", "wfm-help-sidepanel-4": "helpSidepanel4",
@@ -302,6 +331,7 @@ import { initNodesTab } from "./nodes-tab.js";
 import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
 import { initSettingsTab, applyTheme, getSavedTheme } from "./settings-tab.js";
+import { initModelsTab } from "./models-tab.js";
 
 // Apply saved theme immediately to prevent flash of default theme
 applyTheme(getSavedTheme());
@@ -313,6 +343,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initSettingsTab(); // Settings first (applies saved URL)
     initWorkflowTab();
     initNodesTab();
+    initModelsTab();
     initGenerateTab();
     initPromptTab();
 
