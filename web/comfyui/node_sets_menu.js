@@ -21,7 +21,7 @@ export const NODE_SETS_TOOLTIP = "Workflow Studio Library \u2013 Browse & drag w
 const state = {
     visible: false,
     // Top-level tab
-    topTab: "workflows",           // "workflows" | "nodes" | "prompts"
+    topTab: "workflows",           // "workflows" | "nodes" | "prompts" | "models"
     // Node sub-tabs (existing)
     activeTab: "all",              // all | favorites | groups
     activeTab2: null,              // 2nd row: "sets" (or null when 1st row active)
@@ -35,7 +35,7 @@ const state = {
     wfSubTab2: null,               // 2nd row: "wf-modeltype" (or null when 1st row active)
     wfList: [],                    // full workflow array from API
     wfFavorites: [],               // metadata.favorite === true
-    wfModelTypes: [],              // unique model type strings
+    wfBadgeTypes: [],              // unique badge strings
     wfGroups: {},                  // from localStorage "wfm_groups"
     wfLoaded: false,
     // Prompts sub-tabs
@@ -44,6 +44,12 @@ const state = {
     promptFavorites: [],           // favorite === true
     promptCategories: [],          // unique category strings
     promptLoaded: false,
+    // Models sub-tabs
+    modelSubTab: "model-all",      // "model-all" | "model-favorites" | "model-groups"
+    modelSubTab2: null,            // 2nd row: "model-type" (or null when 1st row active)
+    modelMetadata: {},             // {modelName: {favorite, tags, badges, ...}}
+    modelGroups: {},               // {groupName: [modelName, ...]} from /api/wfm/models/groups
+    modelsLoaded: false,
     // Shared
     searchText: "",
 };
@@ -118,6 +124,62 @@ const loadPromptData = async () => {
 };
 
 // ============================================
+// API – Models
+// ============================================
+
+const MODEL_TYPE_LABELS = {
+    checkpoint: "Checkpoint",
+    lora: "LoRA",
+    vae: "VAE",
+    controlnet: "ControlNet",
+    unet: "UNET",
+    textencoder: "TextEncoder",
+    hypernetwork: "Hypernetwork",
+    embedding: "Embedding",
+};
+
+const MODEL_TYPES = Object.keys(MODEL_TYPE_LABELS);
+
+const fetchModelList = async (type) => {
+    try {
+        const comfyBase = window.location.origin;
+        const fetchMap = {
+            checkpoint: () => fetch(`${comfyBase}/object_info/CheckpointLoaderSimple`).then(r => r.json()).then(d => d?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || []),
+            lora:        () => fetch(`${comfyBase}/object_info/LoraLoader`).then(r => r.json()).then(d => d?.LoraLoader?.input?.required?.lora_name?.[0] || []),
+            vae:         () => fetch(`${comfyBase}/object_info/VAELoader`).then(r => r.json()).then(d => d?.VAELoader?.input?.required?.vae_name?.[0] || []),
+            controlnet:  () => fetch(`${comfyBase}/object_info/ControlNetLoader`).then(r => r.json()).then(d => d?.ControlNetLoader?.input?.required?.control_net_name?.[0] || []),
+            unet:        () => fetch(`${comfyBase}/object_info/UNETLoader`).then(r => r.json()).then(d => d?.UNETLoader?.input?.required?.unet_name?.[0] || []),
+            textencoder: () => fetch(`${comfyBase}/object_info/CLIPLoader`).then(r => r.json()).then(d => d?.CLIPLoader?.input?.required?.clip_name1?.[0] || []),
+            hypernetwork:() => fetch(`${comfyBase}/object_info/HypernetworkLoader`).then(r => r.json()).then(d => d?.HypernetworkLoader?.input?.required?.hypernetwork_name?.[0] || []),
+            embedding:   () => fetch(`${comfyBase}/embeddings`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+        };
+        const fn = fetchMap[type];
+        return fn ? await fn() : [];
+    } catch { return []; }
+};
+
+const fetchModelMetadata = async () => {
+    try {
+        const res = await fetch("/api/wfm/models/metadata");
+        return res.ok ? await res.json() : {};
+    } catch { return {}; }
+};
+
+const fetchModelGroups = async () => {
+    try {
+        const res = await fetch("/api/wfm/models/groups");
+        return res.ok ? await res.json() : {};
+    } catch { return {}; }
+};
+
+const loadModelsData = async () => {
+    const [metadata, groups] = await Promise.all([fetchModelMetadata(), fetchModelGroups()]);
+    state.modelMetadata = metadata;
+    state.modelGroups = groups;
+    state.modelsLoaded = true;
+};
+
+// ============================================
 // API – Workflows
 // ============================================
 
@@ -142,15 +204,12 @@ const loadWfData = async () => {
     // Extract favorites
     state.wfFavorites = workflows.filter(w => w.metadata?.favorite);
 
-    // Extract unique model types
-    const typeSet = new Set();
+    // Extract unique badge labels
+    const badgeSet = new Set();
     for (const wf of workflows) {
-        const types = wf.metadata?.modelTypesOverride?.length
-            ? wf.metadata.modelTypesOverride
-            : (wf.analysis?.modelTypes || []);
-        types.forEach(t => typeSet.add(t));
+        (wf.metadata?.badges || []).forEach(b => badgeSet.add(b));
     }
-    state.wfModelTypes = [...typeSet].sort();
+    state.wfBadgeTypes = [...badgeSet].sort();
 
     // Load groups from localStorage and clean up stale entries
     try {
@@ -276,6 +335,70 @@ const placePromptNode = (posText, negText, promptName, pos) => {
 };
 
 // ============================================
+// Model node placement
+// ============================================
+
+// Model type → { classType, widgetName } mapping
+const MODEL_NODE_MAP = {
+    checkpoint:   { classType: "CheckpointLoaderSimple", widgetName: "ckpt_name" },
+    lora:         { classType: "LoraLoader",             widgetName: "lora_name" },
+    vae:          { classType: "VAELoader",              widgetName: "vae_name" },
+    controlnet:   { classType: "ControlNetLoader",       widgetName: "control_net_name" },
+    unet:         { classType: "UNETLoader",             widgetName: "unet_name" },
+    textencoder:  { classType: "CLIPLoader",             widgetName: "clip_name1" },
+    hypernetwork: { classType: "HypernetworkLoader",     widgetName: "hypernetwork_name" },
+    // embedding has no loader node — copy-only
+};
+
+const placeModelNode = (modelName, modelType, pos) => {
+    const mapping = MODEL_NODE_MAP[modelType];
+    if (!mapping) {
+        // Embedding: copy "embedding:name" to clipboard and notify
+        const lastSlash = Math.max(modelName.lastIndexOf("/"), modelName.lastIndexOf("\\"));
+        const filename = lastSlash >= 0 ? modelName.substring(lastSlash + 1) : modelName;
+        const dot = filename.lastIndexOf(".");
+        const stem = dot >= 0 ? filename.substring(0, dot) : filename;
+        const text = `embedding:${stem}`;
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(`Copied: ${text}`, "success");
+        });
+        return;
+    }
+
+    const graph = app.graph;
+    if (!graph) return;
+
+    const node = LiteGraph.createNode(mapping.classType);
+    if (!node) {
+        showToast(`Node not found: ${mapping.classType}`, "error");
+        return;
+    }
+
+    const canvas = app.canvas;
+    const centerPos = canvas
+        ? [-canvas.ds.offset[0] + canvas.canvas.width / 2 / canvas.ds.scale,
+           -canvas.ds.offset[1] + canvas.canvas.height / 2 / canvas.ds.scale]
+        : [100, 100];
+    node.pos = pos || centerPos;
+    graph.add(node);
+
+    // Set the model widget value
+    if (node.widgets) {
+        const w = node.widgets.find(ww => ww.name === mapping.widgetName);
+        if (w) {
+            w.value = modelName;
+            // Trigger callback if present (updates node appearance)
+            if (w.callback) w.callback(modelName);
+        }
+    }
+
+    app.canvas.setDirty(true, true);
+    const lastSlash = Math.max(modelName.lastIndexOf("/"), modelName.lastIndexOf("\\"));
+    const filename = lastSlash >= 0 ? modelName.substring(lastSlash + 1) : modelName;
+    showToast(`Placed: ${filename}`, "success");
+};
+
+// ============================================
 // Workflow canvas loading
 // ============================================
 
@@ -311,13 +434,24 @@ const installCanvasDropHandler = () => {
     canvasEl.addEventListener("dragover", (e) => {
         if (e.dataTransfer.types.includes("application/x-wfm-node") ||
             e.dataTransfer.types.includes("application/x-wfm-workflow") ||
-            e.dataTransfer.types.includes("application/x-wfm-prompt")) {
+            e.dataTransfer.types.includes("application/x-wfm-prompt") ||
+            e.dataTransfer.types.includes("application/x-wfm-model")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
         }
     });
 
     canvasEl.addEventListener("drop", (e) => {
+        // Handle model drop
+        const modelRaw = e.dataTransfer.getData("application/x-wfm-model");
+        if (modelRaw) {
+            e.preventDefault();
+            const { modelName, modelType } = JSON.parse(modelRaw);
+            const pos = getCanvasDropPos(e);
+            placeModelNode(modelName, modelType, pos);
+            return;
+        }
+
         // Handle prompt drop
         const promptRaw = e.dataTransfer.getData("application/x-wfm-prompt");
         if (promptRaw) {
@@ -377,6 +511,7 @@ const createPanel = () => {
             <button class="wfm-nlp-tab wfm-nlp-top-tab active" data-toptab="workflows">Workflows</button>
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="nodes">Nodes</button>
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="prompts">Prompts</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="models">Models</button>
         </div>
         <div class="wfm-nlp-subtabs"></div>
         <div class="wfm-nlp-subtabs wfm-nlp-subtabs-row2"></div>
@@ -399,7 +534,7 @@ const createPanel = () => {
             const searchInput = panel.querySelector(".wfm-nlp-search-input");
             if (searchInput) {
                 searchInput.value = "";
-                const placeholders = { workflows: "Search workflows...", nodes: "Search nodes...", prompts: "Search prompts..." };
+                const placeholders = { workflows: "Search workflows...", nodes: "Search nodes...", prompts: "Search prompts...", models: "Search models..." };
                 searchInput.placeholder = placeholders[tab] || "Search...";
             }
             panel.querySelectorAll(".wfm-nlp-top-tab").forEach(b => b.classList.remove("active"));
@@ -412,6 +547,8 @@ const createPanel = () => {
                 await loadData();
             } else if (tab === "prompts" && !state.promptLoaded) {
                 await loadPromptData();
+            } else if (tab === "models" && !state.modelsLoaded) {
+                await loadModelsData();
             }
 
             rebuildSubTabs();
@@ -431,10 +568,16 @@ const createPanel = () => {
     // Refresh
     panel.querySelector(".wfm-nlp-refresh").addEventListener("click", async () => {
         if (state.topTab === "workflows") {
+            state.wfLoaded = false;
             await loadWfData();
         } else if (state.topTab === "prompts") {
+            state.promptLoaded = false;
             await loadPromptData();
+        } else if (state.topTab === "models") {
+            state.modelsLoaded = false;
+            await loadModelsData();
         } else {
+            state.loaded = false;
             await loadData();
         }
         renderContent();
@@ -463,7 +606,46 @@ const rebuildSubTabs = () => {
         row2.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
     };
 
-    if (state.topTab === "prompts") {
+    if (state.topTab === "models") {
+        const row1Tabs = [
+            { key: "model-all", label: "All" },
+            { key: "model-favorites", label: "\u2605 Favorites" },
+            { key: "model-groups", label: "\ud83d\udcc1 Groups" },
+        ];
+        const row2Tabs = [
+            { key: "model-type", label: "\u25a6 By Type" },
+        ];
+
+        const activeKey = state.modelSubTab2 || state.modelSubTab;
+
+        for (const t of row1Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.modelSubTab = t.key;
+                state.modelSubTab2 = null;
+                updateAllActive();
+                btn.classList.add("active");
+                renderContent();
+            });
+            row1.appendChild(btn);
+        }
+        for (const t of row2Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.modelSubTab2 = t.key;
+                updateAllActive();
+                btn.classList.add("active");
+                renderContent();
+            });
+            row2.appendChild(btn);
+        }
+    } else if (state.topTab === "prompts") {
         const row1Tabs = [
             { key: "prompt-all", label: "All" },
             { key: "prompt-favorites", label: "\u2605 Favorites" },
@@ -488,7 +670,7 @@ const rebuildSubTabs = () => {
         // No row2 tabs for prompts
     } else if (state.topTab === "workflows") {
         const row1Tabs = [
-            { key: "wf-all", label: "Workflows" },
+            { key: "wf-all", label: "All" },
             { key: "wf-favorites", label: "\u2605 Favorites" },
             { key: "wf-groups", label: "\ud83d\udcc1 Groups" },
         ];
@@ -527,7 +709,7 @@ const rebuildSubTabs = () => {
         }
     } else {
         const row1Tabs = [
-            { key: "all", label: "Nodes" },
+            { key: "all", label: "All" },
             { key: "favorites", label: "\u2733 Favorites" },
             { key: "groups", label: "\ud83d\udcc1 Groups" },
         ];
@@ -575,7 +757,19 @@ const renderContent = () => {
     const content = panelEl?.querySelector(".wfm-nlp-content");
     if (!content) return;
 
-    if (state.topTab === "prompts") {
+    if (state.topTab === "models") {
+        if (!state.modelsLoaded) {
+            content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+            return;
+        }
+        const modelKey = state.modelSubTab2 || state.modelSubTab;
+        switch (modelKey) {
+            case "model-all": renderModelAll(content); break;
+            case "model-favorites": renderModelFavorites(content); break;
+            case "model-groups": renderModelGroups(content); break;
+            case "model-type": renderModelByType(content); break;
+        }
+    } else if (state.topTab === "prompts") {
         if (!state.promptLoaded) {
             content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
             return;
@@ -616,26 +810,27 @@ const renderContent = () => {
 // Render – Workflow sub-tabs
 // ============================================
 
-const getWfModelTypes = (wf) => {
-    return wf.metadata?.modelTypesOverride?.length
-        ? wf.metadata.modelTypesOverride
-        : (wf.analysis?.modelTypes || []);
+const getWfBadges = (wf) => {
+    return wf.metadata?.badges || [];
 };
 
 const createDraggableWfItem = (wf) => {
     const displayName = wf.filename.replace(/\.json$/i, "");
-    const types = getWfModelTypes(wf);
+    const types = getWfBadges(wf);
     const badge = types.length ? types.join(", ") : "";
     const fmt = wf.analysis?.format || "";
     const fmtBadge = (fmt === "api" || fmt === "app")
         ? `<span class="wfm-nlp-fmt-badge wfm-nlp-fmt-${fmt}">${fmt.toUpperCase()}</span>`
+        : "";
+    const starHtml = wf.metadata?.favorite
+        ? `<span class="wfm-nlp-fav-star">\u2605</span>`
         : "";
 
     const el = document.createElement("div");
     el.className = "wfm-nlp-item";
     el.draggable = true;
     el.innerHTML = `
-        <div class="wfm-nlp-item-label">${fmtBadge}${esc(displayName)}</div>
+        <div class="wfm-nlp-item-label">${fmtBadge}${starHtml}${esc(displayName)}</div>
         ${badge ? `<div class="wfm-nlp-item-sub">${esc(badge)}</div>` : ""}
     `;
 
@@ -698,17 +893,16 @@ const renderWfFavorites = (container) => {
 const renderWfModelType = (container) => {
     container.innerHTML = "";
 
-    if (state.wfModelTypes.length === 0) {
+    if (state.wfBadgeTypes.length === 0) {
         container.innerHTML = `<div class="wfm-nlp-empty">
-            No model types detected.<br><small>Analyze workflows in Workflow Studio</small>
+            No badges found.<br><small>Add badges to workflows in Workflow Studio</small>
         </div>`;
         return;
     }
 
-    for (const modelType of state.wfModelTypes) {
+    for (const modelType of state.wfBadgeTypes) {
         const wfs = state.wfList.filter(w => {
-            const types = getWfModelTypes(w);
-            return types.includes(modelType);
+            return (w.metadata?.badges || []).includes(modelType);
         }).filter(matchesWfSearch);
 
         if (state.searchText && wfs.length === 0) continue;
@@ -792,6 +986,284 @@ const renderWfGroups = (container) => {
 
     if (container.children.length === 0) {
         container.innerHTML = `<div class="wfm-nlp-empty">No matches</div>`;
+    }
+};
+
+// ============================================
+// Render – Models sub-tabs
+// ============================================
+
+const matchesModelSearch = (name) => {
+    if (!state.searchText) return true;
+    const s = state.searchText;
+    if (name.toLowerCase().includes(s)) return true;
+    const meta = state.modelMetadata[name] || {};
+    if ((meta.tags || []).some(t => t.toLowerCase().includes(s))) return true;
+    if ((meta.badges || []).some(b => b.toLowerCase().includes(s))) return true;
+    if ((meta.memo || "").toLowerCase().includes(s)) return true;
+    return false;
+};
+
+const createModelItem = (modelName, modelType) => {
+    const meta = state.modelMetadata[modelName] || {};
+    const isFav = !!meta.favorite;
+    const badges = (meta.badges || []);
+    const tags = (meta.tags || []);
+
+    // Stem (filename without extension)
+    const lastSlash = Math.max(modelName.lastIndexOf("/"), modelName.lastIndexOf("\\"));
+    const filename = lastSlash >= 0 ? modelName.substring(lastSlash + 1) : modelName;
+    const dot = filename.lastIndexOf(".");
+    const stem = dot >= 0 ? filename.substring(0, dot) : filename;
+
+    const badgesHtml = badges.map(b =>
+        `<span class="wfm-nlp-model-badge">${esc(b)}</span>`
+    ).join("");
+    const tagsHtml = tags.length
+        ? `<span class="wfm-nlp-item-sub">${esc(tags.join(", "))}</span>`
+        : "";
+
+    const isEmbedding = modelType === "embedding";
+    const dragTitle = isEmbedding
+        ? `Drag to canvas (copies embedding:${stem})`
+        : `Drag to canvas to place ${MODEL_TYPE_LABELS[modelType] || modelType} node`;
+
+    const el = document.createElement("div");
+    el.className = "wfm-nlp-item wfm-nlp-model-item";
+    el.draggable = true;
+    el.title = `${modelName}\n${dragTitle}`;
+    el.innerHTML = `
+        <div class="wfm-nlp-item-row">
+            <div class="wfm-nlp-item-body">
+                <div class="wfm-nlp-item-label">
+                    ${isFav ? '<span style="color:#ffd700;margin-right:3px;">&#9733;</span>' : ""}${esc(stem)}
+                </div>
+                ${badgesHtml ? `<div class="wfm-nlp-model-badges">${badgesHtml}</div>` : ""}
+                ${tagsHtml}
+            </div>
+            <button class="wfm-nlp-copy-btn wfm-nlp-model-copy" title="Copy model name">C</button>
+        </div>
+    `;
+
+    el.addEventListener("dragstart", (e) => {
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("application/x-wfm-model",
+            JSON.stringify({ modelName, modelType }));
+        el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+
+    // Double-click: place node immediately at canvas center
+    el.addEventListener("dblclick", () => placeModelNode(modelName, modelType));
+
+    el.querySelector(".wfm-nlp-model-copy").addEventListener("click", (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(stem).then(() => {
+            showToast("Copied: " + stem, "success");
+        });
+    });
+
+    return el;
+};
+
+const renderModelAll = async (container) => {
+    container.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+
+    // Fetch all model types in parallel
+    const results = await Promise.all(
+        MODEL_TYPES.map(async (type) => {
+            const list = await fetchModelList(type);
+            return { type, list };
+        })
+    );
+
+    // Flatten: [{name, type}]
+    const allModels = [];
+    for (const { type, list } of results) {
+        for (const name of list) {
+            allModels.push({ name, type });
+        }
+    }
+
+    const filtered = allModels.filter(m => matchesModelSearch(m.name));
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">${allModels.length === 0 ? "No models found." : "No matches"}</div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    for (const m of filtered) {
+        const item = createModelItem(m.name, m.type);
+        const typeLabel = MODEL_TYPE_LABELS[m.type] || m.type;
+        const typeBadgeEl = item.querySelector(".wfm-nlp-item-body");
+        if (typeBadgeEl) {
+            const tb = document.createElement("span");
+            tb.className = "wfm-nlp-model-type-badge";
+            tb.textContent = typeLabel;
+            typeBadgeEl.prepend(tb);
+        }
+        container.appendChild(item);
+    }
+};
+
+const renderModelByType = async (container) => {
+    container.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+
+    const results = await Promise.all(
+        MODEL_TYPES.map(async (type) => {
+            const list = await fetchModelList(type);
+            return { type, list };
+        })
+    );
+
+    container.innerHTML = "";
+    let hasAny = false;
+
+    for (const { type, list } of results) {
+        const filtered = list.filter(name => matchesModelSearch(name));
+        if (state.searchText && filtered.length === 0) continue;
+        if (list.length === 0) continue;
+
+        hasAny = true;
+        const typeLabel = MODEL_TYPE_LABELS[type] || type;
+        const section = document.createElement("div");
+        section.className = "wfm-nlp-group-section";
+
+        const header = document.createElement("div");
+        header.className = "wfm-nlp-group-header collapsed";
+        header.innerHTML = `<span>${esc(typeLabel)}</span> <span class="wfm-nlp-badge">${filtered.length}</span>`;
+        header.addEventListener("click", () => {
+            const listEl = section.querySelector(".wfm-nlp-group-list");
+            listEl.style.display = listEl.style.display === "none" ? "block" : "none";
+            header.classList.toggle("collapsed");
+        });
+        section.appendChild(header);
+
+        const listEl = document.createElement("div");
+        listEl.className = "wfm-nlp-group-list";
+        listEl.style.display = "none";
+        for (const name of filtered) {
+            listEl.appendChild(createModelItem(name, type));
+        }
+        section.appendChild(listEl);
+        container.appendChild(section);
+    }
+
+    if (!hasAny) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No models found.</div>`;
+    }
+};
+
+const renderModelFavorites = async (container) => {
+    container.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+
+    // Fetch all models and check against metadata favorites
+    const results = await Promise.all(
+        MODEL_TYPES.map(async (type) => {
+            const list = await fetchModelList(type);
+            return { type, list };
+        })
+    );
+
+    const favorites = [];
+    for (const { type, list } of results) {
+        for (const name of list) {
+            if (state.modelMetadata[name]?.favorite) {
+                favorites.push({ name, type });
+            }
+        }
+    }
+
+    const filtered = favorites.filter(m => matchesModelSearch(m.name));
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">${favorites.length === 0 ? "No favorites yet." : "No matches"}</div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    for (const m of filtered) {
+        const item = createModelItem(m.name, m.type);
+        const typeLabel = MODEL_TYPE_LABELS[m.type] || m.type;
+        const typeBadgeEl = item.querySelector(".wfm-nlp-item-body");
+        if (typeBadgeEl) {
+            const tb = document.createElement("span");
+            tb.className = "wfm-nlp-model-type-badge";
+            tb.textContent = typeLabel;
+            typeBadgeEl.prepend(tb);
+        }
+        container.appendChild(item);
+    }
+};
+
+const renderModelGroups = async (container) => {
+    container.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
+
+    const groups = state.modelGroups;
+    const groupNames = Object.keys(groups);
+
+    if (groupNames.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No groups found.</div>`;
+        return;
+    }
+
+    // Build name→type lookup by fetching all models once
+    const results = await Promise.all(
+        MODEL_TYPES.map(async (type) => {
+            const list = await fetchModelList(type);
+            return { type, list };
+        })
+    );
+    const typeOf = {};
+    for (const { type, list } of results) {
+        for (const name of list) typeOf[name] = type;
+    }
+
+    container.innerHTML = "";
+    let hasAny = false;
+
+    for (const groupName of groupNames) {
+        const members = (groups[groupName] || []).filter(name => matchesModelSearch(name));
+        if (state.searchText && members.length === 0) continue;
+        if ((groups[groupName] || []).length === 0) continue;
+
+        hasAny = true;
+        const section = document.createElement("div");
+        section.className = "wfm-nlp-group-section";
+
+        const header = document.createElement("div");
+        header.className = "wfm-nlp-group-header collapsed";
+        header.innerHTML = `<span>${esc(groupName)}</span> <span class="wfm-nlp-badge">${members.length}</span>`;
+        header.addEventListener("click", () => {
+            const listEl = section.querySelector(".wfm-nlp-group-list");
+            listEl.style.display = listEl.style.display === "none" ? "block" : "none";
+            header.classList.toggle("collapsed");
+        });
+        section.appendChild(header);
+
+        const listEl = document.createElement("div");
+        listEl.className = "wfm-nlp-group-list";
+        listEl.style.display = "none";
+        for (const name of members) {
+            const type = typeOf[name] || "checkpoint";
+            const item = createModelItem(name, type);
+            const typeLabel = MODEL_TYPE_LABELS[type] || type;
+            const typeBadgeEl = item.querySelector(".wfm-nlp-item-body");
+            if (typeBadgeEl) {
+                const tb = document.createElement("span");
+                tb.className = "wfm-nlp-model-type-badge";
+                tb.textContent = typeLabel;
+                typeBadgeEl.prepend(tb);
+            }
+            listEl.appendChild(item);
+        }
+        section.appendChild(listEl);
+        container.appendChild(section);
+    }
+
+    if (!hasAny) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No matches.</div>`;
     }
 };
 
@@ -998,7 +1470,11 @@ const renderAllNodes = (container) => {
 
     container.innerHTML = "";
     for (const name of nodeNames) {
-        const el = createDraggableItem(name, "single", { classType: name });
+        const isFav = state.metadata[name]?.favorite;
+        const label = isFav
+            ? `<span class="wfm-nlp-fav-star">\u2605</span>${esc(name)}`
+            : esc(name);
+        const el = createDraggableItem(label, "single", { classType: name });
         el.addEventListener("dblclick", () => placeSingleNode(name));
         container.appendChild(el);
     }
@@ -1150,6 +1626,8 @@ export const togglePanel = async () => {
             await loadData();
         } else if (state.topTab === "prompts" && !state.promptLoaded) {
             await loadPromptData();
+        } else if (state.topTab === "models" && !state.modelsLoaded) {
+            await loadModelsData();
         }
         renderContent();
     }
@@ -1299,7 +1777,7 @@ const injectStyles = () => {
             position: fixed;
             right: 0;
             top: 0;
-            width: 280px;
+            width: 310px;
             height: 100vh;
             background: var(--comfy-menu-bg, #1e1e1e);
             border-left: 1px solid var(--border-color, #4e4e4e);
@@ -1544,6 +2022,45 @@ const injectStyles = () => {
             background: rgba(255,71,87,0.25);
             color: #ff4757;
             border-color: #ff4757;
+        }
+        .wfm-nlp-model-item { cursor: default; }
+        .wfm-nlp-model-item:hover .wfm-nlp-copy-btns { opacity: 1; }
+        .wfm-nlp-model-copy:hover {
+            background: rgba(74,158,255,0.25);
+            color: #4a9eff;
+            border-color: #4a9eff;
+        }
+        .wfm-nlp-fav-star {
+            color: #f5c518;
+            font-size: 11px;
+            margin-right: 3px;
+            vertical-align: middle;
+            line-height: 1;
+        }
+        .wfm-nlp-model-type-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: rgba(74,158,255,0.25);
+            color: #4a9eff;
+            margin-bottom: 2px;
+            vertical-align: middle;
+        }
+        .wfm-nlp-model-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 2px;
+        }
+        .wfm-nlp-model-badge {
+            display: inline-block;
+            font-size: 9px;
+            padding: 1px 5px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.12);
+            color: var(--descrip-text, #aaa);
         }
     `;
     document.head.appendChild(style);

@@ -9,6 +9,7 @@ import { comfyWorkflow } from "./comfyui-workflow.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
 import { t, getSummaryPrompt } from "./i18n.js";
 import { highlightJSON } from "./json-highlight.js";
+import { openBadgeEditModal } from "./models-tab.js";
 
 // ============================================
 // State
@@ -16,29 +17,32 @@ import { highlightJSON } from "./json-highlight.js";
 
 const state = {
     workflows: [],
-    activeModel: "ALL",
+    activeBadge: "ALL",
     searchText: "",
     viewMode: localStorage.getItem("wfm_default_view") || "thumb", // thumb | card | table
     selectedWf: null,
     groupFilter: "", // empty = all groups
     currentPage: 0,
-    badgeColors: (() => {
-        try { return JSON.parse(localStorage.getItem("wfm_badge_colors") || "{}"); }
-        catch { return {}; }
-    })(),
 };
 
 const WF_PER_PAGE = 24;
 
-const BADGE_DEFAULT_COLORS = {
-    "SD1.5": "#e67e22",
-    SDXL: "#2ecc71",
-    Flux: "#9b59b6",
-    Flux2: "#8e44ad",
-    SD3: "#3498db",
-    Qwen: "#e74c3c",
-    "Z-IMAGE": "#1abc9c",
-};
+function getBadgePalette() {
+    try { return JSON.parse(localStorage.getItem("wfm_models_badge_palette") || "{}"); }
+    catch { return {}; }
+}
+
+function saveBadgePalette(palette) {
+    localStorage.setItem("wfm_models_badge_palette", JSON.stringify(palette));
+}
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
 
 // ============================================
 // Open in ComfyUI
@@ -217,15 +221,22 @@ async function getRawWorkflow(filename) {
 // Rendering Helpers
 // ============================================
 
-function badgeHtml(type) {
-    const color = state.badgeColors[type] || BADGE_DEFAULT_COLORS[type] || "#0077ff";
-    return `<span class="wfm-badge wfm-badge-model" style="background:${color}">${type}</span>`;
+function badgeHtml(label) {
+    const palette = getBadgePalette();
+    const color = palette[label] || "";
+    const style = color ? ` style="background:${color};color:#fff;"` : "";
+    return `<span class="wfm-badge wfm-badge-model"${style}>${escapeHtml(label)}</span>`;
 }
 
-function getAllModelTypes() {
+function wfBadgesHtml(wf) {
+    const badges = wf.metadata?.badges || [];
+    return badges.map(label => badgeHtml(label)).join("");
+}
+
+function getAllBadges() {
     const set = new Set();
     state.workflows.forEach((wf) =>
-        (wf.analysis.modelTypes || []).forEach((t) => set.add(t))
+        (wf.metadata?.badges || []).forEach((b) => set.add(b))
     );
     return [...set].sort();
 }
@@ -234,17 +245,17 @@ function renderModelFilters() {
     const container = document.getElementById("wfm-model-filters");
     if (!container) return;
 
-    const types = getAllModelTypes();
+    const badges = getAllBadges();
 
     container.innerHTML = `
-        <button class="wfm-filter-btn ${state.activeModel === "ALL" ? "active" : ""}" data-filter="ALL">ALL</button>
-        <button class="wfm-filter-btn ${state.activeModel === "FAVORITE" ? "active" : ""}" data-filter="FAVORITE">&#9733;</button>
-        ${types.map((t) => `<button class="wfm-filter-btn ${state.activeModel === t ? "active" : ""}" data-filter="${t}">${t}</button>`).join("")}
+        <button class="wfm-filter-btn ${state.activeBadge === "ALL" ? "active" : ""}" data-filter="ALL">ALL</button>
+        <button class="wfm-filter-btn ${state.activeBadge === "FAVORITE" ? "active" : ""}" data-filter="FAVORITE">&#9733;</button>
+        ${badges.map((b) => `<button class="wfm-filter-btn ${state.activeBadge === b ? "active" : ""}" data-filter="${escapeHtml(b)}">${escapeHtml(b)}</button>`).join("")}
     `;
 
     container.querySelectorAll(".wfm-filter-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
-            state.activeModel = btn.dataset.filter;
+            state.activeBadge = btn.dataset.filter;
             state.currentPage = 0;
             renderModelFilters();
             renderGrid();
@@ -254,10 +265,10 @@ function renderModelFilters() {
 
 function filterWorkflows() {
     return state.workflows.filter((wf) => {
-        if (state.activeModel === "FAVORITE") {
+        if (state.activeBadge === "FAVORITE") {
             if (!wf.metadata.favorite) return false;
-        } else if (state.activeModel !== "ALL") {
-            if (!(wf.analysis.modelTypes || []).includes(state.activeModel))
+        } else if (state.activeBadge !== "ALL") {
+            if (!(wf.metadata?.badges || []).includes(state.activeBadge))
                 return false;
         }
 
@@ -326,7 +337,7 @@ function renderGrid() {
         card.className = "wfm-card";
         card.dataset.filename = wf.filename;
         const hasThumb = !!wf.thumbnail;
-        const badges = (wf.analysis.modelTypes || []).map((t) => badgeHtml(t)).join("");
+        const badges = wfBadgesHtml(wf);
         const tags = (wf.metadata.tags || []).map((t) => `<span class="wfm-tag">#${t}</span>`).join("");
         const favStar = wf.metadata.favorite ? "\u2605" : "\u2606";
         const favClass = wf.metadata.favorite ? "wfm-fav-btn active" : "wfm-fav-btn";
@@ -407,7 +418,7 @@ function renderTableView(grid, filtered) {
         const tr = document.createElement("tr");
         tr.className = "wfm-table-row";
         tr.dataset.filename = wf.filename;
-        const badges = (wf.analysis.modelTypes || []).map((t) => badgeHtml(t)).join("");
+        const badges = wfBadgesHtml(wf);
         const tags = (wf.metadata.tags || []).map((t) => `<span class="wfm-tag">#${t}</span>`).join("");
         const thumbHtml = wf.thumbnail
             ? `<img src="${wf.thumbnail}" class="wfm-table-thumb" loading="lazy" />`
@@ -550,7 +561,7 @@ function sidePanelThumbUpdate(wf) {
         nameEl.textContent = wf ? wf.filename.replace(/\.json$/, "") : "";
     }
     if (metaEl && wf) {
-        const badges = (wf.analysis.modelTypes || []).map((mt) => badgeHtml(mt)).join(" ");
+        const badges = wfBadgesHtml(wf);
         const io = `P:${wf.analysis.inputs?.prompts || 0} I:${wf.analysis.inputs?.images || 0} → ${wf.analysis.outputs?.images || 0}`;
         metaEl.innerHTML = `${badges} <span style="margin-left:4px;">${io}</span>`;
     } else if (metaEl) {
@@ -608,14 +619,13 @@ function refreshGroupSelects() {
 }
 
 // ============================================
-// Badge Color Settings
+// View Settings Panel
 // ============================================
 
-function renderBadgeSettings() {
+function renderViewSettings() {
     const panel = document.getElementById("wfm-badge-settings-panel");
     if (!panel) return;
 
-    // === Default View section ===
     const currentView = localStorage.getItem("wfm_default_view") || "thumb";
     const viewOptions = [
         { value: "thumb", label: t("viewThumbnail") },
@@ -629,56 +639,19 @@ function renderBadgeSettings() {
         </label>`
     ).join("");
 
-    // === Badge Colors section ===
-    const types = getAllModelTypes();
-    const allKnown = new Set([...Object.keys(BADGE_DEFAULT_COLORS), ...types]);
-    const rows = [...allKnown].sort().map((type) => {
-        const color = state.badgeColors[type] || BADGE_DEFAULT_COLORS[type] || "#0077ff";
-        return `<div class="wfm-badge-color-row" data-type="${type}">
-            <span class="wfm-badge wfm-badge-model" style="background:${color}">${type}</span>
-            <input type="color" class="wfm-badge-color-input" value="${color}" data-type="${type}" title="Change color for ${type}" />
-        </div>`;
-    }).join("");
-
     panel.innerHTML = `
         <div class="wfm-badge-settings-title">${t("defaultView")}</div>
-        <div class="wfm-settings-radio-group">${viewRadios}</div>
-        <hr style="border:none;border-top:1px solid var(--wfm-border);margin:8px 0;">
-        <div class="wfm-badge-settings-title">${t("badgeColors")}</div>
-        ${rows}
-        <button id="wfm-badge-color-reset" class="wfm-btn wfm-btn-sm" style="margin-top:6px;width:100%;">${t("resetColors")}</button>`;
+        <div class="wfm-settings-radio-group">${viewRadios}</div>`;
 
-    // Default view change
     panel.querySelectorAll('input[name="wfm-default-view"]').forEach((radio) => {
         radio.addEventListener("change", () => {
             localStorage.setItem("wfm_default_view", radio.value);
             state.viewMode = radio.value;
-            // Update active state on view mode buttons
             document.querySelectorAll(".wfm-view-btn").forEach((b) => {
                 b.classList.toggle("active", b.dataset.view === radio.value);
             });
             renderGrid();
         });
-    });
-
-    // Badge color change
-    panel.querySelectorAll(".wfm-badge-color-input").forEach((input) => {
-        input.addEventListener("input", (e) => {
-            const type = e.target.dataset.type;
-            const color = e.target.value;
-            state.badgeColors[type] = color;
-            localStorage.setItem("wfm_badge_colors", JSON.stringify(state.badgeColors));
-            const badge = e.target.closest(".wfm-badge-color-row")?.querySelector(".wfm-badge");
-            if (badge) badge.style.background = color;
-            renderGrid();
-        });
-    });
-
-    panel.querySelector("#wfm-badge-color-reset")?.addEventListener("click", () => {
-        state.badgeColors = {};
-        localStorage.removeItem("wfm_badge_colors");
-        renderBadgeSettings();
-        renderGrid();
     });
 }
 
@@ -704,10 +677,21 @@ async function saveModalMeta(wf) {
 
 function openDetailModal(wf) {
     const meta = wf.metadata;
-    const types = (wf.analysis.modelTypes || []).map((t) => badgeHtml(t)).join(" ");
-    const io = `P:${wf.analysis.inputs?.prompts || 0} I:${wf.analysis.inputs?.images || 0} → ${wf.analysis.outputs?.images || 0}`;
-    const overrideText = (meta.modelTypesOverride || []).join(", ");
     const isFav = !!meta.favorite;
+    const palette = getBadgePalette();
+    const allBadgeLabels = Object.keys(palette).sort();
+    const activeBadges = meta.badges || [];
+    const badgeCheckboxes = allBadgeLabels.length === 0
+        ? `<span style="color:var(--wfm-text-secondary);font-size:12px;">${t("badgeNoneHint")}</span>`
+        : allBadgeLabels.map((label) => {
+            const color = palette[label] || "";
+            const style = color ? ` style="background:${color};color:#fff;"` : "";
+            const checked = activeBadges.includes(label) ? " checked" : "";
+            return `<label class="wfm-badge-check-label">
+                <input type="checkbox" class="wfm-badge-checkbox" value="${escapeHtml(label)}"${checked}>
+                <span class="wfm-badge wfm-badge-model"${style}>${escapeHtml(label)}</span>
+            </label>`;
+        }).join("");
 
     const thumbSrc = wf.thumbnail || "";
     const html = `
@@ -720,23 +704,9 @@ function openDetailModal(wf) {
         <div class="wfm-modal-two-col">
             <div class="wfm-modal-left">
                 <section>
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                        <h4>${t("analysis")}</h4>
-                        <button class="wfm-btn wfm-btn-sm" id="wfm-detail-analyze">${t("analyze")}</button>
-                    </div>
-                    <div id="wfm-detail-analysis" class="wfm-detail-analysis">
-                        <div>${types || `<span style="color:var(--wfm-text-secondary)">${t("noModelDetected")}</span>`}</div>
-                        <div style="font-size:11px;color:var(--wfm-text-secondary);margin-top:4px;">${io}</div>
-                    </div>
-                    <div id="wfm-detail-override-row" style="margin-top:8px;">
-                        <div style="display:flex;gap:4px;align-items:center;">
-                            <span style="font-size:12px;color:var(--wfm-text-secondary);white-space:nowrap;">${t("modelCategory")}</span>
-                            <input type="text" class="wfm-input" id="wfm-detail-model-override"
-                                value="${overrideText}"
-                                placeholder="${t("modelOverridePlaceholder")}" style="flex:1;font-size:12px;padding:4px 6px;min-width:0;">
-                            <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-detail-override-save">${t("save")}</button>
-                        </div>
-                    </div>
+                    <h4>${t("modelsBadges")} <button class="wfm-btn wfm-btn-sm" id="wfm-detail-badge-manage">&#9881; ${t("badgeManage")}</button></h4>
+                    <div id="wfm-detail-badge-checkboxes" class="wfm-badge-checkboxes">${badgeCheckboxes}</div>
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-detail-badges-save" style="margin-top:6px;">${t("save")}</button>
                 </section>
                 <section>
                     <h4>${t("tags")} <span style="font-weight:normal;font-size:11px;">${t("tagsHint")}</span></h4>
@@ -844,51 +814,40 @@ function openDetailModal(wf) {
         document.getElementById(id)?.addEventListener("blur", () => saveModalMeta(wf));
     });
 
-    // Analyze button
-    document.getElementById("wfm-detail-analyze")?.addEventListener("click", async () => {
-        const btn = document.getElementById("wfm-detail-analyze");
-        btn.disabled = true;
-        btn.textContent = t("analyzing");
-        try {
-            const res = await fetch("/api/wfm/workflows/analyze", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: wf.filename }),
-            });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            wf.analysis = data.analysis;
-            const cached = state.workflows.find((w) => w.filename === wf.filename);
-            if (cached) cached.analysis = data.analysis;
-            // Re-render analysis section
-            const analysisEl = document.getElementById("wfm-detail-analysis");
-            if (analysisEl) {
-                const newTypes = (data.analysis.modelTypes || []).map((mt) => badgeHtml(mt)).join(" ");
-                const newIo = `P:${data.analysis.inputs?.prompts || 0} I:${data.analysis.inputs?.images || 0} → ${data.analysis.outputs?.images || 0}`;
-                analysisEl.innerHTML = `<div>${newTypes || `<span style="color:var(--wfm-text-secondary)">${t("noModelDetected")}</span>`}</div>
-                    <div style="font-size:11px;color:var(--wfm-text-secondary);margin-top:4px;">${newIo}</div>`;
-            }
-            renderGrid();
-            showToast(t("analysisComplete"), "success");
-        } catch (err) {
-            showToast(t("analyzeError") + ": " + err.message, "error");
-        } finally {
-            btn.disabled = false;
-            btn.textContent = t("analyze");
-        }
+    // Badge manage button
+    document.getElementById("wfm-detail-badge-manage")?.addEventListener("click", () => {
+        openBadgeEditModal(() => {
+            // Rebuild checkboxes after palette changes
+            const palette = getBadgePalette();
+            const allLabels = Object.keys(palette).sort();
+            const currentBadges = [...document.querySelectorAll(".wfm-badge-checkbox:checked")].map(cb => cb.value);
+            const el = document.getElementById("wfm-detail-badge-checkboxes");
+            if (!el) return;
+            el.innerHTML = allLabels.length === 0
+                ? `<span style="color:var(--wfm-text-secondary);font-size:12px;">${t("badgeNoneHint")}</span>`
+                : allLabels.map((label) => {
+                    const color = palette[label] || "";
+                    const style = color ? ` style="background:${color};color:#fff;"` : "";
+                    const checked = currentBadges.includes(label) ? " checked" : "";
+                    return `<label class="wfm-badge-check-label">
+                        <input type="checkbox" class="wfm-badge-checkbox" value="${escapeHtml(label)}"${checked}>
+                        <span class="wfm-badge wfm-badge-model"${style}>${escapeHtml(label)}</span>
+                    </label>`;
+                }).join("");
+        });
     });
 
-    // Model type override save
-    document.getElementById("wfm-detail-override-save")?.addEventListener("click", async () => {
-        const overrideStr = document.getElementById("wfm-detail-model-override")?.value || "";
-        const modelTypesOverride = overrideStr.split(",").map((t) => t.trim()).filter(Boolean);
+    // Badge save
+    document.getElementById("wfm-detail-badges-save")?.addEventListener("click", async () => {
+        const badges = [...document.querySelectorAll(".wfm-badge-checkbox:checked")].map(cb => cb.value);
         try {
-            await saveMetadata(wf.filename, { modelTypesOverride });
-            wf.metadata.modelTypesOverride = modelTypesOverride;
+            await saveMetadata(wf.filename, { badges });
+            wf.metadata.badges = badges;
             const cached = state.workflows.find((w) => w.filename === wf.filename);
-            if (cached) cached.metadata.modelTypesOverride = modelTypesOverride;
+            if (cached) cached.metadata.badges = badges;
             renderGrid();
-            showToast(t("overrideSaved"), "success");
+            renderModelFilters();
+            showToast(t("modelsSaved"), "success");
         } catch (err) {
             showToast(t("saveError") + ": " + err.message, "error");
         }
@@ -1271,7 +1230,7 @@ export function initWorkflowTab() {
         showToast("Refreshed", "success");
     });
 
-    // Toolbar: Badge color settings
+    // Toolbar: ⚙ settings button (view settings panel)
     const badgeSettingsBtn = document.getElementById("wfm-badge-settings-btn");
     const badgeSettingsPanel = document.getElementById("wfm-badge-settings-panel");
     if (badgeSettingsBtn && badgeSettingsPanel) {
@@ -1282,7 +1241,7 @@ export function initWorkflowTab() {
                 badgeSettingsPanel.style.display = "none";
                 return;
             }
-            renderBadgeSettings();
+            renderViewSettings();
             badgeSettingsPanel.style.display = "";
         });
         document.addEventListener("click", (e) => {
@@ -1292,15 +1251,9 @@ export function initWorkflowTab() {
         });
     }
 
-    // Toolbar: Reanalyze All button
-    document.getElementById("wfm-reanalyze-btn")?.addEventListener("click", async () => {
-        try {
-            const result = await reanalyzeAll();
-            showToast(`Reanalyzed ${result.count ?? 0} workflows`, "success");
-            await loadWorkflows();
-        } catch (err) {
-            showToast("Reanalyze error: " + err.message, "error");
-        }
+    // Toolbar: ⚙ Badge button
+    document.getElementById("wfm-badge-btn")?.addEventListener("click", () => {
+        openBadgeEditModal(() => renderGrid());
     });
 
     // Initial load

@@ -50,13 +50,13 @@
                         <button class="wfm-view-btn" data-view="table" title="Table">&#8801;</button>
                     </div>
                     <button id="wfm-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
-                    <button id="wfm-reanalyze-btn" class="wfm-btn wfm-btn-sm" title="Re-analyze all workflows">Reanalyze All</button>
                     <label class="wfm-btn wfm-btn-sm" style="cursor:pointer;">
                         Import
                         <input type="file" id="wfm-import-input" multiple accept=".json,.png" style="display:none">
                     </label>
+                    <button id="wfm-badge-btn" class="wfm-btn wfm-btn-sm" title="Badge settings">&#9881; Badge</button>
                     <div class="wfm-badge-settings-wrap">
-                        <button id="wfm-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge color settings">&#9881;</button>
+                        <button id="wfm-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="View settings">&#9881;</button>
                         <div id="wfm-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
                     </div>
                     <div id="wfm-workflow-pagination" class="wfm-pagination-inline"></div>
@@ -199,8 +199,8 @@
         <!-- Models Tab -->
         <section id="wfm-tab-models" class="wfm-tab-content">
             <div class="wfm-toolbar">
-                <!-- Row 1: Model type sub-tabs -->
-                <div class="wfm-toolbar-row" style="gap:8px;">
+                <!-- Row 1: Model type sub-tabs + badge filter -->
+                <div class="wfm-toolbar-row" style="gap:8px;flex-wrap:wrap;align-items:center;">
                     <div class="wfm-models-type-nav">
                         <button class="wfm-models-type-btn active" data-model-type="checkpoint">Checkpoint</button>
                         <button class="wfm-models-type-btn" data-model-type="lora">LoRA</button>
@@ -208,7 +208,11 @@
                         <button class="wfm-models-type-btn" data-model-type="controlnet">ControlNet</button>
                         <button class="wfm-models-type-btn" data-model-type="unet">UNET</button>
                         <button class="wfm-models-type-btn" data-model-type="textencoder">TextEncoder</button>
+                        <button class="wfm-models-type-btn" data-model-type="hypernetwork">Hypernetwork</button>
+                        <button class="wfm-models-type-btn" data-model-type="embedding">Embedding</button>
                     </div>
+                    <div class="wfm-models-type-divider"></div>
+                    <div id="wfm-models-badge-filter-bar" class="wfm-badge-filter-bar"></div>
                 </div>
                 <!-- Row 2: Search / filter toolbar -->
                 <div id="wfm-models-toolbar" class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;">
@@ -225,10 +229,7 @@
                     <button id="wfm-models-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
                     <button id="wfm-models-civitai-batch-btn" class="wfm-btn wfm-btn-sm" title="Fetch CivitAI info for all models">CivitAI</button>
                     <span id="wfm-models-civitai-progress" style="font-size:12px;color:var(--wfm-text-secondary);"></span>
-                    <div class="wfm-badge-settings-wrap">
-                        <button id="wfm-models-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge color settings">&#9881;</button>
-                        <div id="wfm-models-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
-                    </div>
+                    <button id="wfm-models-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge settings">&#9881; Badge</button>
                     <div id="wfm-models-pagination" class="wfm-pagination-inline"></div>
                 </div>
             </div>
@@ -499,9 +500,8 @@
                             <li id="wfm-help-wf-3">Create, rename, delete groups and assign/remove workflows</li>
                             <li id="wfm-help-wf-4">Import JSON/PNG files via button or drag &amp; drop</li>
                             <li id="wfm-help-wf-5">Side panel: thumbnail, JSON viewer (format badge: UI/API/App), clipboard copy, group management</li>
-                            <li id="wfm-help-wf-6">Detail modal: rename, favorite, thumbnail change, analysis, category override, tags, memo, AI summary, open in ComfyUI, load in GenerateUI, set as default, delete</li>
-                            <li id="wfm-help-wf-7">Customize badge colors per category</li>
-                            <li id="wfm-help-wf-8">Batch re-analysis of all workflow I/O (P: prompt nodes, I: image nodes, output: save nodes)</li>
+                            <li id="wfm-help-wf-6">Detail modal: rename, favorite, thumbnail change, badge assignment, tags, memo, AI summary, open in ComfyUI, load in GenerateUI, set as default, delete</li>
+                            <li id="wfm-help-wf-7">Badge management: add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)</li>
                         </ul>
                     </div>
 
@@ -560,13 +560,15 @@
                     <div class="wfm-help-card">
                         <h3>Models Tab</h3>
                         <ul>
-                            <li id="wfm-help-models-1">Browse installed models: Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder with sub-tab switching</li>
+                            <li id="wfm-help-models-1">Browse installed models: Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding with sub-tab switching</li>
                             <li id="wfm-help-models-2">Thumbnail, Card, and Table view modes with pagination</li>
                             <li id="wfm-help-models-3">Search, tag filter, group filter, and favorites filter</li>
                             <li id="wfm-help-models-4">Side panel: Info (file path, tags, memo), Groups management, CivitAI integration</li>
                             <li id="wfm-help-models-5">CivitAI integration: fetch model info by SHA256 hash, batch fetch per model type</li>
                             <li id="wfm-help-models-6">Detail modal: preview image, CivitAI info (base model, trained words, tags), thumbnail change</li>
                             <li id="wfm-help-models-7">Group management: create, rename, delete groups and assign/remove models</li>
+                            <li id="wfm-help-models-8">GenUI Model button: apply the selected model to the corresponding node in GenerateUI's current workflow (Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder)</li>
+                            <li id="wfm-help-models-9">User-defined badges: assign free-label badges with custom colors shared with the Workflow tab</li>
                         </ul>
                     </div>
 
@@ -574,8 +576,9 @@
                         <h3 id="wfm-help-sidepanel-title">Workflow Studio Library (ComfyUI Side Panel)</h3>
                         <ul>
                             <li id="wfm-help-sidepanel-1">Open from the Workflow Studio Library button in the ComfyUI toolbar</li>
-                            <li id="wfm-help-sidepanel-2">Workflows tab: browse favorite workflows, filter by model type, and filter by group</li>
-                            <li id="wfm-help-sidepanel-3">Nodes tab: browse favorite nodes, node sets, and node groups</li>
+                            <li id="wfm-help-sidepanel-2">Workflows tab: All / ★ Favorites / Groups sub-tabs; ★ shown for favorites in All view</li>
+                            <li id="wfm-help-sidepanel-3">Nodes tab: All / ★ Favorites / Groups / Sets sub-tabs; ★ shown for favorites in All view</li>
+                            <li id="wfm-help-sidepanel-11">Models tab: All / ★ Favorites / Groups / By Type sub-tabs</li>
                             <li id="wfm-help-sidepanel-4">Prompts tab: browse prompt presets with All/Favorites/Categories sub-tabs</li>
                             <li id="wfm-help-sidepanel-5">Drag &amp; drop workflows onto the canvas to load them</li>
                             <li id="wfm-help-sidepanel-6">Drag &amp; drop nodes/node sets onto the canvas to place them</li>

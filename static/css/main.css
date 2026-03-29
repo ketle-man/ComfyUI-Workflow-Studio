@@ -1196,6 +1196,79 @@ body {
 }
 
 /* ============================================
+   Badge Filter Bar (model type row)
+   ============================================ */
+
+.wfm-models-type-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-badge-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.wfm-badge-filter-btn {
+    padding: 2px 10px;
+    font-size: 11px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: var(--wfm-bg-tertiary);
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    transition: opacity 0.15s, box-shadow 0.15s;
+    white-space: nowrap;
+}
+
+.wfm-badge-filter-btn:hover {
+    opacity: 0.85;
+}
+
+.wfm-badge-filter-btn.active {
+    box-shadow: 0 0 0 2px var(--wfm-primary);
+    opacity: 1;
+}
+
+/* ============================================
+   Badge checkbox list in modal
+   ============================================ */
+
+.wfm-badge-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.wfm-badge-check-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.wfm-badge-check-label input[type="checkbox"] {
+    display: none;
+}
+
+.wfm-badge-check-label input[type="checkbox"]:not(:checked) + .wfm-badge {
+    opacity: 0.45;
+}
+
+.wfm-badge-clickable {
+    cursor: pointer;
+}
+
+.wfm-badge-clickable:hover {
+    opacity: 0.8;
+}
+
+/* ============================================
    Modal Detail - Two Column Layout
    ============================================ */
 
@@ -1820,7 +1893,7 @@ body {
 }
 
 .wfm-side-thumb-img-wrap {
-    width: 100%;
+    width: 90%;
     aspect-ratio: 1 / 1;
     background: var(--wfm-bg);
     border: 1px solid var(--wfm-border);
@@ -1829,6 +1902,7 @@ body {
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    align-self: center;
 }
 
 .wfm-side-thumb-img-wrap img {

@@ -1,5 +1,100 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-29: v0.2.3 バッジ統一・GenUI Model・サイドパネルModels拡充
+
+### 概要
+- ワークフローとモデルのバッジ体系を統一（共有パレット `wfm_models_badge_palette`、自動解析廃止）
+- ModelsタブにGenUI Modelボタン追加（詳細モーダル・サイドパネル両対応）
+- ComfyUIサイドパネルのModelsタブにFavorites/Groups/By Typeサブタブを追加
+- サイドパネルのWorkflows・Nodesサブタブ名を「All」に統一、お気に入りに★表示
+- サイドパネル幅を280px→310pxに拡張
+
+### 変更内容
+
+#### `web/comfyui/node_sets_menu.js` — サイドパネルModels拡充
+
+- **Modelsタブのサブタブ構成を2段に変更:**
+  - row1: All / ★ Favorites / 📁 Groups
+  - row2: ◦ By Type
+  - `state.modelSubTab2` で行2の選択を管理
+- **`renderModelFavorites(container)`** — 全モデルを取得し `state.modelMetadata[name]?.favorite === true` のものを表示
+- **`renderModelGroups(container)`** — `state.modelGroups` からコラプス式セクションを生成
+- **Workflowsサブタブ名:** `"Workflows"` → `"All"`
+- **Nodesサブタブ名:** `"Nodes"` → `"All"`
+- **Allビューでお気に入りに★表示:**
+  - `createDraggableWfItem`: `wf.metadata?.favorite` に応じて `<span class="wfm-nlp-fav-star">★</span>` を追加
+  - `renderAllNodes`: `state.metadata[name]?.favorite` に応じて★を表示
+- **`.wfm-nlp-fav-star`** スタイル追加（`color: #f5c518; font-size: 11px; margin-right: 3px`）
+- **サイドパネル幅:** `width: 280px` → `width: 310px`
+- **`getWfModelTypes` → `getWfBadges`** にリネーム（`wf.metadata?.badges` ベースに変更）
+- **`wfModelTypes` state → `wfBadgeTypes`** にリネーム
+- `renderWfModelType` がバッジ表示に `state.wfBadgeTypes` を使用
+
+#### `static/js/models-tab.js` — GenUI Modelボタン・バッジ表示改善
+
+- **型バッジの削除:** ThumbView・CardView・SidePanelの `renderSideInfo` から `typeBadge = badgeHtml(typeLabel)` を削除。ユーザー定義バッジのみ表示
+- **`GENUI_TYPE_MAP` 追加:**
+  ```javascript
+  const GENUI_TYPE_MAP = {
+      checkpoint:  { key: "checkpoints",     inputKey: "ckpt_name" },
+      lora:        { key: "loras",           inputKey: "lora_name" },
+      vae:         { key: "vaes",            inputKey: "vae_name" },
+      controlnet:  { key: "controlNets",     inputKey: "control_net_name" },
+      unet:        { key: "diffusionModels", inputKey: "unet_name" },
+      textencoder: { key: "textEncoders",    inputKey: "clip_name1" },
+  };
+  ```
+  hypernetwork / embedding は対象外
+- **`applyToGenUI(modelName, modelType)`** 追加:
+  - `comfyUI.currentWorkflow` からターゲット `inputKey` を持つノードを検索
+  - `node.inputs[inputKey] = modelName` で直接セット
+  - `<select id="wfm-model-${key}">` の表示値も同期
+  - `<textarea id="wfm-gen-raw-json">` も同期
+  - 成功トースト表示
+- **詳細モーダルの actions に「GenUI Model」ボタン追加**（`GENUI_TYPE_MAP` に対応するタイプのみ表示）
+- **サイドパネルの Save ボタン右隣に「GenUI Model」ボタン追加**（同上）
+- **`export function openBadgeEditModal(onPaletteChange = null)`** — workflow-tab.js から呼び出せるよう export 化
+- **`bindBadgeModalEvents(onPaletteChange)`** — パレット変更後に `renderBadgeFilter()`, `renderModelGrid()`, `onPaletteChange()` を実行
+
+#### `static/js/workflow-tab.js` — バッジ体系をモデルタブと統一
+
+- **`import { openBadgeEditModal } from "./models-tab.js"`** 追加
+- **自動解析によるバッジ体系を廃止:**
+  - `state.badgeColors`, `BADGE_DEFAULT_COLORS` 削除
+  - 「Analysis」「Override」セクションを詳細モーダルから完全削除
+  - `getAllModelTypes()` → `getAllBadges()` （`wf.metadata?.badges` ベース）
+  - `state.activeModel` → `state.activeBadge`
+- **共有パレット関数を追加:** `getBadgePalette()`, `saveBadgePalette()` （`wfm_models_badge_palette` localStorage キー共有）
+- **`badgeHtml(label)`** が共有パレットを参照するように変更
+- **`wfBadgesHtml(wf)`** ヘルパー追加（`wf.metadata?.badges` から表示用バッジHTML生成）
+- **`filterWorkflows()`** が `wf.metadata?.badges` でフィルタリング
+- **詳細モーダルにバッジチェックボックスUI追加**（Modelsタブと同じ管理UI）
+- **⚙ボタン** → `renderViewSettings()`（ビュー設定のみ）
+- **「⚙ Badge」ボタン追加** → `openBadgeEditModal(() => renderGrid())`
+
+#### `templates/index.html` — Workflowツールバー更新
+
+- `<button id="wfm-reanalyze-btn">Reanalyze All</button>` 削除
+- `<button id="wfm-badge-btn">⚙ Badge</button>` 追加
+- ⚙設定ボタンの title を "View settings" に変更
+
+#### `static/js/i18n.js` — 翻訳追加（EN/JA/ZH）
+
+- **GenUI Model関連（3言語）:**
+  - `modelsGenUIBtn`: "GenUI Model"
+  - `modelsGenUITitle`: ボタンのツールチップ
+  - `modelsGenUIUnsupported`: 非対応タイプへの警告
+  - `modelsGenUINoWorkflow`: GenUIにワークフローが未読み込みの警告
+  - `modelsGenUINoNode(type)`: 対応ノードが見つからない場合の警告（アロー関数）
+
+### 技術的な判断
+
+- **バッジ統一の方針:** 自動解析モデルタイプはユーザー操作が必要なオーバーライドが多く UX が複雑だったため廃止。完全にユーザー定義バッジへ移行し、ワークフロー/モデル間で同じパレットを共有する設計に統一
+- **GenUI連携方式:** `comfyUI.currentWorkflow` を直接ミューテーション。`<select>` 要素の DOM 同期も行うことで視覚的なフィードバックを確保
+- **`openBadgeEditModal` のexport:** モデルタブとワークフロータブが同じパレット管理 UI を共有するため、`export function` に変更。`onPaletteChange` コールバックで各タブが独立してグリッドを再描画
+
+---
+
 ## 2026-03-28: v0.2.2 Modelsタブ・CivitAI連携
 
 ### 概要

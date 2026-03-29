@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.2-green)
+![Version](https://img.shields.io/badge/version-0.2.3-green)
 
 ## Screenshots
 
@@ -36,10 +36,10 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 ### Workflow Tab
 - **Thumbnail / Card / Table views** — switch between view modes to browse your workflow library
 - **Thumbnail side panel** — preview workflow canvas snapshots in the side panel
-- **Tag-based filtering** — filter by base model (SD1.5, SDXL, etc.) and custom groups
+- **Badge filtering** — filter by user-defined badges (free labels you assign to each workflow)
 - **Search** — full-text search across workflow names and metadata
 - **Side panel tabs** — Thumbnail preview, JSON viewer with syntax highlighting, and Group management
-- **Batch analysis** — auto-detect checkpoint, model type, prompt, and I/O node counts
+- **Badge management** — add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)
 - **AI summary** — generate workflow descriptions using Ollama
 - **Import / Export** — import workflows from files or clipboard, open in ComfyUI directly
 - **Default view setting** — persist your preferred view mode (Thumbnail / Card / Table)
@@ -87,21 +87,24 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Node Sets** — save multiple nodes + connections as reusable sets from the ComfyUI canvas
 - **Right-click context menu** — "Save as Node Set" option on any node in ComfyUI
 
-### Models Tab (v0.2.2)
-- **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder) with sub-tab switching
+### Models Tab (v0.2.3)
+- **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding) with sub-tab switching
 - **Thumbnail / Card / Table views** — switch between view modes with pagination (24 items per page)
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
+- **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
 - **Side panel tabs** — Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
 - **CivitAI integration** — fetch model metadata by SHA256 hash, view base model, trained words, tags, and model page link
 - **Batch CivitAI fetch** — one-click batch fetch for all models of a type with SSE progress streaming
 - **Detail modal** — preview image, CivitAI info, thumbnail change via file upload
+- **GenUI Model button** — apply the selected model directly to the corresponding node in GenerateUI's current workflow (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder)
 - **Group management** — create, rename, delete groups and assign/remove models
 - **Table view memo** — memo column displayed in table view for quick reference
 - **Preview images** — auto-detect `{model_stem}.preview.png` next to model files
 
-### Workflow Studio Library (ComfyUI Side Panel) (v0.1.8)
-- **Workflows tab** — browse favorite workflows, filter by model type, filter by group
-- **Nodes tab** — browse favorite nodes, node sets, and node groups
+### Workflow Studio Library (ComfyUI Side Panel) (v0.2.3)
+- **Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
+- **Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets sub-tabs), ★ star shown for favorites in All view
+- **Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs)
 - **Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
 - **Drag & drop workflows** — drag a workflow onto the canvas to load it
 - **Drag & drop nodes** — drag nodes/node sets onto the canvas to place them
@@ -184,6 +187,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.2.3
+- **Badge system unified** — Workflow and Models tabs now share a single badge palette (`⚙ Badge` button); workflow auto-analysis model type system removed in favor of user-defined free-label badges
+- **GenUI Model button** — apply any model from the Models tab directly to the corresponding node in GenerateUI's current workflow (available in detail modal and side panel; Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder)
+- **Sidebar Models tab** — added All / ★ Favorites / Groups / By Type sub-tabs to the Models section of Workflow Studio Library
+- **Sidebar All views** — ★ star displayed for favorite items in Workflows and Nodes All sub-tabs
+- **Sidebar panel width** — widened from 280px to 310px
 
 ### v0.2.2
 - **Models tab** — browse, search, and manage all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder) with Thumbnail/Card/Table views

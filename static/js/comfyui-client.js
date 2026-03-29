@@ -134,6 +134,25 @@ export const comfyUI = {
         );
     },
 
+    async fetchHypernetworks() {
+        return this._fetchModelList(
+            ["HypernetworkLoader"],
+            "hypernetwork_name"
+        );
+    },
+
+    async fetchEmbeddings() {
+        // ComfyUI exposes embeddings via /embeddings endpoint
+        try {
+            const res = await fetch(`${this.baseUrl}/embeddings`);
+            if (res.ok) {
+                const list = await res.json();
+                return Array.isArray(list) ? list : [];
+            }
+        } catch {}
+        return [];
+    },
+
     async fetchSamplers() {
         return this._fetchModelList(["KSampler"], "sampler_name");
     },

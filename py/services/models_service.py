@@ -21,6 +21,8 @@ MODEL_TYPE_FOLDER_KEYS = {
     "controlnet": "controlnet",
     "unet": "diffusion_models",
     "textencoder": "text_encoders",
+    "hypernetwork": "hypernetworks",
+    "embedding": "embeddings",
 }
 
 
@@ -91,6 +93,8 @@ class ModelsService:
             entry["memo"] = updates["memo"]
         if "sha256" in updates:
             entry["sha256"] = updates["sha256"]
+        if "badges" in updates:
+            entry["badges"] = updates["badges"]
         entry["updatedAt"] = self._now_iso()
         data[model_name] = entry
         self._save_metadata(data)
