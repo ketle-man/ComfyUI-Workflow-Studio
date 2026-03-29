@@ -61,6 +61,7 @@ export const comfyEditor = {
         this.renderImageTab(analysis, "wfm-gen-image-fields");
         this.renderModelTab(analysis, "wfm-gen-model-fields");
         this.renderSettingsTab(analysis, "wfm-gen-settings-fields");
+        _syncRawJson();
     },
 
     renderPromptTab(analysis, containerId) {
@@ -208,9 +209,9 @@ export const comfyEditor = {
         const latent = analysis.latent_nodes?.[0];
 
         el.innerHTML = `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-                <div>
-                    <h3 style="font-size:14px;margin-bottom:12px;">KSampler</h3>
+            <div style="display:flex;flex-direction:column;gap:0;">
+                <div style="padding-bottom:14px;border-bottom:1px solid var(--wfm-border);margin-bottom:14px;">
+                    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">KSampler</h3>
                     ${sampler ? `
                     <input type="hidden" id="wfm-settings-sampler-id" value="${sampler.id}">
                     <div class="wfm-form-group">
@@ -245,7 +246,7 @@ export const comfyEditor = {
                     ` : "<p class='wfm-placeholder'>No KSampler node found</p>"}
                 </div>
                 <div>
-                    <h3 style="font-size:14px;margin-bottom:12px;">Latent Image</h3>
+                    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">Latent Image</h3>
                     ${latent ? `
                     <input type="hidden" id="wfm-settings-latent-id" value="${latent.id}">
                     <div class="wfm-form-group">

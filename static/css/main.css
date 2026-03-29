@@ -505,11 +505,12 @@ body {
 }
 
 .wfm-gen-right {
-    width: 360px;
+    width: 280px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    border-left: 1px solid var(--wfm-border);
     padding: 12px;
     gap: 12px;
 }
@@ -546,13 +547,55 @@ body {
 
 .wfm-gen-subtab-content {
     display: none;
-    padding: 12px 16px;
-    overflow-y: auto;
     flex: 1;
+    overflow: hidden;
 }
 
 .wfm-gen-subtab-content.active {
-    display: block;
+    display: flex;
+}
+
+/* ── Tab inner layout: params col + rawjson col ── */
+.wfm-gen-tab-cols {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Left sub-column: parameter controls */
+.wfm-gen-params-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--wfm-border);
+}
+
+/* Scrollable variant (Model / Settings single-section) */
+.wfm-gen-params-col--scroll {
+    overflow-y: auto;
+    padding: 12px 14px;
+}
+
+/* Stacked sections inside params col (Input: Prompt on top, Image below) */
+.wfm-gen-params-section {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    min-height: 0;
+}
+
+.wfm-gen-params-section--top-border {
+    border-top: 1px solid var(--wfm-border);
+}
+
+/* Right sub-column: Raw JSON */
+.wfm-gen-rawjson-col {
+    width: 540px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .wfm-gen-status {
@@ -570,13 +613,6 @@ body {
 .wfm-gen-status.disconnected {
     background: rgba(255, 71, 87, 0.2);
     color: var(--wfm-danger);
-}
-
-.wfm-gen-panel {
-    background: var(--wfm-surface);
-    border: 1px solid var(--wfm-border);
-    border-radius: var(--wfm-radius);
-    padding: 12px;
 }
 
 .wfm-gen-progress-container {
@@ -609,8 +645,56 @@ body {
     text-align: right;
 }
 
-.wfm-gen-result {
+/* Raw JSON widget (shared, moved between tabs by JS) */
+#wfm-gen-rawjson-widget {
     flex: 1;
+    min-height: 0;
+}
+
+.wfm-gen-rawjson-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--wfm-bg-secondary);
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-gen-rawjson-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wfm-gen-rawjson-editor {
+    flex: 1 !important;
+    height: auto !important;
+}
+
+.wfm-gen-col-title {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 0 10px 0;
+    color: var(--wfm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--wfm-border);
+    padding-bottom: 6px;
+}
+
+/* Generation panel in right column */
+.wfm-gen-panel {
+    background: var(--wfm-surface);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius);
+    padding: 12px;
+    flex-shrink: 0;
+}
+
+.wfm-gen-result {
     display: flex;
     flex-direction: column;
     align-items: center;

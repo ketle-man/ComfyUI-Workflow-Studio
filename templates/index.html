@@ -279,53 +279,57 @@
 
             <!-- Editor Layout -->
             <div class="wfm-gen-layout">
-                <!-- Left Column: Parameter Editor -->
+                <!-- Left Column: Parameter Tabs -->
                 <div class="wfm-gen-left">
-                    <!-- Subtab Navigation -->
+                    <!-- Tab Navigation -->
                     <div class="wfm-gen-subtab-nav">
-                        <button class="wfm-gen-subtab-btn active" data-subtab="prompt">Prompt</button>
-                        <button class="wfm-gen-subtab-btn" data-subtab="image">Image</button>
+                        <button class="wfm-gen-subtab-btn active" data-subtab="input">Input</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="model">Model</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="settings">Settings</button>
-                        <button class="wfm-gen-subtab-btn" data-subtab="raw">Raw JSON</button>
                     </div>
 
-                    <!-- Subtab: Prompt -->
-                    <div id="wfm-gen-subtab-prompt" class="wfm-gen-subtab-content active">
-                        <div id="wfm-gen-prompt-fields">
-                            <p class="wfm-placeholder">Load a workflow to edit prompts</p>
+                    <!-- Tab: Input — left sub-col: Prompt(top)+Image(bottom), right sub-col: Raw JSON -->
+                    <div id="wfm-gen-subtab-input" class="wfm-gen-subtab-content active">
+                        <div class="wfm-gen-tab-cols">
+                            <div class="wfm-gen-params-col">
+                                <div class="wfm-gen-params-section">
+                                    <h3 class="wfm-gen-col-title">Prompt</h3>
+                                    <div id="wfm-gen-prompt-fields">
+                                        <p class="wfm-placeholder">Load a workflow to edit prompts</p>
+                                    </div>
+                                </div>
+                                <div class="wfm-gen-params-section wfm-gen-params-section--top-border">
+                                    <h3 class="wfm-gen-col-title">Image</h3>
+                                    <div id="wfm-gen-image-fields">
+                                        <p class="wfm-placeholder">Load a workflow to set input images</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="wfm-gen-rawjson-col" id="wfm-gen-rawjson-col-input"></div>
                         </div>
                     </div>
 
-                    <!-- Subtab: Image Input -->
-                    <div id="wfm-gen-subtab-image" class="wfm-gen-subtab-content">
-                        <div id="wfm-gen-image-fields">
-                            <p class="wfm-placeholder">Load a workflow to set input images</p>
-                        </div>
-                    </div>
-
-                    <!-- Subtab: Model -->
+                    <!-- Tab: Model — left sub-col: model selects, right sub-col: Raw JSON -->
                     <div id="wfm-gen-subtab-model" class="wfm-gen-subtab-content">
-                        <div id="wfm-gen-model-fields">
-                            <p class="wfm-placeholder">Load a workflow to edit models</p>
+                        <div class="wfm-gen-tab-cols">
+                            <div class="wfm-gen-params-col wfm-gen-params-col--scroll">
+                                <div id="wfm-gen-model-fields">
+                                    <p class="wfm-placeholder">Load a workflow to edit models</p>
+                                </div>
+                            </div>
+                            <div class="wfm-gen-rawjson-col" id="wfm-gen-rawjson-col-model"></div>
                         </div>
                     </div>
 
-                    <!-- Subtab: Settings -->
+                    <!-- Tab: Settings — left sub-col: KSampler(top)+LatentImage(bottom), right sub-col: Raw JSON -->
                     <div id="wfm-gen-subtab-settings" class="wfm-gen-subtab-content">
-                        <div id="wfm-gen-settings-fields">
-                            <p class="wfm-placeholder">Load a workflow to edit settings</p>
-                        </div>
-                    </div>
-
-                    <!-- Subtab: Raw JSON -->
-                    <div id="wfm-gen-subtab-raw" class="wfm-gen-subtab-content">
-                        <div style="margin-bottom:8px;">
-                            <button id="wfm-gen-apply-raw-btn" class="wfm-btn wfm-btn-sm">Apply JSON</button>
-                        </div>
-                        <div class="wfm-json-container" style="height:500px;">
-                            <pre id="wfm-gen-raw-json-highlight" class="wfm-json-highlight"></pre>
-                            <textarea id="wfm-gen-raw-json" class="wfm-json-editor" spellcheck="false" placeholder="Paste workflow JSON here..."></textarea>
+                        <div class="wfm-gen-tab-cols">
+                            <div class="wfm-gen-params-col wfm-gen-params-col--scroll">
+                                <div id="wfm-gen-settings-fields">
+                                    <p class="wfm-placeholder">Load a workflow to edit settings</p>
+                                </div>
+                            </div>
+                            <div class="wfm-gen-rawjson-col" id="wfm-gen-rawjson-col-settings"></div>
                         </div>
                     </div>
                 </div>
@@ -350,7 +354,7 @@
                         <!-- Seed -->
                         <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
                             <label style="font-size:12px;color:var(--wfm-text-secondary);white-space:nowrap;">Seed:</label>
-                            <input type="number" id="wfm-gen-seed-value" class="wfm-input" value="-1" style="width:140px;">
+                            <input type="number" id="wfm-gen-seed-value" class="wfm-input" value="-1" style="width:130px;">
                             <select id="wfm-gen-seed-mode" class="wfm-select" style="width:auto;">
                                 <option value="random">Random</option>
                                 <option value="fixed">Fixed</option>
@@ -365,6 +369,18 @@
                         <img id="wfm-gen-result-img" style="display:none;max-width:100%;border-radius:6px;">
                         <div id="wfm-gen-result-thumbs" class="wfm-gen-thumbs"></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Raw JSON shared widget (moved into active tab's rawjson-col by JS) -->
+            <div id="wfm-gen-rawjson-widget" style="display:none;flex-direction:column;height:100%;">
+                <div class="wfm-gen-rawjson-header">
+                    <span class="wfm-gen-rawjson-label">Raw JSON</span>
+                    <button id="wfm-gen-apply-raw-btn" class="wfm-btn wfm-btn-sm">Apply</button>
+                </div>
+                <div class="wfm-json-container wfm-gen-rawjson-editor">
+                    <pre id="wfm-gen-raw-json-highlight" class="wfm-json-highlight"></pre>
+                    <textarea id="wfm-gen-raw-json" class="wfm-json-editor" spellcheck="false" placeholder="Paste workflow JSON here..."></textarea>
                 </div>
             </div>
         </section>
@@ -510,11 +526,14 @@
                         <ul>
                             <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
                             <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported)</li>
-                            <li id="wfm-help-gen-3">Edit parameters: Prompt, Image (drag &amp; drop), Model (checkpoint/VAE/LoRA/ControlNet with filter), Settings (steps/CFG/sampler/scheduler/resolution), Raw JSON</li>
-                            <li id="wfm-help-gen-4">Seed control: random, fixed, increment, decrement</li>
-                            <li id="wfm-help-gen-5">Generate, progress display, and stop</li>
-                            <li id="wfm-help-gen-6">View results with main image and thumbnail history</li>
-                            <li id="wfm-help-gen-7">Eagle integration: auto-save generated images to Eagle</li>
+                            <li id="wfm-help-gen-3">3-tab layout — Input (Prompt + Image), Model, Settings — each with a Raw JSON column for instant preview and direct editing</li>
+                            <li id="wfm-help-gen-4">Input tab: Prompt (top) and Image drag-and-drop (bottom) in the left column</li>
+                            <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter</li>
+                            <li id="wfm-help-gen-6">Settings tab: KSampler (top) and LatentImage (bottom) in the left column</li>
+                            <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow</li>
+                            <li id="wfm-help-gen-8">Seed control: random, fixed, increment, decrement</li>
+                            <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
+                            <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle</li>
                         </ul>
                     </div>
 

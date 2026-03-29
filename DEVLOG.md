@@ -1,5 +1,48 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-03-29: v0.2.4 GenerateUIタブ レイアウト再設計
+
+### 概要
+- GenerateUIのサブタブを5タブ（Prompt/Image/Model/Settings/RawJSON）→ 3タブ（Input/Model/Settings）に整理
+- 各タブ内にRaw JSONエディタを右列として常時表示。どのタブでもJSON変更をリアルタイム確認・直接編集・Apply可能
+- Raw JSONタブを廃止（独立タブとしての Raw JSON は不要）
+- 右列（生成コントロール）はGenerate/Seed/結果画像のみにスリム化
+
+### 変更内容
+
+#### `templates/index.html` — タブ構成刷新
+
+- **Inputタブ**: 左列＝Prompt（上段）+ Image（下段）の縦2段、右列＝Raw JSON（540px）
+- **Modelタブ**: 左列＝モデル選択フォーム（スクロール）、右列＝Raw JSON（540px）
+- **Settingsタブ**: 左列＝KSampler（上段）+ LatentImage（下段）の縦2段、右列＝Raw JSON（540px）
+- Raw JSONのDOMノード（`wfm-gen-rawjson-widget`）はページ内に1つ定義し、タブ切替時にJSで対応する列へ移動
+- 右列（`.wfm-gen-right`）: 280px幅、Generate/Stop/Progress/Seed＋結果画像のみ
+
+#### `static/js/generate-tab.js` — タブ切替時にRaw JSONを移動
+
+- `moveRawJsonToTab(tabKey)` 追加: `wfm-gen-rawjson-widget` を `wfm-gen-rawjson-col-{tabKey}` へ `appendChild`
+- 初期表示（Input）とタブクリック時に自動移動
+
+#### `static/js/comfyui-editor.js` — Settings縦2段化
+
+- `renderSettingsTab`: KSampler / LatentImageを横2列グリッド → 縦2段（`flex-direction:column`）に変更
+- `renderAll` の末尾に `_syncRawJson()` 追加（ワークフロー読込直後にRaw JSONが即時反映）
+
+#### `static/css/main.css` — 新レイアウト用スタイル
+
+- `.wfm-gen-tab-cols`: タブ内2列レイアウト（flex行）
+- `.wfm-gen-params-col`: 左サブ列（flex:1、縦積み）
+- `.wfm-gen-params-col--scroll`: Model/Settings用スクロール変種
+- `.wfm-gen-params-section`: Input用上下2段の各セクション（flex:1、overflow-y:auto）
+- `.wfm-gen-rawjson-col`: Raw JSON列（540px固定幅）
+- `#wfm-gen-rawjson-widget` / `.wfm-gen-rawjson-header` / `.wfm-gen-rawjson-editor`: Raw JSONウィジェットスタイル
+
+### 技術的な判断
+- **Raw JSONをDOMで移動**: タブごとにtextareaのIDは1つである必要があるため、DOMノードをappendChildで移動する方式を採用。イベントリスナーはノードに付いたまま引き継がれる
+- **Raw JSON列幅540px**: テキストエディタとして十分な視認性を確保しつつ、パラメータ列にも十分な幅を残す設定
+
+---
+
 ## 2026-03-29: v0.2.3 バッジ統一・GenUI Model・サイドパネルModels拡充
 
 ### 概要

@@ -246,6 +246,16 @@ export async function initGenerateTab() {
         showToast("Interrupted", "info");
     });
 
+    // Move shared Raw JSON widget into the active tab's rawjson-col
+    function moveRawJsonToTab(tabKey) {
+        const widget = document.getElementById("wfm-gen-rawjson-widget");
+        const col = document.getElementById(`wfm-gen-rawjson-col-${tabKey}`);
+        if (widget && col) {
+            col.appendChild(widget);
+            widget.style.display = "flex";
+        }
+    }
+
     // Subtab navigation
     document.querySelectorAll(".wfm-gen-subtab-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -254,10 +264,14 @@ export async function initGenerateTab() {
             btn.classList.add("active");
             document.querySelectorAll(".wfm-gen-subtab-content").forEach((c) => c.classList.remove("active"));
             document.getElementById(`wfm-gen-subtab-${target}`)?.classList.add("active");
+            moveRawJsonToTab(target);
         });
     });
 
-    // Raw JSON apply
+    // Initial placement: move to first active tab (input)
+    moveRawJsonToTab("input");
+
+    // Raw JSON apply (always-visible panel in right column)
     document.getElementById("wfm-gen-apply-raw-btn")?.addEventListener("click", async () => {
         const textarea = document.getElementById("wfm-gen-raw-json");
         if (!textarea) return;

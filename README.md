@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.3-green)
+![Version](https://img.shields.io/badge/version-0.2.4-green)
 
 ## Screenshots
 
@@ -50,11 +50,14 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Embedded workflow metadata** — workflow JSON is embedded in the PNG (tEXt chunk), compatible with ComfyUI's drag-and-drop import
 - **Auto-import** — the captured workflow is automatically imported and appears in the Workflow tab
 
-### GenerateUI Tab
-- **Auto-generated parameter UI** — prompt, model, sampler, image, and other settings extracted from the workflow
+### GenerateUI Tab (v0.2.4)
+- **3-tab layout** — Input / Model / Settings tabs, each with a Raw JSON column on the right for instant preview and direct editing
+- **Input tab** — Prompt (top) and Image drag-and-drop (bottom) in the left column; Raw JSON (540px) in the right column
+- **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; Raw JSON on the right
+- **Settings tab** — KSampler (top) and LatentImage (bottom) in the left column; Raw JSON on the right
+- **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds
-- **Raw JSON editor** — view and edit the API-format JSON with syntax highlighting
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
@@ -187,6 +190,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.2.4
+- **GenerateUI tab redesign** — reorganized from 5 tabs (Prompt/Image/Model/Settings/Raw JSON) to 3 tabs (Input/Model/Settings); each tab shows a Raw JSON column (540px) for instant JSON preview and direct editing from any tab
+- **Input tab** — Prompt and Image stacked vertically in the left column
+- **Settings tab** — KSampler and LatentImage stacked vertically in the left column
+- **Raw JSON tab removed** — Raw JSON is now always visible as a right-column panel within each tab
 
 ### v0.2.3
 - **Badge system unified** — Workflow and Models tabs now share a single badge palette (`⚙ Badge` button); workflow auto-analysis model type system removed in favor of user-defined free-label badges

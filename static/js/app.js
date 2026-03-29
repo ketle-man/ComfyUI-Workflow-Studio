@@ -256,6 +256,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-1": "helpGen1", "wfm-help-gen-2": "helpGen2",
         "wfm-help-gen-3": "helpGen3", "wfm-help-gen-4": "helpGen4",
         "wfm-help-gen-5": "helpGen5", "wfm-help-gen-6": "helpGen6", "wfm-help-gen-7": "helpGen7",
+        "wfm-help-gen-8": "helpGen8", "wfm-help-gen-9": "helpGen9", "wfm-help-gen-10": "helpGen10",
         "wfm-help-prompt-1": "helpPrompt1", "wfm-help-prompt-2": "helpPrompt2",
         "wfm-help-prompt-3": "helpPrompt3", "wfm-help-prompt-4": "helpPrompt4",
         "wfm-help-prompt-5": "helpPrompt5", "wfm-help-prompt-6": "helpPrompt6",
