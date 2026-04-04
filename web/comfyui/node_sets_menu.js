@@ -24,7 +24,10 @@ const state = {
     topTab: "workflows",           // "workflows" | "nodes" | "prompts" | "models"
     // Node sub-tabs (existing)
     activeTab: "all",              // all | favorites | groups
-    activeTab2: null,              // 2nd row: "sets" (or null when 1st row active)
+    activeTab2: null,              // 2nd row: "sets" | "category" | "package" (or null when 1st row active)
+    activeNodeCategory: "",        // selected category value
+    activeNodePackage: "",         // selected package value
+    objectInfo: {},                // raw /object_info data for package lookup
     favorites: [],                 // [{name, display_name}]
     nodeSets: [],
     groups: {},                    // {groupName: [nodeName, ...]}
@@ -79,13 +82,28 @@ const fetchGroups = async () => {
     } catch { return {}; }
 };
 
+const fetchObjectInfo = async () => {
+    try {
+        const res = await fetch(`${window.location.origin}/object_info`);
+        return res.ok ? await res.json() : {};
+    } catch { return {}; }
+};
+
+const extractPackageName = (pythonModule) => {
+    if (!pythonModule || pythonModule === "nodes") return "ComfyUI (Built-in)";
+    const parts = pythonModule.split(".");
+    if (parts[0] === "custom_nodes" && parts.length > 1) return parts[1];
+    return pythonModule;
+};
+
 const loadData = async () => {
-    const [metadata, nodeSets, groups] = await Promise.all([
-        fetchMetadata(), fetchNodeSets(), fetchGroups(),
+    const [metadata, nodeSets, groups, objectInfo] = await Promise.all([
+        fetchMetadata(), fetchNodeSets(), fetchGroups(), fetchObjectInfo(),
     ]);
     state.metadata = metadata;
     state.nodeSets = nodeSets;
     state.groups = groups;
+    state.objectInfo = objectInfo;
 
     // Extract favorites from metadata
     state.favorites = [];
@@ -149,7 +167,17 @@ const fetchModelList = async (type) => {
             vae:         () => fetch(`${comfyBase}/object_info/VAELoader`).then(r => r.json()).then(d => d?.VAELoader?.input?.required?.vae_name?.[0] || []),
             controlnet:  () => fetch(`${comfyBase}/object_info/ControlNetLoader`).then(r => r.json()).then(d => d?.ControlNetLoader?.input?.required?.control_net_name?.[0] || []),
             unet:        () => fetch(`${comfyBase}/object_info/UNETLoader`).then(r => r.json()).then(d => d?.UNETLoader?.input?.required?.unet_name?.[0] || []),
-            textencoder: () => fetch(`${comfyBase}/object_info/CLIPLoader`).then(r => r.json()).then(d => d?.CLIPLoader?.input?.required?.clip_name1?.[0] || []),
+            textencoder: async () => {
+                const base = window.location.origin;
+                for (const cls of ["DualCLIPLoader", "CLIPLoader"]) {
+                    try {
+                        const d = await fetch(`${base}/object_info/${cls}`).then(r => r.json());
+                        const list = d?.[cls]?.input?.required?.clip_name1?.[0];
+                        if (list?.length) return list;
+                    } catch {}
+                }
+                return [];
+            },
             hypernetwork:() => fetch(`${comfyBase}/object_info/HypernetworkLoader`).then(r => r.json()).then(d => d?.HypernetworkLoader?.input?.required?.hypernetwork_name?.[0] || []),
             embedding:   () => fetch(`${comfyBase}/embeddings`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
         };
@@ -199,7 +227,7 @@ const fetchWorkflowRaw = async (filename) => {
 
 const loadWfData = async () => {
     const workflows = await fetchWorkflows();
-    state.wfList = workflows;
+    state.wfList = workflows.filter(w => w.filename !== ".index.json");
 
     // Extract favorites
     state.wfFavorites = workflows.filter(w => w.metadata?.favorite);
@@ -496,6 +524,76 @@ let panelEl = null;
 
 const PANEL_ID = "wfm-node-library-panel";
 
+// ============================================
+// Theme
+// ============================================
+
+const THEME_KEY = "wfm_nlp_theme";
+
+const THEME_VARS = [
+    { key: "bg",     label: "Background",      cssVar: "--comfy-menu-bg",   default: "#1e1e1e" },
+    { key: "input",  label: "Sub-header BG",   cssVar: "--comfy-input-bg",  default: "#2a2a2a" },
+    { key: "text",   label: "Text",             cssVar: "--input-text",      default: "#dddddd" },
+    { key: "border", label: "Border",           cssVar: "--border-color",    default: "#4e4e4e" },
+    { key: "desc",   label: "Secondary text",   cssVar: "--descrip-text",    default: "#888888" },
+];
+
+function loadTheme() {
+    try { return JSON.parse(localStorage.getItem(THEME_KEY)) || {}; } catch { return {}; }
+}
+
+function applyTheme(panel, theme) {
+    THEME_VARS.forEach(({ key, cssVar, default: def }) => {
+        panel.style.setProperty(cssVar, theme[key] || def);
+    });
+}
+
+function buildThemePanel(panel) {
+    const themePanel = panel.querySelector(".wfm-nlp-theme-panel");
+    if (!themePanel) return;
+    const theme = loadTheme();
+    themePanel.innerHTML = `
+        <div class="wfm-nlp-theme-title">Panel Theme</div>
+        ${THEME_VARS.map(({ key, label, default: def }) => `
+        <div class="wfm-nlp-theme-row">
+            <span class="wfm-nlp-theme-label">${label}</span>
+            <input type="color" class="wfm-nlp-theme-color" data-key="${key}"
+                value="${theme[key] || def}">
+        </div>`).join("")}
+        <div class="wfm-nlp-theme-actions">
+            <button class="wfm-nlp-theme-reset-btn">Reset</button>
+            <button class="wfm-nlp-theme-save-btn">Save</button>
+        </div>`;
+
+    themePanel.querySelector(".wfm-nlp-theme-save-btn").addEventListener("click", () => {
+        const saved = {};
+        themePanel.querySelectorAll(".wfm-nlp-theme-color").forEach(input => {
+            saved[input.dataset.key] = input.value;
+        });
+        localStorage.setItem(THEME_KEY, JSON.stringify(saved));
+        applyTheme(panel, saved);
+        themePanel.style.display = "none";
+    });
+
+    themePanel.querySelector(".wfm-nlp-theme-reset-btn").addEventListener("click", () => {
+        localStorage.removeItem(THEME_KEY);
+        THEME_VARS.forEach(({ cssVar, default: def }) => {
+            panel.style.setProperty(cssVar, def);
+        });
+        themePanel.style.display = "none";
+    });
+
+    // Live preview on color change
+    themePanel.querySelectorAll(".wfm-nlp-theme-color").forEach(input => {
+        input.addEventListener("input", () => {
+            panel.style.setProperty(
+                THEME_VARS.find(v => v.key === input.dataset.key).cssVar,
+                input.value
+            );
+        });
+    });
+}
+
 const createPanel = () => {
     if (panelEl) return panelEl;
 
@@ -504,9 +602,11 @@ const createPanel = () => {
     panel.innerHTML = `
         <div class="wfm-nlp-header">
             <span class="wfm-nlp-title">Workflow Studio Library</span>
+            <button class="wfm-nlp-theme-btn" title="Theme settings">&#9881;</button>
             <button class="wfm-nlp-refresh" title="Refresh">&#8635;</button>
             <button class="wfm-nlp-close" title="Close">&times;</button>
         </div>
+        <div class="wfm-nlp-theme-panel" style="display:none;"></div>
         <div class="wfm-nlp-tabs">
             <button class="wfm-nlp-tab wfm-nlp-top-tab active" data-toptab="workflows">Workflows</button>
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="nodes">Nodes</button>
@@ -584,7 +684,24 @@ const createPanel = () => {
         showToast("Library refreshed", "success");
     });
 
+    // Theme button
+    panel.querySelector(".wfm-nlp-theme-btn").addEventListener("click", () => {
+        const themePanel = panel.querySelector(".wfm-nlp-theme-panel");
+        if (!themePanel) return;
+        const isOpen = themePanel.style.display !== "none";
+        if (isOpen) {
+            themePanel.style.display = "none";
+        } else {
+            buildThemePanel(panel);
+            themePanel.style.display = "block";
+        }
+    });
+
     injectStyles();
+
+    // Apply saved theme
+    applyTheme(panel, loadTheme());
+
     rebuildSubTabs();
     return panel;
 };
@@ -715,6 +832,8 @@ const rebuildSubTabs = () => {
         ];
         const row2Tabs = [
             { key: "sets", label: "\u2630 Sets" },
+            { key: "category", label: "\ud83d\udcc2 Category" },
+            { key: "package", label: "\ud83e\udde9 Package" },
         ];
 
         const activeKey = state.activeTab2 || state.activeTab;
@@ -756,6 +875,9 @@ const rebuildSubTabs = () => {
 const renderContent = () => {
     const content = panelEl?.querySelector(".wfm-nlp-content");
     if (!content) return;
+
+    // Remove filter dropdowns from previous category/package views
+    panelEl.querySelectorAll(".wfm-nlp-filter-row").forEach(e => e.remove());
 
     if (state.topTab === "models") {
         if (!state.modelsLoaded) {
@@ -802,6 +924,8 @@ const renderContent = () => {
             case "favorites": renderFavorites(content); break;
             case "sets": renderSets(content); break;
             case "groups": renderGroups(content); break;
+            case "category": renderNodesByCategory(content); break;
+            case "package": renderNodesByPackage(content); break;
         }
     }
 };
@@ -1584,6 +1708,133 @@ const renderGroups = (container) => {
 };
 
 // ============================================
+// Render – Nodes by Category / Package
+// ============================================
+
+const getNodeCategory = (nodeType) => {
+    const info = state.objectInfo[nodeType];
+    if (info?.category) return info.category.split("/")[0] || "uncategorized";
+    // Fallback: LiteGraph type string often contains category as prefix
+    const def = typeof LiteGraph !== "undefined"
+        ? LiteGraph.registered_node_types[nodeType]
+        : null;
+    const cat = def?.category || "";
+    return cat.split("/")[0] || "uncategorized";
+};
+
+const getNodePackage = (nodeType) => {
+    const info = state.objectInfo[nodeType];
+    if (!info) return "ComfyUI (Built-in)";
+    return extractPackageName(info.python_module || "");
+};
+
+const renderNodesByCategory = (container) => {
+    const registered = typeof LiteGraph !== "undefined" ? LiteGraph.registered_node_types : {};
+    const nodeNames = Object.keys(registered).sort();
+
+    // Build category list
+    const catSet = new Set();
+    nodeNames.forEach(n => catSet.add(getNodeCategory(n)));
+    const categories = [...catSet].sort();
+
+    // Insert dropdown above content (remove old one first)
+    container.parentNode.querySelectorAll(".wfm-nlp-filter-row").forEach(e => e.remove());
+    const wrap = document.createElement("div");
+    wrap.className = "wfm-nlp-filter-row";
+    wrap.style.cssText = "padding:6px 8px;border-bottom:1px solid var(--border-color,#4e4e4e);flex-shrink:0;";
+    const sel = document.createElement("select");
+    sel.style.cssText = "width:100%;padding:4px 6px;background:var(--comfy-input-bg,#2a2a2a);border:1px solid var(--border-color,#4e4e4e);border-radius:3px;color:var(--input-text,#ddd);font-size:12px;";
+    sel.innerHTML = `<option value="">-- All Categories --</option>` +
+        categories.map(c => `<option value="${esc(c)}"${c === state.activeNodeCategory ? " selected" : ""}>${esc(c)}</option>`).join("");
+    sel.addEventListener("change", () => {
+        state.activeNodeCategory = sel.value;
+        renderNodesByCategoryList(container);
+    });
+    wrap.appendChild(sel);
+    container.parentNode.insertBefore(wrap, container);
+
+    renderNodesByCategoryList(container);
+};
+
+const renderNodesByCategoryList = (container) => {
+    const registered = typeof LiteGraph !== "undefined" ? LiteGraph.registered_node_types : {};
+    let nodeNames = Object.keys(registered).sort();
+
+    if (state.activeNodeCategory) {
+        nodeNames = nodeNames.filter(n => getNodeCategory(n) === state.activeNodeCategory);
+    }
+    if (state.searchText) {
+        nodeNames = nodeNames.filter(n => n.toLowerCase().includes(state.searchText));
+    }
+
+    container.innerHTML = "";
+    if (nodeNames.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No nodes found</div>`;
+        return;
+    }
+    for (const name of nodeNames) {
+        const isFav = state.metadata[name]?.favorite;
+        const label = isFav ? `<span class="wfm-nlp-fav-star">\u2605</span>${esc(name)}` : esc(name);
+        const el = createDraggableItem(label, "single", { classType: name });
+        el.addEventListener("dblclick", () => placeSingleNode(name));
+        container.appendChild(el);
+    }
+};
+
+const renderNodesByPackage = (container) => {
+    const registered = typeof LiteGraph !== "undefined" ? LiteGraph.registered_node_types : {};
+    const nodeNames = Object.keys(registered).sort();
+
+    // Build package list
+    const pkgSet = new Set();
+    nodeNames.forEach(n => pkgSet.add(getNodePackage(n)));
+    const packages = [...pkgSet].sort();
+
+    // Insert dropdown above content (remove old one first)
+    container.parentNode.querySelectorAll(".wfm-nlp-filter-row").forEach(e => e.remove());
+    const wrap = document.createElement("div");
+    wrap.className = "wfm-nlp-filter-row";
+    wrap.style.cssText = "padding:6px 8px;border-bottom:1px solid var(--border-color,#4e4e4e);flex-shrink:0;";
+    const sel = document.createElement("select");
+    sel.style.cssText = "width:100%;padding:4px 6px;background:var(--comfy-input-bg,#2a2a2a);border:1px solid var(--border-color,#4e4e4e);border-radius:3px;color:var(--input-text,#ddd);font-size:12px;";
+    sel.innerHTML = `<option value="">-- All Packages --</option>` +
+        packages.map(p => `<option value="${esc(p)}"${p === state.activeNodePackage ? " selected" : ""}>${esc(p)}</option>`).join("");
+    sel.addEventListener("change", () => {
+        state.activeNodePackage = sel.value;
+        renderNodesByPackageList(container);
+    });
+    wrap.appendChild(sel);
+    container.parentNode.insertBefore(wrap, container);
+
+    renderNodesByPackageList(container);
+};
+
+const renderNodesByPackageList = (container) => {
+    const registered = typeof LiteGraph !== "undefined" ? LiteGraph.registered_node_types : {};
+    let nodeNames = Object.keys(registered).sort();
+
+    if (state.activeNodePackage) {
+        nodeNames = nodeNames.filter(n => getNodePackage(n) === state.activeNodePackage);
+    }
+    if (state.searchText) {
+        nodeNames = nodeNames.filter(n => n.toLowerCase().includes(state.searchText));
+    }
+
+    container.innerHTML = "";
+    if (nodeNames.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No nodes found</div>`;
+        return;
+    }
+    for (const name of nodeNames) {
+        const isFav = state.metadata[name]?.favorite;
+        const label = isFav ? `<span class="wfm-nlp-fav-star">\u2605</span>${esc(name)}` : esc(name);
+        const el = createDraggableItem(label, "single", { classType: name });
+        el.addEventListener("dblclick", () => placeSingleNode(name));
+        container.appendChild(el);
+    }
+};
+
+// ============================================
 // Draggable item factory (nodes)
 // ============================================
 
@@ -2062,6 +2313,75 @@ const injectStyles = () => {
             background: rgba(255,255,255,0.12);
             color: var(--descrip-text, #aaa);
         }
+        .wfm-nlp-theme-btn {
+            background: none;
+            border: none;
+            color: var(--input-text, #ddd);
+            font-size: 15px;
+            cursor: pointer;
+            opacity: 0.7;
+            padding: 0 2px;
+            line-height: 1;
+        }
+        .wfm-nlp-theme-btn:hover { opacity: 1; }
+        .wfm-nlp-theme-panel {
+            border-bottom: 1px solid var(--border-color, #4e4e4e);
+            background: var(--comfy-input-bg, #2a2a2a);
+            padding: 10px 12px;
+            flex-shrink: 0;
+        }
+        .wfm-nlp-theme-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--input-text, #ddd);
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+        .wfm-nlp-theme-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .wfm-nlp-theme-label {
+            font-size: 11px;
+            color: var(--descrip-text, #aaa);
+            flex: 1;
+            white-space: nowrap;
+        }
+        .wfm-nlp-theme-color {
+            width: 32px;
+            height: 22px;
+            border: 1px solid var(--border-color, #555);
+            border-radius: 3px;
+            padding: 1px;
+            cursor: pointer;
+            background: transparent;
+        }
+        .wfm-nlp-theme-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            justify-content: flex-end;
+        }
+        .wfm-nlp-theme-save-btn, .wfm-nlp-theme-reset-btn {
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            border: 1px solid var(--border-color, #555);
+        }
+        .wfm-nlp-theme-save-btn {
+            background: #4a9eff;
+            color: #fff;
+            border-color: #4a9eff;
+        }
+        .wfm-nlp-theme-save-btn:hover { background: #3a8eef; }
+        .wfm-nlp-theme-reset-btn {
+            background: none;
+            color: var(--descrip-text, #aaa);
+        }
+        .wfm-nlp-theme-reset-btn:hover { color: var(--input-text, #ddd); }
     `;
     document.head.appendChild(style);
 };

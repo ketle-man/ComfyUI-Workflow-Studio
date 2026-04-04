@@ -279,7 +279,7 @@ function applyI18nToHtml() {
         "wfm-help-sidepanel-5": "helpSidepanel5", "wfm-help-sidepanel-6": "helpSidepanel6",
         "wfm-help-sidepanel-7": "helpSidepanel7", "wfm-help-sidepanel-8": "helpSidepanel8",
         "wfm-help-sidepanel-9": "helpSidepanel9", "wfm-help-sidepanel-10": "helpSidepanel10",
-        "wfm-help-sidepanel-11": "helpSidepanel11",
+        "wfm-help-sidepanel-11": "helpSidepanel11", "wfm-help-sidepanel-12": "helpSidepanel12",
         "wfm-help-shortcuts-title": "helpShortcutsTitle",
         "wfm-help-shortcuts-1": "helpShortcuts1", "wfm-help-shortcuts-2": "helpShortcuts2",
         "wfm-help-shortcuts-3": "helpShortcuts3", "wfm-help-shortcuts-4": "helpShortcuts4",

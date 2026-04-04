@@ -265,6 +265,8 @@ function renderModelFilters() {
 
 function filterWorkflows() {
     return state.workflows.filter((wf) => {
+        if (wf.filename === ".index.json") return false;
+
         if (state.activeBadge === "FAVORITE") {
             if (!wf.metadata.favorite) return false;
         } else if (state.activeBadge !== "ALL") {

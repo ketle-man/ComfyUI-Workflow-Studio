@@ -1,5 +1,87 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-04: v0.2.5 追加修正
+
+### 概要
+- サイドパネルModels→By TypeでTextEncoderが表示されない問題を修正
+- サイドパネルのWorkflowsタブでも `.index.json` を非表示に
+- 未使用の `buildDropdown` 関数を削除
+
+### 変更内容
+
+#### `web/comfyui/node_sets_menu.js`
+
+**TextEncoder取得ロジック修正:**
+- 変更前: `/api/wfm/models?type=textencoder`（存在しないエンドポイント）
+- 変更後: `DualCLIPLoader` → `CLIPLoader` の順に `/object_info/{cls}` を試して `clip_name1` を取得（`comfyui-client.js` の `fetchTextEncoders()` と同じロジック）
+
+**`.index.json` 非表示:**
+- `loadWfData()`: `state.wfList = workflows.filter(w => w.filename !== ".index.json")` でサイドパネルのWorkflowsタブからも除外
+
+**未使用関数削除:**
+- `buildDropdown()` 関数を削除（Category/Packageドロップダウンは個別実装に置き換え済みだったため不要）
+
+---
+
+## 2026-04-03: v0.2.5 サイドパネル Category/Package サブタブ・テーマ設定・Workflow修正
+
+### 概要
+- サイドパネル（Workflow Studio Library）のNodesタブに📂 Category / 🧩 Packageサブタブを追加
+- サイドパネルのヘッダーに⚙テーマ設定ボタンを追加（背景・文字・ボーダー色カスタマイズ）
+- ワークフロータブで `.index.json` を非表示に
+
+### 変更内容
+
+#### `web/comfyui/node_sets_menu.js` — Nodesサブタブ追加・テーマ設定
+
+**Nodesタブのrow2サブタブ構成変更:**
+- 変更前: row2 = `☰ Sets`
+- 変更後: row2 = `☰ Sets` / `📂 Category` / `🧩 Package`
+
+**state追加:**
+- `activeNodeCategory: ""` — Categoryサブタブで選択中のカテゴリ値
+- `activeNodePackage: ""` — Packageサブタブで選択中のパッケージ値
+- `objectInfo: {}` — `/object_info` APIから取得した全ノード情報（パッケージ判定に使用）
+
+**`loadData()` 変更:**
+- `fetchObjectInfo()` を追加して `/object_info` を並行取得
+- `state.objectInfo` に保存
+
+**新規関数:**
+- `fetchObjectInfo()` — `GET /object_info` で全ノード情報を取得
+- `extractPackageName(pythonModule)` — `python_module` からパッケージ名を抽出
+- `getNodeCategory(nodeType)` — `state.objectInfo` 優先でカテゴリを取得（LiteGraphフォールバック）
+- `getNodePackage(nodeType)` — `state.objectInfo[nodeType].python_module` からパッケージ名を取得
+- `renderNodesByCategory(container)` — カテゴリドロップダウンをcontent上部に挿入してリスト表示
+- `renderNodesByCategoryList(container)` — 選択カテゴリ＋検索テキストでフィルタしてカード表示
+- `renderNodesByPackage(container)` — パッケージドロップダウンをcontent上部に挿入してリスト表示
+- `renderNodesByPackageList(container)` — 選択パッケージ＋検索テキストでフィルタしてカード表示
+
+**ドロップダウンのDOM挿入方式:**
+- `.wfm-nlp-filter-row` クラスのdivを `.wfm-nlp-content` の直前に `insertBefore` で挿入
+- `renderContent()` 冒頭で `panelEl.querySelectorAll(".wfm-nlp-filter-row").forEach(e => e.remove())` により他タブ移動時に削除
+
+**テーマ設定:**
+- `THEME_KEY = "wfm_nlp_theme"` — localStorage保存キー
+- `THEME_VARS` — 設定可能な5変数: `--comfy-menu-bg`（背景）、`--comfy-input-bg`（サブヘッダーBG）、`--input-text`（文字色）、`--border-color`（ボーダー）、`--descrip-text`（補助テキスト色）
+- `loadTheme()` — localStorageから読み込み
+- `applyTheme(panel, theme)` — パネル要素にCSS変数をインラインsetPropertyで上書き
+- `buildThemePanel(panel)` — カラーピッカーUIを動的生成（ライブプレビュー・Save・Resetボタン付き）
+- パネルのHTMLに `.wfm-nlp-theme-btn`（⚙）と `.wfm-nlp-theme-panel` を追加
+- `createPanel()` 内でテーマボタンのイベントリスナーを登録、`applyTheme(panel, loadTheme())` で起動時に保存済みテーマを適用
+
+#### `static/js/workflow-tab.js` — `.index.json` 非表示
+
+- `filterWorkflows()` の先頭に `if (wf.filename === ".index.json") return false;` を追加
+
+### 技術的な判断
+
+- **`python_module` の取得元をAPIに変更:** `LiteGraph.registered_node_types` にはバックエンド由来の `python_module` が存在しないため、全ノードが `ComfyUI (Built-in)` 判定になる問題があった。`/object_info` APIを `loadData()` 時に並行取得することで正確なパッケージ判定を実現
+- **CSS変数のインライン上書き:** テーマ色はパネル要素自体に `style.setProperty` で適用。ComfyUI本体の `:root` 変数を書き換えず、パネルスコープ内のみに影響させる設計
+- **ドロップダウンのDOMインジェクション:** Category/Packageビューのドロップダウンは `renderContent` の都度生成・削除する方式を採用。タブ切替時のクリーンアップを `renderContent` 冒頭の `.wfm-nlp-filter-row` 削除処理で一元管理
+
+---
+
 ## 2026-03-29: v0.2.4 GenerateUIタブ レイアウト再設計
 
 ### 概要

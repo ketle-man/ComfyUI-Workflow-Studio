@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.4-green)
+![Version](https://img.shields.io/badge/version-0.2.5-green)
 
 ## Screenshots
 
@@ -104,9 +104,11 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Table view memo** — memo column displayed in table view for quick reference
 - **Preview images** — auto-detect `{model_stem}.preview.png` next to model files
 
-### Workflow Studio Library (ComfyUI Side Panel) (v0.2.3)
+### Workflow Studio Library (ComfyUI Side Panel) (v0.2.5)
 - **Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
-- **Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets sub-tabs), ★ star shown for favorites in All view
+- **Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs), ★ star shown for favorites in All view
+  - **Category sub-tab** — dropdown to filter nodes by top-level category
+  - **Package sub-tab** — dropdown to filter nodes by custom node package name
 - **Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs)
 - **Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
 - **Drag & drop workflows** — drag a workflow onto the canvas to load it
@@ -115,6 +117,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Copy prompts** — copy individual positive (P) or negative (N) prompts from sidebar items
 - **Double-click** — load workflows or place nodes without dragging
 - **Search** — search within each sub-tab to quickly find items
+- **⚙ Theme settings** — customize panel background, sub-header background, text, border, and secondary text colors; saved to localStorage and applied on every open
 
 ### Help & Support Tab (v0.1.3)
 - **Feature list** — overview of all features organized by tab
@@ -190,6 +193,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.2.5
+- **Sidebar Category/Package sub-tabs** — added 📂 Category and 🧩 Package sub-tabs to the Nodes tab in Workflow Studio Library; each shows a dropdown to filter nodes by category or custom node package (reads `/object_info` for accurate package detection)
+- **Sidebar theme settings** — added ⚙ button in the panel header to customize background, sub-header background, text, border, and secondary text colors with live preview; settings saved to localStorage
+- **Sidebar TextEncoder (By Type)** — fixed TextEncoder not appearing in Models → By Type; now uses `DualCLIPLoader` → `CLIPLoader` fallback to retrieve `clip_name1` list
+- **Hide `.index.json`** — excluded `.index.json` from both the Workflow tab and the Workflow Studio Library side panel
 
 ### v0.2.4
 - **GenerateUI tab redesign** — reorganized from 5 tabs (Prompt/Image/Model/Settings/Raw JSON) to 3 tabs (Input/Model/Settings); each tab shows a Raw JSON column (540px) for instant JSON preview and direct editing from any tab

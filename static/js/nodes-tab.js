@@ -276,42 +276,41 @@ function renderNodeGrid() {
     const pageItems = filtered.slice(start, start + NODES_PER_PAGE);
 
     grid.innerHTML = "";
-    pageItems.forEach(node => {
-        const meta = state.nodeMetadata[node.name] || {};
-        const card = document.createElement("div");
-        card.className = "wfm-card wfm-node-card";
-        if (state.selectedNode && state.selectedNode.name === node.name) {
-            card.classList.add("wfm-card-selected");
-        }
-        card.dataset.nodeName = node.name;
-        card.style.borderLeft = `3px solid ${packageColor(node.package)}`;
-
-        const inputCount = Object.keys(node.input.required || {}).length +
-                           Object.keys(node.input.optional || {}).length;
-        const outputCount = (node.output || []).length;
-        const tags = (meta.tags || []).map(tg => `<span class="wfm-tag">#${escapeHtml(tg)}</span>`).join("");
-        const favStar = meta.favorite ? "\u2605" : "\u2606";
-        const favClass = meta.favorite ? "wfm-fav-btn active" : "wfm-fav-btn";
-
-        card.innerHTML = `
-            <div class="wfm-card-body">
-                <div class="wfm-card-title" title="${escapeHtml(node.name)}">${escapeHtml(node.display_name)}</div>
-                <div class="wfm-card-meta">
-                    ${categoryBadgeHtml(node.category)}
-                </div>
-                ${tags ? `<div class="wfm-card-tags">${tags}</div>` : ""}
-            </div>
-            <button class="${favClass}" title="Favorite">${favStar}</button>`;
-
-        card.querySelector(".wfm-fav-btn").addEventListener("click", e => {
-            e.stopPropagation();
-            toggleFavorite(node.name, e.currentTarget);
-        });
-        card.addEventListener("click", () => showNodeSidePanel(node));
-        grid.appendChild(card);
-    });
+    pageItems.forEach(node => grid.appendChild(createNodeCard(node)));
 
     renderPagination(filtered.length, totalPages);
+}
+
+function createNodeCard(node) {
+    const meta = state.nodeMetadata[node.name] || {};
+    const card = document.createElement("div");
+    card.className = "wfm-card wfm-node-card";
+    if (state.selectedNode && state.selectedNode.name === node.name) {
+        card.classList.add("wfm-card-selected");
+    }
+    card.dataset.nodeName = node.name;
+    card.style.borderLeft = `3px solid ${packageColor(node.package)}`;
+
+    const tags = (meta.tags || []).map(tg => `<span class="wfm-tag">#${escapeHtml(tg)}</span>`).join("");
+    const favStar = meta.favorite ? "\u2605" : "\u2606";
+    const favClass = meta.favorite ? "wfm-fav-btn active" : "wfm-fav-btn";
+
+    card.innerHTML = `
+        <div class="wfm-card-body">
+            <div class="wfm-card-title" title="${escapeHtml(node.name)}">${escapeHtml(node.display_name)}</div>
+            <div class="wfm-card-meta">
+                ${categoryBadgeHtml(node.category)}
+            </div>
+            ${tags ? `<div class="wfm-card-tags">${tags}</div>` : ""}
+        </div>
+        <button class="${favClass}" title="Favorite">${favStar}</button>`;
+
+    card.querySelector(".wfm-fav-btn").addEventListener("click", e => {
+        e.stopPropagation();
+        toggleFavorite(node.name, e.currentTarget);
+    });
+    card.addEventListener("click", () => showNodeSidePanel(node));
+    return card;
 }
 
 function renderPagination(totalItems, totalPages) {
