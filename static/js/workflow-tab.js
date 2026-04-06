@@ -25,7 +25,6 @@ const state = {
     currentPage: 0,
 };
 
-const WF_PER_PAGE = 24;
 
 function getBadgePalette() {
     try { return JSON.parse(localStorage.getItem("wfm_models_badge_palette") || "{}"); }
@@ -245,12 +244,17 @@ function renderModelFilters() {
     const container = document.getElementById("wfm-model-filters");
     if (!container) return;
 
-    const badges = getAllBadges();
+    const palette = getBadgePalette();
+    const badges = Object.keys(palette).sort();
 
     container.innerHTML = `
         <button class="wfm-filter-btn ${state.activeBadge === "ALL" ? "active" : ""}" data-filter="ALL">ALL</button>
         <button class="wfm-filter-btn ${state.activeBadge === "FAVORITE" ? "active" : ""}" data-filter="FAVORITE">&#9733;</button>
-        ${badges.map((b) => `<button class="wfm-filter-btn ${state.activeBadge === b ? "active" : ""}" data-filter="${escapeHtml(b)}">${escapeHtml(b)}</button>`).join("")}
+        ${badges.map((b) => {
+            const color = palette[b] || "";
+            const style = color ? ` style="background:${color};color:#fff;"` : "";
+            return `<button class="wfm-filter-btn ${state.activeBadge === b ? "active" : ""}" data-filter="${escapeHtml(b)}"${style}>${escapeHtml(b)}</button>`;
+        }).join("")}
     `;
 
     container.querySelectorAll(".wfm-filter-btn").forEach((btn) => {
@@ -314,27 +318,16 @@ function renderGrid() {
     if (filtered.length === 0) {
         grid.innerHTML =
             '<p class="wfm-placeholder">No workflows found</p>';
-        updateWfPagination(0);
         return;
     }
 
     if (state.viewMode === "table") {
         renderTableView(grid, filtered);
-        updateWfPagination(0);
         return;
     }
 
-    // Thumbnail / Card view with pagination
-    const totalPages = Math.ceil(filtered.length / WF_PER_PAGE);
-    if (state.currentPage >= totalPages) state.currentPage = totalPages - 1;
-    if (state.currentPage < 0) state.currentPage = 0;
-    const start = state.currentPage * WF_PER_PAGE;
-    const pageItems = filtered.slice(start, start + WF_PER_PAGE);
-
-    updateWfPagination(totalPages);
-
     grid.innerHTML = "";
-    pageItems.forEach((wf) => {
+    filtered.forEach((wf) => {
         const card = document.createElement("div");
         card.className = "wfm-card";
         card.dataset.filename = wf.filename;
@@ -384,22 +377,6 @@ function renderGrid() {
     }
 }
 
-function updateWfPagination(totalPages) {
-    const container = document.getElementById("wfm-workflow-pagination");
-    if (!container) return;
-    if (totalPages <= 1) { container.innerHTML = ""; return; }
-    container.innerHTML = `
-        <button class="wfm-btn wfm-btn-sm" ${state.currentPage === 0 ? "disabled" : ""} data-page="prev">&laquo;</button>
-        <span>${state.currentPage + 1} / ${totalPages}</span>
-        <button class="wfm-btn wfm-btn-sm" ${state.currentPage >= totalPages - 1 ? "disabled" : ""} data-page="next">&raquo;</button>
-    `;
-    container.querySelector('[data-page="prev"]').addEventListener("click", () => {
-        if (state.currentPage > 0) { state.currentPage--; renderGrid(); }
-    });
-    container.querySelector('[data-page="next"]').addEventListener("click", () => {
-        if (state.currentPage < totalPages - 1) { state.currentPage++; renderGrid(); }
-    });
-}
 
 function renderTableView(grid, filtered) {
     const table = document.createElement("table");
@@ -486,7 +463,6 @@ async function showSidePanel(wf, cardEl) {
 
     titleEl.textContent = wf.filename.replace(/\.json$/, "");
     contentEl.textContent = t("loading");
-    panel.style.display = "flex";
 
     state.selectedWf = wf;
 
@@ -530,12 +506,12 @@ async function showSidePanel(wf, cardEl) {
 }
 
 function closeSidePanel() {
-    const panel = document.getElementById("wfm-side-panel");
-    if (panel) panel.style.display = "none";
     document.querySelectorAll(".wfm-card, .wfm-table-row").forEach((c) =>
         c.classList.remove("wfm-card-selected")
     );
     state.selectedWf = null;
+    const titleEl = document.getElementById("wfm-side-panel-title");
+    if (titleEl) titleEl.textContent = "";
     const listLoadBtn = document.getElementById("wfm-list-load-btn");
     if (listLoadBtn) { listLoadBtn.disabled = true; listLoadBtn.title = t("selectCardFirst"); }
     const listOpenComfyBtn = document.getElementById("wfm-list-open-comfyui-btn");
@@ -1089,9 +1065,6 @@ export function initWorkflowTab() {
             }
         });
     }
-
-    // Side panel: close button
-    document.getElementById("wfm-side-panel-close")?.addEventListener("click", closeSidePanel);
 
     // Side panel: tab switching
     document.querySelectorAll(".wfm-side-tab-btn").forEach((btn) => {

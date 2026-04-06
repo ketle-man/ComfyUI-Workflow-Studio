@@ -1,5 +1,102 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-06: v0.2.6 UI改善・バッジ保存修正・フォルダフィルター追加
+
+### 概要
+- ワークフロー/モデル/ノードタブのサイドパネルを常時表示固定に変更
+- グリッドをページネーションからスクロール全件表示に変更
+- ワークフロータブのバッジが再起動後に消える問題を修正
+- バッジフィルターボタンをパレット定義バッジで統一（ワークフロータブ）
+- モデルタブにフォルダ（サブディレクトリ）フィルターを追加
+- モデルカードビューから拡張子・フォルダバッジを削除（詳細パネルで確認可能）
+- サムネイルカードサイズを 178×200px に調整、グリッドレイアウトを修正
+
+### 変更内容
+
+#### `py/services/workflow_service.py` — バッジ保存修正
+
+**`save_metadata` のキーリストに `badges` を追加:**
+- 変更前: `("tags", "memo", "summary", "modelTypesOverride", "favorite")`
+- 変更後: `("tags", "memo", "summary", "modelTypesOverride", "favorite", "badges")`
+
+**`list_workflows` のレスポンスに `badges` フィールドを追加:**
+- `metadata` dict に `"badges": meta.get("badges", [])` を追加
+- これにより再起動後もバッジが保持される
+
+#### `static/js/workflow-tab.js` — バッジフィルター・サイドパネル・スクロール
+
+**バッジフィルターをパレット定義バッジで表示:**
+- `renderModelFilters()`: `getAllBadges()`（ワークフローに付いているバッジのみ）→ `getBadgePalette()`（パレット全バッジ）に変更
+- フィルターボタンにバッジカラーを適用
+
+**サイドパネル常時表示化:**
+- `showSidePanel()`: `panel.style.display = "flex"` を削除
+- `closeSidePanel()`: `panel.style.display = "none"` を削除、タイトルをクリアするのみ
+- ×ボタンのイベントリスナー削除
+
+**ページネーション廃止・スクロール全件表示:**
+- `WF_PER_PAGE` 定数削除
+- `updateWfPagination()` 関数削除
+- `renderGrid()`: ページスライス処理を削除、全件描画に変更
+
+#### `static/js/models-tab.js` — サイドパネル・スクロール・フォルダフィルター・カードビュー
+
+**サイドパネル常時表示化:**
+- `showSidePanel()`: `panel.style.display = "flex"` を削除
+- `closeSidePanel()`: `panel.style.display = "none"` を削除
+
+**ページネーション廃止・スクロール全件表示:**
+- `MODELS_PER_PAGE` 定数削除、`updatePagination()` 関数削除
+- `renderThumbView()` / `renderCardView()` / `renderTableView()`: `totalPages` 引数削除、全件描画に変更
+
+**フォルダフィルター追加:**
+- `state.dirFilter: ""` 追加
+- `filterModels()` に `dirFilter` による絞り込みを追加
+- `renderDirFilter()` 関数追加（現在のモデルタイプのサブディレクトリ一覧を `<select>` に反映）
+- モデルロード時・モデルタイプ切替時に呼び出し
+- `wfm-models-dir-filter` change イベントリスナー追加
+
+**モデルカードビューからバッジ削除:**
+- `renderCardView()`: `dir` バッジ・`ext` バッジを削除。ユーザーバッジ・タグのみ表示
+
+#### `static/js/nodes-tab.js` — サイドパネル・スクロール
+
+**サイドパネル常時表示化:**
+- `showNodeSidePanel()`: `panel.style.display = "flex"` を削除
+- `closeNodeSidePanel()`: `panel.style.display = "none"` を削除
+
+**ページネーション廃止・スクロール全件表示:**
+- `NODES_PER_PAGE` / `renderPagination()` / `clearPagination()` / `scrollGridToTop()` 削除
+- `renderNodeGrid()`: 全件描画に変更
+
+#### `templates/index.html` — サイドパネル・ページネーション・フォルダフィルター
+
+- 3タブ（ワークフロー/ノード/モデル）のサイドパネルから `style="display:none"` と×ボタンを削除
+- ページネーション用 `<div>` を3箇所から削除
+- モデルタブのツールバーに `<select id="wfm-models-dir-filter">` を追加（TagとGroupの間）
+
+#### `static/css/main.css` — グリッド・カードサイズ・サイドパネル
+
+**グリッド・カードサイズ変更:**
+- グリッド列幅: `161px` → `178px`
+- カード幅: `161px` → `178px`
+- サムネイル: `161×162px` → `178×200px`
+- `grid-auto-rows: max-content` / `align-items: start` / `justify-items: start` 追加（行高さ圧縮防止）
+
+**カードビュー:**
+- グリッド列幅: `minmax(180px, 1fr)` → `repeat(auto-fill, 220px)` 固定幅に変更（横伸び防止）
+- カード: `flex-direction: row` / `min-height: 56px` / `width: 220px` 固定
+
+**サイドパネル:**
+- `.wfm-side-panel-close` スタイル削除
+- `.wfm-side-panel-empty` クラス追加（選択前の空状態表示用）
+
+#### `static/js/i18n.js` — フォルダフィルター翻訳追加
+
+- `modelsAllDirs`: 英語 `"All Folders"` / 日本語 `"すべてのフォルダ"` / 中国語 `"所有文件夹"` を追加
+
+---
+
 ## 2026-04-04: v0.2.5 追加修正
 
 ### 概要

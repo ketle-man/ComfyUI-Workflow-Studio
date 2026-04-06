@@ -1,0 +1,16 @@
+[project]
+name = "comfyui-workflow-studio"
+description = "A comprehensive workflow management and generation UI plugin for ComfyUI. Browse, organize, and execute workflows from a dedicated studio interface."
+version = "0.2.6"
+license = "MIT"
+requires-python = ">= 3.10"
+dependencies = ["jinja2"]
+
+[project.urls]
+Repository = "https://github.com/ketle-man/ComfyUI-Workflow-Studio"
+
+[tool.comfy]
+PublisherId = "ketle-man"
+DisplayName = "Workflow Studio"
+Icon = "https://raw.githubusercontent.com/ketle-man/ComfyUI-Workflow-Studio/main/assets/icon.svg"
+Banner = "https://raw.githubusercontent.com/ketle-man/ComfyUI-Workflow-Studio/main/assets/banner.svg"

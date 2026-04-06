@@ -250,12 +250,15 @@ body {
 
 .wfm-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, 161px);
+    grid-template-columns: repeat(auto-fill, 178px);
+    grid-auto-rows: max-content;
     gap: 10px;
     padding: 10px;
     flex: 1;
     overflow-y: auto;
     align-content: start;
+    align-items: start;
+    justify-items: start;
 }
 
 /* ============================================
@@ -263,8 +266,8 @@ body {
    ============================================ */
 
 .wfm-card {
-    width: 161px;
-    min-width: 161px;
+    width: 178px;
+    min-width: 178px;
     background: var(--wfm-surface);
     border: 1px solid var(--wfm-border);
     border-radius: var(--wfm-radius);
@@ -280,8 +283,8 @@ body {
 }
 
 .wfm-card-thumb {
-    width: 161px;
-    height: 162px;
+    width: 178px;
+    height: 200px;
     background: var(--wfm-bg-tertiary);
     display: flex;
     align-items: center;
@@ -827,26 +830,38 @@ body {
    ============================================ */
 
 .wfm-view-card {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
-    gap: 6px !important;
+    grid-template-columns: repeat(auto-fill, 220px) !important;
+    grid-auto-rows: max-content !important;
+    gap: 8px !important;
+    justify-items: stretch !important;
+    align-items: start !important;
 }
 
 .wfm-view-card .wfm-card {
     display: flex;
-    flex-direction: column;
-    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    width: 220px !important;
+    min-width: 220px !important;
+    min-height: 56px;
 }
 
 .wfm-view-card .wfm-card-body {
     flex: 1;
     min-width: 0;
-    padding: 8px;
+    padding: 8px 10px;
+}
+
+.wfm-view-card .wfm-fav-btn {
+    flex-shrink: 0;
+    margin-right: 6px;
 }
 
 .wfm-view-card .wfm-card-title {
-    margin-bottom: 4px;
-    white-space: normal;
-    word-break: break-all;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 12px;
 }
 
@@ -878,6 +893,13 @@ body {
 .wfm-view-table {
     display: block !important;
     overflow-y: auto;
+    justify-items: stretch !important;
+}
+
+.wfm-view-table .wfm-card,
+.wfm-view-table .wfm-model-card {
+    width: auto !important;
+    min-width: 0 !important;
 }
 
 .wfm-table {
@@ -1007,6 +1029,7 @@ body {
     border-bottom: 1px solid var(--wfm-border);
     background: var(--wfm-surface);
     flex-shrink: 0;
+    min-height: 37px;
 }
 
 .wfm-side-panel-title {
@@ -1018,18 +1041,13 @@ body {
     text-overflow: ellipsis;
 }
 
-.wfm-side-panel-close {
-    background: none;
-    border: none;
+.wfm-side-panel-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--wfm-text-secondary);
-    font-size: 18px;
-    cursor: pointer;
-    padding: 0 4px;
-    line-height: 1;
-}
-
-.wfm-side-panel-close:hover {
-    color: var(--wfm-text);
+    font-size: 13px;
 }
 
 /* Side Panel Tabs */
@@ -2885,6 +2903,7 @@ body {
 #wfm-nodes-grid.wfm-view-card {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 8px;
+    justify-items: stretch;
 }
 
 /* Node card: package color left border, auto width */

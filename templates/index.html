@@ -59,7 +59,6 @@
                         <button id="wfm-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="View settings">&#9881;</button>
                         <div id="wfm-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
                     </div>
-                    <div id="wfm-workflow-pagination" class="wfm-pagination-inline"></div>
                 </div>
             </div>
             <div class="wfm-workflow-area">
@@ -67,10 +66,9 @@
                     <p class="wfm-placeholder">Loading workflows...</p>
                 </div>
                 <!-- Side Panel -->
-                <div id="wfm-side-panel" class="wfm-side-panel" style="display:none;">
+                <div id="wfm-side-panel" class="wfm-side-panel">
                     <div class="wfm-side-panel-header">
                         <span id="wfm-side-panel-title" class="wfm-side-panel-title"></span>
-                        <button id="wfm-side-panel-close" class="wfm-side-panel-close">&times;</button>
                     </div>
                     <div class="wfm-side-tab-nav">
                         <button class="wfm-side-tab-btn active" data-side-tab="thumb">Thumbnail</button>
@@ -156,7 +154,6 @@
                     </div>
                     <span id="wfm-nodes-count" class="wfm-nodes-count"></span>
                     <button id="wfm-nodes-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
-                    <div id="wfm-nodes-pagination" class="wfm-pagination-inline"></div>
                 </div>
             </div>
 
@@ -166,10 +163,9 @@
                     <p class="wfm-placeholder" id="wfm-nodes-placeholder">Click to load nodes...</p>
                 </div>
                 <!-- Side Panel -->
-                <div id="wfm-nodes-side-panel" class="wfm-side-panel" style="display:none;">
+                <div id="wfm-nodes-side-panel" class="wfm-side-panel">
                     <div class="wfm-side-panel-header">
                         <span id="wfm-nodes-panel-title" class="wfm-side-panel-title"></span>
-                        <button id="wfm-nodes-panel-close" class="wfm-side-panel-close">&times;</button>
                     </div>
                     <div class="wfm-side-tab-nav">
                         <button class="wfm-nodes-side-tab-btn active" data-side-tab="details">Details</button>
@@ -219,6 +215,7 @@
                     <button class="wfm-filter-btn" id="wfm-models-fav-btn" title="Favorites">&#9733;</button>
                     <input type="text" id="wfm-models-search" class="wfm-search-input" placeholder="Search models...">
                     <select id="wfm-models-tag-filter" class="wfm-select wfm-toolbar-select"><option value="">All Tags</option></select>
+                    <select id="wfm-models-dir-filter" class="wfm-select wfm-toolbar-select"><option value="">All Folders</option></select>
                     <select id="wfm-models-group-filter" class="wfm-select wfm-toolbar-select"><option value="">All Groups</option></select>
                     <div class="wfm-view-btns">
                         <button class="wfm-view-btn active" data-models-view="thumb" title="Thumbnail">&#8862;</button>
@@ -230,7 +227,6 @@
                     <button id="wfm-models-civitai-batch-btn" class="wfm-btn wfm-btn-sm" title="Fetch CivitAI info for all models">CivitAI</button>
                     <span id="wfm-models-civitai-progress" style="font-size:12px;color:var(--wfm-text-secondary);"></span>
                     <button id="wfm-models-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge settings">&#9881; Badge</button>
-                    <div id="wfm-models-pagination" class="wfm-pagination-inline"></div>
                 </div>
             </div>
 
@@ -240,10 +236,9 @@
                     <p class="wfm-placeholder" id="wfm-models-placeholder">Click Refresh to load models...</p>
                 </div>
                 <!-- Side Panel -->
-                <div id="wfm-models-side-panel" class="wfm-side-panel" style="display:none;">
+                <div id="wfm-models-side-panel" class="wfm-side-panel">
                     <div class="wfm-side-panel-header">
                         <span id="wfm-models-panel-title" class="wfm-side-panel-title"></span>
-                        <button id="wfm-models-panel-close" class="wfm-side-panel-close">&times;</button>
                     </div>
                     <div class="wfm-side-tab-nav">
                         <button class="wfm-models-side-tab-btn active" data-side-tab="info">Info</button>

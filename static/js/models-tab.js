@@ -27,6 +27,7 @@ const state = {
     searchText: "",
     tagFilter: "",
     badgeFilter: "",
+    dirFilter: "",
     groupFilter: "",
     showFavoritesOnly: false,
     viewMode: localStorage.getItem("wfm_models_view") || "thumb",
@@ -36,7 +37,6 @@ const state = {
     currentPage: 0,
 };
 
-const MODELS_PER_PAGE = 24;
 
 const FETCH_MAP = {
     checkpoint: () => comfyUI.fetchCheckpoints(),
@@ -257,6 +257,13 @@ function filterModels() {
         });
     }
 
+    if (state.dirFilter) {
+        models = models.filter((m) => {
+            const { dir } = parseModelPath(m);
+            return dir === state.dirFilter;
+        });
+    }
+
     if (state.groupFilter) {
         const members = state.modelGroups[state.groupFilter] || [];
         models = models.filter((m) => members.includes(m));
@@ -428,6 +435,20 @@ function renderGroupFilter() {
     select.value = state.groupFilter;
 }
 
+function renderDirFilter() {
+    const select = document.getElementById("wfm-models-dir-filter");
+    if (!select) return;
+    const dirs = [...new Set(
+        getCurrentModels()
+            .map((m) => parseModelPath(m).dir)
+            .filter((d) => d !== "")
+    )].sort();
+    select.innerHTML =
+        `<option value="">${t("modelsAllDirs")}</option>` +
+        dirs.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+    select.value = state.dirFilter;
+}
+
 async function fetchModelGroups() {
     try {
         const res = await fetch("/api/wfm/models/groups");
@@ -466,23 +487,18 @@ function renderModelGrid() {
         return;
     }
 
-    // Pagination
-    const start = state.currentPage * MODELS_PER_PAGE;
-    const page = filtered.slice(start, start + MODELS_PER_PAGE);
-    const totalPages = Math.ceil(filtered.length / MODELS_PER_PAGE);
-
     if (state.viewMode === "table") {
-        renderTableView(grid, page, totalPages);
+        renderTableView(grid, filtered);
     } else if (state.viewMode === "card") {
-        renderCardView(grid, page, totalPages);
+        renderCardView(grid, filtered);
     } else {
-        renderThumbView(grid, page, totalPages);
+        renderThumbView(grid, filtered);
     }
 }
 
 // ── Thumbnail View (same as Workflow tab) ─────────────────
 
-function renderThumbView(grid, models, totalPages) {
+function renderThumbView(grid, models) {
     grid.innerHTML = "";
     models.forEach((modelName) => {
         const meta = state.modelMetadata[modelName] || {};
@@ -524,13 +540,11 @@ function renderThumbView(grid, models, totalPages) {
         });
         grid.appendChild(card);
     });
-
-    updatePagination(totalPages);
 }
 
 // ── Card View (no thumbnail, compact) ─────────────────────
 
-function renderCardView(grid, models, totalPages) {
+function renderCardView(grid, models) {
     grid.innerHTML = "";
     models.forEach((modelName) => {
         const meta = state.modelMetadata[modelName] || {};
@@ -550,8 +564,6 @@ function renderCardView(grid, models, totalPages) {
             <div class="wfm-card-body">
                 <div class="wfm-card-title" title="${escapeHtml(modelName)}">${escapeHtml(name)}</div>
                 <div class="wfm-card-meta">
-                    ${dir ? `<span class="wfm-badge wfm-badge-sm wfm-badge-dir">${escapeHtml(dir)}</span>` : ""}
-                    <span class="wfm-badge wfm-badge-sm">${escapeHtml(ext)}</span>
                     ${userBadges} ${tagsHtml}
                 </div>
             </div>
@@ -568,13 +580,11 @@ function renderCardView(grid, models, totalPages) {
         });
         grid.appendChild(card);
     });
-
-    updatePagination(totalPages);
 }
 
 // ── Table View ────────────────────────────────────────────
 
-function renderTableView(grid, models, totalPages) {
+function renderTableView(grid, models) {
     const rows = models
         .map((modelName) => {
             const meta = state.modelMetadata[modelName] || {};
@@ -620,25 +630,6 @@ function renderTableView(grid, models, totalPages) {
             e.stopPropagation();
             toggleFavorite(mn);
         });
-    });
-
-    updatePagination(totalPages);
-}
-
-function updatePagination(totalPages) {
-    const container = document.getElementById("wfm-models-pagination");
-    if (!container) return;
-    if (totalPages <= 1) { container.innerHTML = ""; return; }
-    container.innerHTML = `
-        <button class="wfm-btn wfm-btn-sm" ${state.currentPage === 0 ? "disabled" : ""} data-page="prev">&laquo;</button>
-        <span>${state.currentPage + 1} / ${totalPages}</span>
-        <button class="wfm-btn wfm-btn-sm" ${state.currentPage >= totalPages - 1 ? "disabled" : ""} data-page="next">&raquo;</button>
-    `;
-    container.querySelector('[data-page="prev"]').addEventListener("click", () => {
-        if (state.currentPage > 0) { state.currentPage--; renderModelGrid(); }
-    });
-    container.querySelector('[data-page="next"]').addEventListener("click", () => {
-        if (state.currentPage < totalPages - 1) { state.currentPage++; renderModelGrid(); }
     });
 }
 
@@ -755,6 +746,7 @@ function openDetailModal(modelName) {
         await saveModelMetadata(modelName, { tags, memo, badges });
         showToast(t("modelsSaved"), "success");
         renderTagFilter();
+        renderDirFilter();
         renderModelGrid();
     });
 
@@ -805,9 +797,6 @@ function openDetailModal(modelName) {
 
 function showSidePanel(modelName) {
     state.selectedModel = modelName;
-    const panel = document.getElementById("wfm-models-side-panel");
-    if (!panel) return;
-    panel.style.display = "flex";
 
     // Highlight selected
     document.querySelectorAll("#wfm-models-grid .wfm-card, #wfm-models-grid .wfm-models-table-row").forEach((el) => {
@@ -830,9 +819,9 @@ function showSidePanel(modelName) {
 }
 
 function closeSidePanel() {
-    const panel = document.getElementById("wfm-models-side-panel");
-    if (panel) panel.style.display = "none";
     state.selectedModel = null;
+    const titleEl = document.getElementById("wfm-models-panel-title");
+    if (titleEl) titleEl.textContent = "";
     document.querySelectorAll("#wfm-models-grid .wfm-card, #wfm-models-grid .wfm-models-table-row").forEach((el) => {
         el.classList.remove("wfm-card-selected");
     });
@@ -1209,6 +1198,7 @@ async function loadModelsForCurrentType() {
 
     if (state.loaded[type] && state.modelsByType[type].length > 0) {
         renderTagFilter();
+        renderDirFilter();
         renderModelGrid();
         return;
     }
@@ -1224,6 +1214,7 @@ async function loadModelsForCurrentType() {
         state.loaded[type] = true;
 
         renderTagFilter();
+        renderDirFilter();
         renderModelGrid();
     } catch (err) {
         console.error("Failed to load models:", err);
@@ -1343,6 +1334,7 @@ export function initModelsTab() {
             state.searchText = "";
             state.tagFilter = "";
             state.badgeFilter = "";
+            state.dirFilter = "";
             state.currentPage = 0;
             state.selectedModel = null;
             closeSidePanel();
@@ -1370,6 +1362,13 @@ export function initModelsTab() {
     // Tag filter
     document.getElementById("wfm-models-tag-filter")?.addEventListener("change", (e) => {
         state.tagFilter = e.target.value;
+        state.currentPage = 0;
+        renderModelGrid();
+    });
+
+    // Dir filter
+    document.getElementById("wfm-models-dir-filter")?.addEventListener("change", (e) => {
+        state.dirFilter = e.target.value;
         state.currentPage = 0;
         renderModelGrid();
     });
@@ -1423,9 +1422,6 @@ export function initModelsTab() {
     document.getElementById("wfm-models-civitai-batch-btn")?.addEventListener("click", () => {
         batchFetchCivitai();
     });
-
-    // Side panel close
-    document.getElementById("wfm-models-panel-close")?.addEventListener("click", closeSidePanel);
 
     // Side panel tab switching
     document.querySelectorAll(".wfm-models-side-tab-btn").forEach((btn) => {

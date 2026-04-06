@@ -112,6 +112,7 @@ class WorkflowService:
                         "summary": meta.get("summary", ""),
                         "modelTypesOverride": override_types,
                         "favorite": bool(meta.get("favorite", False)),
+                        "badges": meta.get("badges", []),
                     },
                     "mtime": stat.st_mtime,
                     "thumbnail": thumbnail,
@@ -132,7 +133,7 @@ class WorkflowService:
         """Save metadata (tags, memo, summary, etc.) for a workflow."""
         metadata = self._load_metadata()
         entry = metadata.get(filename, {})
-        for key in ("tags", "memo", "summary", "modelTypesOverride", "favorite"):
+        for key in ("tags", "memo", "summary", "modelTypesOverride", "favorite", "badges"):
             if key in updates:
                 entry[key] = updates[key]
         entry["updatedAt"] = self._now_iso()

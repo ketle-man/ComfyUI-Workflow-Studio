@@ -8,7 +8,6 @@ import { t } from "./i18n.js";
 
 // ── State ─────────────────────────────────────────────────
 
-const NODES_PER_PAGE = 50;
 
 const state = {
     allNodes: [],
@@ -257,28 +256,16 @@ function renderNodeGrid() {
 
     if (filtered.length === 0) {
         grid.innerHTML = `<p class="wfm-placeholder">${t("noNodesFound")}</p>`;
-        clearPagination();
         return;
     }
 
     if (state.viewMode === "table") {
         renderNodeTableView(grid, filtered);
-        clearPagination();
         return;
     }
 
-    // Card view with pagination
-    const totalPages = Math.ceil(filtered.length / NODES_PER_PAGE);
-    if (state.currentPage >= totalPages) state.currentPage = totalPages - 1;
-    if (state.currentPage < 0) state.currentPage = 0;
-
-    const start = state.currentPage * NODES_PER_PAGE;
-    const pageItems = filtered.slice(start, start + NODES_PER_PAGE);
-
     grid.innerHTML = "";
-    pageItems.forEach(node => grid.appendChild(createNodeCard(node)));
-
-    renderPagination(filtered.length, totalPages);
+    filtered.forEach(node => grid.appendChild(createNodeCard(node)));
 }
 
 function createNodeCard(node) {
@@ -313,34 +300,6 @@ function createNodeCard(node) {
     return card;
 }
 
-function renderPagination(totalItems, totalPages) {
-    const container = document.getElementById("wfm-nodes-pagination");
-    if (!container) return;
-    if (totalPages <= 1) { container.innerHTML = ""; return; }
-
-    const start = state.currentPage * NODES_PER_PAGE + 1;
-    const end = Math.min((state.currentPage + 1) * NODES_PER_PAGE, totalItems);
-    container.innerHTML = `
-        <button class="wfm-btn wfm-btn-sm" ${state.currentPage === 0 ? "disabled" : ""} data-page="prev">&laquo;</button>
-        <span>${start}-${end} / ${totalItems}</span>
-        <button class="wfm-btn wfm-btn-sm" ${state.currentPage >= totalPages - 1 ? "disabled" : ""} data-page="next">&raquo;</button>
-    `;
-    container.querySelector('[data-page="prev"]').addEventListener("click", () => {
-        if (state.currentPage > 0) { state.currentPage--; renderNodeGrid(); scrollGridToTop(); }
-    });
-    container.querySelector('[data-page="next"]').addEventListener("click", () => {
-        if (state.currentPage < totalPages - 1) { state.currentPage++; renderNodeGrid(); scrollGridToTop(); }
-    });
-}
-
-function clearPagination() {
-    const container = document.getElementById("wfm-nodes-pagination");
-    if (container) container.innerHTML = "";
-}
-
-function scrollGridToTop() {
-    document.getElementById("wfm-nodes-grid")?.scrollTo(0, 0);
-}
 
 function renderNodeTableView(grid, filtered) {
     grid.innerHTML = "";
@@ -398,9 +357,6 @@ async function toggleFavorite(nodeName, btnEl) {
 
 function showNodeSidePanel(node) {
     state.selectedNode = node;
-    const panel = document.getElementById("wfm-nodes-side-panel");
-    if (!panel) return;
-    panel.style.display = "flex";
 
     // Highlight selected card
     document.querySelectorAll("#wfm-nodes-grid .wfm-card, #wfm-nodes-grid tr").forEach(el => {
@@ -620,9 +576,9 @@ function renderSideGroups(node) {
 }
 
 function closeNodeSidePanel() {
-    const panel = document.getElementById("wfm-nodes-side-panel");
-    if (panel) panel.style.display = "none";
     state.selectedNode = null;
+    const titleEl = document.getElementById("wfm-nodes-panel-title");
+    if (titleEl) titleEl.textContent = "";
     document.querySelectorAll("#wfm-nodes-grid .wfm-card, #wfm-nodes-grid tr").forEach(el => {
         el.classList.remove("wfm-card-selected");
     });
@@ -1082,8 +1038,6 @@ export function initNodesTab() {
         loadNodesData();
     });
 
-    // Side panel close
-    document.getElementById("wfm-nodes-panel-close")?.addEventListener("click", closeNodeSidePanel);
 
     // Side panel tab switching
     document.querySelectorAll(".wfm-nodes-side-tab-btn").forEach(btn => {
