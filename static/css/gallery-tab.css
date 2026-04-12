@@ -11,6 +11,41 @@
     gap: 0;
 }
 
+/* ── 折りたたみトグルバー（常時表示） ──────────────────────── */
+
+.wfm-gallery-tree-toggle-bar {
+    width: 20px;
+    min-width: 20px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 6px;
+    border-right: 1px solid var(--wfm-border);
+    background: var(--wfm-bg-primary, #16213e);
+}
+
+.wfm-gallery-tree-toggle-btn {
+    background: none;
+    border: 1px solid var(--wfm-border);
+    border-radius: 3px;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.wfm-gallery-tree-toggle-btn:hover {
+    background: var(--wfm-bg-hover, rgba(255,255,255,0.08));
+    color: var(--wfm-text-primary);
+}
+
 /* ── 左: フォルダツリーパネル ──────────────────────────────── */
 
 .wfm-gallery-tree-panel {
@@ -20,24 +55,18 @@
     border-right: 1px solid var(--wfm-border);
     display: flex;
     flex-direction: column;
-    overflow: visible; /* ヘッダーボタンが折りたたみ時も見えるよう */
-    transition: width 0.2s ease, min-width 0.2s ease;
+    overflow: hidden;
+    transition: width 0.2s ease, min-width 0.2s ease, max-width 0.2s ease;
     background: var(--wfm-bg-secondary, #1a1a2e);
 }
-
 
 .wfm-gallery-tree-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 6px 4px;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--wfm-border);
     flex-shrink: 0;
     background: var(--wfm-bg-primary, #16213e);
-    min-width: 32px; /* 折りたたみ時もボタンが見える幅 */
-    overflow: hidden;
-    position: relative;
-    z-index: 1;
 }
 
 .wfm-gallery-tree-title {
@@ -443,41 +472,49 @@
     border-color: var(--wfm-accent, #4f8ef7);
 }
 
-/* メタデータ表示 */
-.wfm-gallery-metadata-content {
-    background: var(--wfm-bg-primary, #16213e);
-    border: 1px solid var(--wfm-border);
-    border-radius: 4px;
-    padding: 6px;
-    max-height: 200px;
-    overflow-y: auto;
-    font-size: 11px;
-}
+/* ── Metadataタブ（Workflow全幅表示） ─────────────────────── */
 
-.wfm-gallery-meta-row {
+.wfm-gallery-meta-tab {
     display: flex;
-    gap: 6px;
-    margin-bottom: 3px;
+    flex-direction: column;
+    padding: 0 !important;
+    overflow: hidden;
+    height: 100%;
+}
+
+.wfm-gallery-meta-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--wfm-border);
-    padding-bottom: 3px;
-}
-
-.wfm-gallery-meta-key {
-    color: var(--wfm-accent, #4f8ef7);
-    font-weight: 600;
-    min-width: 60px;
     flex-shrink: 0;
+    background: var(--wfm-bg-primary, #16213e);
+    gap: 8px;
+}
+
+.wfm-gallery-meta-status {
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.wfm-gallery-meta-value {
-    color: var(--wfm-text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.wfm-gallery-workflow-json {
     flex: 1;
+    margin: 0;
+    padding: 10px;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--wfm-text-primary);
+    background: var(--wfm-bg-secondary, #1a1a2e);
+    overflow: auto;
+    white-space: pre;
+    word-break: normal;
+    border: none;
 }
 
 /* グループ */

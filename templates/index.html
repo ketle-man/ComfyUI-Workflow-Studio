@@ -685,11 +685,15 @@
 
             <!-- 3カラムレイアウト -->
             <div class="wfm-gallery-layout">
+                <!-- 折りたたみトグルバー（常時表示） -->
+                <div class="wfm-gallery-tree-toggle-bar">
+                    <button id="wfm-gallery-tree-toggle" class="wfm-gallery-tree-toggle-btn" title="Collapse panel">&#9664;</button>
+                </div>
+
                 <!-- 左: フォルダツリー -->
                 <div id="wfm-gallery-tree-panel" class="wfm-gallery-tree-panel">
                     <div class="wfm-gallery-tree-header">
                         <span id="wfm-gallery-tree-title">Folders</span>
-                        <button id="wfm-gallery-tree-toggle" class="wfm-btn wfm-btn-sm" title="Collapse panel">&#9664;</button>
                     </div>
                     <div id="wfm-gallery-output-path" class="wfm-gallery-output-path">
                         <span id="wfm-gallery-output-label"></span>
@@ -747,14 +751,12 @@
                         </div>
                     </div>
                     <!-- Metadata タブ -->
-                    <div id="wfm-gallery-detail-meta" class="wfm-gallery-detail-tab-content" style="display:none;">
-                        <div class="wfm-gallery-info-section">
-                            <div class="wfm-gallery-section-title">
-                                Embedded Metadata
-                                <button id="wfm-gallery-copy-workflow-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;font-size:11px;" title="Copy embedded workflow JSON">Copy Workflow</button>
-                            </div>
-                            <div id="wfm-gallery-metadata-content" class="wfm-gallery-metadata-content"></div>
+                    <div id="wfm-gallery-detail-meta" class="wfm-gallery-detail-tab-content wfm-gallery-meta-tab" style="display:none;">
+                        <div class="wfm-gallery-meta-toolbar">
+                            <span id="wfm-gallery-meta-status" class="wfm-gallery-meta-status"></span>
+                            <button id="wfm-gallery-copy-workflow-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" disabled title="Copy embedded workflow JSON">Copy Workflow</button>
                         </div>
+                        <pre id="wfm-gallery-workflow-json" class="wfm-gallery-workflow-json">No workflow found in this image.</pre>
                     </div>
 
                     <!-- Group タブ -->

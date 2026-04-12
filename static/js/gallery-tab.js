@@ -383,14 +383,10 @@ async function loadImageDetail(img) {
             apiFetch(API.imageMeta(img.path)),
             apiFetch(API.imageWorkflow(img.path)),
         ]);
-        renderMetadata(metaRes.embedded || {});
         state.embeddedWorkflow = wfRes.has_workflow ? wfRes.workflow : null;
-
-        const copyWfBtn = document.getElementById("wfm-gallery-copy-workflow-btn");
-        copyWfBtn.disabled = !state.embeddedWorkflow;
-        copyWfBtn.style.opacity = state.embeddedWorkflow ? "1" : "0.4";
+        renderWorkflowJson(state.embeddedWorkflow);
     } catch (e) {
-        document.getElementById("wfm-gallery-metadata-content").textContent = "Error loading metadata";
+        renderWorkflowJson(null);
     }
 
     // グループタブ更新
@@ -410,28 +406,19 @@ function renderTagsDisplay(tags) {
     });
 }
 
-function renderMetadata(embedded) {
-    const container = document.getElementById("wfm-gallery-metadata-content");
-    if (!embedded || Object.keys(embedded).length === 0) {
-        container.textContent = "No embedded metadata.";
-        return;
-    }
-    container.innerHTML = "";
-    for (const [key, value] of Object.entries(embedded)) {
-        const row = document.createElement("div");
-        row.className = "wfm-gallery-meta-row";
-        const keyEl = document.createElement("span");
-        keyEl.className = "wfm-gallery-meta-key";
-        keyEl.textContent = key;
-        const valEl = document.createElement("span");
-        valEl.className = "wfm-gallery-meta-value";
-        // 長いvalueは省略
-        const display = String(value).length > 100 ? String(value).slice(0, 100) + "…" : String(value);
-        valEl.textContent = display;
-        valEl.title = String(value);
-        row.appendChild(keyEl);
-        row.appendChild(valEl);
-        container.appendChild(row);
+function renderWorkflowJson(workflow) {
+    const pre = document.getElementById("wfm-gallery-workflow-json");
+    const statusEl = document.getElementById("wfm-gallery-meta-status");
+    const copyBtn = document.getElementById("wfm-gallery-copy-workflow-btn");
+
+    if (workflow) {
+        pre.textContent = JSON.stringify(workflow, null, 2);
+        if (statusEl) statusEl.textContent = "Workflow found";
+        if (copyBtn) copyBtn.disabled = false;
+    } else {
+        pre.textContent = "No workflow embedded in this image.";
+        if (statusEl) statusEl.textContent = "No workflow";
+        if (copyBtn) copyBtn.disabled = true;
     }
 }
 
@@ -616,9 +603,6 @@ function openLightbox(img) {
 function toggleTreePanel() {
     const panel = document.getElementById("wfm-gallery-tree-panel");
     const btn = document.getElementById("wfm-gallery-tree-toggle");
-    const treeEl = document.getElementById("wfm-gallery-tree");
-    const outputLabel = document.getElementById("wfm-gallery-output-label");
-    const treeTitle = document.querySelector(".wfm-gallery-tree-title");
 
     state.treeExpanded = !state.treeExpanded;
 
@@ -626,19 +610,14 @@ function toggleTreePanel() {
         panel.style.width = "250px";
         panel.style.minWidth = "250px";
         panel.style.maxWidth = "250px";
-        if (treeEl) treeEl.style.display = "";
-        if (outputLabel) outputLabel.style.display = "";
-        if (treeTitle) treeTitle.style.display = "";
+        panel.style.display = "";
         btn.textContent = "◀";
         btn.title = "Collapse";
     } else {
-        // 32px = ヘッダーボタンだけ見える幅
-        panel.style.width = "32px";
-        panel.style.minWidth = "32px";
-        panel.style.maxWidth = "32px";
-        if (treeEl) treeEl.style.display = "none";
-        if (outputLabel) outputLabel.style.display = "none";
-        if (treeTitle) treeTitle.style.display = "none";
+        panel.style.width = "0";
+        panel.style.minWidth = "0";
+        panel.style.maxWidth = "0";
+        panel.style.display = "none";
         btn.textContent = "▶";
         btn.title = "Expand";
     }
