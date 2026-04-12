@@ -90,7 +90,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", settings: "tabSettings", help: "tabHelp" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", settings: "tabSettings", help: "tabHelp" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -335,6 +335,7 @@ import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
 import { initSettingsTab, applyTheme, getSavedTheme } from "./settings-tab.js";
 import { initModelsTab } from "./models-tab.js";
+import { initGalleryTab } from "./gallery-tab.js";
 
 // Apply saved theme immediately to prevent flash of default theme
 applyTheme(getSavedTheme());
@@ -349,6 +350,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initModelsTab();
     initGenerateTab();
     initPromptTab();
+    initGalleryTab();
 
     console.log("Workflow Studio: App initialized");
 });

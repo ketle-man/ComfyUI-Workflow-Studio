@@ -20,6 +20,7 @@ const LANGUAGES = {
         // -- Tabs --
         tabWorkflow: "Workflow",
         tabGenerate: "GenerateUI",
+        tabGallery: "Gallery",
         tabSettings: "Settings",
 
         // -- Workflow toolbar --
@@ -290,6 +291,13 @@ const LANGUAGES = {
         modelsSideGroup: "Group",
         modelsSideCivitai: "CivitAI",
 
+        // -- Gallery --
+        galleryAllTags: "All Tags",
+        galleryFolders: "Folders",
+        gallerySelectFolder: "Select a folder to browse images.",
+        galleryNoImages: "No images found.",
+        gallerySearchPlaceholder: "Search images...",
+
         // -- Help & Support --
         tabHelp: "Help",
         helpManualTitle: "Features",
@@ -487,6 +495,7 @@ const LANGUAGES = {
         // -- Tabs --
         tabWorkflow: "ワークフロー",
         tabGenerate: "生成UI",
+        tabGallery: "ギャラリー",
         tabSettings: "設定",
 
         // -- Workflow toolbar --
@@ -757,6 +766,13 @@ const LANGUAGES = {
         modelsSideGroup: "グループ",
         modelsSideCivitai: "CivitAI",
 
+        // -- Gallery --
+        galleryAllTags: "すべてのタグ",
+        galleryFolders: "フォルダ",
+        gallerySelectFolder: "フォルダを選択して画像を表示します。",
+        galleryNoImages: "画像が見つかりません。",
+        gallerySearchPlaceholder: "画像を検索...",
+
         // -- Help & Support --
         tabHelp: "ヘルプ",
         helpManualTitle: "機能一覧",
@@ -954,6 +970,7 @@ const LANGUAGES = {
         // -- Tabs --
         tabWorkflow: "工作流",
         tabGenerate: "生成UI",
+        tabGallery: "图库",
         tabSettings: "设置",
 
         // -- Workflow toolbar --
@@ -1219,6 +1236,13 @@ const LANGUAGES = {
         modelsSideInfo: "基本信息",
         modelsSideGroup: "分组",
         modelsSideCivitai: "CivitAI",
+
+        // -- Gallery --
+        galleryAllTags: "所有标签",
+        galleryFolders: "文件夹",
+        gallerySelectFolder: "选择文件夹以浏览图片。",
+        galleryNoImages: "未找到图片。",
+        gallerySearchPlaceholder: "搜索图片...",
 
         // -- Help & Support --
         tabHelp: "帮助",
