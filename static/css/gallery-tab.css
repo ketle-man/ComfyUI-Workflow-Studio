@@ -20,7 +20,7 @@
     border-right: 1px solid var(--wfm-border);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible; /* ヘッダーボタンが折りたたみ時も見えるよう */
     transition: width 0.2s ease, min-width 0.2s ease;
     background: var(--wfm-bg-secondary, #1a1a2e);
 }
@@ -30,10 +30,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 8px;
+    padding: 6px 4px;
     border-bottom: 1px solid var(--wfm-border);
     flex-shrink: 0;
     background: var(--wfm-bg-primary, #16213e);
+    min-width: 32px; /* 折りたたみ時もボタンが見える幅 */
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
 }
 
 .wfm-gallery-tree-title {
@@ -59,6 +63,7 @@
 .wfm-gallery-tree {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 4px 0;
 }
 

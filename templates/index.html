@@ -718,6 +718,7 @@
                     <!-- タブナビ -->
                     <div class="wfm-side-tab-nav">
                         <button class="wfm-gallery-detail-tab-btn active" data-detail-tab="info">Info</button>
+                        <button class="wfm-gallery-detail-tab-btn" data-detail-tab="meta">Metadata</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="group">Group</button>
                     </div>
                     <!-- Info タブ -->
@@ -744,11 +745,12 @@
                             <textarea id="wfm-gallery-memo" class="wfm-gallery-memo" placeholder="Write a memo..." rows="3"></textarea>
                             <button id="wfm-gallery-memo-save-btn" class="wfm-btn wfm-btn-sm" style="margin-top:4px;width:100%;">Save Memo</button>
                         </div>
-                        <hr class="wfm-group-divider">
-                        <!-- 埋め込みメタデータ -->
+                    </div>
+                    <!-- Metadata タブ -->
+                    <div id="wfm-gallery-detail-meta" class="wfm-gallery-detail-tab-content" style="display:none;">
                         <div class="wfm-gallery-info-section">
                             <div class="wfm-gallery-section-title">
-                                Metadata
+                                Embedded Metadata
                                 <button id="wfm-gallery-copy-workflow-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;font-size:11px;" title="Copy embedded workflow JSON">Copy Workflow</button>
                             </div>
                             <div id="wfm-gallery-metadata-content" class="wfm-gallery-metadata-content"></div>

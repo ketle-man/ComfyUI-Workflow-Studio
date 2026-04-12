@@ -623,21 +623,24 @@ function toggleTreePanel() {
     state.treeExpanded = !state.treeExpanded;
 
     if (state.treeExpanded) {
-        // 展開: パネル幅を戻してコンテンツを表示
         panel.style.width = "250px";
         panel.style.minWidth = "250px";
+        panel.style.maxWidth = "250px";
         if (treeEl) treeEl.style.display = "";
         if (outputLabel) outputLabel.style.display = "";
         if (treeTitle) treeTitle.style.display = "";
         btn.textContent = "◀";
+        btn.title = "Collapse";
     } else {
-        // 折りたたみ: パネルを縮小してコンテンツを隠す
+        // 32px = ヘッダーボタンだけ見える幅
         panel.style.width = "32px";
         panel.style.minWidth = "32px";
+        panel.style.maxWidth = "32px";
         if (treeEl) treeEl.style.display = "none";
         if (outputLabel) outputLabel.style.display = "none";
         if (treeTitle) treeTitle.style.display = "none";
         btn.textContent = "▶";
+        btn.title = "Expand";
     }
 }
 
