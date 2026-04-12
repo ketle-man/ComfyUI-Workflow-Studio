@@ -29,15 +29,16 @@ const state = {
     outputRoot: "",        // ComfyUI output フォルダ
     currentFolder: "",     // 選択中フォルダ絶対パス
     images: [],            // 現在表示中画像リスト
-    selectedImage: null,   // 選択中画像オブジェクト
+    selectedImage: null,   // 選択中画像オブジェクト（詳細パネル用）
     viewMode: localStorage.getItem("wfm_gallery_view") || "thumb",
     sortBy: localStorage.getItem("wfm_gallery_sort") || "date_desc",
     search: "",
     favoriteOnly: false,
     tagFilter: "",
+    groupFilter: "",       // グループフィルタ
     groups: [],
-    treeExpanded: true,
     embeddedWorkflow: null,  // 選択画像のworkflow JSON
+    selectedImages: new Set(), // 複数選択中のパス Set
 };
 
 // ── ヘルパー ──────────────────────────────────────────────────
@@ -116,6 +117,8 @@ function renderTreeNode(node, container, depth, isRoot) {
         document.querySelectorAll(".wfm-gallery-tree-item.selected").forEach(el => el.classList.remove("selected"));
         item.classList.add("selected");
         state.currentFolder = absPath;
+        state.selectedImages.clear();
+        updateBulkBar();
         loadImages();
     });
 
@@ -166,8 +169,14 @@ async function loadImages() {
     if (state.tagFilter) params.tag = state.tagFilter;
 
     try {
-        const data = await apiFetch(API.images(params));
-        state.images = data.images || [];
+        let images = (await apiFetch(API.images(params))).images || [];
+
+        // グループフィルタ（クライアントサイド）
+        if (state.groupFilter) {
+            images = images.filter(img => (img.groups || []).includes(state.groupFilter));
+        }
+
+        state.images = images;
         document.getElementById("wfm-gallery-count").textContent = `${state.images.length} images`;
         renderImages();
         updateTagFilter(state.images);
@@ -200,7 +209,10 @@ function renderImages() {
 function createThumbCard(img) {
     const card = document.createElement("div");
     card.className = "wfm-gallery-thumb-card";
-    card.title = img.filename; // ホバーでファイル名を表示
+    card.title = img.filename;
+    if (state.selectedImages.has(img.path)) {
+        card.classList.add("multi-selected");
+    }
     if (state.selectedImage && state.selectedImage.path === img.path) {
         card.classList.add("selected");
     }
@@ -226,38 +238,30 @@ function createThumbCard(img) {
     favBtn.title = img.favorite ? "Unfavorite" : "Favorite";
     favBtn.textContent = img.favorite ? "★" : "☆";
     favBtn.addEventListener("click", async (e) => {
-        e.stopPropagation(); // カード選択を妨げない
-        try {
-            const res = await fetch(API.toggleFavorite, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: img.path }),
-            });
-            const data = await res.json();
-            img.favorite = data.favorite;
-            // 一覧キャッシュ更新
-            const cached = state.images.find(i => i.path === img.path);
-            if (cached) cached.favorite = data.favorite;
-            // ボタン表示更新
-            favBtn.textContent = data.favorite ? "★" : "☆";
-            favBtn.title = data.favorite ? "Unfavorite" : "Favorite";
-            favBtn.classList.toggle("active", data.favorite);
-            // 詳細パネルが同じ画像を表示中なら更新
-            if (state.selectedImage && state.selectedImage.path === img.path) {
-                state.selectedImage.favorite = data.favorite;
-            }
-        } catch (e) {
-            showToast(`Error: ${e.message}`, "error");
-        }
+        e.stopPropagation();
+        await toggleFavoriteInPlace(img, favBtn);
     });
     card.appendChild(favBtn);
 
-    // シングルクリック: 詳細表示
-    card.addEventListener("click", () => {
-        state.selectedImage = img;
-        document.querySelectorAll(".wfm-gallery-thumb-card.selected").forEach(el => el.classList.remove("selected"));
-        card.classList.add("selected");
-        loadImageDetail(img);
+    // クリック: 詳細表示 / Ctrl+クリック: 複数選択
+    card.addEventListener("click", (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            // 複数選択トグル
+            if (state.selectedImages.has(img.path)) {
+                state.selectedImages.delete(img.path);
+                card.classList.remove("multi-selected");
+            } else {
+                state.selectedImages.add(img.path);
+                card.classList.add("multi-selected");
+            }
+            updateBulkBar();
+        } else {
+            // 通常選択: 詳細表示
+            state.selectedImage = img;
+            document.querySelectorAll(".wfm-gallery-thumb-card.selected").forEach(el => el.classList.remove("selected"));
+            card.classList.add("selected");
+            loadImageDetail(img);
+        }
     });
 
     // ダブルクリック: 拡大表示
@@ -272,62 +276,82 @@ function createTable(images) {
     const table = document.createElement("table");
     table.className = "wfm-gallery-table";
 
+    // Fav列を最左列に配置
     const thead = document.createElement("thead");
     thead.innerHTML = `<tr>
+        <th>Fav</th>
         <th></th>
         <th>Filename</th>
         <th>Size</th>
         <th>Date</th>
         <th>Tags</th>
-        <th>Fav</th>
     </tr>`;
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
     images.forEach(img => {
         const tr = document.createElement("tr");
+        if (state.selectedImages.has(img.path)) {
+            tr.classList.add("multi-selected");
+        }
         if (state.selectedImage && state.selectedImage.path === img.path) {
             tr.classList.add("selected");
         }
 
-        tr.innerHTML = `
-            <td><img src="${API.serveImage(img.path)}" class="wfm-gallery-table-thumb" loading="lazy" alt=""></td>
-            <td class="wfm-gallery-table-name" title="${img.filename}">${img.filename}</td>
-            <td>${formatBytes(img.size)}</td>
-            <td>${formatDate(img.mtime)}</td>
-            <td>${(img.tags || []).map(tag => `<span class="wfm-gallery-tag-badge">${tag}</span>`).join("")}</td>
-            <td><button class="wfm-gallery-table-fav-btn${img.favorite ? " active" : ""}" title="${img.favorite ? "Unfavorite" : "Favorite"}">${img.favorite ? "★" : "☆"}</button></td>
-        `;
-        // テーブルのお気に入りボタン
-        const favBtn = tr.querySelector(".wfm-gallery-table-fav-btn");
+        // Fav列を先頭に
+        const favBtn = document.createElement("button");
+        favBtn.className = `wfm-gallery-table-fav-btn${img.favorite ? " active" : ""}`;
+        favBtn.title = img.favorite ? "Unfavorite" : "Favorite";
+        favBtn.textContent = img.favorite ? "★" : "☆";
         favBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
-            try {
-                const res = await fetch(API.toggleFavorite, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ path: img.path }),
-                });
-                const data = await res.json();
-                img.favorite = data.favorite;
-                const cached = state.images.find(i => i.path === img.path);
-                if (cached) cached.favorite = data.favorite;
-                favBtn.textContent = data.favorite ? "★" : "☆";
-                favBtn.title = data.favorite ? "Unfavorite" : "Favorite";
-                favBtn.classList.toggle("active", data.favorite);
-                if (state.selectedImage && state.selectedImage.path === img.path) {
-                    state.selectedImage.favorite = data.favorite;
-                }
-            } catch (err) {
-                showToast(`Error: ${err.message}`, "error");
-            }
+            await toggleFavoriteInPlace(img, favBtn);
         });
 
-        tr.addEventListener("click", () => {
-            state.selectedImage = img;
-            tbody.querySelectorAll("tr.selected").forEach(el => el.classList.remove("selected"));
-            tr.classList.add("selected");
-            loadImageDetail(img);
+        const tdFav = document.createElement("td");
+        tdFav.appendChild(favBtn);
+
+        const tdThumb = document.createElement("td");
+        tdThumb.innerHTML = `<img src="${API.serveImage(img.path)}" class="wfm-gallery-table-thumb" loading="lazy" alt="">`;
+
+        const tdName = document.createElement("td");
+        tdName.className = "wfm-gallery-table-name";
+        tdName.title = img.filename;
+        tdName.textContent = img.filename;
+
+        const tdSize = document.createElement("td");
+        tdSize.textContent = formatBytes(img.size);
+
+        const tdDate = document.createElement("td");
+        tdDate.textContent = formatDate(img.mtime);
+
+        const tdTags = document.createElement("td");
+        tdTags.innerHTML = (img.tags || []).map(tag => `<span class="wfm-gallery-tag-badge">${tag}</span>`).join("");
+
+        tr.appendChild(tdFav);
+        tr.appendChild(tdThumb);
+        tr.appendChild(tdName);
+        tr.appendChild(tdSize);
+        tr.appendChild(tdDate);
+        tr.appendChild(tdTags);
+
+        // クリック: 詳細表示 / Ctrl+クリック: 複数選択
+        tr.addEventListener("click", (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (state.selectedImages.has(img.path)) {
+                    state.selectedImages.delete(img.path);
+                    tr.classList.remove("multi-selected");
+                } else {
+                    state.selectedImages.add(img.path);
+                    tr.classList.add("multi-selected");
+                }
+                updateBulkBar();
+            } else {
+                state.selectedImage = img;
+                tbody.querySelectorAll("tr.selected").forEach(el => el.classList.remove("selected"));
+                tr.classList.add("selected");
+                loadImageDetail(img);
+            }
         });
 
         tr.addEventListener("dblclick", () => openLightbox(img));
@@ -336,6 +360,45 @@ function createTable(images) {
     });
     table.appendChild(tbody);
     return table;
+}
+
+// ── 複数選択バー ──────────────────────────────────────────────
+
+function updateBulkBar() {
+    const bar = document.getElementById("wfm-gallery-bulk-bar");
+    const countEl = document.getElementById("wfm-gallery-bulk-count");
+    if (!bar) return;
+    const count = state.selectedImages.size;
+    if (count > 0) {
+        bar.style.display = "";
+        countEl.textContent = `${count} selected`;
+    } else {
+        bar.style.display = "none";
+    }
+}
+
+// ── お気に入りトグル（インプレース更新） ─────────────────────────
+
+async function toggleFavoriteInPlace(img, btn) {
+    try {
+        const res = await fetch(API.toggleFavorite, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: img.path }),
+        });
+        const data = await res.json();
+        img.favorite = data.favorite;
+        const cached = state.images.find(i => i.path === img.path);
+        if (cached) cached.favorite = data.favorite;
+        btn.textContent = data.favorite ? "★" : "☆";
+        btn.title = data.favorite ? "Unfavorite" : "Favorite";
+        btn.classList.toggle("active", data.favorite);
+        if (state.selectedImage && state.selectedImage.path === img.path) {
+            state.selectedImage.favorite = data.favorite;
+        }
+    } catch (e) {
+        showToast(`Error: ${e.message}`, "error");
+    }
 }
 
 // ── タグフィルター更新 ────────────────────────────────────────
@@ -452,7 +515,6 @@ async function saveMetaField(fields) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ path: state.selectedImage.path, ...fields }),
         });
-        // 一覧のキャッシュも更新
         const idx = state.images.findIndex(i => i.path === state.selectedImage.path);
         if (idx >= 0) Object.assign(state.images[idx], fields);
     } catch (e) {
@@ -468,20 +530,50 @@ async function loadGroups() {
         state.groups = data.groups || [];
         renderGroupSelect();
         renderGroupsList();
+        renderGroupFilterSelect();
     } catch (e) {
         console.error("loadGroups error:", e);
     }
 }
 
-function renderGroupSelect() {
-    const sel = document.getElementById("wfm-gallery-group-select");
-    sel.innerHTML = `<option value="">Select group</option>`;
+function renderGroupFilterSelect() {
+    const sel = document.getElementById("wfm-gallery-group-filter");
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = `<option value="">All Groups</option>`;
     state.groups.forEach(g => {
         const opt = document.createElement("option");
         opt.value = g.name;
         opt.textContent = g.name;
+        if (g.name === current) opt.selected = true;
         sel.appendChild(opt);
     });
+}
+
+function renderGroupSelect() {
+    // 詳細パネル用グループ選択
+    const sel = document.getElementById("wfm-gallery-group-select");
+    if (sel) {
+        sel.innerHTML = `<option value="">Select group</option>`;
+        state.groups.forEach(g => {
+            const opt = document.createElement("option");
+            opt.value = g.name;
+            opt.textContent = g.name;
+            sel.appendChild(opt);
+        });
+    }
+
+    // 複数選択バー用グループ選択
+    const bulkSel = document.getElementById("wfm-gallery-bulk-group-select");
+    if (bulkSel) {
+        bulkSel.innerHTML = `<option value="">Add to Group...</option>`;
+        state.groups.forEach(g => {
+            const opt = document.createElement("option");
+            opt.value = g.name;
+            opt.textContent = g.name;
+            bulkSel.appendChild(opt);
+        });
+    }
 }
 
 function renderCurrentGroups(groups) {
@@ -578,6 +670,54 @@ async function removeFromGroup(groupName) {
     }
 }
 
+// ── 一括操作 ─────────────────────────────────────────────────
+
+async function bulkAddToGroup(groupName) {
+    if (!groupName || state.selectedImages.size === 0) return;
+    const paths = [...state.selectedImages];
+    let success = 0;
+    for (const path of paths) {
+        try {
+            await fetch(API.groupAdd(groupName), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path }),
+            });
+            // キャッシュ更新
+            const img = state.images.find(i => i.path === path);
+            if (img) {
+                if (!img.groups) img.groups = [];
+                if (!img.groups.includes(groupName)) img.groups.push(groupName);
+            }
+            success++;
+        } catch (e) { /* continue */ }
+    }
+    showToast(`Added ${success} image(s) to "${groupName}"`, "success");
+}
+
+async function bulkSetFavorite(favoriteValue) {
+    if (state.selectedImages.size === 0) return;
+    const paths = [...state.selectedImages];
+    let success = 0;
+    for (const path of paths) {
+        try {
+            const img = state.images.find(i => i.path === path);
+            if (!img || img.favorite === favoriteValue) continue;
+            await fetch(API.toggleFavorite, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path }),
+            });
+            img.favorite = favoriteValue;
+            success++;
+        } catch (e) { /* continue */ }
+    }
+    if (success > 0) {
+        showToast(`${favoriteValue ? "Favorited" : "Unfavorited"} ${success} image(s)`, "success");
+        renderImages(); // お気に入り状態が変わったのでビュー更新
+    }
+}
+
 // ── ライトボックス ────────────────────────────────────────────
 
 function openLightbox(img) {
@@ -598,31 +738,6 @@ function openLightbox(img) {
     document.body.appendChild(overlay);
 }
 
-// ── フォルダツリーパネル折りたたみ ─────────────────────────────
-
-function toggleTreePanel() {
-    const panel = document.getElementById("wfm-gallery-tree-panel");
-    const btn = document.getElementById("wfm-gallery-tree-toggle");
-
-    state.treeExpanded = !state.treeExpanded;
-
-    if (state.treeExpanded) {
-        panel.style.width = "250px";
-        panel.style.minWidth = "250px";
-        panel.style.maxWidth = "250px";
-        panel.style.display = "";
-        btn.textContent = "◀";
-        btn.title = "Collapse";
-    } else {
-        panel.style.width = "0";
-        panel.style.minWidth = "0";
-        panel.style.maxWidth = "0";
-        panel.style.display = "none";
-        btn.textContent = "▶";
-        btn.title = "Expand";
-    }
-}
-
 // ── outputパス取得 ────────────────────────────────────────────
 
 async function detectOutputPath() {
@@ -633,17 +748,11 @@ async function detectOutputPath() {
             const dir = data.current || "";
             if (dir) {
                 state.outputRoot = dir;
-                const label = document.getElementById("wfm-gallery-output-label");
-                if (label) label.textContent = dir;
                 loadFolderTree();
                 return;
             }
         }
     } catch (e) { /* ignore */ }
-
-    // outputパスが未設定の場合
-    const label = document.getElementById("wfm-gallery-output-label");
-    if (label) label.textContent = "Settings > Gallery Output Folder でパスを設定してください";
 }
 
 // Settings変更イベントを受信してツリーを再ロード
@@ -651,9 +760,6 @@ window.addEventListener("wfm-output-dir-changed", (e) => {
     const newPath = e.detail?.path || "";
     if (!newPath) return;
     state.outputRoot = newPath;
-    const label = document.getElementById("wfm-gallery-output-label");
-    if (label) label.textContent = newPath;
-    // Galleryタブが表示中なら即リロード
     const galleryTab = document.getElementById("wfm-tab-gallery");
     if (galleryTab && galleryTab.classList.contains("active")) {
         loadFolderTree();
@@ -663,7 +769,6 @@ window.addEventListener("wfm-output-dir-changed", (e) => {
 // ── 初期化 ────────────────────────────────────────────────────
 
 export function initGalleryTab() {
-    // タブ切り替え時にのみ初期化
     const tabBtn = document.querySelector('.wfm-tab[data-tab="gallery"]');
     if (tabBtn) {
         tabBtn.addEventListener("click", onGalleryTabActivated);
@@ -700,7 +805,6 @@ function bindEvents() {
         localStorage.setItem("wfm_gallery_sort", state.sortBy);
         loadImages();
     });
-    // ソートの初期値を反映
     const sortSel = document.getElementById("wfm-gallery-sort");
     if (sortSel) sortSel.value = state.sortBy;
 
@@ -717,6 +821,12 @@ function bindEvents() {
         loadImages();
     });
 
+    // グループフィルタ
+    document.getElementById("wfm-gallery-group-filter")?.addEventListener("change", (e) => {
+        state.groupFilter = e.target.value;
+        loadImages();
+    });
+
     // ビュー切替
     document.querySelectorAll("[data-gallery-view]").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -727,13 +837,9 @@ function bindEvents() {
             renderImages();
         });
     });
-    // ビューの初期値を反映
     document.querySelectorAll("[data-gallery-view]").forEach(b => {
         b.classList.toggle("active", b.dataset.galleryView === state.viewMode);
     });
-
-    // フォルダツリー折りたたみ
-    document.getElementById("wfm-gallery-tree-toggle")?.addEventListener("click", toggleTreePanel);
 
     // タグ追加
     document.getElementById("wfm-gallery-tag-add-btn")?.addEventListener("click", () => {
@@ -772,10 +878,35 @@ function bindEvents() {
         input.value = "";
     });
 
-    // グループに追加
+    // グループに追加（詳細パネル）
     document.getElementById("wfm-gallery-group-add-btn")?.addEventListener("click", () => {
         const sel = document.getElementById("wfm-gallery-group-select");
         if (sel.value) addToGroup(sel.value);
+    });
+
+    // 一括操作バー
+    document.getElementById("wfm-gallery-bulk-deselect")?.addEventListener("click", () => {
+        state.selectedImages.clear();
+        updateBulkBar();
+        // 選択状態をビューから除去
+        document.querySelectorAll(".multi-selected").forEach(el => el.classList.remove("multi-selected"));
+    });
+
+    document.getElementById("wfm-gallery-bulk-group-add")?.addEventListener("click", () => {
+        const sel = document.getElementById("wfm-gallery-bulk-group-select");
+        if (sel && sel.value) {
+            bulkAddToGroup(sel.value);
+        } else {
+            showToast("Please select a group", "error");
+        }
+    });
+
+    document.getElementById("wfm-gallery-bulk-fav")?.addEventListener("click", () => {
+        bulkSetFavorite(true);
+    });
+
+    document.getElementById("wfm-gallery-bulk-unfav")?.addEventListener("click", () => {
+        bulkSetFavorite(false);
     });
 
     // 詳細タブ切り替え

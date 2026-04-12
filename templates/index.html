@@ -668,6 +668,9 @@
                     <select id="wfm-gallery-tag-filter" class="wfm-select wfm-toolbar-select">
                         <option value="">All Tags</option>
                     </select>
+                    <select id="wfm-gallery-group-filter" class="wfm-select wfm-toolbar-select">
+                        <option value="">All Groups</option>
+                    </select>
                     <select id="wfm-gallery-sort" class="wfm-select wfm-toolbar-select">
                         <option value="date_desc">Date (Newest)</option>
                         <option value="date_asc">Date (Oldest)</option>
@@ -681,22 +684,25 @@
                     <span id="wfm-gallery-count" class="wfm-nodes-count"></span>
                     <button id="wfm-gallery-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
                 </div>
+                <!-- 複数選択時の一括操作バー -->
+                <div id="wfm-gallery-bulk-bar" class="wfm-gallery-bulk-bar" style="display:none;">
+                    <span id="wfm-gallery-bulk-count" class="wfm-gallery-bulk-count"></span>
+                    <button id="wfm-gallery-bulk-deselect" class="wfm-btn wfm-btn-sm">Deselect All</button>
+                    <select id="wfm-gallery-bulk-group-select" class="wfm-select" style="font-size:12px;padding:3px 6px;">
+                        <option value="">Add to Group...</option>
+                    </select>
+                    <button id="wfm-gallery-bulk-group-add" class="wfm-btn wfm-btn-sm wfm-btn-primary">Add</button>
+                    <button id="wfm-gallery-bulk-fav" class="wfm-btn wfm-btn-sm">★ Favorite All</button>
+                    <button id="wfm-gallery-bulk-unfav" class="wfm-btn wfm-btn-sm">☆ Unfavorite All</button>
+                </div>
             </div>
 
             <!-- 3カラムレイアウト -->
             <div class="wfm-gallery-layout">
-                <!-- 折りたたみトグルバー（常時表示） -->
-                <div class="wfm-gallery-tree-toggle-bar">
-                    <button id="wfm-gallery-tree-toggle" class="wfm-gallery-tree-toggle-btn" title="Collapse panel">&#9664;</button>
-                </div>
-
                 <!-- 左: フォルダツリー -->
                 <div id="wfm-gallery-tree-panel" class="wfm-gallery-tree-panel">
                     <div class="wfm-gallery-tree-header">
-                        <span id="wfm-gallery-tree-title">Folders</span>
-                    </div>
-                    <div id="wfm-gallery-output-path" class="wfm-gallery-output-path">
-                        <span id="wfm-gallery-output-label"></span>
+                        <span class="wfm-gallery-tree-title">Folders</span>
                     </div>
                     <div id="wfm-gallery-tree" class="wfm-gallery-tree">
                         <p class="wfm-placeholder" id="wfm-gallery-tree-placeholder">Loading...</p>

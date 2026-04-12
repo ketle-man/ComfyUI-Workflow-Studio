@@ -11,41 +11,6 @@
     gap: 0;
 }
 
-/* ── 折りたたみトグルバー（常時表示） ──────────────────────── */
-
-.wfm-gallery-tree-toggle-bar {
-    width: 20px;
-    min-width: 20px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding-top: 6px;
-    border-right: 1px solid var(--wfm-border);
-    background: var(--wfm-bg-primary, #16213e);
-}
-
-.wfm-gallery-tree-toggle-btn {
-    background: none;
-    border: 1px solid var(--wfm-border);
-    border-radius: 3px;
-    color: var(--wfm-text-secondary);
-    cursor: pointer;
-    width: 18px;
-    height: 18px;
-    font-size: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    transition: background 0.15s, color 0.15s;
-}
-
-.wfm-gallery-tree-toggle-btn:hover {
-    background: var(--wfm-bg-hover, rgba(255,255,255,0.08));
-    color: var(--wfm-text-primary);
-}
-
 /* ── 左: フォルダツリーパネル ──────────────────────────────── */
 
 .wfm-gallery-tree-panel {
@@ -56,7 +21,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease, max-width 0.2s ease;
     background: var(--wfm-bg-secondary, #1a1a2e);
 }
 
@@ -77,17 +41,6 @@
     letter-spacing: 0.05em;
 }
 
-.wfm-gallery-output-path {
-    padding: 4px 6px;
-    border-bottom: 1px solid var(--wfm-border);
-    flex-shrink: 0;
-    font-size: 11px;
-    color: var(--wfm-text-secondary);
-    background: var(--wfm-bg-hover, rgba(255,255,255,0.04));
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
 .wfm-gallery-tree {
     flex: 1;
@@ -195,6 +148,11 @@
 .wfm-gallery-thumb-card.selected {
     border-color: var(--wfm-accent, #4f8ef7);
     box-shadow: 0 0 0 2px var(--wfm-accent, #4f8ef7);
+}
+
+.wfm-gallery-thumb-card.multi-selected {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px #f59e0b;
 }
 
 .wfm-gallery-thumb-img {
@@ -309,6 +267,10 @@
 
 .wfm-gallery-table tbody tr.selected {
     background: rgba(79,142,247,0.15);
+}
+
+.wfm-gallery-table tbody tr.multi-selected {
+    background: rgba(245,158,11,0.15);
 }
 
 .wfm-gallery-table td {
@@ -550,6 +512,27 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--wfm-text-primary);
+}
+
+/* ── 一括操作バー ──────────────────────────────────────────── */
+
+.wfm-gallery-bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: rgba(245,158,11,0.12);
+    border-bottom: 1px solid rgba(245,158,11,0.35);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.wfm-gallery-bulk-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #f59e0b;
+    white-space: nowrap;
+    margin-right: 4px;
 }
 
 /* ── ライトボックス ─────────────────────────────────────────── */
