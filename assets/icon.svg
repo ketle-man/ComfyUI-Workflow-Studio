@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none">
+    <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#1a1a2e"/>
+            <stop offset="100%" stop-color="#16213e"/>
+        </linearGradient>
+        <linearGradient id="wStroke" x1="0" y1="0" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#4a9eff"/>
+            <stop offset="100%" stop-color="#7b68ee"/>
+        </linearGradient>
+        <linearGradient id="sWave" x1="0" y1="0" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#7b68ee"/>
+            <stop offset="100%" stop-color="#4a9eff"/>
+        </linearGradient>
+    </defs>
+    <!-- Background -->
+    <rect width="400" height="400" rx="48" fill="url(#bg)"/>
+    <!-- Subtle grid pattern -->
+    <line x1="0" y1="100" x2="400" y2="100" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <line x1="0" y1="200" x2="400" y2="200" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <line x1="0" y1="300" x2="400" y2="300" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <line x1="100" y1="0" x2="100" y2="400" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <line x1="200" y1="0" x2="200" y2="400" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <line x1="300" y1="0" x2="300" y2="400" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <!-- W letterform -->
+    <path d="M80 110 L140 290 L200 150 L260 290 L320 110" stroke="url(#wStroke)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <!-- S wave -->
+    <path d="M100 330 Q150 295 200 330 Q250 365 300 330" stroke="url(#sWave)" stroke-width="20" stroke-linecap="round" fill="none"/>
+</svg>

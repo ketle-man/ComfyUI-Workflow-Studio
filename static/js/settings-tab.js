@@ -346,6 +346,12 @@ export async function initSettingsTab() {
         workflowsDirInfo = await res.json();
     } catch {}
 
+    // Load gallery output dir info
+    let outputDirInfo = { current: "", default: "", saved: "" };
+    try {
+        const res = await fetch("/api/wfm/settings/output-dir");
+        outputDirInfo = await res.json();
+    } catch {}
 
     const uiLang = getLang();
     const summaryLang = getSummaryLang();
@@ -488,6 +494,27 @@ export async function initSettingsTab() {
                 </small>
                 <div style="font-size:11px;color:var(--wfm-text-secondary);margin-top:6px;">
                     ${t("workflowsDirCurrent")}: <code id="wfm-settings-workflows-dir-current" style="color:var(--wfm-primary);word-break:break-all;">${workflowsDirInfo.current}</code>
+                </div>
+            </div>
+        </details>
+
+        <!-- Gallery Output Folder -->
+        <details class="wfm-settings-section">
+            <summary class="wfm-settings-summary">${t("galleryOutputDir")}</summary>
+            <div class="wfm-form-group">
+                <label>${t("galleryOutputDirLabel")}</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" class="wfm-input" id="wfm-settings-output-dir"
+                        value="${serverSettings.gallery_output_dir || ""}"
+                        placeholder="${outputDirInfo.default}">
+                    <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-output-dir-apply">${t("workflowsDirApply")}</button>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-settings-output-dir-reset">${t("workflowsDirDefault")}</button>
+                </div>
+                <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-top:4px;">
+                    ${t("galleryOutputDirHint")}
+                </small>
+                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-top:6px;">
+                    ${t("workflowsDirCurrent")}: <code id="wfm-settings-output-dir-current" style="color:var(--wfm-primary);word-break:break-all;">${outputDirInfo.current}</code>
                 </div>
             </div>
         </details>
@@ -823,6 +850,50 @@ export async function initSettingsTab() {
             const data = await res.json();
             if (currentEl) currentEl.textContent = data.workflows_dir;
             showToast(t("workflowsDirChanged"), "success");
+        } catch (err) {
+            showToast(`${t("workflowsDirError")}: ${err.message}`, "error");
+        }
+    });
+
+    // --- Gallery output dir handlers ---
+    document.getElementById("wfm-settings-output-dir-apply")?.addEventListener("click", async () => {
+        const dirInput = document.getElementById("wfm-settings-output-dir");
+        const currentEl = document.getElementById("wfm-settings-output-dir-current");
+        const newDir = dirInput.value.trim();
+        try {
+            const res = await fetch("/api/wfm/settings/output-dir", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ gallery_output_dir: newDir }),
+            });
+            const data = await res.json();
+            if (data.error) {
+                showToast(`${t("workflowsDirError")}: ${data.error}`, "error");
+            } else {
+                if (currentEl) currentEl.textContent = data.current;
+                showToast(t("workflowsDirChanged"), "success");
+                // gallery-tab に通知して再ロード
+                window.dispatchEvent(new CustomEvent("wfm-output-dir-changed", { detail: { path: data.current } }));
+            }
+        } catch (err) {
+            showToast(`${t("workflowsDirError")}: ${err.message}`, "error");
+        }
+    });
+
+    document.getElementById("wfm-settings-output-dir-reset")?.addEventListener("click", async () => {
+        const dirInput = document.getElementById("wfm-settings-output-dir");
+        const currentEl = document.getElementById("wfm-settings-output-dir-current");
+        dirInput.value = "";
+        try {
+            const res = await fetch("/api/wfm/settings/output-dir", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ gallery_output_dir: "" }),
+            });
+            const data = await res.json();
+            if (currentEl) currentEl.textContent = data.current;
+            showToast(t("workflowsDirChanged"), "success");
+            window.dispatchEvent(new CustomEvent("wfm-output-dir-changed", { detail: { path: data.current } }));
         } catch (err) {
             showToast(`${t("workflowsDirError")}: ${err.message}`, "error");
         }

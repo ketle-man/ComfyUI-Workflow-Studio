@@ -297,6 +297,9 @@ const LANGUAGES = {
         gallerySelectFolder: "Select a folder to browse images.",
         galleryNoImages: "No images found.",
         gallerySearchPlaceholder: "Search images...",
+        galleryOutputDir: "Gallery Output Folder",
+        galleryOutputDirLabel: "Output Folder Path",
+        galleryOutputDirHint: "Set the ComfyUI output folder to browse in the Gallery tab. Leave blank to use ComfyUI's default output directory.",
 
         // -- Help & Support --
         tabHelp: "Help",
@@ -772,6 +775,9 @@ const LANGUAGES = {
         gallerySelectFolder: "フォルダを選択して画像を表示します。",
         galleryNoImages: "画像が見つかりません。",
         gallerySearchPlaceholder: "画像を検索...",
+        galleryOutputDir: "ギャラリー Outputフォルダ",
+        galleryOutputDirLabel: "Outputフォルダのパス",
+        galleryOutputDirHint: "ギャラリータブで参照するComfyUIのoutputフォルダを設定します。空欄の場合はComfyUIのデフォルトoutputディレクトリを使用します。",
 
         // -- Help & Support --
         tabHelp: "ヘルプ",
@@ -1243,6 +1249,9 @@ const LANGUAGES = {
         gallerySelectFolder: "选择文件夹以浏览图片。",
         galleryNoImages: "未找到图片。",
         gallerySearchPlaceholder: "搜索图片...",
+        galleryOutputDir: "图库输出文件夹",
+        galleryOutputDirLabel: "输出文件夹路径",
+        galleryOutputDirHint: "设置图库标签页浏览的ComfyUI输出文件夹。留空则使用ComfyUI默认输出目录。",
 
         // -- Help & Support --
         tabHelp: "帮助",

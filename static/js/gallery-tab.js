@@ -200,6 +200,7 @@ function renderImages() {
 function createThumbCard(img) {
     const card = document.createElement("div");
     card.className = "wfm-gallery-thumb-card";
+    card.title = img.filename; // ホバーでファイル名を表示
     if (state.selectedImage && state.selectedImage.path === img.path) {
         card.classList.add("selected");
     }
@@ -219,33 +220,37 @@ function createThumbCard(img) {
     };
     card.appendChild(imgEl);
 
-    // お気に入りアイコン
-    if (img.favorite) {
-        const fav = document.createElement("span");
-        fav.className = "wfm-gallery-thumb-fav";
-        fav.textContent = "★";
-        card.appendChild(fav);
-    }
-
-    // ファイル名
-    const name = document.createElement("div");
-    name.className = "wfm-gallery-thumb-name";
-    name.textContent = img.filename;
-    name.title = img.filename;
-    card.appendChild(name);
-
-    // タグ
-    if (img.tags && img.tags.length > 0) {
-        const tagsEl = document.createElement("div");
-        tagsEl.className = "wfm-gallery-thumb-tags";
-        img.tags.slice(0, 2).forEach(tag => {
-            const t = document.createElement("span");
-            t.className = "wfm-gallery-tag-badge";
-            t.textContent = tag;
-            tagsEl.appendChild(t);
-        });
-        card.appendChild(tagsEl);
-    }
+    // お気に入りトグルボタン（カード右上）
+    const favBtn = document.createElement("button");
+    favBtn.className = `wfm-gallery-thumb-fav-btn${img.favorite ? " active" : ""}`;
+    favBtn.title = img.favorite ? "Unfavorite" : "Favorite";
+    favBtn.textContent = img.favorite ? "★" : "☆";
+    favBtn.addEventListener("click", async (e) => {
+        e.stopPropagation(); // カード選択を妨げない
+        try {
+            const res = await fetch(API.toggleFavorite, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: img.path }),
+            });
+            const data = await res.json();
+            img.favorite = data.favorite;
+            // 一覧キャッシュ更新
+            const cached = state.images.find(i => i.path === img.path);
+            if (cached) cached.favorite = data.favorite;
+            // ボタン表示更新
+            favBtn.textContent = data.favorite ? "★" : "☆";
+            favBtn.title = data.favorite ? "Unfavorite" : "Favorite";
+            favBtn.classList.toggle("active", data.favorite);
+            // 詳細パネルが同じ画像を表示中なら更新
+            if (state.selectedImage && state.selectedImage.path === img.path) {
+                state.selectedImage.favorite = data.favorite;
+            }
+        } catch (e) {
+            showToast(`Error: ${e.message}`, "error");
+        }
+    });
+    card.appendChild(favBtn);
 
     // シングルクリック: 詳細表示
     card.addEventListener("click", () => {
@@ -291,8 +296,32 @@ function createTable(images) {
             <td>${formatBytes(img.size)}</td>
             <td>${formatDate(img.mtime)}</td>
             <td>${(img.tags || []).map(tag => `<span class="wfm-gallery-tag-badge">${tag}</span>`).join("")}</td>
-            <td>${img.favorite ? "★" : "☆"}</td>
+            <td><button class="wfm-gallery-table-fav-btn${img.favorite ? " active" : ""}" title="${img.favorite ? "Unfavorite" : "Favorite"}">${img.favorite ? "★" : "☆"}</button></td>
         `;
+        // テーブルのお気に入りボタン
+        const favBtn = tr.querySelector(".wfm-gallery-table-fav-btn");
+        favBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            try {
+                const res = await fetch(API.toggleFavorite, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: img.path }),
+                });
+                const data = await res.json();
+                img.favorite = data.favorite;
+                const cached = state.images.find(i => i.path === img.path);
+                if (cached) cached.favorite = data.favorite;
+                favBtn.textContent = data.favorite ? "★" : "☆";
+                favBtn.title = data.favorite ? "Unfavorite" : "Favorite";
+                favBtn.classList.toggle("active", data.favorite);
+                if (state.selectedImage && state.selectedImage.path === img.path) {
+                    state.selectedImage.favorite = data.favorite;
+                }
+            } catch (err) {
+                showToast(`Error: ${err.message}`, "error");
+            }
+        });
 
         tr.addEventListener("click", () => {
             state.selectedImage = img;
@@ -342,10 +371,6 @@ async function loadImageDetail(img) {
     document.getElementById("wfm-gallery-info-size").textContent = `Size: ${formatBytes(img.size)}`;
     document.getElementById("wfm-gallery-info-date").textContent = `Date: ${formatDate(img.mtime)}`;
 
-    // お気に入りボタン
-    const favBtn = document.getElementById("wfm-gallery-fav-toggle");
-    updateFavBtn(favBtn, img.favorite);
-
     // タグ
     renderTagsDisplay(img.tags || []);
 
@@ -371,11 +396,6 @@ async function loadImageDetail(img) {
     // グループタブ更新
     renderCurrentGroups(img.groups || []);
     renderGroupSelect();
-}
-
-function updateFavBtn(btn, isFav) {
-    btn.textContent = isFav ? "★ Unfavorite" : "☆ Favorite";
-    btn.classList.toggle("wfm-btn-primary", isFav);
 }
 
 function renderTagsDisplay(tags) {
@@ -450,27 +470,6 @@ async function saveMetaField(fields) {
         if (idx >= 0) Object.assign(state.images[idx], fields);
     } catch (e) {
         showToast(`Save failed: ${e.message}`, "error");
-    }
-}
-
-// ── お気に入り ────────────────────────────────────────────────
-
-async function toggleFavorite() {
-    if (!state.selectedImage) return;
-    try {
-        const res = await fetch(API.toggleFavorite, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: state.selectedImage.path }),
-        });
-        const data = await res.json();
-        state.selectedImage.favorite = data.favorite;
-        const idx = state.images.findIndex(i => i.path === state.selectedImage.path);
-        if (idx >= 0) state.images[idx].favorite = data.favorite;
-        updateFavBtn(document.getElementById("wfm-gallery-fav-toggle"), data.favorite);
-        renderImages();
-    } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
     }
 }
 
@@ -617,66 +616,67 @@ function openLightbox(img) {
 function toggleTreePanel() {
     const panel = document.getElementById("wfm-gallery-tree-panel");
     const btn = document.getElementById("wfm-gallery-tree-toggle");
+    const treeEl = document.getElementById("wfm-gallery-tree");
+    const outputLabel = document.getElementById("wfm-gallery-output-label");
+    const treeTitle = document.querySelector(".wfm-gallery-tree-title");
+
     state.treeExpanded = !state.treeExpanded;
-    panel.classList.toggle("collapsed", !state.treeExpanded);
-    btn.textContent = state.treeExpanded ? "◀" : "▶";
+
+    if (state.treeExpanded) {
+        // 展開: パネル幅を戻してコンテンツを表示
+        panel.style.width = "250px";
+        panel.style.minWidth = "250px";
+        if (treeEl) treeEl.style.display = "";
+        if (outputLabel) outputLabel.style.display = "";
+        if (treeTitle) treeTitle.style.display = "";
+        btn.textContent = "◀";
+    } else {
+        // 折りたたみ: パネルを縮小してコンテンツを隠す
+        panel.style.width = "32px";
+        panel.style.minWidth = "32px";
+        if (treeEl) treeEl.style.display = "none";
+        if (outputLabel) outputLabel.style.display = "none";
+        if (treeTitle) treeTitle.style.display = "none";
+        btn.textContent = "▶";
+    }
 }
 
 // ── outputパス取得 ────────────────────────────────────────────
 
 async function detectOutputPath() {
-    // ComfyUIのoutputフォルダを設定から取得する
     try {
-        const res = await fetch("/wfm/settings");
-        const data = await res.json();
-        const outputDir = data.output_dir || data.comfyui_output_dir || "";
-        if (outputDir) {
-            state.outputRoot = outputDir;
-            document.getElementById("wfm-gallery-output-label").textContent = outputDir;
-            return;
-        }
-    } catch (e) {
-        // ignore
-    }
-    // フォールバック: system_stats から output_dir を取得
-    try {
-        const res = await fetch("/system_stats");
+        const res = await fetch("/api/wfm/settings/output-dir");
         if (res.ok) {
             const data = await res.json();
-            // ComfyUI /system_stats は直接output_dirを返さないので、
-            // ユーザーに入力させるUIへフォールバック
+            const dir = data.current || "";
+            if (dir) {
+                state.outputRoot = dir;
+                const label = document.getElementById("wfm-gallery-output-label");
+                if (label) label.textContent = dir;
+                loadFolderTree();
+                return;
+            }
         }
     } catch (e) { /* ignore */ }
 
-    showOutputPathInput();
+    // outputパスが未設定の場合
+    const label = document.getElementById("wfm-gallery-output-label");
+    if (label) label.textContent = "Settings > Gallery Output Folder でパスを設定してください";
 }
 
-function showOutputPathInput() {
+// Settings変更イベントを受信してツリーを再ロード
+window.addEventListener("wfm-output-dir-changed", (e) => {
+    const newPath = e.detail?.path || "";
+    if (!newPath) return;
+    state.outputRoot = newPath;
     const label = document.getElementById("wfm-gallery-output-label");
-    label.innerHTML = `
-        <div style="display:flex;gap:4px;align-items:center;padding:4px;">
-            <input type="text" id="wfm-gallery-output-input" class="wfm-input"
-                placeholder="ComfyUI output path..." style="flex:1;font-size:12px;padding:4px 6px;">
-            <button id="wfm-gallery-output-set-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Set</button>
-        </div>
-    `;
-    const savedPath = localStorage.getItem("wfm_gallery_output_path") || "";
-    document.getElementById("wfm-gallery-output-input").value = savedPath;
-
-    document.getElementById("wfm-gallery-output-set-btn").addEventListener("click", () => {
-        const val = document.getElementById("wfm-gallery-output-input").value.trim();
-        if (!val) return;
-        state.outputRoot = val;
-        localStorage.setItem("wfm_gallery_output_path", val);
-        label.textContent = val;
-        loadFolderTree();
-    });
-
-    if (savedPath) {
-        state.outputRoot = savedPath;
+    if (label) label.textContent = newPath;
+    // Galleryタブが表示中なら即リロード
+    const galleryTab = document.getElementById("wfm-tab-gallery");
+    if (galleryTab && galleryTab.classList.contains("active")) {
         loadFolderTree();
     }
-}
+});
 
 // ── 初期化 ────────────────────────────────────────────────────
 
@@ -771,9 +771,6 @@ function bindEvents() {
         const memo = document.getElementById("wfm-gallery-memo").value;
         saveMetaField({ memo }).then(() => showToast("Memo saved", "success"));
     });
-
-    // お気に入りトグル (詳細パネル)
-    document.getElementById("wfm-gallery-fav-toggle")?.addEventListener("click", toggleFavorite);
 
     // ワークフローコピー
     document.getElementById("wfm-gallery-copy-workflow-btn")?.addEventListener("click", () => {
