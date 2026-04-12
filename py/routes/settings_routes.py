@@ -137,6 +137,11 @@ async def handle_set_output_dir(request: web.Request) -> web.Response:
 
         default_dir = await asyncio.to_thread(_get_comfyui_output_dir)
         resolved = new_dir or default_dir
+
+        # GalleryServiceの許可ルートを更新
+        from ..routes.gallery_routes import _service as gallery_service
+        gallery_service.update_output_root(resolved)
+
         return web.json_response({
             "status": "ok",
             "current": resolved,

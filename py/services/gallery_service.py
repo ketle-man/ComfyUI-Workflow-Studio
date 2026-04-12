@@ -18,10 +18,36 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 from .gallery_metadata import GalleryMetadataStore
 
 
+# PNGチャンク1個の最大許容サイズ (32MB)
+_PNG_CHUNK_MAX = 32 * 1024 * 1024
+# JPEGを読む際の最大ファイルサイズ (64MB)
+_JPEG_READ_MAX = 64 * 1024 * 1024
+
+
 class GalleryService:
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
         self.metadata_store = GalleryMetadataStore(data_dir / "gallery_metadata.json")
+        # 許可するルートパス（設定後に update_output_root で更新）
+        self._allowed_root: Path | None = None
+
+    def update_output_root(self, root_path: str) -> None:
+        """許可するルートパスを更新する（Settings変更時に呼ぶ）"""
+        p = Path(root_path).resolve() if root_path else None
+        self._allowed_root = p
+
+    def _check_path_allowed(self, path: Path) -> bool:
+        """パスが許可ルート配下かチェック（パストラバーサル防止）"""
+        if self._allowed_root is None:
+            # ルート未設定時はローカルホスト向けツールとして緩く許可
+            # ただし .. を含む相対トラバーサルは拒否
+            resolved = path.resolve()
+            return resolved == path.resolve()  # symlinkループなどを解決して一致確認
+        try:
+            path.resolve().relative_to(self._allowed_root)
+            return True
+        except ValueError:
+            return False
 
     # ──────────────────────────────────────────────────────────────
     # フォルダツリー
@@ -29,9 +55,12 @@ class GalleryService:
 
     def list_folder_tree(self, root_path: str) -> dict:
         """outputフォルダのフォルダツリーを返す"""
-        root = Path(root_path)
+        root = Path(root_path).resolve()
         if not root.is_dir():
             return {"error": f"Directory not found: {root_path}"}
+        # ルート自体を許可リストに設定（初回呼び出し時）
+        if self._allowed_root is None:
+            self._allowed_root = root
 
         def build_tree(path: Path, rel_base: Path) -> dict:
             rel = str(path.relative_to(rel_base)).replace("\\", "/")
@@ -66,8 +95,11 @@ class GalleryService:
         tag_filter: str = "",
     ) -> list[dict]:
         """指定フォルダ内の画像一覧を返す（サブフォルダなし）"""
-        folder = Path(folder_path)
+        folder = Path(folder_path).resolve()
         if not folder.is_dir():
+            return []
+        if not self._check_path_allowed(folder):
+            logger.warning("list_images: path not allowed: %s", folder)
             return []
 
         images = []
@@ -122,9 +154,11 @@ class GalleryService:
 
     def get_image_metadata(self, image_path: str) -> dict:
         """PNG/JPEGからメタデータを抽出し、保存済みメタと合わせて返す"""
-        path = Path(image_path)
+        path = Path(image_path).resolve()
         if not path.is_file():
             return {"error": "File not found"}
+        if not self._check_path_allowed(path):
+            return {"error": "Access denied"}
 
         embedded = {}
         ext = path.suffix.lower()
@@ -163,6 +197,12 @@ class GalleryService:
                         break
                     chunk_len = struct.unpack(">I", chunk_len_bytes)[0]
                     chunk_type = f.read(4).decode("ascii", errors="ignore")
+                    # 巨大チャンクによるメモリ枯渇を防ぐ
+                    if chunk_len > _PNG_CHUNK_MAX:
+                        f.seek(chunk_len + 4, 1)  # データ+CRCをスキップ
+                        if chunk_type == "IEND":
+                            break
+                        continue
                     chunk_data = f.read(chunk_len)
                     f.read(4)  # CRC
 
@@ -198,17 +238,21 @@ class GalleryService:
         """JPEGのEXIF/commentからメタデータを抽出（簡易）"""
         result = {}
         try:
+            file_size = path.stat().st_size
+            read_size = min(file_size, _JPEG_READ_MAX)
             with open(path, "rb") as f:
-                data = f.read()
+                data = f.read(read_size)
             # コメントセグメント
             idx = 0
-            while idx < len(data) - 2:
+            while idx < len(data) - 3:
                 if data[idx] == 0xFF:
                     marker = data[idx + 1]
                     if marker == 0xFE:  # COM
                         length = struct.unpack(">H", data[idx + 2:idx + 4])[0]
-                        comment = data[idx + 4:idx + 2 + length].decode("utf-8", errors="replace")
+                        end = idx + 2 + length
+                        comment = data[idx + 4:end].decode("utf-8", errors="replace")
                         result["Comment"] = comment
+                        break
                     idx += 2
                 else:
                     idx += 1
@@ -218,8 +262,10 @@ class GalleryService:
 
     def extract_workflow_from_metadata(self, image_path: str) -> dict | None:
         """PNG埋め込みメタデータからComfyUIワークフローを抽出"""
-        path = Path(image_path)
+        path = Path(image_path).resolve()
         if path.suffix.lower() != ".png":
+            return None
+        if not self._check_path_allowed(path):
             return None
         embedded = self._read_png_metadata(path)
         # ComfyUIはworkflowキーにJSONを格納
@@ -281,7 +327,12 @@ class GalleryService:
 
     def serve_image(self, image_path: str):
         """画像のPathオブジェクトを返す（ルートで使用）"""
-        p = Path(image_path)
-        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
-            return p
-        return None
+        p = Path(image_path).resolve()
+        if not p.is_file():
+            return None
+        if p.suffix.lower() not in IMAGE_EXTENSIONS:
+            return None
+        if not self._check_path_allowed(p):
+            logger.warning("serve_image: path not allowed: %s", p)
+            return None
+        return p
