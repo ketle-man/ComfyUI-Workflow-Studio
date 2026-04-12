@@ -18,6 +18,7 @@ const API = {
     toggleFavorite:             `/wfm/gallery/image/favorite`,
     groups:                     `/wfm/gallery/groups`,
     groupCreate:                `/wfm/gallery/groups`,
+    groupRename:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}`,
     groupDelete:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}`,
     groupAdd:       (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/add`,
     groupRemove:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/remove`,
@@ -168,14 +169,11 @@ async function loadImages() {
     if (state.favoriteOnly) params.favorite = "true";
     if (state.tagFilter) params.tag = state.tagFilter;
 
+    // グループフィルタはサーバーサイドで処理
+    if (state.groupFilter) params.group = state.groupFilter;
+
     try {
-        let images = (await apiFetch(API.images(params))).images || [];
-
-        // グループフィルタ（クライアントサイド）
-        if (state.groupFilter) {
-            images = images.filter(img => (img.groups || []).includes(state.groupFilter));
-        }
-
+        const images = (await apiFetch(API.images(params))).images || [];
         state.images = images;
         document.getElementById("wfm-gallery-count").textContent = `${state.images.length} images`;
         renderImages();
@@ -453,8 +451,7 @@ async function loadImageDetail(img) {
     }
 
     // グループタブ更新
-    renderCurrentGroups(img.groups || []);
-    renderGroupSelect();
+    renderDetailGroup(img);
 }
 
 function renderTagsDisplay(tags) {
@@ -528,146 +525,246 @@ async function loadGroups() {
     try {
         const data = await apiFetch(API.groups);
         state.groups = data.groups || [];
-        renderGroupSelect();
-        renderGroupsList();
-        renderGroupFilterSelect();
+        _updateGroupSelects();
+        // 詳細パネルが表示中なら再描画
+        if (state.selectedImage) {
+            renderDetailGroup(state.selectedImage);
+        }
     } catch (e) {
         console.error("loadGroups error:", e);
     }
 }
 
-function renderGroupFilterSelect() {
-    const sel = document.getElementById("wfm-gallery-group-filter");
-    if (!sel) return;
-    const current = sel.value;
-    sel.innerHTML = `<option value="">All Groups</option>`;
-    state.groups.forEach(g => {
-        const opt = document.createElement("option");
-        opt.value = g.name;
-        opt.textContent = g.name;
-        if (g.name === current) opt.selected = true;
-        sel.appendChild(opt);
-    });
-}
-
-function renderGroupSelect() {
-    // 詳細パネル用グループ選択
-    const sel = document.getElementById("wfm-gallery-group-select");
-    if (sel) {
-        sel.innerHTML = `<option value="">Select group</option>`;
+/** ツールバーのグループフィルタと一括バーのセレクトを更新 */
+function _updateGroupSelects() {
+    // ツールバー: グループフィルタ
+    const filterSel = document.getElementById("wfm-gallery-group-filter");
+    if (filterSel) {
+        const current = filterSel.value;
+        filterSel.innerHTML = `<option value="">All Groups</option>`;
         state.groups.forEach(g => {
             const opt = document.createElement("option");
             opt.value = g.name;
             opt.textContent = g.name;
-            sel.appendChild(opt);
+            if (g.name === current) opt.selected = true;
+            filterSel.appendChild(opt);
         });
     }
 
-    // 複数選択バー用グループ選択
+    // 一括操作バー: グループ選択
     const bulkSel = document.getElementById("wfm-gallery-bulk-group-select");
     if (bulkSel) {
+        const current = bulkSel.value;
         bulkSel.innerHTML = `<option value="">Add to Group...</option>`;
         state.groups.forEach(g => {
             const opt = document.createElement("option");
             opt.value = g.name;
             opt.textContent = g.name;
+            if (g.name === current) opt.selected = true;
             bulkSel.appendChild(opt);
         });
     }
 }
 
-function renderCurrentGroups(groups) {
-    const container = document.getElementById("wfm-gallery-current-groups");
-    container.innerHTML = "";
-    if (!groups || groups.length === 0) {
-        container.textContent = "Not in any group.";
-        return;
-    }
-    groups.forEach(g => {
-        const span = document.createElement("span");
-        span.className = "wfm-gallery-tag-badge wfm-gallery-tag-removable";
-        span.innerHTML = `${g} <button class="wfm-gallery-tag-remove" title="Remove from group">&times;</button>`;
-        span.querySelector("button").addEventListener("click", () => removeFromGroup(g));
-        container.appendChild(span);
+/** 詳細パネルのGroupタブをModelsと同じUIで描画（JS動的生成） */
+function renderDetailGroup(img) {
+    const el = document.getElementById("wfm-gallery-detail-group");
+    if (!el) return;
+
+    const memberOf = img.groups || [];
+    const allGroups = state.groups.map(g => g.name).sort();
+    const availableGroups = allGroups.filter(g => !memberOf.includes(g));
+
+    el.innerHTML = `
+        <div style="padding:4px;">
+            <div style="margin-bottom:12px;">
+                <div class="wfm-gallery-section-title">Current Groups</div>
+                ${memberOf.length === 0
+                    ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">Not in any group.</p>`
+                    : memberOf.map(g => `
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;">
+                            <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g)}</span>
+                            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-gallery-grp-remove" data-group="${escapeHtml(g)}" title="Remove">&times;</button>
+                        </div>`).join("")}
+            </div>
+            <div style="margin-bottom:12px;">
+                <div class="wfm-gallery-section-title">Add to Group</div>
+                <div style="display:flex;gap:4px;">
+                    <select id="wfm-gallery-grp-assign-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
+                        ${availableGroups.length === 0
+                            ? `<option value="">No groups available</option>`
+                            : availableGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
+                    </select>
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-gallery-grp-assign-btn"
+                        ${availableGroups.length === 0 ? "disabled" : ""}>Add</button>
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <div class="wfm-gallery-section-title">Create Group</div>
+                <div style="display:flex;gap:4px;">
+                    <input type="text" id="wfm-gallery-grp-new-input" class="wfm-input"
+                        style="flex:1;font-size:12px;padding:3px 6px;" placeholder="Group name...">
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-gallery-grp-create-btn">Create</button>
+                </div>
+            </div>
+            <div style="border-top:1px solid var(--wfm-border);padding-top:10px;margin-top:4px;">
+                <div class="wfm-gallery-section-title">Manage Groups</div>
+                <div style="display:flex;gap:4px;">
+                    <select id="wfm-gallery-grp-manage-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
+                        ${allGroups.length === 0
+                            ? `<option value="">No groups</option>`
+                            : allGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
+                    </select>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-gallery-grp-rename-btn"
+                        ${allGroups.length === 0 ? "disabled" : ""} title="Rename">&#9998;</button>
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-gallery-grp-delete-btn"
+                        ${allGroups.length === 0 ? "disabled" : ""} title="Delete">&times;</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // グループから除外
+    el.querySelectorAll(".wfm-gallery-grp-remove").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const g = btn.dataset.group;
+            try {
+                await fetch(API.groupRemove(g), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: img.path }),
+                });
+                img.groups = (img.groups || []).filter(x => x !== g);
+                const cached = state.images.find(i => i.path === img.path);
+                if (cached) cached.groups = img.groups;
+                renderDetailGroup(img);
+                showToast(`Removed from "${g}"`, "success");
+            } catch (e) {
+                showToast(`Error: ${e.message}`, "error");
+            }
+        });
+    });
+
+    // グループに追加
+    el.querySelector("#wfm-gallery-grp-assign-btn")?.addEventListener("click", async () => {
+        const sel = el.querySelector("#wfm-gallery-grp-assign-sel");
+        const g = sel?.value;
+        if (!g) return;
+        try {
+            await fetch(API.groupAdd(g), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: img.path }),
+            });
+            if (!(img.groups || []).includes(g)) img.groups = [...(img.groups || []), g];
+            const cached = state.images.find(i => i.path === img.path);
+            if (cached) cached.groups = img.groups;
+            renderDetailGroup(img);
+            showToast(`Added to "${g}"`, "success");
+        } catch (e) {
+            showToast(`Error: ${e.message}`, "error");
+        }
+    });
+
+    // グループ作成（作成後に現在の画像にも追加）
+    el.querySelector("#wfm-gallery-grp-create-btn")?.addEventListener("click", async () => {
+        const input = el.querySelector("#wfm-gallery-grp-new-input");
+        const name = input?.value.trim();
+        if (!name) return;
+        if (state.groups.some(g => g.name === name)) {
+            showToast("Group already exists", "warning");
+            return;
+        }
+        try {
+            await fetch(API.groupCreate, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+            });
+            // 作成後に現在の画像へ追加
+            await fetch(API.groupAdd(name), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: img.path }),
+            });
+            if (!(img.groups || []).includes(name)) img.groups = [...(img.groups || []), name];
+            const cached = state.images.find(i => i.path === img.path);
+            if (cached) cached.groups = img.groups;
+            input.value = "";
+            await loadGroups(); // セレクト類を更新
+            showToast(`Group "${name}" created`, "success");
+        } catch (e) {
+            showToast(`Error: ${e.message}`, "error");
+        }
+    });
+
+    // グループ名変更
+    el.querySelector("#wfm-gallery-grp-rename-btn")?.addEventListener("click", async () => {
+        const sel = el.querySelector("#wfm-gallery-grp-manage-sel");
+        const oldName = sel?.value;
+        if (!oldName) return;
+        const newName = prompt(`Rename group "${oldName}" to:`, oldName);
+        if (!newName || newName === oldName) return;
+        if (state.groups.some(g => g.name === newName)) {
+            showToast("Group name already exists", "warning");
+            return;
+        }
+        try {
+            const res = await fetch(API.groupRename(oldName), {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ new_name: newName }),
+            });
+            if (!res.ok) throw new Error((await res.json()).error || "Rename failed");
+            // 現在の画像のgroupsも更新
+            if (img.groups) {
+                img.groups = img.groups.map(g => g === oldName ? newName : g);
+            }
+            const cached = state.images.find(i => i.path === img.path);
+            if (cached && cached.groups) {
+                cached.groups = cached.groups.map(g => g === oldName ? newName : g);
+            }
+            // グループフィルタが変更されたグループを選択中なら更新
+            if (state.groupFilter === oldName) {
+                state.groupFilter = newName;
+            }
+            await loadGroups();
+            showToast(`Renamed to "${newName}"`, "success");
+        } catch (e) {
+            showToast(`Error: ${e.message}`, "error");
+        }
+    });
+
+    // グループ削除
+    el.querySelector("#wfm-gallery-grp-delete-btn")?.addEventListener("click", async () => {
+        const sel = el.querySelector("#wfm-gallery-grp-manage-sel");
+        const name = sel?.value;
+        if (!name) return;
+        if (!confirm(`Delete group "${name}"?`)) return;
+        try {
+            await fetch(API.groupDelete(name), { method: "DELETE" });
+            if (img.groups) img.groups = img.groups.filter(g => g !== name);
+            const cached = state.images.find(i => i.path === img.path);
+            if (cached && cached.groups) cached.groups = cached.groups.filter(g => g !== name);
+            if (state.groupFilter === name) {
+                state.groupFilter = "";
+                const filterSel = document.getElementById("wfm-gallery-group-filter");
+                if (filterSel) filterSel.value = "";
+            }
+            await loadGroups();
+            showToast(`Group "${name}" deleted`, "success");
+        } catch (e) {
+            showToast(`Error: ${e.message}`, "error");
+        }
     });
 }
 
-function renderGroupsList() {
-    const container = document.getElementById("wfm-gallery-groups-list");
-    container.innerHTML = "";
-    if (state.groups.length === 0) {
-        container.textContent = "No groups yet.";
-        return;
-    }
-    state.groups.forEach(g => {
-        const row = document.createElement("div");
-        row.className = "wfm-gallery-group-row";
-        row.innerHTML = `<span class="wfm-gallery-group-name">${g.name}</span>
-            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-gallery-group-delete" data-name="${g.name}" title="Delete group">&times;</button>`;
-        row.querySelector(".wfm-gallery-group-delete").addEventListener("click", () => deleteGroup(g.name));
-        container.appendChild(row);
-    });
-}
-
-async function createGroup(name) {
-    if (!name.trim()) return;
-    try {
-        await fetch(API.groupCreate, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: name.trim() }),
-        });
-        await loadGroups();
-        showToast(`Group "${name}" created`, "success");
-    } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
-    }
-}
-
-async function deleteGroup(name) {
-    if (!confirm(`Delete group "${name}"?`)) return;
-    try {
-        await fetch(API.groupDelete(name), { method: "DELETE" });
-        await loadGroups();
-        showToast(`Group "${name}" deleted`, "success");
-    } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
-    }
-}
-
-async function addToGroup(groupName) {
-    if (!state.selectedImage || !groupName) return;
-    try {
-        await fetch(API.groupAdd(groupName), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: state.selectedImage.path }),
-        });
-        const groups = [...(state.selectedImage.groups || [])];
-        if (!groups.includes(groupName)) groups.push(groupName);
-        state.selectedImage.groups = groups;
-        renderCurrentGroups(groups);
-        showToast(`Added to "${groupName}"`, "success");
-    } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
-    }
-}
-
-async function removeFromGroup(groupName) {
-    if (!state.selectedImage) return;
-    try {
-        await fetch(API.groupRemove(groupName), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: state.selectedImage.path }),
-        });
-        const groups = (state.selectedImage.groups || []).filter(g => g !== groupName);
-        state.selectedImage.groups = groups;
-        renderCurrentGroups(groups);
-        showToast(`Removed from "${groupName}"`, "success");
-    } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
-    }
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 }
 
 // ── 一括操作 ─────────────────────────────────────────────────
@@ -869,19 +966,6 @@ function bindEvents() {
         navigator.clipboard.writeText(JSON.stringify(state.embeddedWorkflow, null, 2))
             .then(() => showToast("Workflow copied to clipboard!", "success"))
             .catch(() => showToast("Copy failed", "error"));
-    });
-
-    // グループ作成
-    document.getElementById("wfm-gallery-new-group-btn")?.addEventListener("click", () => {
-        const input = document.getElementById("wfm-gallery-new-group-input");
-        createGroup(input.value);
-        input.value = "";
-    });
-
-    // グループに追加（詳細パネル）
-    document.getElementById("wfm-gallery-group-add-btn")?.addEventListener("click", () => {
-        const sel = document.getElementById("wfm-gallery-group-select");
-        if (sel.value) addToGroup(sel.value);
     });
 
     // 一括操作バー

@@ -766,30 +766,8 @@
                     </div>
 
                     <!-- Group タブ -->
-                    <div id="wfm-gallery-detail-group" class="wfm-gallery-detail-tab-content" style="display:none;">
-                        <div class="wfm-gallery-info-section">
-                            <div class="wfm-gallery-section-title">Add to Group</div>
-                            <div style="display:flex;gap:4px;margin-bottom:6px;">
-                                <select id="wfm-gallery-group-select" class="wfm-select" style="flex:1;min-width:0;font-size:12px;padding:4px 6px;">
-                                    <option value="">Select group</option>
-                                </select>
-                                <button id="wfm-gallery-group-add-btn" class="wfm-btn wfm-btn-sm">Add</button>
-                            </div>
-                            <div id="wfm-gallery-current-groups" class="wfm-gallery-current-groups"></div>
-                        </div>
-                        <hr class="wfm-group-divider">
-                        <div class="wfm-gallery-info-section">
-                            <div class="wfm-gallery-section-title">Create Group</div>
-                            <div style="display:flex;gap:4px;margin-bottom:6px;">
-                                <input type="text" id="wfm-gallery-new-group-input" class="wfm-input" placeholder="Group name..." style="flex:1;min-width:0;font-size:12px;padding:4px 6px;">
-                                <button id="wfm-gallery-new-group-btn" class="wfm-btn wfm-btn-sm">Create</button>
-                            </div>
-                        </div>
-                        <hr class="wfm-group-divider">
-                        <div class="wfm-gallery-info-section">
-                            <div class="wfm-gallery-section-title">Manage Groups</div>
-                            <div id="wfm-gallery-groups-list" class="wfm-gallery-groups-list"></div>
-                        </div>
+                    <div id="wfm-gallery-detail-group" class="wfm-gallery-detail-tab-content" style="display:none;overflow-y:auto;">
+                        <!-- JS動的生成: renderDetailGroup() -->
                     </div>
                 </div>
             </div>

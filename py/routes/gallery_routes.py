@@ -25,6 +25,7 @@ def setup_routes(app: web.Application):
     app.router.add_post("/wfm/gallery/image/favorite", toggle_favorite)
     app.router.add_get("/wfm/gallery/groups", list_groups)
     app.router.add_post("/wfm/gallery/groups", create_group)
+    app.router.add_put("/wfm/gallery/groups/{name}", rename_group)
     app.router.add_delete("/wfm/gallery/groups/{name}", delete_group)
     app.router.add_post("/wfm/gallery/groups/{name}/add", add_to_group)
     app.router.add_post("/wfm/gallery/groups/{name}/remove", remove_from_group)
@@ -39,7 +40,6 @@ async def list_folders(request: web.Request) -> web.Response:
     root = request.rel_url.query.get("root", "")
     if not root:
         return web.json_response({"error": "root parameter required"}, status=400)
-    # セキュリティ: 絶対パスのみ許可
     try:
         tree = _service.list_folder_tree(root)
         return web.json_response(tree)
@@ -58,12 +58,20 @@ async def list_images(request: web.Request) -> web.Response:
     sort_by = request.rel_url.query.get("sort", "date_desc")
     favorite_only = request.rel_url.query.get("favorite", "false") == "true"
     tag_filter = request.rel_url.query.get("tag", "")
+    group_filter = request.rel_url.query.get("group", "")
 
     if not folder:
         return web.json_response({"error": "folder parameter required"}, status=400)
 
     try:
-        images = _service.list_images(folder, search=search, sort_by=sort_by, favorite_only=favorite_only, tag_filter=tag_filter)
+        images = _service.list_images(
+            folder,
+            search=search,
+            sort_by=sort_by,
+            favorite_only=favorite_only,
+            tag_filter=tag_filter,
+            group_filter=group_filter,
+        )
         return web.json_response({"images": images, "total": len(images)})
     except Exception as e:
         logger.error("list_images error: %s", e)
@@ -99,12 +107,10 @@ async def get_image_workflow(request: web.Request) -> web.Response:
 
 
 async def serve_image(request: web.Request) -> web.Response:
-    """画像ファイルをバイナリで配信"""
     path = request.rel_url.query.get("path", "")
     if not path:
         return web.Response(status=400)
 
-    # パストラバーサル防止
     img_path = _service.serve_image(path)
     if img_path is None:
         return web.Response(status=404)
@@ -156,7 +162,25 @@ async def create_group(request: web.Request) -> web.Response:
         if not name:
             return web.json_response({"error": "name required"}, status=400)
         ok = _service.create_group(name)
-        return web.json_response({"ok": ok})
+        if not ok:
+            return web.json_response({"error": "Group already exists"}, status=409)
+        return web.json_response({"ok": True})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def rename_group(request: web.Request) -> web.Response:
+    """PUT /wfm/gallery/groups/{name} - グループ名変更"""
+    try:
+        old_name = request.match_info.get("name", "")
+        body = await request.json()
+        new_name = body.get("new_name", "").strip()
+        if not old_name or not new_name:
+            return web.json_response({"error": "old_name and new_name required"}, status=400)
+        ok = _service.rename_group(old_name, new_name)
+        if not ok:
+            return web.json_response({"error": "Rename failed (not found or name conflict)"}, status=400)
+        return web.json_response({"ok": True})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 

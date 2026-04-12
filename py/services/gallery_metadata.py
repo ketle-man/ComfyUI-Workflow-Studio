@@ -64,7 +64,6 @@ class GalleryMetadataStore:
         key = self._normalize_path(image_path)
         existing = self._data["images"].get(key, {})
         existing.update(data)
-        # 許可するキーのみ保存
         allowed = {"favorite", "tags", "memo", "groups"}
         existing = {k: v for k, v in existing.items() if k in allowed}
         self._data["images"][key] = existing
@@ -83,11 +82,30 @@ class GalleryMetadataStore:
         self._data["groups"] = groups
         return self._save_to_disk()
 
+    def rename_group(self, old_name: str, new_name: str) -> bool:
+        """グループ名を変更し、全画像のgroupsフィールドも更新する"""
+        groups = self._data.get("groups", [])
+        if not any(g["name"] == old_name for g in groups):
+            return False
+        if any(g["name"] == new_name for g in groups):
+            return False  # 新名前が既に存在
+        # グループリスト更新
+        for g in groups:
+            if g["name"] == old_name:
+                g["name"] = new_name
+                break
+        # 全画像のgroupsフィールドを更新
+        for meta in self._data["images"].values():
+            img_groups = meta.get("groups", [])
+            if old_name in img_groups:
+                meta["groups"] = [new_name if g == old_name else g for g in img_groups]
+        return self._save_to_disk()
+
     def delete_group(self, name: str) -> bool:
         groups = [g for g in self._data.get("groups", []) if g["name"] != name]
         self._data["groups"] = groups
         # 画像のgroupsからも削除
-        for key, meta in self._data["images"].items():
+        for meta in self._data["images"].values():
             if name in meta.get("groups", []):
                 meta["groups"] = [g for g in meta["groups"] if g != name]
         return self._save_to_disk()
@@ -98,3 +116,10 @@ class GalleryMetadataStore:
             if group_name in meta.get("groups", []):
                 result.append(key)
         return result
+
+    def get_group_member_set(self, group_name: str) -> set:
+        """グループメンバーのパスをsetで返す（高速フィルタ用）"""
+        return {
+            key for key, meta in self._data["images"].items()
+            if group_name in meta.get("groups", [])
+        }
