@@ -1059,3 +1059,43 @@ GitHub公開・ComfyUI Manager登録・初回リリース
 - README.md 作成（スクリーンショット4枚付き）
 - ComfyUI Manager 登録PR: https://github.com/Comfy-Org/ComfyUI-Manager/pull/2706
 - GitHub Release v0.1.0: https://github.com/ketle-man/ComfyUI-Workflow-Studio/releases/tag/v0.1.0
+
+---
+
+## 2026-04-13: Gallery タブ追加 & 全タブ Group UI 統一
+
+### 概要
+- ギャラリータブ（Phase 1）実装：6800枚超の画像ブラウザ
+- Workflow / Nodes / Gallery の Group UI を Models タブ基準に統一
+- Settings タブを2カラムレイアウトに変更（テーマを右固定）
+
+### Gallery タブ機能
+- **3カラム表示** — サムネイル / テーブル切り替え、Fav列を左端に
+- **サーバーサイドフィルタ** — グループ・お気に入り・タグによる server-side filtering
+- **マルチセレクト** — Ctrl+クリックで複数選択、Bulk Bar でまとめて操作
+- **グループ管理** — 作成・Rename・削除（Models パネルと同一UIパターン）
+- **os.scandir() + フォルダキャッシュ** — 6800枚環境でのパフォーマンス改善
+- **出力フォルダ設定** — Settings タブからギャラリー参照フォルダを変更可能
+
+### Group UI 統一
+- **Workflow タブ** — `renderSideGroup()` を新設し Models 4 セクションパターンに変更（Current Groups / Add to Group / Create New Group / Manage Groups）。冗長なヘッダーブロック削除
+- **Nodes タブ** — `renderSideGroups()` を全面書き換え。`×` ボタン・"Add" ボタン・"Rename (✎)" 追加
+- **Gallery タブ** — `renderDetailGroup()` を新設、同パターン適用
+
+### Settings 2カラムレイアウト
+- テーマパネルを右側（`float:right; width:50%`）に固定
+- 左側に UI言語〜保存ボタンを連続配置（ギャップなし）
+- `position:sticky; top:0` でテーマパネルをスクロールに追従
+
+### 変更ファイル
+- `py/services/gallery_metadata.py` — `rename_group()`, `get_group_member_set()` 追加
+- `py/services/gallery_service.py` — `_FolderCache`, `_scan_folder()`, `group_filter` 対応
+- `py/routes/gallery_routes.py` — `PUT /wfm/gallery/groups/{name}` 追加
+- `static/js/gallery-tab.js` — マルチセレクト・サーバーサイドフィルタ・renderDetailGroup
+- `static/js/nodes-tab.js` — `renderSideGroups()` 全面書き換え
+- `static/js/workflow-tab.js` — `renderSideGroup()` 新設、旧ハンドラ削除
+- `static/js/settings-tab.js` — 2カラムレイアウト HTML 構造変更
+- `static/css/gallery-tab.css` — multi-selected・bulk-bar・セクションタイトルスタイル
+- `static/css/main.css` — Settings レイアウト CSS（float:right ベース 50:50）
+- `templates/index.html` — Gallery "Group"→"Groups"、各タブ static HTML → JS動的生成、Gallery ヘルプカード追加
+

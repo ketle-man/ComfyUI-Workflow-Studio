@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.5-green)
+![Version](https://img.shields.io/badge/version-0.2.7-green)
 
 ## Screenshots
 
@@ -21,9 +21,9 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 |:---:|:---:|
 | ![Nodes](docs/screenshot_nodes.png) | ![Models](docs/screenshot_models.png) |
 
-| Help & Support Tab | |
+| Gallery Tab | Help & Support Tab |
 |:---:|:---:|
-| ![Help](docs/screenshot_help.png) | |
+| ![Gallery](docs/screenshot_gallery.png) | ![Help](docs/screenshot_help.png) |
 
 | Workflow Studio Library (ComfyUI) | ComfyUI Integration |
 |:---:|:---:|
@@ -73,14 +73,27 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **GenUI Set** — apply preset prompts directly to the GenerateUI interface
 
 ### Settings Tab
+- **2-column layout** — left column for all settings; right column shows the Theme panel fixed in place (sticky)
 - **Collapsible sections** — all settings organized in accordion panels for a clean layout
 - **Theme selection** — 13 built-in themes with visual swatch preview (Dark, Pop, Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro Pixel, Pastel, Brutalism, Earthy, Material, Monotone, Corporate)
 - **Theme customization** — override colors (background, surface, text, primary, accent), add background patterns (horizontal/vertical/diagonal stripes, polka dot, checkerboard, custom SVG tiling with color/opacity/scale/gap controls), and select from 16 fonts including Japanese display fonts (Google Fonts)
 - **Workflows directory** — configure which folder to scan for workflows
+- **Gallery output directory** — configure which output folder the Gallery tab scans for images
 - **Eagle connection** — set Eagle API endpoint for auto-save
 - **Ollama connection** — configure Ollama server URL
 - **Default workflow** — set a workflow to auto-load on startup
 - **Language** — English / Japanese / Chinese
+
+### Gallery Tab (v0.2.7)
+- **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
+- **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
+- **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch tag/group/favorite operations
+- **Server-side filtering** — filter by group, favorites, or tags with fast server-side set lookup (no full rescan)
+- **Group management** — create, rename, delete groups and assign/remove images using the same 4-section panel as Models tab
+- **Favorites** — star images inline without reopening the detail panel
+- **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel
+- **Output folder configurable** — set the scanned output folder from Settings tab
+- **Performance** —  with folder-level mtime cache (30s TTL) for fast incremental refresh
 
 ### Nodes Tab (v0.1.7)
 - **Node Browser** — browse all installed ComfyUI nodes from `/object_info` API with Card/Table views
@@ -193,6 +206,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.2.7
+- **Gallery tab** — new image browser for ComfyUI output folder; Thumbnail/Table views, multi-select with Bulk Bar, server-side group/tag/favorite filtering, group management (rename support), performance-optimized with  + mtime folder cache
+- **Group UI unified** — Workflow, Nodes, and Gallery group panels rebuilt to match the Models tab 4-section pattern (Current Groups / Add to Group / Create New Group / Manage Groups); Rename support added to Workflow and Nodes tabs
+- **Settings 2-column layout** — Theme panel fixed on the right (50% width, sticky); all other settings flow continuously on the left with no visual gap
+- **Gallery output directory setting** — configure the output folder scanned by Gallery tab from Settings
+- **Help tab** — Gallery tab description card added
 
 ### v0.2.5
 - **Sidebar Category/Package sub-tabs** — added 📂 Category and 🧩 Package sub-tabs to the Nodes tab in Workflow Studio Library; each shows a dropdown to filter nodes by category or custom node package (reads `/object_info` for accurate package detection)

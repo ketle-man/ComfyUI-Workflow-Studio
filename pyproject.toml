@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-workflow-studio"
 description = "A comprehensive workflow management and generation UI plugin for ComfyUI. Browse, organize, and execute workflows from a dedicated studio interface."
-version = "0.2.6"
+version = "0.2.7"
 license = "MIT"
 requires-python = ">= 3.10"
 dependencies = ["jinja2"]

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2100 900" fill="none">
+    <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="2100" y2="900" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#1a1a2e"/>
+            <stop offset="50%" stop-color="#16213e"/>
+            <stop offset="100%" stop-color="#1a1a2e"/>
+        </linearGradient>
+        <linearGradient id="wStroke" x1="0" y1="0" x2="600" y2="600" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#4a9eff"/>
+            <stop offset="100%" stop-color="#7b68ee"/>
+        </linearGradient>
+        <linearGradient id="sWave" x1="0" y1="0" x2="600" y2="600" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#7b68ee"/>
+            <stop offset="100%" stop-color="#4a9eff"/>
+        </linearGradient>
+        <linearGradient id="textGrad" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#e0e0ff"/>
+            <stop offset="100%" stop-color="#b0b0d0"/>
+        </linearGradient>
+    </defs>
+    <!-- Background -->
+    <rect width="2100" height="900" fill="url(#bg)"/>
+    <!-- Subtle grid -->
+    <line x1="0" y1="225" x2="2100" y2="225" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <line x1="0" y1="450" x2="2100" y2="450" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <line x1="0" y1="675" x2="2100" y2="675" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    <!-- Decorative wave lines in background -->
+    <path d="M0 750 Q262 700 525 750 Q787 800 1050 750 Q1312 700 1575 750 Q1837 800 2100 750" stroke="#4a9eff" stroke-opacity="0.08" stroke-width="2" fill="none"/>
+    <path d="M0 780 Q262 730 525 780 Q787 830 1050 780 Q1312 730 1575 780 Q1837 830 2100 780" stroke="#7b68ee" stroke-opacity="0.06" stroke-width="2" fill="none"/>
+    <!-- W+S Logo (left side) -->
+    <g transform="translate(180, 180)">
+        <!-- W -->
+        <path d="M60 80 L120 280 L180 130 L240 280 L300 80" stroke="url(#wStroke)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <!-- S wave -->
+        <path d="M80 340 Q140 300 200 340 Q260 380 320 340" stroke="url(#sWave)" stroke-width="18" stroke-linecap="round" fill="none"/>
+    </g>
+    <!-- Title text -->
+    <text x="720" y="380" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="120" font-weight="700" fill="url(#textGrad)" letter-spacing="-2">Workflow Studio</text>
+    <!-- Subtitle -->
+    <text x="720" y="470" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="42" fill="#8888aa" letter-spacing="1">Workflow Management &amp; Generation UI for ComfyUI</text>
+    <!-- Feature pills -->
+    <g font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" fill="#a0a0c0">
+        <rect x="720" y="530" width="200" height="44" rx="22" fill="#4a9eff" fill-opacity="0.12" stroke="#4a9eff" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="820" y="559" text-anchor="middle" fill="#4a9eff">Workflows</text>
+        <rect x="940" y="530" width="200" height="44" rx="22" fill="#7b68ee" fill-opacity="0.12" stroke="#7b68ee" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="1040" y="559" text-anchor="middle" fill="#7b68ee">GenerateUI</text>
+        <rect x="1160" y="530" width="200" height="44" rx="22" fill="#4a9eff" fill-opacity="0.12" stroke="#4a9eff" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="1260" y="559" text-anchor="middle" fill="#4a9eff">AI Prompts</text>
+        <rect x="1380" y="530" width="180" height="44" rx="22" fill="#7b68ee" fill-opacity="0.12" stroke="#7b68ee" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="1470" y="559" text-anchor="middle" fill="#7b68ee">Themes</text>
+    </g>
+</svg>

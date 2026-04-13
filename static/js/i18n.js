@@ -20,6 +20,7 @@ const LANGUAGES = {
         // -- Tabs --
         tabWorkflow: "Workflow",
         tabGenerate: "GenerateUI",
+        tabGallery: "Gallery",
         tabSettings: "Settings",
 
         // -- Workflow toolbar --
@@ -289,6 +290,17 @@ const LANGUAGES = {
         modelsSideInfo: "Info",
         modelsSideGroup: "Group",
         modelsSideCivitai: "CivitAI",
+        gallerySideMetadata: "Metadata",
+
+        // -- Gallery --
+        galleryAllTags: "All Tags",
+        galleryFolders: "Folders",
+        gallerySelectFolder: "Select a folder to browse images.",
+        galleryNoImages: "No images found.",
+        gallerySearchPlaceholder: "Search images...",
+        galleryOutputDir: "Gallery Output Folder",
+        galleryOutputDirLabel: "Output Folder Path",
+        galleryOutputDirHint: "Set the ComfyUI output folder to browse in the Gallery tab. Leave blank to use ComfyUI's default output directory.",
 
         // -- Help & Support --
         tabHelp: "Help",
@@ -344,6 +356,17 @@ const LANGUAGES = {
         helpModels7: "Group management: create, rename, delete groups and assign/remove models",
         helpModels8: "GenUI Model button: apply the selected model to the corresponding node in GenerateUI's current workflow (Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder)",
         helpModels9: "User-defined badges: assign free-label badges with custom colors shared with the Workflow tab",
+        helpGalleryTitle: "Gallery Tab",
+        helpGallery1: "Browse images in the ComfyUI output folder — set the folder path in Settings > Gallery Output Folder",
+        helpGallery2: "3-column layout: folder tree (left) | image grid (center) | detail panel (right)",
+        helpGallery3: "Thumbnail and Table view modes; double-click any image to open fullscreen lightbox",
+        helpGallery4: "Toolbar filters: favorites (★), text search, tag filter, group filter, sort by date/name",
+        helpGallery5: "Multi-select with Ctrl+click — bulk operations: Add to Group, Favorite All, Unfavorite All",
+        helpGallery6: "Detail panel — Info tab: filename, size, date, tags (add/remove), memo with save",
+        helpGallery7: "Detail panel — Metadata tab: embedded ComfyUI workflow JSON viewer with one-click clipboard copy",
+        helpGallery8: "Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image",
+        helpGallery9: "Supports PNG (tEXt/iTXt metadata), JPEG, WebP, GIF; PNG workflow extraction reads ComfyUI-embedded JSON",
+        helpGallery10: "Folder tree: click a folder to load its images; expand subfolders with ▶ arrow",
         helpSidepanelTitle: "Workflow Studio Library (ComfyUI Side Panel)",
         helpSidepanel1: "Open from the Workflow Studio Library button in the ComfyUI toolbar",
         helpSidepanel2: "Workflows tab: All / ★ Favorites / Groups sub-tabs; ★ shown for favorites in All view",
@@ -487,6 +510,7 @@ const LANGUAGES = {
         // -- Tabs --
         tabWorkflow: "ワークフロー",
         tabGenerate: "生成UI",
+        tabGallery: "ギャラリー",
         tabSettings: "設定",
 
         // -- Workflow toolbar --
@@ -756,6 +780,17 @@ const LANGUAGES = {
         modelsSideInfo: "基本情報",
         modelsSideGroup: "グループ",
         modelsSideCivitai: "CivitAI",
+        gallerySideMetadata: "メタデータ",
+
+        // -- Gallery --
+        galleryAllTags: "すべてのタグ",
+        galleryFolders: "フォルダ",
+        gallerySelectFolder: "フォルダを選択して画像を表示します。",
+        galleryNoImages: "画像が見つかりません。",
+        gallerySearchPlaceholder: "画像を検索...",
+        galleryOutputDir: "ギャラリー Outputフォルダ",
+        galleryOutputDirLabel: "Outputフォルダのパス",
+        galleryOutputDirHint: "ギャラリータブで参照するComfyUIのoutputフォルダを設定します。空欄の場合はComfyUIのデフォルトoutputディレクトリを使用します。",
 
         // -- Help & Support --
         tabHelp: "ヘルプ",
@@ -811,6 +846,17 @@ const LANGUAGES = {
         helpModels7: "グループ管理：グループの作成・名前変更・削除、モデルの割り当て・解除",
         helpModels8: "GenUI Modelボタン：選択モデルをGenerateUIの現在のワークフローの該当ノードに直接適用（Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder）",
         helpModels9: "ユーザー定義バッジ：自由ラベルのバッジをモデルに付与（Workflowタブと色パレットを共有）",
+        helpGalleryTitle: "Galleryタブ",
+        helpGallery1: "ComfyUIの出力フォルダ内画像を閲覧 — Settings > Gallery Output Folder でフォルダパスを設定可能",
+        helpGallery2: "3カラムレイアウト: フォルダツリー (左) | 画像グリッド (中央) | 詳細パネル (右)",
+        helpGallery3: "サムネイル・テーブル表示モード切替；ダブルクリックで全画面ライトボックス表示",
+        helpGallery4: "ツールバーフィルタ：お気に入り(★)、テキスト検索、タグフィルタ、グループフィルタ、日付・名前ソート",
+        helpGallery5: "Ctrl+クリックで複数選択 — 一括操作：グループへ追加、一括お気に入り、一括お気に入り解除",
+        helpGallery6: "詳細パネル — Infoタブ：ファイル名、サイズ、日付、タグ（追加/削除）、メモ（保存機能付き）",
+        helpGallery7: "詳細パネル — Metadataタブ：埋め込みComfyUIワークフローJSONビューアとワンクリッククリップボードコピー",
+        helpGallery8: "詳細パネル — Groupsタブ：画像ごとのグループ作成、割り当て、解除、名前変更、削除",
+        helpGallery9: "PNG (tEXt/iTXt メタデータ), JPEG, WebP, GIF対応； PNGはComfyUIの埋め込みJSONを読み込んでワークフロー抽出可能",
+        helpGallery10: "フォルダツリー：フォルダをクリックして画像を読み込む；▶矢印でサブフォルダを展開",
         helpSidepanelTitle: "Workflow Studio Library（ComfyUIサイドパネル）",
         helpSidepanel1: "ComfyUIツールバーのWorkflow Studio Libraryボタンから開く",
         helpSidepanel2: "Workflowsタブ：All / ★ Favorites / Groupsサブタブ、Allビューでお気に入りに★表示",
@@ -954,6 +1000,7 @@ const LANGUAGES = {
         // -- Tabs --
         tabWorkflow: "工作流",
         tabGenerate: "生成UI",
+        tabGallery: "图库",
         tabSettings: "设置",
 
         // -- Workflow toolbar --
@@ -1219,6 +1266,17 @@ const LANGUAGES = {
         modelsSideInfo: "基本信息",
         modelsSideGroup: "分组",
         modelsSideCivitai: "CivitAI",
+        gallerySideMetadata: "元数据",
+
+        // -- Gallery --
+        galleryAllTags: "所有标签",
+        galleryFolders: "文件夹",
+        gallerySelectFolder: "选择文件夹以浏览图片。",
+        galleryNoImages: "未找到图片。",
+        gallerySearchPlaceholder: "搜索图片...",
+        galleryOutputDir: "图库输出文件夹",
+        galleryOutputDirLabel: "输出文件夹路径",
+        galleryOutputDirHint: "设置图库标签页浏览的ComfyUI输出文件夹。留空则使用ComfyUI默认输出目录。",
 
         // -- Help & Support --
         tabHelp: "帮助",
@@ -1274,6 +1332,17 @@ const LANGUAGES = {
         helpModels7: "分组管理：创建、重命名、删除分组，分配/移除模型",
         helpModels8: "GenUI Model按钮：将选中模型直接应用到GenerateUI当前工作流的对应节点（Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder）",
         helpModels9: "用户自定义徽章：为模型添加自由标签徽章（颜色调色板与Workflow标签共享）",
+        helpGalleryTitle: "图库标签页 (Gallery)",
+        helpGallery1: "浏览 ComfyUI 输出文件夹中的图像 — 可以在 设置 > 图库输出文件夹 中设置文件夹路径",
+        helpGallery2: "三列布局：文件夹树（左） | 图像网格（中） | 详情面板（右）",
+        helpGallery3: "缩略图和表格视图模式；双击任何图像可在全屏灯箱中打开",
+        helpGallery4: "工具栏过滤器：收藏 (★)、文本搜索、标签过滤、分组过滤、按日期/名称排序",
+        helpGallery5: "使用 Ctrl+点击 多选 — 批量操作：添加到分组、全部收藏、取消全部收藏",
+        helpGallery6: "详情面板 — 信息(Info)标签：文件名、大小、日期、标签（添加/移除）、包含保存功能的备注",
+        helpGallery7: "详情面板 — 元数据(Metadata)标签：ComfyUI 嵌入的内置工作流 JSON 查看器及一键复制功能",
+        helpGallery8: "详情面板 — 分组(Groups)标签：对每个图像进行组的创建、分配、移除、重命名和删除",
+        helpGallery9: "支持 PNG（tEXt/iTXt 元数据）、JPEG、WebP、GIF；对于 PNG 会读取 ComfyUI 内置的 JSON 提取工作流",
+        helpGallery10: "文件夹树：点击文件夹加载其包含的图像；使用 ▶ 箭头展开子文件夹",
         helpSidepanelTitle: "Workflow Studio Library（ComfyUI侧面板）",
         helpSidepanel1: "从ComfyUI工具栏的Workflow Studio Library按钮打开",
         helpSidepanel2: "Workflows标签：All / ★ Favorites / Groups子标签，All视图中收藏项显示★",

@@ -735,7 +735,29 @@ body {
 
 .wfm-settings-container {
     padding: 24px;
-    max-width: 700px;
+    height: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.wfm-settings-layout {
+    /* layout wrapper — Theme floats right inside this */
+}
+
+.wfm-settings-left-col {
+    overflow: hidden;
+}
+
+.wfm-settings-right-col {
+    float: right;
+    width: 50%;
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - var(--wfm-header-height, 96px) - 48px);
+    overflow-y: auto;
+    margin-left: 24px;
+    margin-bottom: 16px;
+    box-sizing: border-box;
 }
 
 /* ============================================
