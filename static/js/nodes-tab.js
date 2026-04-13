@@ -500,42 +500,61 @@ function renderSideGroups(node) {
     const el = document.getElementById("wfm-nodes-side-group");
     if (!el) return;
 
-    const groupNames = Object.keys(state.nodeGroups).sort();
-    const memberOf = groupNames.filter(g => (state.nodeGroups[g] || []).includes(node.name));
+    const allGroups = Object.keys(state.nodeGroups).sort();
+    const memberOf = allGroups.filter(g => (state.nodeGroups[g] || []).includes(node.name));
+    const available = allGroups.filter(g => !memberOf.includes(g));
 
-    let html = `<h4 style="margin:0 0 8px;">${t("nodesGroups")}</h4>`;
+    el.innerHTML = `
+        <div style="padding:0 4px;">
+            <div style="margin-bottom:12px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("nodesGroups")}</div>
+                ${memberOf.length === 0
+                    ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">No groups assigned</p>`
+                    : memberOf.map(g =>
+                        `<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;">
+                            <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g)}</span>
+                            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-node-remove-group" data-group="${escapeHtml(g)}" title="${t("nodesRemoveGroup")}">&times;</button>
+                        </div>`
+                    ).join("")}
+            </div>
+            <div style="margin-bottom:12px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("nodesAssignGroup")}</div>
+                <div style="display:flex;gap:4px;">
+                    <select id="wfm-nodes-assign-group-select" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
+                        ${available.length === 0
+                            ? `<option value="">No groups available</option>`
+                            : available.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
+                    </select>
+                    <button id="wfm-nodes-assign-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary"
+                        ${available.length === 0 ? "disabled" : ""}>Add</button>
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("nodesCreateGroup")}</div>
+                <div style="display:flex;gap:4px;">
+                    <input type="text" id="wfm-nodes-new-group-input" class="wfm-input"
+                        style="flex:1;font-size:12px;padding:3px 6px;" placeholder="${t("nodesGroupName")}">
+                    <button id="wfm-nodes-create-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Create</button>
+                </div>
+            </div>
+            <div style="border-top:1px solid var(--wfm-border);padding-top:10px;margin-top:4px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Manage Groups</div>
+                <div style="display:flex;gap:4px;">
+                    <select id="wfm-nodes-manage-group-select" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
+                        ${allGroups.length === 0
+                            ? `<option value="">No groups</option>`
+                            : allGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
+                    </select>
+                    <button id="wfm-nodes-rename-group-btn" class="wfm-btn wfm-btn-sm"
+                        ${allGroups.length === 0 ? "disabled" : ""} title="Rename">&#9998;</button>
+                    <button id="wfm-nodes-delete-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger"
+                        ${allGroups.length === 0 ? "disabled" : ""} title="Delete">&times;</button>
+                </div>
+            </div>
+        </div>
+    `;
 
-    // Current groups
-    if (memberOf.length) {
-        html += memberOf.map(g =>
-            `<div class="wfm-node-group-item">
-                <span>${escapeHtml(g)}</span>
-                <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-node-remove-group" data-group="${escapeHtml(g)}">${t("nodesRemoveGroup")}</button>
-            </div>`
-        ).join("");
-    } else {
-        html += `<p style="color:var(--wfm-text-secondary);font-size:12px;">No groups assigned</p>`;
-    }
-
-    // Assign to group
-    const available = groupNames.filter(g => !memberOf.includes(g));
-    html += `<div style="margin-top:12px;display:flex;gap:4px;">
-        <select id="wfm-nodes-assign-group-select" class="wfm-select" style="flex:1;">
-            <option value="">${t("nodesAssignGroup")}</option>
-            ${available.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
-        </select>
-        <button id="wfm-nodes-assign-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+</button>
-    </div>`;
-
-    // Create new group
-    html += `<div style="margin-top:8px;display:flex;gap:4px;">
-        <input type="text" id="wfm-nodes-new-group-input" class="wfm-input" style="flex:1;" placeholder="${t("nodesGroupName")}">
-        <button id="wfm-nodes-create-group-btn" class="wfm-btn wfm-btn-sm">${t("nodesCreateGroup")}</button>
-    </div>`;
-
-    el.innerHTML = html;
-
-    // Event listeners
+    // グループから除外
     el.querySelectorAll(".wfm-node-remove-group").forEach(btn => {
         btn.addEventListener("click", async () => {
             const group = btn.dataset.group;
@@ -547,8 +566,9 @@ function renderSideGroups(node) {
         });
     });
 
-    document.getElementById("wfm-nodes-assign-group-btn")?.addEventListener("click", async () => {
-        const sel = document.getElementById("wfm-nodes-assign-group-select");
+    // グループに追加
+    el.querySelector("#wfm-nodes-assign-group-btn")?.addEventListener("click", async () => {
+        const sel = el.querySelector("#wfm-nodes-assign-group-select");
         const group = sel?.value;
         if (!group) return;
         if (!state.nodeGroups[group]) state.nodeGroups[group] = [];
@@ -560,18 +580,54 @@ function renderSideGroups(node) {
         }
     });
 
-    document.getElementById("wfm-nodes-create-group-btn")?.addEventListener("click", async () => {
-        const input = document.getElementById("wfm-nodes-new-group-input");
+    // グループ作成（作成後に現在のノードに追加）
+    el.querySelector("#wfm-nodes-create-group-btn")?.addEventListener("click", async () => {
+        const input = el.querySelector("#wfm-nodes-new-group-input");
         const name = input?.value?.trim();
         if (!name) return;
-        if (!state.nodeGroups[name]) state.nodeGroups[name] = [];
-        if (!state.nodeGroups[name].includes(node.name)) {
-            state.nodeGroups[name].push(node.name);
+        if (state.nodeGroups[name]) {
+            showToast("Group already exists", "warning");
+            return;
         }
+        state.nodeGroups[name] = [node.name];
         await saveNodeGroups(state.nodeGroups);
         input.value = "";
         renderSideGroups(node);
         renderFilters();
+    });
+
+    // グループ名変更
+    el.querySelector("#wfm-nodes-rename-group-btn")?.addEventListener("click", async () => {
+        const sel = el.querySelector("#wfm-nodes-manage-group-select");
+        const oldName = sel?.value;
+        if (!oldName) return;
+        const newName = prompt(`Rename group "${oldName}" to:`, oldName);
+        if (!newName || newName === oldName) return;
+        if (state.nodeGroups[newName] !== undefined) {
+            showToast("Group name already exists", "warning");
+            return;
+        }
+        state.nodeGroups[newName] = state.nodeGroups[oldName];
+        delete state.nodeGroups[oldName];
+        await saveNodeGroups(state.nodeGroups);
+        if (state.groupFilter === oldName) state.groupFilter = newName;
+        renderSideGroups(node);
+        renderFilters();
+        showToast(`Renamed to "${newName}"`, "success");
+    });
+
+    // グループ削除
+    el.querySelector("#wfm-nodes-delete-group-btn")?.addEventListener("click", async () => {
+        const sel = el.querySelector("#wfm-nodes-manage-group-select");
+        const name = sel?.value;
+        if (!name) return;
+        if (!confirm(`Delete group "${name}"?`)) return;
+        delete state.nodeGroups[name];
+        await saveNodeGroups(state.nodeGroups);
+        if (state.groupFilter === name) state.groupFilter = "";
+        renderSideGroups(node);
+        renderFilters();
+        showToast(`Group "${name}" deleted`, "success");
     });
 }
 

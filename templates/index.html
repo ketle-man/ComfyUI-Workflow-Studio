@@ -98,35 +98,8 @@
                         <pre id="wfm-json-content" class="wfm-json-content"></pre>
                     </div>
                     <!-- Group Tab -->
-                    <div id="wfm-side-tab-group" class="wfm-side-tab-content" style="display:none;">
-                        <div class="wfm-group-panel">
-                            <div class="wfm-group-section">
-                                <div class="wfm-group-section-title">Properties</div>
-                                <div id="wfm-grp-prop-name" class="wfm-group-prop">No selection</div>
-                                <div id="wfm-grp-prop-group" class="wfm-group-prop"></div>
-                            </div>
-                            <hr class="wfm-group-divider">
-                            <div class="wfm-group-section">
-                                <div class="wfm-group-section-title">Group Management</div>
-                                <div style="display:flex;gap:4px;margin-bottom:6px;">
-                                    <input type="text" id="wfm-group-name-input" class="wfm-input" placeholder="Group name" style="flex:1;min-width:0;padding:4px 6px;font-size:12px;">
-                                    <button id="wfm-group-add-btn" class="wfm-btn wfm-btn-sm" title="Create group">Add</button>
-                                </div>
-                                <div style="display:flex;gap:4px;margin-bottom:6px;">
-                                    <select id="wfm-group-select" class="wfm-select" style="flex:1;min-width:0;padding:4px 6px;font-size:12px;">
-                                        <option value="">Select group</option>
-                                    </select>
-                                    <button id="wfm-group-rename-btn" class="wfm-btn wfm-btn-sm" title="Rename group">&#9998;</button>
-                                    <button id="wfm-group-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" title="Delete group" style="padding:4px 8px;font-size:12px;">&times;</button>
-                                </div>
-                            </div>
-                            <hr class="wfm-group-divider">
-                            <div class="wfm-group-section">
-                                <div class="wfm-group-section-title">Workflow Actions</div>
-                                <button id="wfm-assign-group-btn" class="wfm-btn wfm-btn-sm" style="width:100%;margin-bottom:4px;" disabled>Add to Group</button>
-                                <button id="wfm-remove-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" style="width:100%;margin-bottom:4px;font-size:12px;" disabled>Remove from Group</button>
-                            </div>
-                        </div>
+                    <div id="wfm-side-tab-group" class="wfm-side-tab-content" style="display:none;overflow-y:auto;">
+                        <!-- JS動的生成: renderSideGroup() -->
                     </div>
                 </div>
             </div>

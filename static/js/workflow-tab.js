@@ -482,7 +482,7 @@ async function showSidePanel(wf, cardEl) {
     sidePanelThumbUpdate(wf);
 
     // Update group tab
-    sidePanelGroupUpdate();
+    renderSideGroup(wf);
 
     const badgeEl = document.getElementById("wfm-json-format-badge");
     try {
@@ -516,7 +516,7 @@ function closeSidePanel() {
     if (listLoadBtn) { listLoadBtn.disabled = true; listLoadBtn.title = t("selectCardFirst"); }
     const listOpenComfyBtn = document.getElementById("wfm-list-open-comfyui-btn");
     if (listOpenComfyBtn) { listOpenComfyBtn.disabled = true; listOpenComfyBtn.title = t("selectCardFirst"); }
-    sidePanelGroupUpdate();
+    renderSideGroup(null);
 }
 
 // ============================================
@@ -551,49 +551,161 @@ function sidePanelThumbUpdate(wf) {
 // Group Tab in Side Panel
 // ============================================
 
-function sidePanelGroupUpdate() {
-    const nameEl = document.getElementById("wfm-grp-prop-name");
-    const groupEl = document.getElementById("wfm-grp-prop-group");
-    const assignBtn = document.getElementById("wfm-assign-group-btn");
-    const removeBtn = document.getElementById("wfm-remove-group-btn");
+function renderSideGroup(wf) {
+    const el = document.getElementById("wfm-side-tab-group");
+    if (!el) return;
 
-    if (!state.selectedWf) {
-        if (nameEl) nameEl.textContent = t("noSelection");
-        if (groupEl) groupEl.textContent = "";
-        if (assignBtn) assignBtn.disabled = true;
-        if (removeBtn) removeBtn.disabled = true;
+    const allGroups = groups.groupNames();
+
+    if (!wf) {
+        el.innerHTML = `<p style="padding:12px;color:var(--wfm-text-secondary);font-size:12px;">${t("noSelection")}</p>`;
+        _refreshGroupFilter();
         return;
     }
 
-    const filename = state.selectedWf.filename;
-    if (nameEl) nameEl.textContent = filename.replace(/\.json$/, "");
-    const grps = groups.groupsOf(filename);
-    if (groupEl) groupEl.textContent = grps.length > 0 ? `${t("groupsLabel")}: ${grps.join(", ")}` : `${t("groupsLabel")}: ${t("groupsNone")}`;
-    if (assignBtn) assignBtn.disabled = false;
+    const filename = wf.filename;
+    const memberOf = groups.groupsOf(filename);
+    const available = allGroups.filter(g => !memberOf.includes(g));
 
-    const selGroup = document.getElementById("wfm-group-select")?.value;
-    if (removeBtn) removeBtn.disabled = !selGroup || !grps.includes(selGroup);
+    el.innerHTML = `
+        <div style="padding:8px;">
+            <div style="margin-bottom:10px;">
+                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:2px;">${t("groupsLabel")}</div>
+                <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                    title="${escapeHtml(filename)}">${escapeHtml(filename.replace(/\.json$/, ""))}</div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Current Groups</div>
+                ${memberOf.length === 0
+                    ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">${t("groupsNone")}</p>`
+                    : memberOf.map(g =>
+                        `<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;">
+                            <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g)}</span>
+                            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-wf-grp-remove" data-group="${escapeHtml(g)}" title="Remove">&times;</button>
+                        </div>`
+                    ).join("")}
+            </div>
+            <div style="margin-bottom:12px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Add to Group</div>
+                <div style="display:flex;gap:4px;">
+                    <select id="wfm-grp-assign-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
+                        ${available.length === 0
+                            ? `<option value="">No groups available</option>`
+                            : available.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
+                    </select>
+                    <button id="wfm-grp-assign-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary"
+                        ${available.length === 0 ? "disabled" : ""}>Add</button>
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Create New Group</div>
+                <div style="display:flex;gap:4px;">
+                    <input type="text" id="wfm-grp-new-input" class="wfm-input"
+                        style="flex:1;font-size:12px;padding:3px 6px;" placeholder="Group name">
+                    <button id="wfm-grp-create-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Create</button>
+                </div>
+            </div>
+            <div style="border-top:1px solid var(--wfm-border);padding-top:10px;margin-top:4px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Manage Groups</div>
+                <div style="display:flex;gap:4px;">
+                    <select id="wfm-grp-manage-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
+                        ${allGroups.length === 0
+                            ? `<option value="">No groups</option>`
+                            : allGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
+                    </select>
+                    <button id="wfm-grp-rename-btn" class="wfm-btn wfm-btn-sm"
+                        ${allGroups.length === 0 ? "disabled" : ""} title="Rename">&#9998;</button>
+                    <button id="wfm-grp-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger"
+                        ${allGroups.length === 0 ? "disabled" : ""} title="Delete">&times;</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // グループから除外
+    el.querySelectorAll(".wfm-wf-grp-remove").forEach(btn => {
+        btn.addEventListener("click", () => {
+            groups.remove(filename, btn.dataset.group);
+            renderSideGroup(wf);
+            _refreshGroupFilter();
+            showToast(`Removed from "${btn.dataset.group}"`, "success");
+        });
+    });
+
+    // グループに追加
+    el.querySelector("#wfm-grp-assign-btn")?.addEventListener("click", () => {
+        const g = el.querySelector("#wfm-grp-assign-sel")?.value;
+        if (!g) return;
+        groups.assign(filename, g);
+        renderSideGroup(wf);
+        showToast(`Added to "${g}"`, "success");
+    });
+
+    // グループ作成（作成後に現在のWFに追加）
+    el.querySelector("#wfm-grp-create-btn")?.addEventListener("click", () => {
+        const input = el.querySelector("#wfm-grp-new-input");
+        const name = input?.value.trim();
+        if (!name) return;
+        if (!groups.createGroup(name)) {
+            showToast(`"${name}" already exists`, "warning");
+            return;
+        }
+        groups.assign(filename, name);
+        input.value = "";
+        renderSideGroup(wf);
+        _refreshGroupFilter();
+        showToast(`Group "${name}" created`, "success");
+    });
+
+    // グループ名変更
+    el.querySelector("#wfm-grp-rename-btn")?.addEventListener("click", () => {
+        const oldName = el.querySelector("#wfm-grp-manage-sel")?.value;
+        if (!oldName) return;
+        const newName = prompt(`Rename group "${oldName}" to:`, oldName);
+        if (!newName || newName === oldName) return;
+        if (!groups.renameGroup(oldName, newName)) {
+            showToast("Rename failed", "error");
+            return;
+        }
+        if (state.groupFilter === oldName) state.groupFilter = newName;
+        renderSideGroup(wf);
+        _refreshGroupFilter();
+        showToast(`Renamed to "${newName}"`, "success");
+    });
+
+    // グループ削除
+    el.querySelector("#wfm-grp-delete-btn")?.addEventListener("click", () => {
+        const name = el.querySelector("#wfm-grp-manage-sel")?.value;
+        if (!name) return;
+        if (!confirm(`Delete group "${name}"?`)) return;
+        groups.deleteGroup(name);
+        if (state.groupFilter === name) {
+            state.groupFilter = "";
+            const filterSel = document.getElementById("wfm-group-filter");
+            if (filterSel) filterSel.value = "";
+        }
+        renderSideGroup(wf);
+        _refreshGroupFilter();
+        showToast(`Group "${name}" deleted`, "success");
+    });
+
+    _refreshGroupFilter();
 }
 
-function refreshGroupSelects() {
-    const sideSel = document.getElementById("wfm-group-select");
+/** ツールバーのグループフィルタセレクトのみ更新 */
+function _refreshGroupFilter() {
     const filterSel = document.getElementById("wfm-group-filter");
+    if (!filterSel) return;
+    const prevVal = filterSel.value;
     const grpNames = groups.groupNames();
-
-    [filterSel, sideSel].forEach((sel, i) => {
-        if (!sel) return;
-        const prevVal = sel.value;
-        sel.innerHTML = i === 0
-            ? `<option value="">${t("allGroups")}</option>`
-            : `<option value="">${t("selectGroup")}</option>`;
-        grpNames.forEach((g) => {
-            const opt = document.createElement("option");
-            opt.value = g;
-            opt.textContent = g;
-            sel.appendChild(opt);
-        });
-        if (grpNames.includes(prevVal)) sel.value = prevVal;
+    filterSel.innerHTML = `<option value="">${t("allGroups")}</option>`;
+    grpNames.forEach(g => {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.textContent = g;
+        filterSel.appendChild(opt);
     });
+    if (grpNames.includes(prevVal)) filterSel.value = prevVal;
 }
 
 // ============================================
@@ -1099,74 +1211,7 @@ export function initWorkflowTab() {
 
     // Group management
     groups.load();
-    refreshGroupSelects();
-
-    // Add group
-    document.getElementById("wfm-group-add-btn")?.addEventListener("click", () => {
-        const input = document.getElementById("wfm-group-name-input");
-        const name = input?.value.trim();
-        if (!name) return;
-        if (!groups.createGroup(name)) {
-            showToast(`"${name}" already exists`, "error");
-            return;
-        }
-        input.value = "";
-        refreshGroupSelects();
-        showToast(`Group "${name}" created`, "success");
-    });
-
-    // Rename group
-    document.getElementById("wfm-group-rename-btn")?.addEventListener("click", () => {
-        const sel = document.getElementById("wfm-group-select");
-        const oldName = sel?.value;
-        if (!oldName) return;
-        const newName = prompt("New group name:", oldName);
-        if (!newName || newName === oldName) return;
-        if (!groups.renameGroup(oldName, newName)) {
-            showToast("Rename failed", "error");
-            return;
-        }
-        refreshGroupSelects();
-        sidePanelGroupUpdate();
-        showToast(`Group renamed to "${newName}"`, "success");
-    });
-
-    // Delete group
-    document.getElementById("wfm-group-delete-btn")?.addEventListener("click", () => {
-        const sel = document.getElementById("wfm-group-select");
-        const name = sel?.value;
-        if (!name) return;
-        if (!confirm(`Delete group "${name}"?`)) return;
-        groups.deleteGroup(name);
-        refreshGroupSelects();
-        sidePanelGroupUpdate();
-        showToast(`Group "${name}" deleted`, "success");
-    });
-
-    // Assign to group
-    document.getElementById("wfm-assign-group-btn")?.addEventListener("click", () => {
-        const sel = document.getElementById("wfm-group-select");
-        const groupName = sel?.value;
-        if (!groupName || !state.selectedWf) return;
-        groups.assign(state.selectedWf.filename, groupName);
-        sidePanelGroupUpdate();
-        showToast(`Added to "${groupName}"`, "success");
-    });
-
-    // Remove from group
-    document.getElementById("wfm-remove-group-btn")?.addEventListener("click", () => {
-        const sel = document.getElementById("wfm-group-select");
-        const groupName = sel?.value;
-        if (!groupName || !state.selectedWf) return;
-        groups.remove(state.selectedWf.filename, groupName);
-        sidePanelGroupUpdate();
-        showToast(`Removed from "${groupName}"`, "success");
-    });
-
-    // Update remove button state when group select changes
-    document.getElementById("wfm-group-select")?.addEventListener("change", () => {
-        sidePanelGroupUpdate();
-    });
+    _refreshGroupFilter();
 
     // Toolbar: group filter dropdown
     document.getElementById("wfm-group-filter")?.addEventListener("change", (e) => {
