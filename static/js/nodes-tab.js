@@ -507,7 +507,7 @@ function renderSideGroups(node) {
     el.innerHTML = `
         <div style="padding:0 4px;">
             <div style="margin-bottom:12px;">
-                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("nodesGroups")}</div>
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Current Groups</div>
                 ${memberOf.length === 0
                     ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">No groups assigned</p>`
                     : memberOf.map(g =>

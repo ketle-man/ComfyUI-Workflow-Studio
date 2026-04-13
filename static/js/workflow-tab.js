@@ -569,11 +569,6 @@ function renderSideGroup(wf) {
 
     el.innerHTML = `
         <div style="padding:8px;">
-            <div style="margin-bottom:10px;">
-                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:2px;">${t("groupsLabel")}</div>
-                <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                    title="${escapeHtml(filename)}">${escapeHtml(filename.replace(/\.json$/, ""))}</div>
-            </div>
             <div style="margin-bottom:12px;">
                 <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Current Groups</div>
                 ${memberOf.length === 0
