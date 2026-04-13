@@ -360,32 +360,8 @@ export async function initSettingsTab() {
         <h2 style="font-size:18px;margin-bottom:20px;">${t("settingsTitle")}</h2>
 
         <div class="wfm-settings-layout">
-        <!-- Left column: all settings except Theme -->
-        <div class="wfm-settings-left-col">
 
-        <!-- Language Settings -->
-        <details class="wfm-settings-section" open>
-            <summary class="wfm-settings-summary">${t("langLabel")} / ${t("summaryLangLabel")}</summary>
-            <div class="wfm-form-group">
-                <label>${t("langLabel")}</label>
-                <select class="wfm-select" id="wfm-settings-ui-lang">
-                    ${buildLangOptions(getLanguageOptions(), uiLang)}
-                </select>
-            </div>
-            <div class="wfm-form-group">
-                <label>${t("summaryLangLabel")}</label>
-                <select class="wfm-select" id="wfm-settings-summary-lang">
-                    ${buildLangOptions(getSummaryLanguageOptions(), summaryLang)}
-                </select>
-                <small style="color:var(--wfm-warning);font-size:11px;display:block;margin-top:4px;">
-                    ⚠ ${t("summaryLangNote")}
-                </small>
-            </div>
-        </details>
-
-        </div><!-- /wfm-settings-left-col -->
-
-        <!-- Right column: Theme only -->
+        <!-- Right column: Theme (floated right) -->
         <div class="wfm-settings-right-col">
         <!-- Theme -->
         <details class="wfm-settings-section" open>
@@ -486,10 +462,28 @@ export async function initSettingsTab() {
         </details>
 
         </div><!-- /wfm-settings-right-col -->
-        </div><!-- /wfm-settings-layout -->
 
-        <!-- Remaining settings below the 2-col layout -->
-        <div class="wfm-settings-left-col" style="max-width:480px;">
+        <!-- Left column: all settings (Language + rest), flows left of floated Theme -->
+        <div class="wfm-settings-left-col">
+        <!-- Language Settings -->
+        <details class="wfm-settings-section" open>
+            <summary class="wfm-settings-summary">${t("langLabel")} / ${t("summaryLangLabel")}</summary>
+            <div class="wfm-form-group">
+                <label>${t("langLabel")}</label>
+                <select class="wfm-select" id="wfm-settings-ui-lang">
+                    ${buildLangOptions(getLanguageOptions(), uiLang)}
+                </select>
+            </div>
+            <div class="wfm-form-group">
+                <label>${t("summaryLangLabel")}</label>
+                <select class="wfm-select" id="wfm-settings-summary-lang">
+                    ${buildLangOptions(getSummaryLanguageOptions(), summaryLang)}
+                </select>
+                <small style="color:var(--wfm-warning);font-size:11px;display:block;margin-top:4px;">
+                    ⚠ ${t("summaryLangNote")}
+                </small>
+            </div>
+        </details>
 
         <!-- Workflow Data Folder -->
         <details class="wfm-settings-section">
@@ -615,7 +609,10 @@ export async function initSettingsTab() {
         <!-- Save Button -->
         <button class="wfm-btn wfm-btn-primary" id="wfm-settings-save" style="min-width:120px;">${t("saveSettings")}</button>
 
-        </div><!-- /remaining settings col -->
+        </div><!-- /wfm-settings-left-col -->
+
+        <div style="clear:both;"></div>
+        </div><!-- /wfm-settings-layout -->
     `;
 
     // --- Theme change handler ---

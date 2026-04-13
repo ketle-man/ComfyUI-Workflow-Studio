@@ -188,6 +188,14 @@ function applyI18nToHtml() {
         if (btn.dataset.sideTab === "civitai") btn.textContent = t("modelsSideCivitai");
     });
 
+    // Gallery tab
+    const gallerySideTabBtns = document.querySelectorAll(".wfm-gallery-detail-tab-btn");
+    gallerySideTabBtns.forEach(btn => {
+        if (btn.dataset.detailTab === "info") btn.textContent = t("modelsSideInfo");
+        if (btn.dataset.detailTab === "meta") btn.textContent = t("gallerySideMetadata");
+        if (btn.dataset.detailTab === "group") btn.textContent = t("modelsSideGroup");
+    });
+
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
     if (assistantHeader) assistantHeader.textContent = t("assistantSubtab");
@@ -273,6 +281,12 @@ function applyI18nToHtml() {
         "wfm-help-models-5": "helpModels5", "wfm-help-models-6": "helpModels6",
         "wfm-help-models-7": "helpModels7", "wfm-help-models-8": "helpModels8",
         "wfm-help-models-9": "helpModels9",
+        "wfm-help-gallery-title": "helpGalleryTitle",
+        "wfm-help-gallery-1": "helpGallery1", "wfm-help-gallery-2": "helpGallery2",
+        "wfm-help-gallery-3": "helpGallery3", "wfm-help-gallery-4": "helpGallery4",
+        "wfm-help-gallery-5": "helpGallery5", "wfm-help-gallery-6": "helpGallery6",
+        "wfm-help-gallery-7": "helpGallery7", "wfm-help-gallery-8": "helpGallery8",
+        "wfm-help-gallery-9": "helpGallery9", "wfm-help-gallery-10": "helpGallery10",
         "wfm-help-sidepanel-title": "helpSidepanelTitle",
         "wfm-help-sidepanel-1": "helpSidepanel1", "wfm-help-sidepanel-2": "helpSidepanel2",
         "wfm-help-sidepanel-3": "helpSidepanel3", "wfm-help-sidepanel-4": "helpSidepanel4",

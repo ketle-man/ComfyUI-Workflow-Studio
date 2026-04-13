@@ -741,27 +741,23 @@ body {
 }
 
 .wfm-settings-layout {
-    display: flex;
-    gap: 24px;
-    align-items: flex-start;
-    min-height: 100%;
+    /* layout wrapper — Theme floats right inside this */
 }
 
 .wfm-settings-left-col {
-    flex: 0 0 480px;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    overflow: hidden;
 }
 
 .wfm-settings-right-col {
-    flex: 1;
-    min-width: 300px;
+    float: right;
+    width: 50%;
     position: sticky;
     top: 0;
     max-height: calc(100vh - var(--wfm-header-height, 96px) - 48px);
     overflow-y: auto;
+    margin-left: 24px;
+    margin-bottom: 16px;
+    box-sizing: border-box;
 }
 
 /* ============================================

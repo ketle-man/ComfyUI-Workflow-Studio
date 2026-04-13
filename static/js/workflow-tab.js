@@ -570,48 +570,48 @@ function renderSideGroup(wf) {
     el.innerHTML = `
         <div style="padding:8px;">
             <div style="margin-bottom:12px;">
-                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Current Groups</div>
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("modelsCurrentGroups")}</div>
                 ${memberOf.length === 0
-                    ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">${t("groupsNone")}</p>`
+                    ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">${t("modelsNoGroup")}</p>`
                     : memberOf.map(g =>
                         `<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;">
                             <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g)}</span>
-                            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-wf-grp-remove" data-group="${escapeHtml(g)}" title="Remove">&times;</button>
+                            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-wf-grp-remove" data-group="${escapeHtml(g)}" title="${t("modelsRemoveFromGroup")}">&times;</button>
                         </div>`
                     ).join("")}
             </div>
             <div style="margin-bottom:12px;">
-                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Add to Group</div>
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("modelsAssignGroup")}</div>
                 <div style="display:flex;gap:4px;">
                     <select id="wfm-grp-assign-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
                         ${available.length === 0
-                            ? `<option value="">No groups available</option>`
+                            ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
                             : available.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
                     </select>
                     <button id="wfm-grp-assign-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary"
-                        ${available.length === 0 ? "disabled" : ""}>Add</button>
+                        ${available.length === 0 ? "disabled" : ""}>${t("modelsAdd")}</button>
                 </div>
             </div>
             <div style="margin-bottom:12px;">
-                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Create New Group</div>
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("modelsCreateGroup")}</div>
                 <div style="display:flex;gap:4px;">
                     <input type="text" id="wfm-grp-new-input" class="wfm-input"
-                        style="flex:1;font-size:12px;padding:3px 6px;" placeholder="Group name">
-                    <button id="wfm-grp-create-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Create</button>
+                        style="flex:1;font-size:12px;padding:3px 6px;" placeholder="${t("modelsGroupName")}">
+                    <button id="wfm-grp-create-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">${t("modelsCreate")}</button>
                 </div>
             </div>
             <div style="border-top:1px solid var(--wfm-border);padding-top:10px;margin-top:4px;">
-                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Manage Groups</div>
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${t("modelsManageGroups")}</div>
                 <div style="display:flex;gap:4px;">
                     <select id="wfm-grp-manage-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
                         ${allGroups.length === 0
-                            ? `<option value="">No groups</option>`
+                            ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
                             : allGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
                     </select>
                     <button id="wfm-grp-rename-btn" class="wfm-btn wfm-btn-sm"
-                        ${allGroups.length === 0 ? "disabled" : ""} title="Rename">&#9998;</button>
+                        ${allGroups.length === 0 ? "disabled" : ""} title="${t("modelsRename")}">&#9998;</button>
                     <button id="wfm-grp-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger"
-                        ${allGroups.length === 0 ? "disabled" : ""} title="Delete">&times;</button>
+                        ${allGroups.length === 0 ? "disabled" : ""} title="${t("modelsDelete")}">&times;</button>
                 </div>
             </div>
         </div>

@@ -578,47 +578,47 @@ function renderDetailGroup(img) {
     el.innerHTML = `
         <div style="padding:4px;">
             <div style="margin-bottom:12px;">
-                <div class="wfm-gallery-section-title">Current Groups</div>
+                <div class="wfm-gallery-section-title">${t("modelsCurrentGroups")}</div>
                 ${memberOf.length === 0
-                    ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">Not in any group.</p>`
+                    ? `<p style="color:var(--wfm-text-secondary);font-size:12px;">${t("modelsNoGroup")}</p>`
                     : memberOf.map(g => `
                         <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;">
                             <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g)}</span>
-                            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-gallery-grp-remove" data-group="${escapeHtml(g)}" title="Remove">&times;</button>
+                            <button class="wfm-btn wfm-btn-sm wfm-btn-danger wfm-gallery-grp-remove" data-group="${escapeHtml(g)}" title="${t("modelsRemoveFromGroup")}">&times;</button>
                         </div>`).join("")}
             </div>
             <div style="margin-bottom:12px;">
-                <div class="wfm-gallery-section-title">Add to Group</div>
+                <div class="wfm-gallery-section-title">${t("modelsAssignGroup")}</div>
                 <div style="display:flex;gap:4px;">
                     <select id="wfm-gallery-grp-assign-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
                         ${availableGroups.length === 0
-                            ? `<option value="">No groups available</option>`
+                            ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
                             : availableGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
                     </select>
                     <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-gallery-grp-assign-btn"
-                        ${availableGroups.length === 0 ? "disabled" : ""}>Add</button>
+                        ${availableGroups.length === 0 ? "disabled" : ""}>${t("modelsAdd")}</button>
                 </div>
             </div>
             <div style="margin-bottom:12px;">
-                <div class="wfm-gallery-section-title">Create Group</div>
+                <div class="wfm-gallery-section-title">${t("modelsCreateGroup")}</div>
                 <div style="display:flex;gap:4px;">
                     <input type="text" id="wfm-gallery-grp-new-input" class="wfm-input"
-                        style="flex:1;font-size:12px;padding:3px 6px;" placeholder="Group name...">
-                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-gallery-grp-create-btn">Create</button>
+                        style="flex:1;font-size:12px;padding:3px 6px;" placeholder="${t("modelsGroupName")}">
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-gallery-grp-create-btn">${t("modelsCreate")}</button>
                 </div>
             </div>
             <div style="border-top:1px solid var(--wfm-border);padding-top:10px;margin-top:4px;">
-                <div class="wfm-gallery-section-title">Manage Groups</div>
+                <div class="wfm-gallery-section-title">${t("modelsManageGroups")}</div>
                 <div style="display:flex;gap:4px;">
                     <select id="wfm-gallery-grp-manage-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
                         ${allGroups.length === 0
-                            ? `<option value="">No groups</option>`
+                            ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
                             : allGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-gallery-grp-rename-btn"
-                        ${allGroups.length === 0 ? "disabled" : ""} title="Rename">&#9998;</button>
+                        ${allGroups.length === 0 ? "disabled" : ""} title="${t("modelsRename")}">&#9998;</button>
                     <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-gallery-grp-delete-btn"
-                        ${allGroups.length === 0 ? "disabled" : ""} title="Delete">&times;</button>
+                        ${allGroups.length === 0 ? "disabled" : ""} title="${t("modelsDelete")}">&times;</button>
                 </div>
             </div>
         </div>
