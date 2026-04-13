@@ -359,6 +359,10 @@ export async function initSettingsTab() {
     container.innerHTML = `
         <h2 style="font-size:18px;margin-bottom:20px;">${t("settingsTitle")}</h2>
 
+        <div class="wfm-settings-layout">
+        <!-- Left column: all settings except Theme -->
+        <div class="wfm-settings-left-col">
+
         <!-- Language Settings -->
         <details class="wfm-settings-section" open>
             <summary class="wfm-settings-summary">${t("langLabel")} / ${t("summaryLangLabel")}</summary>
@@ -379,6 +383,10 @@ export async function initSettingsTab() {
             </div>
         </details>
 
+        </div><!-- /wfm-settings-left-col -->
+
+        <!-- Right column: Theme only -->
+        <div class="wfm-settings-right-col">
         <!-- Theme -->
         <details class="wfm-settings-section" open>
             <summary class="wfm-settings-summary">${t("themeLabel")}</summary>
@@ -476,6 +484,12 @@ export async function initSettingsTab() {
                 </div>
             </div>
         </details>
+
+        </div><!-- /wfm-settings-right-col -->
+        </div><!-- /wfm-settings-layout -->
+
+        <!-- Remaining settings below the 2-col layout -->
+        <div class="wfm-settings-left-col" style="max-width:480px;">
 
         <!-- Workflow Data Folder -->
         <details class="wfm-settings-section">
@@ -600,6 +614,8 @@ export async function initSettingsTab() {
 
         <!-- Save Button -->
         <button class="wfm-btn wfm-btn-primary" id="wfm-settings-save" style="min-width:120px;">${t("saveSettings")}</button>
+
+        </div><!-- /remaining settings col -->
     `;
 
     // --- Theme change handler ---
