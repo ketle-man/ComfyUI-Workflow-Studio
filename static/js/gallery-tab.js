@@ -76,6 +76,11 @@ async function loadFolderTree() {
         }
         tree.innerHTML = "";
         renderTreeNode(data, tree, 0, true);
+        // root フォルダを自動選択（フォルダ未選択の場合のみ）
+        if (!state.currentFolder) {
+            const firstLabel = tree.querySelector(".wfm-gallery-tree-label");
+            if (firstLabel) firstLabel.click();
+        }
     } catch (e) {
         tree.innerHTML = `<p class="wfm-placeholder">Error: ${e.message}</p>`;
     }
