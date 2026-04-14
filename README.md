@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.7-green)
+![Version](https://img.shields.io/badge/version-0.2.8-green)
 
 ## Screenshots
 
@@ -82,6 +82,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Eagle connection** — set Eagle API endpoint for auto-save
 - **Ollama connection** — configure Ollama server URL
 - **Default workflow** — set a workflow to auto-load on startup
+- **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling)
 - **Language** — English / Japanese / Chinese
 
 ### Gallery Tab (v0.2.7)
@@ -206,6 +207,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.2.8
+- **Data storage moved** — plugin data (settings, metadata, prompts, etc.) is now stored in `ComfyUI/user/default/Workflow-Studio/` instead of `custom_nodes/ComfyUI-Workflow-Studio/data/`; falls back to the old `data/` directory if `user/default/` does not exist
+- **Data Management section** — new Settings tab section to export all plugin data to a single JSON file and import it back; useful for migration, backup, and reinstallation
 
 ### v0.2.7
 - **Gallery tab** — new image browser for ComfyUI output folder; Thumbnail/Table views, multi-select with Bulk Bar, server-side group/tag/favorite filtering, group management (rename support), performance-optimized with  + mtime folder cache
@@ -350,7 +355,7 @@ ComfyUI-Workflow-Studio/
 ├── web/comfyui/
 │   ├── top_menu_extension.js    # ComfyUI menu bar integration
 │   └── node_sets_menu.js        # Workflow Studio Library side panel
-└── data/                        # Metadata & settings storage (incl. prompts.json, model_metadata.json, civitai_cache.json)
+└── data/                        # Fallback data dir (used when ComfyUI user/default/ is not found)
 ```
 
 ---

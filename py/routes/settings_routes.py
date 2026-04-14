@@ -1,17 +1,29 @@
 """Settings API routes."""
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 
 from aiohttp import web
 
 from ..services.settings_service import SettingsService
-from ..config import DEFAULT_WORKFLOWS_DIR
+from ..config import DEFAULT_WORKFLOWS_DIR, DATA_DIR
 
 logger = logging.getLogger(__name__)
 
 _service = SettingsService()
+
+# Data files included in export/import
+_DATA_FILES = [
+    "settings.json",
+    "metadata.json",
+    "node_metadata.json",
+    "node_sets.json",
+    "prompts.json",
+    "model_metadata.json",
+    "gallery_metadata.json",
+]
 
 
 def setup_routes(app: web.Application):
@@ -22,6 +34,8 @@ def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/settings/workflows-dir", handle_set_workflows_dir)
     app.router.add_get("/api/wfm/settings/output-dir", handle_get_output_dir)
     app.router.add_post("/api/wfm/settings/output-dir", handle_set_output_dir)
+    app.router.add_get("/api/wfm/settings/export", handle_export)
+    app.router.add_post("/api/wfm/settings/import", handle_import)
 
 
 async def handle_get(request: web.Request) -> web.Response:
@@ -150,4 +164,73 @@ async def handle_set_output_dir(request: web.Request) -> web.Response:
         })
     except Exception as e:
         logger.error("Error setting output dir: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+def _load_data_file(filename: str):
+    """Load a single data file, return empty dict/list if missing."""
+    path = DATA_DIR / filename
+    if not path.exists():
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _build_export_bundle() -> dict:
+    """Collect all data files into a single export bundle."""
+    bundle = {"__version": 1, "__source": "ComfyUI-Workflow-Studio"}
+    for filename in _DATA_FILES:
+        data = _load_data_file(filename)
+        if data is not None:
+            bundle[filename] = data
+    return bundle
+
+
+async def handle_export(request: web.Request) -> web.Response:
+    """GET /api/wfm/settings/export - Download all data as a single JSON bundle."""
+    try:
+        bundle = await asyncio.to_thread(_build_export_bundle)
+        body = json.dumps(bundle, ensure_ascii=False, indent=2)
+        return web.Response(
+            body=body.encode("utf-8"),
+            content_type="application/json",
+            headers={"Content-Disposition": 'attachment; filename="wfm-data-export.json"'},
+        )
+    except Exception as e:
+        logger.error("Error exporting data: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+def _apply_import_bundle(bundle: dict) -> dict:
+    """Write imported bundle back to individual data files. Returns summary."""
+    summary = {"imported": [], "skipped": []}
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    for filename in _DATA_FILES:
+        if filename not in bundle:
+            summary["skipped"].append(filename)
+            continue
+        try:
+            path = DATA_DIR / filename
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(bundle[filename], f, ensure_ascii=False, indent=2)
+            summary["imported"].append(filename)
+        except Exception as e:
+            logger.error("Import failed for %s: %s", filename, e)
+            summary["skipped"].append(filename)
+    return summary
+
+
+async def handle_import(request: web.Request) -> web.Response:
+    """POST /api/wfm/settings/import - Upload and restore a JSON bundle."""
+    try:
+        bundle = await request.json()
+        if not isinstance(bundle, dict):
+            return web.json_response({"error": "Invalid bundle format"}, status=400)
+        summary = await asyncio.to_thread(_apply_import_bundle, bundle)
+        return web.json_response({"status": "ok", **summary})
+    except Exception as e:
+        logger.error("Error importing data: %s", e)
         return web.json_response({"error": str(e)}, status=500)

@@ -606,6 +606,20 @@ export async function initSettingsTab() {
             </div>
         </details>
 
+        <!-- Data Management -->
+        <details class="wfm-settings-section">
+            <summary class="wfm-settings-summary">${t("dataManagement")}</summary>
+            <p style="font-size:12px;color:var(--wfm-text-secondary);margin-bottom:12px;">${t("dataManagementHint")}</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="wfm-btn wfm-btn-sm" id="wfm-settings-export">${t("exportData")}</button>
+                <label class="wfm-btn wfm-btn-sm" style="cursor:pointer;margin:0;">
+                    ${t("importData")}
+                    <input type="file" id="wfm-settings-import-file" accept=".json" style="display:none;">
+                </label>
+            </div>
+            <div id="wfm-settings-data-status" style="font-size:12px;margin-top:8px;"></div>
+        </details>
+
         <!-- Save Button -->
         <button class="wfm-btn wfm-btn-primary" id="wfm-settings-save" style="min-width:120px;">${t("saveSettings")}</button>
 
@@ -1036,4 +1050,51 @@ export async function initSettingsTab() {
     if (savedUrl) {
         comfyUI.updateUrl(savedUrl);
     }
+
+    // --- Data Export ---
+    document.getElementById("wfm-settings-export")?.addEventListener("click", async () => {
+        const statusEl = document.getElementById("wfm-settings-data-status");
+        try {
+            const res = await fetch("/api/wfm/settings/export");
+            if (!res.ok) throw new Error(await res.text());
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "wfm-data-export.json";
+            a.click();
+            URL.revokeObjectURL(url);
+            statusEl.textContent = t("exportSuccess");
+            statusEl.style.color = "var(--wfm-success, #4caf50)";
+        } catch (e) {
+            statusEl.textContent = t("exportError") + ": " + e.message;
+            statusEl.style.color = "var(--wfm-error, #f44336)";
+        }
+    });
+
+    // --- Data Import ---
+    document.getElementById("wfm-settings-import-file")?.addEventListener("change", async (e) => {
+        const statusEl = document.getElementById("wfm-settings-data-status");
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const bundle = JSON.parse(text);
+            const res = await fetch("/api/wfm/settings/import", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(bundle),
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || res.statusText);
+            const imported = result.imported?.join(", ") || "-";
+            statusEl.textContent = t("importSuccess") + ": " + imported;
+            statusEl.style.color = "var(--wfm-success, #4caf50)";
+        } catch (e) {
+            statusEl.textContent = t("importError") + ": " + e.message;
+            statusEl.style.color = "var(--wfm-error, #f44336)";
+        }
+        // Reset file input so same file can be re-selected
+        e.target.value = "";
+    });
 }

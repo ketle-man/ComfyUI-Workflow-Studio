@@ -1,5 +1,66 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-14: v0.2.8 データ保存先変更・エクスポート/インポート機能追加
+
+### 概要
+
+- プラグインデータの保存先を `custom_nodes/ComfyUI-Workflow-Studio/data/` から `ComfyUI/user/default/Workflow-Studio/` に変更
+- `user/default/` が存在しない環境（Portable版・Dockerなど）では従来の `data/` にフォールバック
+- 設定タブに「データ管理」セクションを追加（エクスポート/インポート機能）
+
+### 変更内容
+
+#### `py/config.py` — DATA_DIR 保存先変更
+
+**`DATA_DIR` の解決ロジックを変更:**
+
+- 変更前: `DATA_DIR = PLUGIN_DIR / "data"` （固定）
+- 変更後: `user/default/` が存在すれば `DATA_DIR = _COMFYUI_USER_DEFAULT / "Workflow-Studio"`、存在しなければ `PLUGIN_DIR / "data"` にフォールバック
+- `_COMFYUI_ROOT` の定義位置を `DATA_DIR` の前に移動（`_COMFYUI_WORKFLOWS` と共用）
+
+#### `py/routes/settings_routes.py` — エクスポート/インポートAPI追加
+
+**新エンドポイント:**
+
+- `GET /api/wfm/settings/export` — `settings.json`, `metadata.json`, `node_metadata.json`, `node_sets.json`, `prompts.json`, `model_metadata.json`, `gallery_metadata.json` の7ファイルを1つのJSONバンドルとして返す（`Content-Disposition: attachment` でDL）
+- `POST /api/wfm/settings/import` — JSONバンドルを受け取り、含まれるファイルを個別に書き戻す。存在しないキーはスキップ
+
+**新定数:**
+
+- `_DATA_FILES` — エクスポート/インポート対象ファイル名のリスト
+
+#### `static/js/settings-tab.js` — データ管理UIセクション追加
+
+**Eagle連携セクションの直下に `<!-- Data Management -->` セクションを追加:**
+
+- エクスポートボタン: クリックで `wfm-data-export.json` をダウンロード
+- インポートボタン: `<label>` でファイル選択ダイアログを開く（`.json` 限定）
+- ステータス表示: 成功・失敗をインラインで表示（成功: green / 失敗: red）
+- 同一ファイルの再インポートができるよう、インポート後にファイル入力をリセット
+
+#### `static/js/i18n.js` — 新キー追加（3言語）
+
+**追加キー（英語・日本語・中国語）:**
+
+- `dataManagement`, `dataManagementHint`, `exportData`, `importData`
+- `exportSuccess`, `exportError`, `importSuccess`, `importError`
+
+#### `templates/index.html` / `static/js/app.js` / `static/js/i18n.js` — ヘルプタブ更新
+
+- `wfm-help-settings-8` をデータ管理の説明に変更
+- `wfm-help-settings-9`（アコーディオン説明）を追加（HTML・app.jsマッピング・i18n 3言語）
+
+### 移行手順（既存ユーザー向け）
+
+1. 設定タブ →「データ管理」→「エクスポート」で `wfm-data-export.json` を保存
+2. ComfyUIを再起動（新パスで空の状態で起動）
+3. 設定タブ →「データ管理」→「インポート」でエクスポートしたファイルを選択
+4. ComfyUIを再起動して反映
+
+または手動で `custom_nodes/ComfyUI-Workflow-Studio/data/` の内容を `ComfyUI/user/default/Workflow-Studio/` にコピーしてから再起動。
+
+---
+
 ## 2026-04-06: v0.2.6 UI改善・バッジ保存修正・フォルダフィルター追加
 
 ### 概要

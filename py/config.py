@@ -10,13 +10,21 @@ PLUGIN_DIR = Path(__file__).resolve().parent.parent
 # Directory paths
 TEMPLATES_DIR = PLUGIN_DIR / "templates"
 STATIC_DIR = PLUGIN_DIR / "static"
-DATA_DIR = PLUGIN_DIR / "data"
 
-# Default workflows directory: ComfyUI's user/default/workflows
-# PLUGIN_DIR is custom_nodes/ComfyUI-Workflow-Studio
 # ComfyUI root is custom_nodes/../../ = two levels up
 _COMFYUI_ROOT = PLUGIN_DIR.parent.parent
-_COMFYUI_WORKFLOWS = _COMFYUI_ROOT / "user" / "default" / "workflows"
+
+# Data directory: prefer ComfyUI's user/default/Workflow-Studio/, fallback to plugin data/
+_COMFYUI_USER_DEFAULT = _COMFYUI_ROOT / "user" / "default"
+if _COMFYUI_USER_DEFAULT.is_dir():
+    DATA_DIR = _COMFYUI_USER_DEFAULT / "Workflow-Studio"
+    logger.info("Workflow Studio: Using user data dir: %s", DATA_DIR)
+else:
+    DATA_DIR = PLUGIN_DIR / "data"
+    logger.info("Workflow Studio: user/default not found, using plugin data dir: %s", DATA_DIR)
+
+# Default workflows directory: ComfyUI's user/default/workflows
+_COMFYUI_WORKFLOWS = _COMFYUI_USER_DEFAULT / "workflows"
 
 # Use ComfyUI workflows dir if it exists, otherwise fallback to plugin data dir
 if _COMFYUI_WORKFLOWS.is_dir():
