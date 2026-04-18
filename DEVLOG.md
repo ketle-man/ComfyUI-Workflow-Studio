@@ -1,5 +1,105 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-18: v0.2.9 モデル有効/無効・複数選択・一括削除
+
+### 概要
+
+- モデルファイルの拡張子リネーム（`.disabled`サフィックス）でComfyUIへの表示を制御
+- モデル種別ごとのグループスコープ（checkpointグループはcheckpointタブにのみ表示）
+- 複数選択モードと一括グループ操作・ファイル削除機能を追加
+
+### 変更内容
+
+#### `py/services/models_service.py` — 有効/無効・削除ロジック追加
+
+- `_DISABLED_SUFFIX = ".disabled"` 定数追加
+- `_SIDECAR_EXTENSIONS` — 削除対象の付属ファイル拡張子リスト（`.preview.png` 〜 `.webp` + `.json`, `.civitai.info`, `.info`）
+- `find_model_file(model_type, model_name)` — 有効・無効両状態を検索、`(Path, is_enabled)` を返す
+- `enable_model(model_type, model_name)` — `.disabled` → 元の拡張子にリネーム
+- `disable_model(model_type, model_name)` — 元の拡張子 → `.disabled` にリネーム（`path.name` ベースでサブディレクトリ二重化バグを回避）
+- `scan_disabled_models(model_type)` — `rglob("*.disabled")` でスキャン、正規化名リストを返す
+- `get_model_groups(model_type=None)` — `model_type` パラメータ追加。旧フラット形式 `{ "groupName": [...] }` を `_groups_legacy` に退避し、`{ "_groups": { "checkpoint": {...} } }` 形式へ自動マイグレーション
+- `save_model_groups(groups, model_type)` — `model_type` パラメータ追加、種別ごとに保存
+- `delete_model(model_type, model_name)` — モデルファイル（有効・無効どちらも対応）を削除。`path.name` から `.disabled` を除去してstemを正しく計算し、全サイドカーファイルを削除。メタデータエントリも削除
+
+#### `py/routes/models_routes.py` — エンドポイント追加・変更
+
+**新エンドポイント:**
+
+- `GET /api/wfm/models/disabled?type=` — 指定タイプの無効モデル名リストを返す
+- `POST /api/wfm/models/toggle` — `{ model_type, model_name, enabled }` でモデル1件の有効/無効を切り替え
+- `POST /api/wfm/models/group-toggle` — `{ model_type, group_name, enabled }` でグループ内全モデルを一括切り替え
+- `POST /api/wfm/models/delete` — `{ model_type, model_names: [] }` で複数モデルを一括削除
+
+**変更:**
+
+- `GET /api/wfm/models/groups` — `?type=` クエリパラメータ追加
+- `POST /api/wfm/models/groups` — ボディを `{ "model_type": ..., "groups": {...} }` 形式に変更
+
+#### `static/js/comfyui-client.js` — Hypernetworkバグ修正
+
+- `_fetchModelList` で新ComfyUI APIフォーマット `["COMBO", {"values":[...]}]` に対応
+- `Array.isArray(first)` チェックを追加、文字列 `"COMBO"` をスプレッドしてしまう問題を解消
+
+#### `static/js/models-tab.js` — フロントエンド全体
+
+**state追加:**
+
+- `disabledModels: {}` — タイプ別の無効モデルSet
+- `statusFilter: "all"` — "all" / "enabled" / "disabled"
+- `selectMode: false`, `selectedModels: new Set()` — 複数選択状態
+
+**新関数:**
+
+- `isModelDisabled()`, `fetchDisabledModels()`, `toggleModelEnable()`, `toggleGroupEnable()` — 有効/無効操作
+- `toggleSelectMode()` — 選択モードのON/OFF切り替え、ボタンテキスト更新
+- `toggleModelSelection(modelName)` — DOM直接更新（再レンダリングなし）
+- `clearSelection()` — 選択リセット
+- `renderBulkActionBar()` — グループ選択・追加/削除・新規作成・削除ボタンを描画
+- `bulkAddToGroup()`, `bulkRemoveFromGroup()` — 一括グループ操作
+- `bulkDeleteModels()` — `confirm()` で確認後 `/api/wfm/models/delete` を呼び出し、ローカルstateを即時更新
+
+**各ビュー:**
+
+- ThumbView / CardView: 無効オーバーレイ・⏸ボタン・selectMode時チェックボックスオーバーレイ追加
+- TableView: チェックボックス列・`wfm-table-td-check` 追加
+- `renderSideGroup()`: "全て有効化" / "全て無効化" ボタン追加
+
+**タイプ切り替え:**
+
+- `groupFilter`, `statusFilter`, `selectMode`, `selectedModels` をリセット
+
+#### `templates/index.html` — UI要素追加
+
+- `<select id="wfm-models-status-filter">` — All / Enabled / Disabled フィルター
+- `<button id="wfm-models-select-btn">` — 選択モード切り替え
+- `<div id="wfm-models-bulk-bar">` — 一括操作バー（初期非表示）
+- `<li id="wfm-help-models-11">` — ヘルプ項目追加
+
+#### `static/css/main.css` — スタイル追加
+
+- `.wfm-model-disabled` / `.wfm-disabled-overlay` — 無効状態の見た目
+- `.wfm-toggle-btn` / `.wfm-toggle-btn.wfm-toggle-disabled` — ⏸ボタン
+- `.wfm-badge-disabled` — 無効バッジ
+- `.wfm-select-check` / `.wfm-select-check.checked` — チェックボックス
+- `.wfm-card-checked` — 選択済みカードのアウトライン
+- `.wfm-bulk-bar` / `.wfm-bulk-count` / `.wfm-bulk-sep` / `.wfm-table-td-check` — 一括操作バー
+
+#### `static/js/i18n.js` — 新キー追加（3言語）
+
+- 有効/無効操作: `modelEnable`, `modelDisable`, `modelDisabled`, `modelStatusAll`, `modelStatusEnabled`, `modelStatusDisabled`, `modelGroupEnableAll`, `modelGroupDisableAll`, `modelToggleError`, `modelStatusWarning`
+- 複数選択: `modelSelectMode`, `modelSelectExit`, `modelSelected`, `modelBulkAddGroup`, `modelBulkRemoveGroup`, `modelBulkCreateAdd`, `modelBulkAddDone`, `modelBulkRemoveDone`
+- ファイル削除: `modelBulkDelete`, `modelBulkDeleteConfirm`, `modelBulkDeleteDone`, `modelBulkDeleteError`
+- ヘルプ: `helpModels11`（複数選択・一括削除の説明）、`helpModels3` 更新（ステータスフィルター追記）
+
+### 技術的な判断
+
+- **拡張子リネーム方式**: ComfyUIはスキャン時に認識拡張子のみ列挙するため、`.disabled`サフィックスを付けるだけでモデルを隠せる。ファイル移動や専用DBを使わず最もシンプルな実装
+- **DOM直接更新（選択モード）**: 選択トグルのたびに`renderModelGrid()`を呼ぶと大量再レンダリングが起きる。`querySelectorAll("[data-model-name]")`で対象要素を絞り`classList.toggle()`のみ実行
+- **stemバグの根本原因**: `path.stem`は最後のサフィックスのみ除去する。`model.safetensors.disabled`の`stem`は`model.safetensors`になるため、`model.safetensors.png`を探してしまう。`.disabled`を先に除去してから`Path.stem`を計算する必要がある
+
+---
+
 ## 2026-04-14: v0.2.8 データ保存先変更・エクスポート/インポート機能追加
 
 ### 概要

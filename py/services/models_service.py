@@ -13,6 +13,15 @@ logger = logging.getLogger(__name__)
 _PREVIEW_EXTENSIONS = [".preview.png", ".preview.jpg", ".preview.jpeg", ".preview.webp",
                        ".png", ".jpg", ".jpeg", ".webp"]
 
+# All sidecar extensions to delete when a model is deleted
+_SIDECAR_EXTENSIONS = [
+    ".preview.png", ".preview.jpg", ".preview.jpeg", ".preview.webp",
+    ".png", ".jpg", ".jpeg", ".webp",
+    ".json", ".civitai.info", ".info",
+]
+
+_DISABLED_SUFFIX = ".disabled"
+
 # ComfyUI model type → folder_paths key mapping
 MODEL_TYPE_FOLDER_KEYS = {
     "checkpoint": "checkpoints",
@@ -100,15 +109,87 @@ class ModelsService:
         self._save_metadata(data)
         return entry
 
-    def get_model_groups(self):
+    def get_model_groups(self, model_type=None):
         data = self._load_metadata()
-        return data.get("_groups", {})
+        raw = data.get("_groups", {})
 
-    def save_model_groups(self, groups):
+        # Migrate old flat format { "groupName": [...] } → per-type { "checkpoint": {...} }
+        if raw and not any(k in MODEL_TYPE_FOLDER_KEYS for k in raw):
+            logger.info("Migrating groups to per-type format (old data moved to _groups_legacy)")
+            data["_groups_legacy"] = raw
+            data["_groups"] = {}
+            self._save_metadata(data)
+            raw = {}
+
+        if model_type:
+            return raw.get(model_type, {})
+        return raw
+
+    def save_model_groups(self, groups, model_type):
         data = self._load_metadata()
-        data["_groups"] = groups
+        if not isinstance(data.get("_groups"), dict):
+            data["_groups"] = {}
+        data["_groups"][model_type] = groups
         self._save_metadata(data)
         return groups
+
+    def find_model_file(self, model_type, model_name):
+        """Find a model file, checking both enabled and disabled states.
+
+        Returns (Path, is_enabled) or (None, None) if not found.
+        """
+        dirs = _get_model_dirs(model_type)
+        for d in dirs:
+            enabled = d / model_name
+            if enabled.is_file():
+                return enabled, True
+            disabled = d / (model_name + _DISABLED_SUFFIX)
+            if disabled.is_file():
+                return disabled, False
+        return None, None
+
+    def enable_model(self, model_type, model_name):
+        """Rename model.safetensors.disabled → model.safetensors."""
+        path, is_enabled = self.find_model_file(model_type, model_name)
+        if path is None:
+            raise FileNotFoundError(f"Model not found: {model_name}")
+        if is_enabled:
+            return
+        target = path.parent / path.name[: -len(_DISABLED_SUFFIX)]
+        path.rename(target)
+        logger.info("Enabled model: %s", model_name)
+
+    def disable_model(self, model_type, model_name):
+        """Rename model.safetensors → model.safetensors.disabled."""
+        path, is_enabled = self.find_model_file(model_type, model_name)
+        if path is None:
+            raise FileNotFoundError(f"Model not found: {model_name}")
+        if not is_enabled:
+            return
+        target = path.parent / (path.name + _DISABLED_SUFFIX)
+        path.rename(target)
+        logger.info("Disabled model: %s", model_name)
+
+    def scan_disabled_models(self, model_type):
+        """Scan directories for .disabled files.
+
+        Returns list of normalized model names (without .disabled suffix).
+        """
+        dirs = _get_model_dirs(model_type)
+        disabled = []
+        for d in dirs:
+            if not d.is_dir():
+                continue
+            for f in d.rglob("*"):
+                if f.is_file() and f.name.endswith(_DISABLED_SUFFIX):
+                    try:
+                        rel = str(f.relative_to(d))
+                        if rel.endswith(_DISABLED_SUFFIX):
+                            rel = rel[: -len(_DISABLED_SUFFIX)]
+                        disabled.append(rel.replace("\\", "/"))
+                    except ValueError:
+                        pass
+        return disabled
 
     def find_preview_image(self, model_type, model_name):
         """Find preview image for a model file.
@@ -148,3 +229,48 @@ class ModelsService:
 
         logger.debug("Preview: model file not found in any dir: %s", model_name)
         return None
+
+    def delete_model(self, model_type, model_name):
+        """Delete a model file and all associated preview/sidecar files.
+
+        Also removes the model's metadata entry.
+        Returns dict with deleted file paths.
+        """
+        if ".." in model_name:
+            raise ValueError(f"Invalid model name: {model_name}")
+
+        path, _ = self.find_model_file(model_type, model_name)
+        if path is None:
+            raise FileNotFoundError(f"Model not found: {model_name}")
+
+        deleted = []
+        parent = path.parent
+
+        # Compute stem from the original (non-disabled) filename.
+        # path.name for a disabled file is e.g. "model.safetensors.disabled"
+        # so we strip the .disabled suffix first, then take Path.stem.
+        orig_name = path.name
+        if orig_name.endswith(_DISABLED_SUFFIX):
+            orig_name = orig_name[: -len(_DISABLED_SUFFIX)]
+        stem = Path(orig_name).stem  # "model.safetensors" -> "model"
+
+        # Delete the model file itself
+        path.unlink()
+        deleted.append(str(path))
+        logger.info("Deleted model file: %s", path)
+
+        # Delete all sidecar files (previews, metadata, info)
+        for ext in _SIDECAR_EXTENSIONS:
+            sidecar = parent / (stem + ext)
+            if sidecar.is_file():
+                sidecar.unlink()
+                deleted.append(str(sidecar))
+                logger.info("Deleted sidecar: %s", sidecar)
+
+        # Remove metadata entry
+        data = self._load_metadata()
+        if model_name in data:
+            del data[model_name]
+            self._save_metadata(data)
+
+        return {"deleted": deleted}

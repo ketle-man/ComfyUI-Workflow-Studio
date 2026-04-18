@@ -24,11 +24,15 @@ const state = {
     modelMetadata: {},
     modelGroups: {},
     civitaiCache: {},
+    disabledModels: {},   // { type: Set<modelName> }
+    selectMode: false,
+    selectedModels: new Set(),
     searchText: "",
     tagFilter: "",
     badgeFilter: "",
     dirFilter: "",
     groupFilter: "",
+    statusFilter: "all",  // "all" | "enabled" | "disabled"
     showFavoritesOnly: false,
     viewMode: localStorage.getItem("wfm_models_view") || "thumb",
     activeModelType: "checkpoint",
@@ -200,6 +204,225 @@ function modelBadgesHtml(modelName, clickable = false) {
 
 // ── API ───────────────────────────────────────────────────
 
+// ── Multi-select & Bulk Group Operations ─────────────────
+
+function toggleSelectMode() {
+    state.selectMode = !state.selectMode;
+    if (!state.selectMode) state.selectedModels.clear();
+    const btn = document.getElementById("wfm-models-select-btn");
+    if (btn) {
+        btn.classList.toggle("active", state.selectMode);
+        btn.textContent = state.selectMode ? t("modelSelectExit") : t("modelSelectMode");
+    }
+    renderModelGrid();
+    renderBulkActionBar();
+}
+
+function toggleModelSelection(modelName) {
+    if (state.selectedModels.has(modelName)) {
+        state.selectedModels.delete(modelName);
+    } else {
+        state.selectedModels.add(modelName);
+    }
+    // Update DOM directly (avoid full re-render)
+    document.querySelectorAll("[data-model-name]").forEach((el) => {
+        if (el.dataset.modelName !== modelName) return;
+        const checked = state.selectedModels.has(modelName);
+        el.classList.toggle("wfm-card-checked", checked);
+        const c = el.querySelector(".wfm-select-check");
+        if (c) c.classList.toggle("checked", checked);
+    });
+    renderBulkActionBar();
+}
+
+function clearSelection() {
+    state.selectedModels.clear();
+    renderModelGrid();
+    renderBulkActionBar();
+}
+
+function renderBulkActionBar() {
+    const bar = document.getElementById("wfm-models-bulk-bar");
+    if (!bar) return;
+    if (!state.selectMode || state.selectedModels.size === 0) {
+        bar.style.display = "none";
+        return;
+    }
+    const count = state.selectedModels.size;
+    const groupNames = Object.keys(state.modelGroups).sort();
+    const noGroups = groupNames.length === 0;
+    const groupOptions = noGroups
+        ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
+        : groupNames.map((g) => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
+
+    bar.style.display = "flex";
+    bar.innerHTML = `
+        <span class="wfm-bulk-count">${count} ${t("modelSelected")}</span>
+        <select id="wfm-bulk-group-select" class="wfm-select" style="font-size:12px;">${groupOptions}</select>
+        <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-bulk-add-btn"${noGroups ? " disabled" : ""}>${t("modelBulkAddGroup")}</button>
+        <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-bulk-remove-btn"${noGroups ? " disabled" : ""}>${t("modelBulkRemoveGroup")}</button>
+        <span class="wfm-bulk-sep">|</span>
+        <input type="text" id="wfm-bulk-new-group-input" class="wfm-search-input" style="width:120px;font-size:12px;" placeholder="${t("modelsGroupName")}">
+        <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-create-add-btn">${t("modelBulkCreateAdd")}</button>
+        <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-clear-btn" title="Clear selection">&times;</button>
+        <span class="wfm-bulk-sep" style="margin-left:8px;"></span>
+        <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-bulk-delete-btn">${t("modelBulkDelete")}</button>
+    `;
+
+    document.getElementById("wfm-bulk-add-btn")?.addEventListener("click", () => {
+        const g = document.getElementById("wfm-bulk-group-select")?.value;
+        if (g) bulkAddToGroup(g);
+    });
+    document.getElementById("wfm-bulk-remove-btn")?.addEventListener("click", () => {
+        const g = document.getElementById("wfm-bulk-group-select")?.value;
+        if (g) bulkRemoveFromGroup(g);
+    });
+    document.getElementById("wfm-bulk-create-add-btn")?.addEventListener("click", () => {
+        const input = document.getElementById("wfm-bulk-new-group-input");
+        const name = input?.value.trim();
+        if (!name) return;
+        if (state.modelGroups[name]) { showToast(t("modelsGroupExists"), "warning"); return; }
+        bulkAddToGroup(name);
+    });
+    document.getElementById("wfm-bulk-clear-btn")?.addEventListener("click", clearSelection);
+    document.getElementById("wfm-bulk-delete-btn")?.addEventListener("click", bulkDeleteModels);
+}
+
+async function bulkAddToGroup(groupName) {
+    const groups = { ...state.modelGroups };
+    if (!groups[groupName]) groups[groupName] = [];
+    const toAdd = [...state.selectedModels].filter((m) => !groups[groupName].includes(m));
+    groups[groupName] = [...groups[groupName], ...toAdd];
+    await saveModelGroups(groups);
+    showToast(`${toAdd.length} ${t("modelBulkAddDone")}`, "success");
+    renderBulkActionBar();
+}
+
+async function bulkRemoveFromGroup(groupName) {
+    const groups = { ...state.modelGroups };
+    if (!groups[groupName]) return;
+    const before = groups[groupName].length;
+    groups[groupName] = groups[groupName].filter((m) => !state.selectedModels.has(m));
+    const removed = before - groups[groupName].length;
+    if (groups[groupName].length === 0) delete groups[groupName];
+    await saveModelGroups(groups);
+    showToast(`${removed} ${t("modelBulkRemoveDone")}`, "success");
+    renderModelGrid();
+    renderBulkActionBar();
+}
+
+async function bulkDeleteModels() {
+    const count = state.selectedModels.size;
+    if (count === 0) return;
+    const msg = t("modelBulkDeleteConfirm").replace("{count}", count);
+    if (!window.confirm(msg)) return;
+
+    const model_names = [...state.selectedModels];
+    try {
+        const res = await fetch("/api/wfm/models/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_type: state.activeModelType, model_names }),
+        });
+        const data = await res.json();
+        const okCount = (data.ok || []).length;
+        const errCount = (data.errors || []).length;
+        if (errCount > 0) {
+            showToast(`${t("modelBulkDeleteError")}: ${errCount} errors`, "error");
+        }
+        if (okCount > 0) {
+            showToast(`${okCount} ${t("modelBulkDeleteDone")}`, "success");
+            // Remove deleted models from local state
+            model_names.forEach((mn) => {
+                const list = state.modelsByType[state.activeModelType];
+                const idx = list.indexOf(mn);
+                if (idx !== -1) list.splice(idx, 1);
+                delete state.modelMetadata[mn];
+                const ds = state.disabledModels[state.activeModelType];
+                if (ds) ds.delete(mn);
+                state.selectedModels.delete(mn);
+            });
+            state.loaded[state.activeModelType] = false;
+            renderModelGrid();
+            renderBulkActionBar();
+        }
+    } catch (err) {
+        showToast(`${t("modelBulkDeleteError")}: ${err.message}`, "error");
+    }
+}
+
+// ── Enable / Disable helpers ──────────────────────────────
+
+function isModelDisabled(modelName) {
+    const s = state.disabledModels[state.activeModelType];
+    return s ? s.has(modelName) : false;
+}
+
+async function fetchDisabledModels(type) {
+    try {
+        const res = await fetch(`/api/wfm/models/disabled?type=${encodeURIComponent(type)}`);
+        return res.ok ? await res.json() : [];
+    } catch { return []; }
+}
+
+async function toggleModelEnable(modelName) {
+    const nowDisabled = isModelDisabled(modelName);
+    const newEnabled = nowDisabled;
+    try {
+        const res = await fetch("/api/wfm/models/toggle", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model_type: state.activeModelType,
+                model_name: modelName,
+                enabled: newEnabled,
+            }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "toggle failed");
+        }
+        const s = state.disabledModels[state.activeModelType] || new Set();
+        if (newEnabled) s.delete(modelName);
+        else s.add(modelName);
+        state.disabledModels[state.activeModelType] = s;
+        showToast(t("modelStatusWarning"), "info");
+        renderModelGrid();
+        if (state.selectedModel === modelName) renderSideInfo(modelName);
+    } catch (err) {
+        showToast(t("modelToggleError") + ": " + err.message, "error");
+    }
+}
+
+async function toggleGroupEnable(groupName, enable) {
+    try {
+        const res = await fetch("/api/wfm/models/group-toggle", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model_type: state.activeModelType,
+                group_name: groupName,
+                enabled: enable,
+            }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "group toggle failed");
+        }
+        const data = await res.json();
+        const members = state.modelGroups[groupName] || [];
+        const s = state.disabledModels[state.activeModelType] || new Set();
+        members.forEach((m) => { if (enable) s.delete(m); else s.add(m); });
+        state.disabledModels[state.activeModelType] = s;
+        const errCount = data.errors?.length || 0;
+        if (errCount > 0) showToast(`${errCount} ${t("modelToggleError")}`, "warning");
+        showToast(t("modelStatusWarning"), "info");
+        renderModelGrid();
+    } catch (err) {
+        showToast(t("modelToggleError") + ": " + err.message, "error");
+    }
+}
+
 async function fetchModelMetadata() {
     try {
         const res = await fetch("/api/wfm/models/metadata");
@@ -235,6 +458,12 @@ function getCurrentModels() {
 
 function filterModels() {
     let models = getCurrentModels();
+
+    if (state.statusFilter === "enabled") {
+        models = models.filter((m) => !isModelDisabled(m));
+    } else if (state.statusFilter === "disabled") {
+        models = models.filter((m) => isModelDisabled(m));
+    }
 
     if (state.showFavoritesOnly) {
         models = models.filter((m) => {
@@ -451,7 +680,7 @@ function renderDirFilter() {
 
 async function fetchModelGroups() {
     try {
-        const res = await fetch("/api/wfm/models/groups");
+        const res = await fetch(`/api/wfm/models/groups?type=${encodeURIComponent(state.activeModelType)}`);
         return res.ok ? await res.json() : {};
     } catch { return {}; }
 }
@@ -461,9 +690,10 @@ async function saveModelGroups(groups) {
     await fetch("/api/wfm/models/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(groups),
+        body: JSON.stringify({ model_type: state.activeModelType, groups }),
     });
     renderGroupFilter();
+    renderBulkActionBar();
 }
 
 // ── Render: Grid ──────────────────────────────────────────
@@ -503,6 +733,7 @@ function renderThumbView(grid, models) {
     models.forEach((modelName) => {
         const meta = state.modelMetadata[modelName] || {};
         const { name } = parseModelPath(modelName);
+        const disabled = isModelDisabled(modelName);
         const userBadges = modelBadgesHtml(modelName);
         const tagsHtml = (meta.tags || []).map((tag) => `<span class="wfm-badge wfm-badge-sm">${escapeHtml(tag)}</span>`).join("");
         const favStar = meta.favorite ? "\u2605" : "\u2606";
@@ -510,6 +741,7 @@ function renderThumbView(grid, models) {
 
         const card = document.createElement("div");
         card.className = "wfm-card";
+        if (disabled) card.classList.add("wfm-model-disabled");
         if (state.selectedModel === modelName) card.classList.add("wfm-card-selected");
         card.dataset.modelName = modelName;
 
@@ -517,12 +749,14 @@ function renderThumbView(grid, models) {
             <div class="wfm-card-thumb">
                 <img style="display:none" />
                 <span class="wfm-card-thumb-placeholder">${t("modelsNoPreview")}</span>
+                ${disabled ? `<span class="wfm-disabled-overlay">${t("modelDisabled")}</span>` : ""}
             </div>
             <div class="wfm-card-body">
                 <div class="wfm-card-title" title="${escapeHtml(modelName)}">${escapeHtml(getStem(name))}</div>
                 <div class="wfm-card-meta">${userBadges} ${tagsHtml}</div>
             </div>
-            <button class="${favClass}" title="${t("modelsFavorite")}">${favStar}</button>`;
+            <button class="${favClass}" title="${t("modelsFavorite")}">${favStar}</button>
+            <button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${disabled ? t("modelEnable") : t("modelDisable")}">${disabled ? "▶" : "⏸"}</button>`;
 
         // Load preview without 404 console spam
         const img = card.querySelector(".wfm-card-thumb img");
@@ -533,11 +767,24 @@ function renderThumbView(grid, models) {
             e.stopPropagation();
             toggleFavorite(modelName);
         });
-        card.addEventListener("click", () => showSidePanel(modelName));
-        card.addEventListener("dblclick", (e) => {
+        card.querySelector(".wfm-toggle-btn").addEventListener("click", (e) => {
             e.stopPropagation();
-            openDetailModal(modelName);
+            toggleModelEnable(modelName);
         });
+        if (state.selectMode) {
+            const isChecked = state.selectedModels.has(modelName);
+            card.classList.toggle("wfm-card-checked", isChecked);
+            const checkEl = document.createElement("div");
+            checkEl.className = "wfm-select-check" + (isChecked ? " checked" : "");
+            card.appendChild(checkEl);
+            card.addEventListener("click", (e) => {
+                if (e.target.closest(".wfm-fav-btn, .wfm-toggle-btn")) return;
+                toggleModelSelection(modelName);
+            });
+        } else {
+            card.addEventListener("click", () => showSidePanel(modelName));
+            card.addEventListener("dblclick", (e) => { e.stopPropagation(); openDetailModal(modelName); });
+        }
         grid.appendChild(card);
     });
 }
@@ -550,6 +797,7 @@ function renderCardView(grid, models) {
         const meta = state.modelMetadata[modelName] || {};
         const { dir, name } = parseModelPath(modelName);
         const ext = getExtension(name);
+        const disabled = isModelDisabled(modelName);
         const userBadges = modelBadgesHtml(modelName);
         const tagsHtml = (meta.tags || []).map((tag) => `<span class="wfm-badge wfm-badge-sm">${escapeHtml(tag)}</span>`).join("");
         const favStar = meta.favorite ? "\u2605" : "\u2606";
@@ -557,27 +805,42 @@ function renderCardView(grid, models) {
 
         const card = document.createElement("div");
         card.className = "wfm-card wfm-model-card";
+        if (disabled) card.classList.add("wfm-model-disabled");
         if (state.selectedModel === modelName) card.classList.add("wfm-card-selected");
         card.dataset.modelName = modelName;
 
         card.innerHTML = `
             <div class="wfm-card-body">
-                <div class="wfm-card-title" title="${escapeHtml(modelName)}">${escapeHtml(name)}</div>
+                <div class="wfm-card-title" title="${escapeHtml(modelName)}">${escapeHtml(name)}${disabled ? ` <span class="wfm-badge wfm-badge-disabled">${t("modelDisabled")}</span>` : ""}</div>
                 <div class="wfm-card-meta">
                     ${userBadges} ${tagsHtml}
                 </div>
             </div>
-            <button class="${favClass}" title="${t("modelsFavorite")}">${favStar}</button>`;
+            <button class="${favClass}" title="${t("modelsFavorite")}">${favStar}</button>
+            <button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${disabled ? t("modelEnable") : t("modelDisable")}">${disabled ? "▶" : "⏸"}</button>`;
 
         card.querySelector(".wfm-fav-btn").addEventListener("click", (e) => {
             e.stopPropagation();
             toggleFavorite(modelName);
         });
-        card.addEventListener("click", () => showSidePanel(modelName));
-        card.addEventListener("dblclick", (e) => {
+        card.querySelector(".wfm-toggle-btn").addEventListener("click", (e) => {
             e.stopPropagation();
-            openDetailModal(modelName);
+            toggleModelEnable(modelName);
         });
+        if (state.selectMode) {
+            const isChecked = state.selectedModels.has(modelName);
+            card.classList.toggle("wfm-card-checked", isChecked);
+            const checkEl = document.createElement("div");
+            checkEl.className = "wfm-select-check" + (isChecked ? " checked" : "");
+            card.appendChild(checkEl);
+            card.addEventListener("click", (e) => {
+                if (e.target.closest(".wfm-fav-btn, .wfm-toggle-btn")) return;
+                toggleModelSelection(modelName);
+            });
+        } else {
+            card.addEventListener("click", () => showSidePanel(modelName));
+            card.addEventListener("dblclick", (e) => { e.stopPropagation(); openDetailModal(modelName); });
+        }
         grid.appendChild(card);
     });
 }
@@ -590,10 +853,18 @@ function renderTableView(grid, models) {
             const meta = state.modelMetadata[modelName] || {};
             const { dir, name } = parseModelPath(modelName);
             const ext = getExtension(name);
+            const disabled = isModelDisabled(modelName);
+            const isChecked = state.selectMode && state.selectedModels.has(modelName);
             const favIcon = meta.favorite ? "&#9733;" : "&#9734;";
             const tagsStr = (meta.tags || []).join(", ");
             const memo = meta.memo || "";
-            return `<tr class="wfm-models-table-row${state.selectedModel === modelName ? " wfm-card-selected" : ""}" data-model-name="${escapeHtml(modelName)}">
+            const toggleLabel = disabled ? t("modelEnable") : t("modelDisable");
+            const toggleIcon = disabled ? "▶" : "⏸";
+            const checkCell = state.selectMode
+                ? `<td class="wfm-table-td-check"><div class="wfm-select-check${isChecked ? " checked" : ""}"></div></td>`
+                : "";
+            return `<tr class="wfm-models-table-row${state.selectedModel === modelName ? " wfm-card-selected" : ""}${disabled ? " wfm-model-disabled" : ""}${isChecked ? " wfm-card-checked" : ""}" data-model-name="${escapeHtml(modelName)}">
+                ${checkCell}
                 <td class="wfm-models-table-fav" title="Favorite">${favIcon}</td>
                 <td class="wfm-table-td-thumb"><img class="wfm-table-thumb" style="display:none" /></td>
                 <td title="${escapeHtml(modelName)}">${escapeHtml(name)}</td>
@@ -601,11 +872,14 @@ function renderTableView(grid, models) {
                 <td class="wfm-table-td-ext">${escapeHtml(ext)}</td>
                 <td>${escapeHtml(tagsStr)}</td>
                 <td class="wfm-table-td-memo" title="${escapeHtml(memo)}">${escapeHtml(memo)}</td>
+                <td class="wfm-table-td-toggle"><button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${toggleLabel}">${toggleIcon}</button></td>
             </tr>`;
         })
         .join("");
 
+    const checkTh = state.selectMode ? `<th style="width:24px;"></th>` : "";
     grid.innerHTML = `<table class="wfm-models-table"><thead><tr>
+        ${checkTh}
         <th style="width:30px;">&#9733;</th>
         <th style="width:40px;"></th>
         <th>${t("modelsFileName")}</th>
@@ -613,22 +887,30 @@ function renderTableView(grid, models) {
         <th class="wfm-table-th-ext">${t("modelsExt")}</th>
         <th>${t("modelsTags")}</th>
         <th>${t("modelsMemo")}</th>
+        <th style="width:50px;"></th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 
     grid.querySelectorAll(".wfm-models-table-row").forEach((row) => {
         const mn = row.dataset.modelName;
-        // Load preview image without 404 console spam
         const img = row.querySelector(".wfm-table-thumb");
         if (img) loadPreviewImage(img, null, mn);
 
-        row.addEventListener("click", () => showSidePanel(mn));
-        row.addEventListener("dblclick", (e) => {
-            e.stopPropagation();
-            openDetailModal(mn);
-        });
+        if (state.selectMode) {
+            row.addEventListener("click", (e) => {
+                if (e.target.closest(".wfm-models-table-fav, .wfm-toggle-btn")) return;
+                toggleModelSelection(mn);
+            });
+        } else {
+            row.addEventListener("click", () => showSidePanel(mn));
+            row.addEventListener("dblclick", (e) => { e.stopPropagation(); openDetailModal(mn); });
+        }
         row.querySelector(".wfm-models-table-fav").addEventListener("click", (e) => {
             e.stopPropagation();
             toggleFavorite(mn);
+        });
+        row.querySelector(".wfm-toggle-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleModelEnable(mn);
         });
     });
 }
@@ -993,6 +1275,10 @@ function renderSideGroup(modelName) {
                     <button class="wfm-btn wfm-btn-sm" id="wfm-models-group-rename-btn" ${allGroups.length === 0 ? "disabled" : ""}>${t("modelsRename")}</button>
                     <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-models-group-delete-btn" ${allGroups.length === 0 ? "disabled" : ""}>${t("modelsDelete")}</button>
                 </div>
+                <div style="display:flex;gap:4px;">
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-models-group-enable-btn" ${allGroups.length === 0 ? "disabled" : ""}>${t("modelGroupEnableAll")}</button>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-models-group-disable-btn" ${allGroups.length === 0 ? "disabled" : ""}>${t("modelGroupDisableAll")}</button>
+                </div>
             </div>
         </div>
     `;
@@ -1068,6 +1354,22 @@ function renderSideGroup(modelName) {
             renderSideGroup(modelName);
             renderModelGrid();
         });
+    });
+
+    // Enable all models in selected group
+    document.getElementById("wfm-models-group-enable-btn")?.addEventListener("click", () => {
+        const sel = document.getElementById("wfm-models-group-manage-select");
+        const g = sel?.value;
+        if (!g) return;
+        toggleGroupEnable(g, true).then(() => renderSideGroup(modelName));
+    });
+
+    // Disable all models in selected group
+    document.getElementById("wfm-models-group-disable-btn")?.addEventListener("click", () => {
+        const sel = document.getElementById("wfm-models-group-manage-select");
+        const g = sel?.value;
+        if (!g) return;
+        toggleGroupEnable(g, false).then(() => renderSideGroup(modelName));
     });
 }
 
@@ -1197,8 +1499,11 @@ async function loadModelsForCurrentType() {
     const placeholder = document.getElementById("wfm-models-placeholder");
 
     if (state.loaded[type] && state.modelsByType[type].length > 0) {
+        // Reload groups for this type (groups are per-type)
+        state.modelGroups = await fetchModelGroups();
         renderTagFilter();
         renderDirFilter();
+        renderGroupFilter();
         renderModelGrid();
         return;
     }
@@ -1209,12 +1514,23 @@ async function loadModelsForCurrentType() {
         const fetchFn = FETCH_MAP[type];
         if (!fetchFn) throw new Error("Unknown model type: " + type);
 
-        const models = await fetchFn();
-        state.modelsByType[type] = models || [];
+        const [models, disabledList, groups] = await Promise.all([
+            fetchFn(), fetchDisabledModels(type), fetchModelGroups(),
+        ]);
+        const disabledSet = new Set(Array.isArray(disabledList) ? disabledList : []);
+        state.disabledModels[type] = disabledSet;
+        state.modelGroups = groups;
+
+        // Merge enabled + disabled into one list (dedup)
+        // Guard: ensure models is an array (ComfyUI may return non-array on edge cases)
+        const enabledList = Array.isArray(models) ? models : [];
+        const allModels = [...new Set([...enabledList, ...disabledSet])];
+        state.modelsByType[type] = allModels;
         state.loaded[type] = true;
 
         renderTagFilter();
         renderDirFilter();
+        renderGroupFilter();
         renderModelGrid();
     } catch (err) {
         console.error("Failed to load models:", err);
@@ -1312,13 +1628,12 @@ async function batchFetchCivitai() {
 }
 
 async function loadMetadataAndModels() {
-    const [metadata, groups, civitaiCache] = await Promise.all([
-        fetchModelMetadata(), fetchModelGroups(), fetchCivitaiCache()
+    const [metadata, civitaiCache] = await Promise.all([
+        fetchModelMetadata(), fetchCivitaiCache()
     ]);
     state.modelMetadata = metadata;
-    state.modelGroups = groups;
     state.civitaiCache = civitaiCache;
-    renderGroupFilter();
+    // groups are loaded per-type inside loadModelsForCurrentType
     await loadModelsForCurrentType();
 }
 
@@ -1335,8 +1650,17 @@ export function initModelsTab() {
             state.tagFilter = "";
             state.badgeFilter = "";
             state.dirFilter = "";
+            state.groupFilter = "";
+            state.statusFilter = "all";
             state.currentPage = 0;
             state.selectedModel = null;
+            const statusFilter = document.getElementById("wfm-models-status-filter");
+            if (statusFilter) statusFilter.value = "all";
+            state.selectMode = false;
+            state.selectedModels.clear();
+            const selectBtn = document.getElementById("wfm-models-select-btn");
+            if (selectBtn) { selectBtn.classList.remove("active"); selectBtn.textContent = t("modelSelectMode"); }
+            renderBulkActionBar();
             closeSidePanel();
 
             const searchInput = document.getElementById("wfm-models-search");
@@ -1380,6 +1704,13 @@ export function initModelsTab() {
         renderModelGrid();
     });
 
+    // Status filter
+    document.getElementById("wfm-models-status-filter")?.addEventListener("change", (e) => {
+        state.statusFilter = e.target.value;
+        state.currentPage = 0;
+        renderModelGrid();
+    });
+
     // Favorites filter
     const favBtn = document.getElementById("wfm-models-fav-btn");
     if (favBtn) {
@@ -1417,6 +1748,9 @@ export function initModelsTab() {
         state.modelsByType[state.activeModelType] = [];
         loadModelsForCurrentType();
     });
+
+    // Select mode
+    document.getElementById("wfm-models-select-btn")?.addEventListener("click", toggleSelectMode);
 
     // CivitAI batch fetch
     document.getElementById("wfm-models-civitai-batch-btn")?.addEventListener("click", () => {

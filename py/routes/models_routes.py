@@ -27,6 +27,10 @@ def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/models/civitai/batch", handle_civitai_batch)
     app.router.add_post("/api/wfm/models/change-preview", handle_change_preview)
     app.router.add_get("/api/wfm/models/filepath", handle_get_filepath)
+    app.router.add_get("/api/wfm/models/disabled", handle_get_disabled)
+    app.router.add_post("/api/wfm/models/toggle", handle_toggle_model)
+    app.router.add_post("/api/wfm/models/group-toggle", handle_toggle_group)
+    app.router.add_post("/api/wfm/models/delete", handle_delete_models)
 
 
 # ── Model Metadata ─────────────────────────────────────────
@@ -61,9 +65,10 @@ async def handle_save_metadata(request: web.Request) -> web.Response:
 
 
 async def handle_get_groups(request: web.Request) -> web.Response:
-    """GET /api/wfm/models/groups"""
+    """GET /api/wfm/models/groups?type=checkpoint"""
+    model_type = request.query.get("type", "")
     try:
-        result = await asyncio.to_thread(_service.get_model_groups)
+        result = await asyncio.to_thread(_service.get_model_groups, model_type or None)
         return web.json_response(result)
     except Exception as e:
         logger.error("Error loading model groups: %s", e)
@@ -71,10 +76,17 @@ async def handle_get_groups(request: web.Request) -> web.Response:
 
 
 async def handle_save_groups(request: web.Request) -> web.Response:
-    """POST /api/wfm/models/groups"""
+    """POST /api/wfm/models/groups
+
+    Body: { "model_type": "checkpoint", "groups": { "groupName": [...] } }
+    """
     try:
-        groups = await request.json()
-        result = await asyncio.to_thread(_service.save_model_groups, groups)
+        body = await request.json()
+        model_type = body.get("model_type", "")
+        groups = body.get("groups", {})
+        if not model_type:
+            return web.json_response({"error": "model_type required"}, status=400)
+        result = await asyncio.to_thread(_service.save_model_groups, groups, model_type)
         return web.json_response({"status": "ok", "groups": result})
     except Exception as e:
         logger.error("Error saving model groups: %s", e)
@@ -385,4 +397,135 @@ async def handle_get_filepath(request: web.Request) -> web.Response:
         return web.json_response({"error": "Model file not found"}, status=404)
     except Exception as e:
         logger.error("Error resolving model filepath: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+# ── Model Enable / Disable ────────────────────────────────
+
+
+async def handle_get_disabled(request: web.Request) -> web.Response:
+    """GET /api/wfm/models/disabled?type=checkpoint
+
+    Returns list of disabled model names (normalized, without .disabled suffix).
+    """
+    model_type = request.query.get("type", "")
+    if not model_type:
+        return web.json_response({"error": "type required"}, status=400)
+    try:
+        result = await asyncio.to_thread(_service.scan_disabled_models, model_type)
+        return web.json_response(result)
+    except Exception as e:
+        logger.error("Error scanning disabled models: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_toggle_model(request: web.Request) -> web.Response:
+    """POST /api/wfm/models/toggle
+
+    Body: { "model_type": "checkpoint", "model_name": "v1-5.safetensors", "enabled": false }
+    Renames the model file to add/remove .disabled suffix.
+    """
+    try:
+        body = await request.json()
+        model_type = body.get("model_type", "")
+        model_name = body.get("model_name", "")
+        enabled = body.get("enabled", True)
+
+        if not model_type or not model_name:
+            return web.json_response({"error": "model_type and model_name required"}, status=400)
+        if ".." in model_name:
+            return web.json_response({"error": "Invalid model name"}, status=400)
+
+        if enabled:
+            await asyncio.to_thread(_service.enable_model, model_type, model_name)
+        else:
+            await asyncio.to_thread(_service.disable_model, model_type, model_name)
+
+        return web.json_response({"status": "ok", "enabled": enabled})
+    except FileNotFoundError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except OSError as e:
+        logger.error("OS error toggling model: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+    except Exception as e:
+        logger.error("Error toggling model: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_toggle_group(request: web.Request) -> web.Response:
+    """POST /api/wfm/models/group-toggle
+
+    Body: { "model_type": "checkpoint", "group_name": "MyGroup", "enabled": true }
+    Enables or disables all models belonging to the specified group.
+    """
+    try:
+        body = await request.json()
+        model_type = body.get("model_type", "")
+        group_name = body.get("group_name", "")
+        enabled = body.get("enabled", True)
+
+        if not model_type or not group_name:
+            return web.json_response({"error": "model_type and group_name required"}, status=400)
+
+        groups = await asyncio.to_thread(_service.get_model_groups, model_type)
+        members = groups.get(group_name, [])
+
+        ok_list = []
+        error_list = []
+        for model_name in members:
+            if ".." in model_name:
+                continue
+            try:
+                if enabled:
+                    await asyncio.to_thread(_service.enable_model, model_type, model_name)
+                else:
+                    await asyncio.to_thread(_service.disable_model, model_type, model_name)
+                ok_list.append(model_name)
+            except Exception as e:
+                error_list.append({"model": model_name, "error": str(e)})
+
+        return web.json_response({
+            "status": "ok",
+            "enabled": enabled,
+            "ok": ok_list,
+            "errors": error_list,
+        })
+    except Exception as e:
+        logger.error("Error toggling group: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_delete_models(request: web.Request) -> web.Response:
+    """POST /api/wfm/models/delete
+
+    Body: { "model_type": "checkpoint", "model_names": ["a.safetensors", "b.safetensors"] }
+    Deletes each model file and associated preview/sidecar files, then removes metadata.
+    """
+    try:
+        body = await request.json()
+        model_type = body.get("model_type", "")
+        model_names = body.get("model_names", [])
+
+        if not model_type or not isinstance(model_names, list) or not model_names:
+            return web.json_response({"error": "model_type and model_names[] required"}, status=400)
+
+        ok_list = []
+        error_list = []
+        for model_name in model_names:
+            if ".." in str(model_name):
+                error_list.append({"model": model_name, "error": "Invalid model name"})
+                continue
+            try:
+                result = await asyncio.to_thread(_service.delete_model, model_type, model_name)
+                ok_list.append({"model": model_name, "deleted": result["deleted"]})
+                logger.info("Deleted model: %s (%s files)", model_name, len(result["deleted"]))
+            except FileNotFoundError as e:
+                error_list.append({"model": model_name, "error": str(e)})
+            except Exception as e:
+                logger.error("Error deleting model %s: %s", model_name, e)
+                error_list.append({"model": model_name, "error": str(e)})
+
+        return web.json_response({"status": "ok", "ok": ok_list, "errors": error_list})
+    except Exception as e:
+        logger.error("Error in delete_models: %s", e)
         return web.json_response({"error": str(e)}, status=500)

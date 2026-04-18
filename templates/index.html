@@ -192,6 +192,11 @@
                     <select id="wfm-models-tag-filter" class="wfm-select wfm-toolbar-select"><option value="">All Tags</option></select>
                     <select id="wfm-models-dir-filter" class="wfm-select wfm-toolbar-select"><option value="">All Folders</option></select>
                     <select id="wfm-models-group-filter" class="wfm-select wfm-toolbar-select"><option value="">All Groups</option></select>
+                    <select id="wfm-models-status-filter" class="wfm-select wfm-toolbar-select">
+                        <option value="all">All</option>
+                        <option value="enabled">Enabled only</option>
+                        <option value="disabled">Disabled only</option>
+                    </select>
                     <div class="wfm-view-btns">
                         <button class="wfm-view-btn active" data-models-view="thumb" title="Thumbnail">&#8862;</button>
                         <button class="wfm-view-btn" data-models-view="card" title="Card">&#9776;</button>
@@ -202,7 +207,10 @@
                     <button id="wfm-models-civitai-batch-btn" class="wfm-btn wfm-btn-sm" title="Fetch CivitAI info for all models">CivitAI</button>
                     <span id="wfm-models-civitai-progress" style="font-size:12px;color:var(--wfm-text-secondary);"></span>
                     <button id="wfm-models-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge settings">&#9881; Badge</button>
+                    <button id="wfm-models-select-btn" class="wfm-btn wfm-btn-sm" title="Multi-select models">Select</button>
                 </div>
+                <!-- Bulk action bar (shown in select mode) -->
+                <div id="wfm-models-bulk-bar" class="wfm-bulk-bar" style="display:none;"></div>
             </div>
 
             <!-- Grid + Side Panel -->
@@ -568,13 +576,15 @@
                         <ul>
                             <li id="wfm-help-models-1">Browse installed models: Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding with sub-tab switching</li>
                             <li id="wfm-help-models-2">Thumbnail, Card, and Table view modes with pagination</li>
-                            <li id="wfm-help-models-3">Search, tag filter, group filter, and favorites filter</li>
+                            <li id="wfm-help-models-3">Search, tag filter, group filter, favorites filter, and status filter (All / Enabled only / Disabled only)</li>
                             <li id="wfm-help-models-4">Side panel: Info (file path, tags, memo), Groups management, CivitAI integration</li>
                             <li id="wfm-help-models-5">CivitAI integration: fetch model info by SHA256 hash, batch fetch per model type</li>
                             <li id="wfm-help-models-6">Detail modal: preview image, CivitAI info (base model, trained words, tags), thumbnail change</li>
                             <li id="wfm-help-models-7">Group management: create, rename, delete groups and assign/remove models</li>
                             <li id="wfm-help-models-8">GenUI Model button: apply the selected model to the corresponding node in GenerateUI's current workflow (Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder)</li>
                             <li id="wfm-help-models-9">User-defined badges: assign free-label badges with custom colors shared with the Workflow tab</li>
+                            <li id="wfm-help-models-10">Enable/Disable models: toggle visibility in ComfyUI by renaming file extension (.disabled suffix). Disable per model (⏸ button on each card) or per group (Enable All / Disable All in Group panel). Changes take effect after ComfyUI refresh.</li>
+                            <li id="wfm-help-models-11">Multi-select &amp; bulk operations: click Select to enter selection mode, check multiple models, then use the bulk action bar to add/remove from groups or permanently delete files (model file + preview images + sidecar files such as .json/.info).</li>
                         </ul>
                     </div>
 

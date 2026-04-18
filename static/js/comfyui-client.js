@@ -88,7 +88,13 @@ export const comfyUI = {
             try {
                 const info = await this.fetchObjectInfo(cls);
                 if (info?.[cls]?.input?.required?.[inputKey]) {
-                    return info[cls].input.required[inputKey][0] || [];
+                    const inputDef = info[cls].input.required[inputKey];
+                    const first = inputDef[0];
+                    if (Array.isArray(first)) return first;
+                    // Newer ComfyUI format: ["COMBO", { "values": [...] }]
+                    if (typeof first === "string" && Array.isArray(inputDef[1]?.values)) {
+                        return inputDef[1].values;
+                    }
                 }
             } catch {}
         }

@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.2.8-green)
+![Version](https://img.shields.io/badge/version-0.2.9-green)
 
 ## Screenshots
 
@@ -114,9 +114,11 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Batch CivitAI fetch** — one-click batch fetch for all models of a type with SSE progress streaming
 - **Detail modal** — preview image, CivitAI info, thumbnail change via file upload
 - **GenUI Model button** — apply the selected model directly to the corresponding node in GenerateUI's current workflow (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder)
-- **Group management** — create, rename, delete groups and assign/remove models
+- **Group management** — create, rename, delete groups and assign/remove models; groups are scoped per model type (checkpoint groups only appear in the Checkpoint tab)
 - **Table view memo** — memo column displayed in table view for quick reference
 - **Preview images** — auto-detect `{model_stem}.preview.png` next to model files
+- **Enable / Disable models** — hide models from ComfyUI by renaming the file extension (`.disabled` suffix); toggle per card (⏸ button), per group (Enable All / Disable All), or filter by status (All / Enabled / Disabled)
+- **Multi-select & bulk operations** — enter selection mode to check multiple models; bulk action bar supports add/remove from groups and permanent file deletion (model file + preview images + sidecar files such as `.json` / `.info`)
 
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.2.5)
 - **Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
@@ -207,6 +209,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.2.9
+- **Model Enable/Disable** — hide models from ComfyUI by renaming the file extension to `.disabled`; toggle per model (⏸ button on each card/row), per group (Enable All / Disable All buttons in the Group panel), or filter the grid by status (All / Enabled only / Disabled only). Changes take effect after ComfyUI refresh.
+- **Per-type model groups** — groups are now scoped to each model type; checkpoint groups only appear in the Checkpoint tab, LoRA groups only in the LoRA tab, etc. Existing flat groups are automatically migrated.
+- **Multi-select mode** — click the Select button in the toolbar to enter selection mode; check individual models across Thumbnail / Card / Table views
+- **Bulk group operations** — with models selected, add or remove them from any group in one click, or create a new group and add them simultaneously
+- **Bulk file delete** — permanently delete selected model files along with all associated preview images and sidecar files (`.json`, `.civitai.info`, `.info`); requires confirmation before deleting
+- **Bug fix** — models in subdirectories could not be disabled due to a path-doubling error; fixed by computing the rename target from `path.name` instead of `model_name`
+- **Bug fix** — Hypernetwork tab showed `C`, `O`, `M`, `B` as fake model items; caused by the new ComfyUI API format returning `"COMBO"` as the first element; fixed in `comfyui-client.js`
 
 ### v0.2.8
 - **Data storage moved** — plugin data (settings, metadata, prompts, etc.) is now stored in `ComfyUI/user/default/Workflow-Studio/` instead of `custom_nodes/ComfyUI-Workflow-Studio/data/`; falls back to the old `data/` directory if `user/default/` does not exist
