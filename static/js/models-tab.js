@@ -23,6 +23,7 @@ const state = {
     },
     modelMetadata: {},
     modelGroups: {},
+    allModelGroups: {},  // { type: { groupName: [models] } } — all types
     civitaiCache: {},
     disabledModels: {},   // { type: Set<modelName> }
     selectMode: false,
@@ -657,11 +658,31 @@ function renderTagFilter() {
 function renderGroupFilter() {
     const select = document.getElementById("wfm-models-group-filter");
     if (!select) return;
-    const groups = Object.keys(state.modelGroups).sort();
+
+    // Collect groups across all types with type labels
+    const options = [];
+    const typeOrder = Object.keys(TYPE_LABELS);
+    typeOrder.forEach((type) => {
+        const groups = state.allModelGroups[type];
+        if (!groups) return;
+        const names = Object.keys(groups).sort();
+        names.forEach((g) => {
+            options.push({ type, name: g });
+        });
+    });
+
+    const currentValue = state.groupFilter
+        ? `${state.activeModelType}::${state.groupFilter}`
+        : "";
+
     select.innerHTML =
         `<option value="">${t("modelsAllGroups")}</option>` +
-        groups.map((g) => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
-    select.value = state.groupFilter;
+        options.map(({ type, name }) => {
+            const typeLabel = TYPE_LABELS[type] || type;
+            const value = `${type}::${name}`;
+            const isActive = value === currentValue;
+            return `<option value="${escapeHtml(value)}"${isActive ? " selected" : ""}>[${typeLabel}] ${escapeHtml(name)}</option>`;
+        }).join("");
 }
 
 function renderDirFilter() {
@@ -685,8 +706,16 @@ async function fetchModelGroups() {
     } catch { return {}; }
 }
 
+async function fetchAllModelGroups() {
+    try {
+        const res = await fetch("/api/wfm/models/groups");
+        return res.ok ? await res.json() : {};
+    } catch { return {}; }
+}
+
 async function saveModelGroups(groups) {
     state.modelGroups = groups;
+    state.allModelGroups[state.activeModelType] = groups;
     await fetch("/api/wfm/models/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1501,6 +1530,7 @@ async function loadModelsForCurrentType() {
     if (state.loaded[type] && state.modelsByType[type].length > 0) {
         // Reload groups for this type (groups are per-type)
         state.modelGroups = await fetchModelGroups();
+        state.allModelGroups[type] = state.modelGroups;
         renderTagFilter();
         renderDirFilter();
         renderGroupFilter();
@@ -1520,6 +1550,7 @@ async function loadModelsForCurrentType() {
         const disabledSet = new Set(Array.isArray(disabledList) ? disabledList : []);
         state.disabledModels[type] = disabledSet;
         state.modelGroups = groups;
+        state.allModelGroups[type] = groups;
 
         // Merge enabled + disabled into one list (dedup)
         // Guard: ensure models is an array (ComfyUI may return non-array on edge cases)
@@ -1628,11 +1659,12 @@ async function batchFetchCivitai() {
 }
 
 async function loadMetadataAndModels() {
-    const [metadata, civitaiCache] = await Promise.all([
-        fetchModelMetadata(), fetchCivitaiCache()
+    const [metadata, civitaiCache, allGroups] = await Promise.all([
+        fetchModelMetadata(), fetchCivitaiCache(), fetchAllModelGroups()
     ]);
     state.modelMetadata = metadata;
     state.civitaiCache = civitaiCache;
+    state.allModelGroups = allGroups;
     // groups are loaded per-type inside loadModelsForCurrentType
     await loadModelsForCurrentType();
 }
@@ -1697,9 +1729,36 @@ export function initModelsTab() {
         renderModelGrid();
     });
 
-    // Group filter
-    document.getElementById("wfm-models-group-filter")?.addEventListener("change", (e) => {
-        state.groupFilter = e.target.value;
+    // Group filter — value is "type::groupName" or "" for all
+    document.getElementById("wfm-models-group-filter")?.addEventListener("change", async (e) => {
+        const value = e.target.value;
+        if (!value) {
+            state.groupFilter = "";
+        } else {
+            const sepIdx = value.indexOf("::");
+            const type = value.substring(0, sepIdx);
+            const groupName = value.substring(sepIdx + 2);
+            // Auto-switch model type if different
+            if (type !== state.activeModelType) {
+                document.querySelectorAll(".wfm-models-type-btn").forEach((b) => {
+                    b.classList.toggle("active", b.dataset.modelType === type);
+                });
+                state.activeModelType = type;
+                state.searchText = "";
+                state.tagFilter = "";
+                state.badgeFilter = "";
+                state.dirFilter = "";
+                state.statusFilter = "all";
+                state.selectedModel = null;
+                const statusFilter = document.getElementById("wfm-models-status-filter");
+                if (statusFilter) statusFilter.value = "all";
+                const searchInput = document.getElementById("wfm-models-search");
+                if (searchInput) searchInput.value = "";
+                closeSidePanel();
+                await loadModelsForCurrentType();
+            }
+            state.groupFilter = groupName;
+        }
         state.currentPage = 0;
         renderModelGrid();
     });

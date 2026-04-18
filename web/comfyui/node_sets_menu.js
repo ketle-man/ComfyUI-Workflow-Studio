@@ -1324,10 +1324,21 @@ const renderModelFavorites = async (container) => {
 const renderModelGroups = async (container) => {
     container.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
 
-    const groups = state.modelGroups;
-    const groupNames = Object.keys(groups);
+    // allGroups is { type: { groupName: [modelName, ...] } }
+    const allGroups = state.modelGroups;
 
-    if (groupNames.length === 0) {
+    // Flatten into [{ modelType, groupName, members }]
+    const flatGroups = [];
+    for (const [modelType, groups] of Object.entries(allGroups)) {
+        if (typeof groups !== "object" || Array.isArray(groups)) continue;
+        for (const [groupName, members] of Object.entries(groups)) {
+            if (Array.isArray(members) && members.length > 0) {
+                flatGroups.push({ modelType, groupName, members });
+            }
+        }
+    }
+
+    if (flatGroups.length === 0) {
         container.innerHTML = `<div class="wfm-nlp-empty">No groups found.</div>`;
         return;
     }
@@ -1347,18 +1358,18 @@ const renderModelGroups = async (container) => {
     container.innerHTML = "";
     let hasAny = false;
 
-    for (const groupName of groupNames) {
-        const members = (groups[groupName] || []).filter(name => matchesModelSearch(name));
-        if (state.searchText && members.length === 0) continue;
-        if ((groups[groupName] || []).length === 0) continue;
+    for (const { modelType, groupName, members } of flatGroups) {
+        const filtered = members.filter(name => matchesModelSearch(name));
+        if (state.searchText && filtered.length === 0) continue;
 
         hasAny = true;
         const section = document.createElement("div");
         section.className = "wfm-nlp-group-section";
 
+        const typeLabel = MODEL_TYPE_LABELS[modelType] || modelType;
         const header = document.createElement("div");
         header.className = "wfm-nlp-group-header collapsed";
-        header.innerHTML = `<span>${esc(groupName)}</span> <span class="wfm-nlp-badge">${members.length}</span>`;
+        header.innerHTML = `<span class="wfm-nlp-model-type-badge">[${esc(typeLabel)}]</span> <span>${esc(groupName)}</span> <span class="wfm-nlp-badge">${filtered.length}</span>`;
         header.addEventListener("click", () => {
             const listEl = section.querySelector(".wfm-nlp-group-list");
             listEl.style.display = listEl.style.display === "none" ? "block" : "none";
@@ -1369,17 +1380,9 @@ const renderModelGroups = async (container) => {
         const listEl = document.createElement("div");
         listEl.className = "wfm-nlp-group-list";
         listEl.style.display = "none";
-        for (const name of members) {
-            const type = typeOf[name] || "checkpoint";
+        for (const name of filtered) {
+            const type = typeOf[name] || modelType;
             const item = createModelItem(name, type);
-            const typeLabel = MODEL_TYPE_LABELS[type] || type;
-            const typeBadgeEl = item.querySelector(".wfm-nlp-item-body");
-            if (typeBadgeEl) {
-                const tb = document.createElement("span");
-                tb.className = "wfm-nlp-model-type-badge";
-                tb.textContent = typeLabel;
-                typeBadgeEl.prepend(tb);
-            }
             listEl.appendChild(item);
         }
         section.appendChild(listEl);

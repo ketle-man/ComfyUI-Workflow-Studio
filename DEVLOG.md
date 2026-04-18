@@ -1,5 +1,34 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-18: v0.3.0 モデルグループ表示改善（全タイプ横断・サイドパネル修正）
+
+### 概要
+
+- モデルタブのグループフィルタードロップダウンを全タイプ横断表示に改善
+- ComfyUIサイドパネルのModel Groupsビューを v0.2.9 のタイプ別形式に対応させバグ修正
+
+### 変更内容
+
+#### `static/js/models-tab.js` — グループフィルター全タイプ横断表示
+
+- `state.allModelGroups` 追加 — 全タイプのグループを `{ type: { groupName: [models] } }` 形式で保持
+- `fetchAllModelGroups()` 追加 — `type` パラメータなしで全タイプのグループをAPIから一括取得
+- `renderGroupFilter()` 改善 — ドロップダウンオプションを `[Checkpoint] GroupName` / `[LoRA] GroupName` 形式で全タイプ分表示。値は `type::groupName` としてエンコード
+- グループフィルター `change` ハンドラ更新 — 選択したグループが現在と異なるタイプの場合、モデルタイプタブを自動切り替えしてモデルを再ロード
+- `saveModelGroups()` — 保存時に `state.allModelGroups[type]` も更新
+- `loadModelsForCurrentType()` — ロード時に `state.allModelGroups[type]` を同期
+- `loadMetadataAndModels()` — 初回ロード時に `fetchAllModelGroups()` で全タイプのグループを一括取得
+
+#### `web/comfyui/node_sets_menu.js` — サイドパネルのModel Groupsビュー修正
+
+- `renderModelGroups()` を新タイプ別形式 `{ type: { groupName: [...] } }` に対応
+  - 旧: `groups[groupName]` が配列を期待 → `TypeError: .filter is not a function` でクラッシュ
+  - 新: `flatGroups = [{modelType, groupName, members}]` にフラット展開してから描画
+- グループヘッダーに `[Checkpoint]` / `[LoRA]` 等のタイプラベルを追加（`wfm-nlp-model-type-badge`クラス）
+- `typeOf[name] || modelType` — モデルリスト未取得時のフォールバックをグループのモデルタイプに変更
+
+---
+
 ## 2026-04-18: v0.2.9 モデル有効/無効・複数選択・一括削除
 
 ### 概要
