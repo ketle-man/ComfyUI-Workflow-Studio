@@ -22,6 +22,10 @@ const API = {
     groupDelete:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}`,
     groupAdd:       (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/add`,
     groupRemove:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/remove`,
+    folderCreate:               `/wfm/gallery/folder`,
+    folderDelete:               `/wfm/gallery/folder`,
+    imagesDelete:               `/wfm/gallery/images/delete`,
+    imagesMove:                 `/wfm/gallery/images/move`,
 };
 
 // ── 状態 ─────────────────────────────────────────────────────
@@ -40,6 +44,7 @@ const state = {
     groups: [],
     embeddedWorkflow: null,  // 選択画像のworkflow JSON
     selectedImages: new Set(), // 複数選択中のパス Set
+    folderTree: null,      // フォルダツリー全体（移動先選択に使用）
 };
 
 // ── ヘルパー ──────────────────────────────────────────────────
@@ -62,8 +67,48 @@ function formatDate(mtime) {
 
 // ── フォルダツリー ────────────────────────────────────────────
 
+function _getExpandedPaths() {
+    const expanded = new Set();
+    document.querySelectorAll(".wfm-gallery-tree-item").forEach(item => {
+        const arrow = item.querySelector(".wfm-gallery-tree-arrow");
+        if (arrow && arrow.dataset.expanded === "true") {
+            expanded.add(item.dataset.path);
+        }
+    });
+    return expanded;
+}
+
+function _restoreTreeState(expandedPaths, selectedPath) {
+    // 親→子の順で展開するため、階層の浅い順にソート
+    const sorted = [...expandedPaths].sort(
+        (a, b) => a.split("/").length - b.split("/").length
+    );
+    for (const path of sorted) {
+        document.querySelectorAll(".wfm-gallery-tree-item").forEach(item => {
+            if (item.dataset.path !== path) return;
+            const arrow = item.querySelector(".wfm-gallery-tree-arrow");
+            if (arrow && arrow.dataset.expanded !== "true" && arrow.style.visibility !== "hidden") {
+                arrow.click();
+            }
+        });
+    }
+    // 選択状態を復元（labelクリックは画像リロードを伴うのでハイライトのみ）
+    if (selectedPath) {
+        document.querySelectorAll(".wfm-gallery-tree-item").forEach(item => {
+            if (item.dataset.path === selectedPath) {
+                document.querySelectorAll(".wfm-gallery-tree-item.selected").forEach(el => el.classList.remove("selected"));
+                item.classList.add("selected");
+            }
+        });
+    }
+}
+
 async function loadFolderTree() {
     if (!state.outputRoot) return;
+
+    // 再構築前に展開状態を保存
+    const expandedPaths = _getExpandedPaths();
+    const isFirstLoad = expandedPaths.size === 0 && !state.currentFolder;
 
     const tree = document.getElementById("wfm-gallery-tree");
     tree.innerHTML = `<p class="wfm-placeholder">${t("loading")}</p>`;
@@ -74,12 +119,17 @@ async function loadFolderTree() {
             tree.innerHTML = `<p class="wfm-placeholder">${data.error}</p>`;
             return;
         }
+        state.folderTree = data;
         tree.innerHTML = "";
         renderTreeNode(data, tree, 0, true);
-        // root フォルダを自動選択（フォルダ未選択の場合のみ）
-        if (!state.currentFolder) {
+
+        if (isFirstLoad) {
+            // 初回のみ root を自動選択
             const firstLabel = tree.querySelector(".wfm-gallery-tree-label");
             if (firstLabel) firstLabel.click();
+        } else {
+            // 展開状態と選択ハイライトを復元
+            _restoreTreeState(expandedPaths, state.currentFolder);
         }
     } catch (e) {
         tree.innerHTML = `<p class="wfm-placeholder">Error: ${e.message}</p>`;
@@ -90,6 +140,7 @@ function renderTreeNode(node, container, depth, isRoot) {
     const item = document.createElement("div");
     item.className = "wfm-gallery-tree-item";
     item.style.paddingLeft = `${depth * 12}px`;
+    item.dataset.path = node.abs_path;
 
     const hasChildren = node.children && node.children.length > 0;
     const absPath = node.abs_path;
@@ -126,6 +177,11 @@ function renderTreeNode(node, container, depth, isRoot) {
         state.selectedImages.clear();
         updateBulkBar();
         loadImages();
+        // Delete Folder ボタン: rootは削除不可
+        const delBtn = document.getElementById("wfm-gallery-folder-delete-btn");
+        if (delBtn) {
+            delBtn.disabled = (absPath === state.outputRoot.replace(/\\/g, "/") || absPath === state.outputRoot);
+        }
     });
 
     // 矢印クリックで子ノード展開/折りたたみ
@@ -424,6 +480,12 @@ function updateTagFilter(images) {
 // ── 詳細パネル ────────────────────────────────────────────────
 
 async function loadImageDetail(img) {
+    // ファイル操作ボタンを有効化
+    const moveBtn = document.getElementById("wfm-gallery-img-move-btn");
+    const delBtn = document.getElementById("wfm-gallery-img-delete-btn");
+    if (moveBtn) moveBtn.disabled = false;
+    if (delBtn) delBtn.disabled = false;
+
     // プレビュー
     const preview = document.getElementById("wfm-gallery-detail-preview");
     preview.innerHTML = `<img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${img.filename}" title="Double-click to enlarge">`;
@@ -772,6 +834,181 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;");
 }
 
+// ── フォルダ作成・削除 ────────────────────────────────────────
+
+async function createFolder() {
+    if (!state.currentFolder) {
+        showToast("Please select a parent folder first", "error");
+        return;
+    }
+    const name = prompt("New folder name:");
+    if (!name || !name.trim()) return;
+    try {
+        const res = await fetch(API.folderCreate, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ parent: state.currentFolder, name: name.trim() }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            showToast(`Error: ${data.error}`, "error");
+            return;
+        }
+        showToast(`Folder "${name.trim()}" created`, "success");
+        await loadFolderTree();
+    } catch (e) {
+        showToast(`Error: ${e.message}`, "error");
+    }
+}
+
+async function deleteFolder() {
+    if (!state.currentFolder) return;
+    if (!confirm(`Delete folder "${state.currentFolder.split("/").pop()}" and all its contents?`)) return;
+    try {
+        const res = await fetch(API.folderDelete, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: state.currentFolder }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            showToast(`Error: ${data.error}`, "error");
+            return;
+        }
+        showToast("Folder deleted", "success");
+        state.currentFolder = "";
+        state.images = [];
+        document.getElementById("wfm-gallery-grid").innerHTML = `<p class="wfm-placeholder">Select a folder to browse images.</p>`;
+        await loadFolderTree();
+    } catch (e) {
+        showToast(`Error: ${e.message}`, "error");
+    }
+}
+
+// ── ファイル削除・移動 ────────────────────────────────────────
+
+async function performDeleteImages(paths) {
+    try {
+        const res = await fetch(API.imagesDelete, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paths }),
+        });
+        const data = await res.json();
+        if (data.deleted && data.deleted.length > 0) {
+            showToast(`Deleted ${data.deleted.length} image(s)`, "success");
+            // 削除された画像をstateから除去
+            const deletedSet = new Set(data.deleted);
+            state.images = state.images.filter(img => !deletedSet.has(img.path));
+            state.selectedImages = new Set([...state.selectedImages].filter(p => !deletedSet.has(p)));
+            if (state.selectedImage && deletedSet.has(state.selectedImage.path)) {
+                state.selectedImage = null;
+                document.getElementById("wfm-gallery-detail-preview").innerHTML = `<span class="wfm-placeholder">No selection</span>`;
+                document.getElementById("wfm-gallery-detail-filename").textContent = "";
+                const moveBtn = document.getElementById("wfm-gallery-img-move-btn");
+                const delBtn = document.getElementById("wfm-gallery-img-delete-btn");
+                if (moveBtn) moveBtn.disabled = true;
+                if (delBtn) delBtn.disabled = true;
+            }
+            updateBulkBar();
+            renderImages();
+            // フォルダツリーのカウントを更新
+            loadFolderTree();
+        }
+        if (data.errors && data.errors.length > 0) {
+            showToast(`Errors: ${data.errors.join(", ")}`, "error");
+        }
+    } catch (e) {
+        showToast(`Error: ${e.message}`, "error");
+    }
+}
+
+async function performMoveImages(paths, destFolder) {
+    try {
+        const res = await fetch(API.imagesMove, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paths, dest: destFolder }),
+        });
+        const data = await res.json();
+        if (data.moved && data.moved.length > 0) {
+            showToast(`Moved ${data.moved.length} image(s)`, "success");
+            const movedSet = new Set(data.moved.map(m => m.from));
+            state.images = state.images.filter(img => !movedSet.has(img.path));
+            state.selectedImages = new Set([...state.selectedImages].filter(p => !movedSet.has(p)));
+            if (state.selectedImage && movedSet.has(state.selectedImage.path)) {
+                state.selectedImage = null;
+                document.getElementById("wfm-gallery-detail-preview").innerHTML = `<span class="wfm-placeholder">No selection</span>`;
+                document.getElementById("wfm-gallery-detail-filename").textContent = "";
+                const moveBtn = document.getElementById("wfm-gallery-img-move-btn");
+                const delBtn = document.getElementById("wfm-gallery-img-delete-btn");
+                if (moveBtn) moveBtn.disabled = true;
+                if (delBtn) delBtn.disabled = true;
+            }
+            updateBulkBar();
+            renderImages();
+            loadFolderTree();
+        }
+        if (data.errors && data.errors.length > 0) {
+            showToast(`Errors: ${data.errors.join(", ")}`, "error");
+        }
+        if (data.error) {
+            showToast(`Error: ${data.error}`, "error");
+        }
+    } catch (e) {
+        showToast(`Error: ${e.message}`, "error");
+    }
+}
+
+// ── フォルダツリーを平坦なリストに変換 ──────────────────────────
+
+function flattenFolderTree(node, result = []) {
+    if (!node) return result;
+    result.push({ name: node.name, abs_path: node.abs_path });
+    if (node.children) {
+        node.children.forEach(child => flattenFolderTree(child, result));
+    }
+    return result;
+}
+
+// ── 移動先選択モーダル ────────────────────────────────────────
+
+function openMoveModal(paths) {
+    const allFolders = flattenFolderTree(state.folderTree);
+    const destinations = allFolders.filter(f => f.abs_path !== state.currentFolder);
+
+    if (destinations.length === 0) {
+        showToast("No other folders available. Create a subfolder first.", "error");
+        return;
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "wfm-gallery-lightbox";
+    overlay.innerHTML = `
+        <div class="wfm-gallery-move-modal">
+            <div class="wfm-gallery-move-modal-title">Move ${paths.length} image(s) to folder:</div>
+            <select id="wfm-gallery-move-dest-sel" class="wfm-select wfm-gallery-move-dest-sel">
+                ${destinations.map(f => `<option value="${escapeHtml(f.abs_path)}">${escapeHtml(f.name)}</option>`).join("")}
+            </select>
+            <div class="wfm-gallery-move-modal-footer">
+                <button id="wfm-gallery-move-confirm" class="wfm-btn wfm-btn-primary">Move</button>
+                <button id="wfm-gallery-move-cancel" class="wfm-btn">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    overlay.querySelector("#wfm-gallery-move-cancel").addEventListener("click", () => overlay.remove());
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector("#wfm-gallery-move-confirm").addEventListener("click", async () => {
+        const dest = overlay.querySelector("#wfm-gallery-move-dest-sel").value;
+        if (!dest) return;
+        overlay.remove();
+        await performMoveImages(paths, dest);
+    });
+
+    document.body.appendChild(overlay);
+}
+
 // ── 一括操作 ─────────────────────────────────────────────────
 
 async function bulkAddToGroup(groupName) {
@@ -996,6 +1233,34 @@ function bindEvents() {
 
     document.getElementById("wfm-gallery-bulk-unfav")?.addEventListener("click", () => {
         bulkSetFavorite(false);
+    });
+
+    document.getElementById("wfm-gallery-bulk-move")?.addEventListener("click", () => {
+        if (state.selectedImages.size === 0) return;
+        openMoveModal([...state.selectedImages]);
+    });
+
+    document.getElementById("wfm-gallery-bulk-delete")?.addEventListener("click", () => {
+        if (state.selectedImages.size === 0) return;
+        const count = state.selectedImages.size;
+        if (!confirm(`Delete ${count} selected image(s)? This cannot be undone.`)) return;
+        performDeleteImages([...state.selectedImages]);
+    });
+
+    // フォルダ作成・削除
+    document.getElementById("wfm-gallery-folder-create-btn")?.addEventListener("click", createFolder);
+    document.getElementById("wfm-gallery-folder-delete-btn")?.addEventListener("click", deleteFolder);
+
+    // 詳細パネル: 単体ファイル操作
+    document.getElementById("wfm-gallery-img-move-btn")?.addEventListener("click", () => {
+        if (!state.selectedImage) return;
+        openMoveModal([state.selectedImage.path]);
+    });
+
+    document.getElementById("wfm-gallery-img-delete-btn")?.addEventListener("click", () => {
+        if (!state.selectedImage) return;
+        if (!confirm(`Delete "${state.selectedImage.filename}"? This cannot be undone.`)) return;
+        performDeleteImages([state.selectedImage.path]);
     });
 
     // 詳細タブ切り替え

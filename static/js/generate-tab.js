@@ -51,6 +51,42 @@ async function saveToEagle(imageUrl, name, tags = []) {
 }
 
 // ============================================
+// Gallery Metadata - ワークフロー保存
+// ============================================
+
+let _outputDir = "";
+
+async function _fetchOutputDir() {
+    try {
+        const res = await fetch("/api/wfm/settings/output-dir");
+        if (res.ok) {
+            const data = await res.json();
+            _outputDir = (data.current || "").replace(/\\/g, "/").replace(/\/$/, "");
+        }
+    } catch {}
+}
+
+async function saveGeneratedImagesMeta(images, workflow) {
+    if (!_outputDir) await _fetchOutputDir();
+    if (!_outputDir) return;
+
+    for (const img of images) {
+        if (img.type !== "output") continue;
+        const parts = [_outputDir];
+        if (img.subfolder) parts.push(img.subfolder);
+        parts.push(img.filename);
+        const path = parts.join("/");
+        try {
+            await fetch("/wfm/gallery/image/meta", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path, workflow }),
+            });
+        } catch {}
+    }
+}
+
+// ============================================
 // Status & Connection
 // ============================================
 
@@ -198,6 +234,11 @@ async function handleGenerate() {
             }
         }
 
+        // ギャラリーメタデータ: 生成ワークフローを保存
+        if (images.length > 0) {
+            saveGeneratedImagesMeta(images, { ...comfyUI.currentWorkflow }).catch(() => {});
+        }
+
         showToast("Generation complete", "success");
     } catch (err) {
         if (progressText) progressText.textContent = "Error";
@@ -302,6 +343,12 @@ export async function initGenerateTab() {
             await loadWorkflowIntoEditor(data, filename);
         } catch {}
     }
+
+    // outputDir を事前取得（生成後の保存に使用）
+    _fetchOutputDir();
+    window.addEventListener("wfm-output-dir-changed", (e) => {
+        _outputDir = (e.detail?.path || "").replace(/\\/g, "/").replace(/\/$/, "");
+    });
 
     // Auto-connect on init
     const connected = await comfyUI.checkConnection();

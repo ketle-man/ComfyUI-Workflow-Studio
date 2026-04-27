@@ -350,20 +350,35 @@ class GalleryService:
         return result
 
     def extract_workflow_from_metadata(self, image_path: str) -> dict | None:
-        """PNG埋め込みメタデータからComfyUIワークフローを抽出"""
+        """ワークフローを抽出する。
+        優先順位: PNG[workflow] > PNG[prompt] > gallery_metadata.json[workflow]
+        """
         path = Path(image_path).resolve()
-        if path.suffix.lower() != ".png":
-            return None
         if not self._check_path_allowed(path):
             return None
-        embedded = self._read_png_metadata(path)
-        workflow_str = embedded.get("workflow") or embedded.get("Workflow")
-        if workflow_str:
-            try:
-                return json.loads(workflow_str)
-            except json.JSONDecodeError:
-                pass
-        return None
+
+        if path.suffix.lower() == ".png":
+            embedded = self._read_png_metadata(path)
+            # 1. workflow キー (ComfyUI UI形式)
+            for key in ("workflow", "Workflow"):
+                s = embedded.get(key)
+                if s:
+                    try:
+                        return json.loads(s)
+                    except json.JSONDecodeError:
+                        pass
+            # 2. prompt キー (ComfyUI API形式 — 大多数の生成画像)
+            for key in ("prompt", "Prompt"):
+                s = embedded.get(key)
+                if s:
+                    try:
+                        return json.loads(s)
+                    except json.JSONDecodeError:
+                        pass
+
+        # 3. gallery_metadata.json に保存されたworkflow
+        saved = self.metadata_store.get(str(path))
+        return saved.get("workflow") or None
 
     # ──────────────────────────────────────────────────────────────
     # メタデータ保存
@@ -413,6 +428,106 @@ class GalleryService:
     # ──────────────────────────────────────────────────────────────
     # 画像配信
     # ──────────────────────────────────────────────────────────────
+
+    def create_folder(self, parent_path: str, name: str) -> dict:
+        """選択フォルダ内に新しいサブフォルダを作成する"""
+        parent = Path(parent_path).resolve()
+        if not parent.is_dir():
+            return {"ok": False, "error": "Parent directory not found"}
+        if not self._check_path_allowed(parent):
+            return {"ok": False, "error": "Access denied"}
+        name = name.strip()
+        invalid_chars = set(r'\/:*?"<>|')
+        if not name or any(c in invalid_chars for c in name):
+            return {"ok": False, "error": "Invalid folder name"}
+        new_folder = parent / name
+        if new_folder.exists():
+            return {"ok": False, "error": "Folder already exists"}
+        try:
+            new_folder.mkdir()
+            self._folder_cache.invalidate(parent)
+            return {"ok": True, "path": str(new_folder).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def delete_folder(self, folder_path: str) -> dict:
+        """フォルダを再帰的に削除する"""
+        import shutil
+        folder = Path(folder_path).resolve()
+        if not folder.is_dir():
+            return {"ok": False, "error": "Directory not found"}
+        if not self._check_path_allowed(folder):
+            return {"ok": False, "error": "Access denied"}
+        if self._allowed_root and folder == self._allowed_root:
+            return {"ok": False, "error": "Cannot delete root folder"}
+        try:
+            parent = folder.parent
+            shutil.rmtree(folder)
+            self._folder_cache.invalidate(parent)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def delete_images(self, paths: list) -> dict:
+        """画像ファイルを削除する（複数対応）"""
+        deleted = []
+        errors = []
+        for img_path in paths:
+            p = Path(img_path).resolve()
+            if not p.is_file():
+                errors.append(f"{Path(img_path).name}: not found")
+                continue
+            if p.suffix.lower() not in IMAGE_EXTENSIONS:
+                errors.append(f"{p.name}: not an image")
+                continue
+            if not self._check_path_allowed(p):
+                errors.append(f"{p.name}: access denied")
+                continue
+            try:
+                p.unlink()
+                self.metadata_store.delete(str(p))
+                self._folder_cache.invalidate(p.parent)
+                deleted.append(str(p).replace("\\", "/"))
+            except Exception as e:
+                errors.append(f"{p.name}: {e}")
+        return {"deleted": deleted, "errors": errors}
+
+    def move_images(self, paths: list, dest_folder: str) -> dict:
+        """画像ファイルを別フォルダへ移動する（複数対応）"""
+        dest = Path(dest_folder).resolve()
+        if not dest.is_dir():
+            return {"ok": False, "error": "Destination folder not found", "moved": [], "errors": []}
+        if not self._check_path_allowed(dest):
+            return {"ok": False, "error": "Access denied", "moved": [], "errors": []}
+        moved = []
+        errors = []
+        for img_path in paths:
+            p = Path(img_path).resolve()
+            if not p.is_file():
+                errors.append(f"{Path(img_path).name}: not found")
+                continue
+            if p.suffix.lower() not in IMAGE_EXTENSIONS:
+                errors.append(f"{p.name}: not an image")
+                continue
+            if not self._check_path_allowed(p):
+                errors.append(f"{p.name}: access denied")
+                continue
+            dest_path = dest / p.name
+            counter = 1
+            while dest_path.exists():
+                dest_path = dest / f"{p.stem}_{counter}{p.suffix}"
+                counter += 1
+            try:
+                p.rename(dest_path)
+                old_str = str(p).replace("\\", "/")
+                new_str = str(dest_path).replace("\\", "/")
+                self.metadata_store.rename_path(old_str, new_str)
+                self._folder_cache.invalidate(p.parent)
+                self._folder_cache.invalidate(dest)
+                moved.append({"from": old_str, "to": new_str, "filename": dest_path.name})
+            except Exception as e:
+                errors.append(f"{p.name}: {e}")
+        return {"moved": moved, "errors": errors}
 
     def serve_image(self, image_path: str):
         """画像のPathオブジェクトを返す（ルートで使用）"""

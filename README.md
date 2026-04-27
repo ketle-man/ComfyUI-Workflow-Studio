@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.0-green)
+![Version](https://img.shields.io/badge/version-0.3.1-green)
 
 ## Screenshots
 
@@ -85,16 +85,20 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling)
 - **Language** — English / Japanese / Chinese
 
-### Gallery Tab (v0.2.7)
+### Gallery Tab (v0.3.1)
 - **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
-- **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch tag/group/favorite operations
+- **Folder management** — create subfolders ("+ New") or delete the selected folder with all contents ("Del") from the folder tree header
+- **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To... and Delete from the multi-select bar
+- **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations (group, favorite, move, delete)
 - **Server-side filtering** — filter by group, favorites, or tags with fast server-side set lookup (no full rescan)
 - **Group management** — create, rename, delete groups and assign/remove images using the same 4-section panel as Models tab
 - **Favorites** — star images inline without reopening the detail panel
 - **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel
+- **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab
+- **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
-- **Performance** —  with folder-level mtime cache (30s TTL) for fast incremental refresh
+- **Performance** — folder-level mtime cache (30s TTL) for fast incremental refresh; tree expansion state preserved across folder operations
 
 ### Nodes Tab (v0.1.7)
 - **Node Browser** — browse all installed ComfyUI nodes from `/object_info` API with Card/Table views
@@ -209,6 +213,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.1
+- **Folder operations** — create subfolders and delete folders (with all contents) directly from the folder tree header buttons
+- **File operations** — move or delete individual images from the detail panel; bulk move and bulk delete from the multi-select bar
+- **Tree state preserved** — folder expansion state is maintained after create/delete/move/refresh operations
+- **Workflow viewer improved** — Metadata tab now reads both `prompt` (API format, the default for most ComfyUI-generated images) and `workflow` (UI format) keys from PNG metadata, covering virtually all ComfyUI output
+- **Workflow auto-save** — after each generation in the Generate UI tab, the current workflow is automatically saved to gallery metadata for the generated images; shown in the Metadata tab even if PNG embedding is absent
 
 ### v0.3.0
 - **Cross-type group filter** — the group filter dropdown in the Models tab now shows groups from all model types simultaneously, each prefixed with a type label (`[Checkpoint]`, `[LoRA]`, etc.); selecting a group automatically switches to the corresponding model type

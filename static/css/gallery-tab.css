@@ -27,10 +27,12 @@
 .wfm-gallery-tree-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 6px 8px;
     border-bottom: 1px solid var(--wfm-border);
     flex-shrink: 0;
     background: var(--wfm-bg-primary, #16213e);
+    gap: 4px;
 }
 
 .wfm-gallery-tree-title {
@@ -39,6 +41,13 @@
     color: var(--wfm-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    flex: 1;
+}
+
+.wfm-gallery-tree-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 
@@ -591,4 +600,50 @@
 
 .wfm-gallery-lightbox-close:hover {
     background: rgba(255,255,255,0.2);
+}
+
+/* ── ファイル操作ボタン (詳細パネル) ─────────────────────────── */
+
+.wfm-gallery-file-actions {
+    display: flex;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+.wfm-gallery-file-actions .wfm-btn {
+    flex: 1;
+}
+
+/* ── 移動先選択モーダル ──────────────────────────────────────── */
+
+.wfm-gallery-move-modal {
+    background: var(--wfm-bg-primary, #16213e);
+    border: 1px solid var(--wfm-border);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 320px;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.wfm-gallery-move-modal-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--wfm-text-primary);
+}
+
+.wfm-gallery-move-dest-sel {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.wfm-gallery-move-modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
 }

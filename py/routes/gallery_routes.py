@@ -30,6 +30,11 @@ def setup_routes(app: web.Application):
     app.router.add_post("/wfm/gallery/groups/{name}/add", add_to_group)
     app.router.add_post("/wfm/gallery/groups/{name}/remove", remove_from_group)
     app.router.add_get("/wfm/gallery/groups/{name}/images", list_group_images)
+    # フォルダ・ファイル操作
+    app.router.add_post("/wfm/gallery/folder", create_folder_route)
+    app.router.add_delete("/wfm/gallery/folder", delete_folder_route)
+    app.router.add_post("/wfm/gallery/images/delete", delete_images_route)
+    app.router.add_post("/wfm/gallery/images/move", move_images_route)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -217,3 +222,61 @@ async def list_group_images(request: web.Request) -> web.Response:
     name = request.match_info.get("name", "")
     images = _service.list_images_in_group(name)
     return web.json_response({"images": images})
+
+
+# ──────────────────────────────────────────────────────────────
+# フォルダ・ファイル操作
+# ──────────────────────────────────────────────────────────────
+
+async def create_folder_route(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/folder - 新規フォルダ作成"""
+    try:
+        body = await request.json()
+        parent = body.get("parent", "")
+        name = body.get("name", "").strip()
+        if not parent or not name:
+            return web.json_response({"ok": False, "error": "parent and name required"}, status=400)
+        result = _service.create_folder(parent, name)
+        return web.json_response(result, status=200 if result["ok"] else 400)
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def delete_folder_route(request: web.Request) -> web.Response:
+    """DELETE /wfm/gallery/folder - フォルダ削除"""
+    try:
+        body = await request.json()
+        folder = body.get("path", "")
+        if not folder:
+            return web.json_response({"ok": False, "error": "path required"}, status=400)
+        result = _service.delete_folder(folder)
+        return web.json_response(result, status=200 if result["ok"] else 400)
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def delete_images_route(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/images/delete - 画像削除（単体・複数）"""
+    try:
+        body = await request.json()
+        paths = body.get("paths", [])
+        if not paths:
+            return web.json_response({"deleted": [], "errors": ["paths required"]}, status=400)
+        result = _service.delete_images(paths)
+        return web.json_response(result)
+    except Exception as e:
+        return web.json_response({"deleted": [], "errors": [str(e)]}, status=500)
+
+
+async def move_images_route(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/images/move - 画像移動（単体・複数）"""
+    try:
+        body = await request.json()
+        paths = body.get("paths", [])
+        dest = body.get("dest", "")
+        if not paths or not dest:
+            return web.json_response({"moved": [], "errors": ["paths and dest required"]}, status=400)
+        result = _service.move_images(paths, dest)
+        return web.json_response(result)
+    except Exception as e:
+        return web.json_response({"moved": [], "errors": [str(e)]}, status=500)

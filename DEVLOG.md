@@ -1,5 +1,94 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-27: v0.3.1 ギャラリー拡張（フォルダ/ファイル操作・ワークフロー保存）
+
+### 概要
+
+- ギャラリータブにフォルダ作成・削除機能を追加
+- ギャラリータブにファイル削除・移動機能を追加（単体・複数選択対応）
+- 操作後もフォルダツリーの展開状態を維持するよう改善
+- 生成UIタブで生成した画像のワークフローをギャラリーメタデータに自動保存
+- MetadataタブのワークフローJSON表示をComfyUI生成画像全般（`prompt`キー）に対応
+
+### 変更内容
+
+#### `py/services/gallery_metadata.py` — メタデータ操作追加
+
+- `delete(image_path)` 追加 — 画像削除時にメタデータエントリを除去
+- `rename_path(old_path, new_path)` 追加 — ファイル移動後のパスキー付け替え
+- `allowed` セットに `"workflow"` を追加 — 生成UIからのワークフロー保存を受け付けるように
+
+#### `py/services/gallery_service.py` — ファイル・フォルダ操作追加
+
+- `create_folder(parent_path, name)` — 無効文字チェック付きでサブフォルダを作成。作成後にフォルダキャッシュを無効化
+- `delete_folder(folder_path)` — `shutil.rmtree` で再帰削除。ルートフォルダは保護
+- `delete_images(paths)` — 複数画像ファイルを削除。各ファイルのメタデータ削除・キャッシュ無効化も実行
+- `move_images(paths, dest_folder)` — 複数画像を別フォルダへ移動。ファイル名衝突時は連番サフィックス付与。メタデータのパスキーを `rename_path` で引き継ぎ
+- `extract_workflow_from_metadata` 修正 — PNG埋め込みの参照キーを `workflow` → `workflow / prompt` の順に拡張。どちらも存在しない場合は `gallery_metadata.json` の `workflow` フィールドへフォールバック
+
+#### `py/routes/gallery_routes.py` — エンドポイント追加
+
+- `POST /wfm/gallery/folder` — フォルダ作成
+- `DELETE /wfm/gallery/folder` — フォルダ削除
+- `POST /wfm/gallery/images/delete` — 画像削除（単体・複数）
+- `POST /wfm/gallery/images/move` — 画像移動（単体・複数）
+
+#### `static/js/gallery-tab.js` — フロントエンド拡張
+
+**API定数追加:**
+- `folderCreate`, `folderDelete`, `imagesDelete`, `imagesMove`
+
+**state追加:**
+- `folderTree` — ツリー全体データを保持（移動先フォルダ一覧の生成に使用）
+
+**フォルダツリー展開状態の保持:**
+- `_getExpandedPaths()` — 再構築前に展開済みフォルダのパスを `Set` で収集
+- `_restoreTreeState(expandedPaths, selectedPath)` — 再構築後に展開状態・選択ハイライトを復元。階層の浅い順に展開することで子ノードのDOM存在を保証
+- `renderTreeNode` — 各アイテムに `data-path` 属性を付与（復元の識別子）
+- `loadFolderTree` — 初回ロード判定（`isFirstLoad`）を追加。2回目以降は `_restoreTreeState` を呼び出して展開状態を維持
+
+**フォルダ操作:**
+- `createFolder()` — `prompt()` でフォルダ名入力後、API呼び出し・ツリー再読み込み
+- `deleteFolder()` — 確認ダイアログ後、再帰削除・currentFolder リセット・ツリー再読み込み
+- フォルダラベルクリック時に Delete Folder ボタンの `disabled` 状態を更新（ルート選択時は削除不可）
+
+**ファイル削除・移動:**
+- `performDeleteImages(paths)` — 削除後に `state.images` / `state.selectedImages` を即時更新。詳細パネルの選択中画像が削除された場合はパネルをリセット
+- `performMoveImages(paths, dest)` — 移動後に同様に state を即時更新
+- `flattenFolderTree(node)` — ツリーデータをフラットリストに変換（移動先選択に使用）
+- `openMoveModal(paths)` — 移動先フォルダ選択モーダルを動的生成。現在フォルダを除く全フォルダをドロップダウン表示
+- 詳細パネルの Move To... / Delete ボタンを画像選択時に有効化
+
+#### `templates/index.html` — UI要素追加
+
+- フォルダツリーヘッダーに「+ New」「Del」ボタン（`wfm-gallery-tree-actions`）
+- 詳細パネル Info タブに「Move To...」「Delete」ボタン（`wfm-gallery-file-actions`）
+- 一括バーに「Move To...」「Delete」ボタン
+- ヘルプ項目を10項目から11項目に更新
+
+#### `static/css/gallery-tab.css` — スタイル追加
+
+- `.wfm-gallery-tree-header` — `justify-content: space-between` でタイトルとボタンを両端配置
+- `.wfm-gallery-tree-actions` — フォルダ操作ボタンのフレックスコンテナ
+- `.wfm-gallery-file-actions` — 詳細パネルのファイル操作ボタン
+- `.wfm-gallery-move-modal` / `.wfm-gallery-move-modal-title` / `.wfm-gallery-move-dest-sel` / `.wfm-gallery-move-modal-footer` — 移動先選択モーダル
+
+#### `static/js/generate-tab.js` — ワークフロー自動保存
+
+- `_outputDir` モジュール変数 — outputパスをキャッシュ
+- `_fetchOutputDir()` — `/api/wfm/settings/output-dir` からoutputパスを取得
+- `saveGeneratedImagesMeta(images, workflow)` — 生成完了後、各画像のフルパスを組み立てて `/wfm/gallery/image/meta` にワークフローを保存。`type !== "output"` の一時ファイルはスキップ
+- `initGenerateTab` — 初期化時に `_fetchOutputDir()` を実行。`wfm-output-dir-changed` イベントで設定変更時にパスを同期
+- `handleGenerate` — 生成成功後に `saveGeneratedImagesMeta` を非同期呼び出し
+
+### 技術的な判断
+
+- **ツリー展開状態の復元**: `innerHTML = ""` による完全再構築を維持しつつ、展開パスを `Set` で保存して復元する方式を採用。差分DOMパッチより実装が単純で、フォルダ追加・削除後のツリー構造変化にも対応できる
+- **PNG `prompt` キーの参照**: ComfyUIのSaveImageノードはデフォルトでPNGに `prompt` キー（API形式）のみを埋め込む。`workflow` キー（UI形式）が埋め込まれるのは特定の操作時のみ。`prompt` を参照することで既存の全ComfyUI生成画像に対応
+- **フォールバック優先順位**: PNG埋め込み（`workflow` > `prompt`）> `gallery_metadata.json` の順とし、ComfyUI本体が埋め込んだデータを最優先に
+
+---
+
 ## 2026-04-18: v0.3.0 モデルグループ表示改善（全タイプ横断・サイドパネル修正）
 
 ### 概要

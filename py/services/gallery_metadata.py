@@ -64,7 +64,7 @@ class GalleryMetadataStore:
         key = self._normalize_path(image_path)
         existing = self._data["images"].get(key, {})
         existing.update(data)
-        allowed = {"favorite", "tags", "memo", "groups"}
+        allowed = {"favorite", "tags", "memo", "groups", "workflow"}
         existing = {k: v for k, v in existing.items() if k in allowed}
         self._data["images"][key] = existing
         return self._save_to_disk()
@@ -123,3 +123,20 @@ class GalleryMetadataStore:
             key for key, meta in self._data["images"].items()
             if group_name in meta.get("groups", [])
         }
+
+    def delete(self, image_path: str) -> bool:
+        """画像のメタデータエントリを削除する"""
+        key = self._normalize_path(image_path)
+        if key in self._data["images"]:
+            del self._data["images"][key]
+            return self._save_to_disk()
+        return True
+
+    def rename_path(self, old_path: str, new_path: str) -> bool:
+        """画像のパスキーを変更する（ファイル移動後のメタデータ引継ぎ）"""
+        old_key = self._normalize_path(old_path)
+        new_key = self._normalize_path(new_path)
+        if old_key in self._data["images"]:
+            self._data["images"][new_key] = self._data["images"].pop(old_key)
+            return self._save_to_disk()
+        return True
