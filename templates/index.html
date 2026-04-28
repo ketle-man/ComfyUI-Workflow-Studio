@@ -352,12 +352,23 @@
                         </div>
                         <div id="wfm-ckpt-batch-body" style="display:none;margin-top:8px;">
                             <div style="margin-bottom:6px;">
-                                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:3px;">Include Folders (empty = all, comma-separated)</div>
-                                <input type="text" id="wfm-ckpt-batch-include" class="wfm-input" placeholder="e.g. sdxl, flux">
-                            </div>
-                            <div style="margin-bottom:6px;">
-                                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:3px;">Exclude Folders (comma-separated)</div>
-                                <input type="text" id="wfm-ckpt-batch-exclude" class="wfm-input" placeholder="e.g. old, test">
+                                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:3px;">Checkpoints</div>
+                                <div class="wfm-ckpt-dropdown-wrap" id="wfm-ckpt-dropdown-wrap">
+                                    <button type="button" id="wfm-ckpt-dropdown-btn" class="wfm-ckpt-dropdown-trigger">
+                                        <span id="wfm-ckpt-dropdown-label">All checkpoints</span>
+                                        <span class="wfm-ckpt-dropdown-arrow">&#9660;</span>
+                                    </button>
+                                    <div id="wfm-ckpt-dropdown-panel" class="wfm-ckpt-dropdown-panel" style="display:none;">
+                                        <div style="padding:6px 8px 4px;">
+                                            <input type="text" id="wfm-ckpt-search" class="wfm-input" style="height:28px;padding:4px 8px;font-size:11px;" placeholder="Filter...">
+                                        </div>
+                                        <div style="display:flex;gap:4px;padding:0 8px 4px;">
+                                            <button type="button" id="wfm-ckpt-select-all" class="wfm-btn wfm-btn-sm" style="flex:1;font-size:10px;">All</button>
+                                            <button type="button" id="wfm-ckpt-deselect-all" class="wfm-btn wfm-btn-sm" style="flex:1;font-size:10px;">None</button>
+                                        </div>
+                                        <div id="wfm-ckpt-list" class="wfm-ckpt-dropdown-list"></div>
+                                    </div>
+                                </div>
                             </div>
                             <div id="wfm-ckpt-batch-info" style="font-size:11px;color:var(--wfm-text-secondary);"></div>
                             <div id="wfm-ckpt-batch-progress" style="margin-top:8px;display:none;">
@@ -367,6 +378,9 @@
                                 </div>
                                 <div class="wfm-gen-progress-track">
                                     <div id="wfm-ckpt-batch-bar" class="wfm-gen-progress-bar" style="background:var(--wfm-warning,#f59e0b);"></div>
+                                </div>
+                                <div style="margin-top:6px;">
+                                    <button id="wfm-ckpt-batch-pause-btn" class="wfm-btn wfm-btn-sm" style="width:100%;">Pause</button>
                                 </div>
                             </div>
                         </div>
@@ -615,12 +629,12 @@
                             <li id="wfm-help-gen-3">3-tab layout — Input (Prompt + Image), Model, Settings — each with a Raw JSON column for instant preview and direct editing</li>
                             <li id="wfm-help-gen-4">Input tab: Prompt (top) and Image drag-and-drop (bottom) in the left column</li>
                             <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter</li>
-                            <li id="wfm-help-gen-6">Settings tab: KSampler (top) and LatentImage (bottom) in the left column</li>
+                            <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
                             <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow</li>
                             <li id="wfm-help-gen-8">Seed control: random, fixed, increment, decrement — seed input and mode selector stacked vertically for readability</li>
                             <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
                             <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle</li>
-                            <li id="wfm-help-gen-11">Checkpoint Batch: enable via checkbox in the right panel to auto-generate once per checkpoint model; filter by include folders (comma-separated), exclude folders, or leave blank to use all checkpoints; Stop button aborts the loop after the current generation; per-model progress bar shown in amber</li>
+                            <li id="wfm-help-gen-11">Checkpoint Batch: select checkpoints by folder from the dropdown — check a folder to select all its files, or expand with ▶ to check individual files; use Filter to search; Pause/Resume suspends and continues between models; Stop aborts after the current generation</li>
                         </ul>
                     </div>
 

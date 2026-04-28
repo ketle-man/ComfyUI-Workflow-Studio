@@ -213,8 +213,8 @@ export const comfyEditor = {
         const latent = analysis.latent_nodes?.[0];
 
         el.innerHTML = `
-            <div style="display:flex;flex-direction:column;gap:0;">
-                <div style="padding-bottom:14px;border-bottom:1px solid var(--wfm-border);margin-bottom:14px;">
+            <div style="display:flex;flex-direction:row;gap:0;align-items:flex-start;">
+                <div style="flex:1;min-width:0;padding-right:14px;border-right:1px solid var(--wfm-border);">
                     <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">KSampler</h3>
                     ${sampler ? `
                     <input type="hidden" id="wfm-settings-sampler-id" value="${sampler.id}">
@@ -249,7 +249,7 @@ export const comfyEditor = {
                     <button class="wfm-btn wfm-btn-sm" id="wfm-settings-sampler-apply">Apply</button>
                     ` : "<p class='wfm-placeholder'>No KSampler node found</p>"}
                 </div>
-                <div>
+                <div style="flex:1;min-width:0;padding-left:14px;">
                     <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">Latent Image</h3>
                     ${latent ? `
                     <input type="hidden" id="wfm-settings-latent-id" value="${latent.id}">

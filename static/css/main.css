@@ -688,6 +688,140 @@ body {
     padding-bottom: 6px;
 }
 
+/* Checkpoint batch dropdown */
+.wfm-ckpt-dropdown-wrap {
+    position: relative;
+}
+.wfm-ckpt-dropdown-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--wfm-input-bg, var(--wfm-bg));
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius);
+    color: var(--wfm-text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s ease;
+}
+.wfm-ckpt-dropdown-trigger:hover {
+    border-color: var(--wfm-primary);
+}
+.wfm-ckpt-dropdown-arrow {
+    font-size: 9px;
+    color: var(--wfm-text-secondary);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+.wfm-ckpt-dropdown-wrap.open .wfm-ckpt-dropdown-arrow {
+    transform: rotate(180deg);
+}
+.wfm-ckpt-dropdown-panel {
+    position: absolute;
+    z-index: 200;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    background: var(--wfm-surface);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.wfm-ckpt-dropdown-list {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+.wfm-ckpt-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--wfm-text-primary);
+}
+.wfm-ckpt-item:hover {
+    background: rgba(255,255,255,0.05);
+}
+.wfm-ckpt-item input[type=checkbox] {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--wfm-primary);
+}
+.wfm-ckpt-item-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wfm-ckpt-item--indented {
+    padding-left: 24px;
+}
+.wfm-ckpt-folder-group {
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.wfm-ckpt-folder-group:last-child {
+    border-bottom: none;
+}
+.wfm-ckpt-folder-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    -webkit-user-select: none;
+    user-select: none;
+}
+.wfm-ckpt-folder-header:hover {
+    background: rgba(255,255,255,0.05);
+}
+.wfm-ckpt-folder-header input[type=checkbox] {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--wfm-primary);
+}
+.wfm-ckpt-folder-toggle {
+    font-size: 8px;
+    color: var(--wfm-text-secondary);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+    width: 10px;
+    text-align: center;
+    cursor: pointer;
+}
+.wfm-ckpt-folder-group.open .wfm-ckpt-folder-toggle {
+    transform: rotate(90deg);
+}
+.wfm-ckpt-folder-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.wfm-ckpt-folder-count {
+    font-size: 10px;
+    color: var(--wfm-text-secondary);
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+.wfm-ckpt-folder-files {
+    display: none;
+}
+.wfm-ckpt-folder-group.open .wfm-ckpt-folder-files {
+    display: block;
+}
+
 /* Generation panel in right column */
 .wfm-gen-panel {
     background: var(--wfm-surface);

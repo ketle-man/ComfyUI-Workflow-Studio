@@ -1,5 +1,65 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-29: v0.3.4 GenerateUI — Checkpoint Batch 刷新・Settings 横並びレイアウト・ヘルプ i18n 修正
+
+### 概要
+
+- Checkpoint Batch: フォルダツリー型ドロップダウン選択に刷新（テキスト入力の Include/Exclude フォルダ指定を廃止）
+- Checkpoint Batch: 第二階層以下のサブフォルダにも対応
+- Checkpoint Batch: 一時停止 / 再開（Pause/Resume）ボタンを追加
+- GenerateUI Settings タブ: KSampler と Latent Image を横並び（各50%幅）に変更
+- Help タブ: 最新機能に合わせて説明を更新し、i18n 対応漏れ（Gallery 5〜11、Gen 11）を修正
+
+### 変更内容
+
+#### `templates/index.html`
+
+- Checkpoint Batch パネルの Include/Exclude テキスト入力を廃止し、チェックボックス付きドロップダウンに置き換え
+  - フォルダヘッダー行: チェックボックス + ▶ 展開矢印 + フォルダ名 + ファイル数
+  - ファイル行: インデント + チェックボックス + ファイル名（フルパスを tooltip 表示）
+  - パネル上部: Filter 検索入力 + All / None ボタン
+- バッチ進行エリアのプログレスバー下に Pause ボタンを追加（実行中のみ有効）
+- ヘルプ: `wfm-help-gen-6`（横並びレイアウト）・`wfm-help-gen-11`（新バッチ機能）の初期テキストを更新
+
+#### `static/js/generate-tab.js`
+
+- `_parseFolderList()` / `_getModelFolder()` / `_filterCheckpoints()` を削除
+- `_ckptState = { mode: "all"|"some"|"none", selected: Set<modelPath> }` で選択状態を管理
+  - `"all"`: 全選択（selected は空）、`"some"`: 部分選択、`"none"`: 全解除
+- `_buildFolderTree(models)` — モデルパスをフォルダ → モデルリストの Map に変換（`lastIndexOf("/")` で第二階層以下にも対応）
+- `_getFolderCheckState(folderModels)` — `"checked"` / `"indeterminate"` / `"unchecked"` を返す
+- `_toggleSingleModel()` / `_toggleFolderModels()` — 単体・フォルダ一括のトグルロジック（all/none/some の状態遷移を管理）
+- `_rebuildCkptList()` — フォルダグループ形式の DOM を動的生成（▶ 展開・折りたたみ、`checkbox.indeterminate` 対応）
+- `_getSelectedCheckpoints()` — mode に応じた選択リストを返す
+- `_ckptBatch.paused` フラグと `_waitIfPaused()` で一時停止・再開を実装（Promise 待機 + resolve で解除）
+- `_setPauseBtnState(paused)` — ボタンのテキスト・スタイルを Pause ↔ Resume で切り替え
+- `initCheckpointBatch()` に Pause/Resume ボタンのハンドラを追加
+- `_runBatchGenerate()`: ループ先頭で `await _waitIfPaused()`、一時停止時にステータステキストを "Paused" 表示、finally ブロックで状態クリーンアップ
+- Interrupt（Stop）ボタン: `_ckptBatch.paused = false` と `_resumeResolve()` を呼んで一時停止待機を即解除
+
+#### `static/js/comfyui-editor.js`
+
+- `renderSettingsTab()`: 外枠を `flex-direction: row` に変更し KSampler（左）と Latent Image（右）を横並び（各 `flex:1; min-width:0`）、間に縦の境界線（`border-right: 1px solid var(--wfm-border)`）
+
+#### `static/css/main.css`
+
+- `.wfm-ckpt-dropdown-wrap` / `.wfm-ckpt-dropdown-trigger` / `.wfm-ckpt-dropdown-arrow` / `.wfm-ckpt-dropdown-panel` — ドロップダウン UI スタイル
+- `.wfm-ckpt-folder-group` / `.wfm-ckpt-folder-header` / `.wfm-ckpt-folder-toggle` / `.wfm-ckpt-folder-name` / `.wfm-ckpt-folder-count` / `.wfm-ckpt-folder-files` — フォルダツリー UI スタイル
+- `.wfm-ckpt-item--indented` — ファイル行のインデント（`padding-left: 24px`）
+
+#### `static/js/i18n.js`
+
+- EN / JA / ZH: `helpGen6` を横並びレイアウトの説明に更新
+- EN / JA / ZH: `helpGen11` を追加（フォルダツリードロップダウン、Pause/Resume、Stop の説明）
+- EN / JA / ZH: `helpGallery5`〜`helpGallery10` を現在の HTML 構成に合わせて修正（旧版から5項目ずれていたのを解消）
+- EN / JA / ZH: `helpGallery11` を追加（PNG/JPEG/WebP/GIF 対応・メタデータ抽出の説明）
+
+#### `static/js/app.js`
+
+- `helpIdMap` に `"wfm-help-gen-11": "helpGen11"`、`"wfm-help-gallery-11": "helpGallery11"` を追加
+
+---
+
 ## 2026-04-28: v0.3.3 Promptタブ — ワイルドカード支援パネル・Impact Packシンボリックリンク連携・サブディレクトリ対応・GenerateUI修正
 
 ### 概要
