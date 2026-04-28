@@ -1,6 +1,6 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
-## 2026-04-28: v0.3.3 Promptタブ — ワイルドカード支援パネル・Impact Packシンボリックリンク連携
+## 2026-04-28: v0.3.3 Promptタブ — ワイルドカード支援パネル・Impact Packシンボリックリンク連携・サブディレクトリ対応・GenerateUI修正
 
 ### 概要
 
@@ -9,6 +9,8 @@
   - 右ペイン（Col3）: ワイルドカード支援パネルを新設
 - ワイルドカードファイル管理（txt/yaml）の CRUD API を追加
 - Settingsタブに Wildcard Integration セクションを追加（Impact Pack ジャンクション/シンボリックリンク連携）
+- ワイルドカードフォルダのサブディレクトリファイルに対応（再帰スキャン・ディレクトリグループ表示・`__folder/name__` 形式）
+- GenerateUI: `ImpactWildcardEncode` ノードの実行エラーを修正
 
 ### 変更内容
 
@@ -94,6 +96,45 @@
 - `.wfm-wc-panel`、`.wfm-wc-toolbar`、`.wfm-wc-btn`、`.wfm-wc-prompt-ta` — ワイルドカードパネル
 - `.wfm-wc-file-picker-wrap`、`.wfm-wc-file-picker`、`.wfm-wc-picker-item` — ファイルピッカー
 - `.wfm-wc-files-section`、`.wfm-wc-file-list`、`.wfm-wc-file-item`、`.wfm-wc-editor` — ファイルマネージャ
+
+### ワイルドカードサブディレクトリ対応
+
+#### `py/services/wildcard_service.py`
+
+- `list_wildcards()` — `iterdir()` → `rglob("*")` に変更して再帰スキャン。レスポンスに `dir`（サブディレクトリパス、ルートは空文字）と `wc_name`（拡張子なし相対パス、例: `color/animals`）を追加
+- `_safe_path()` — `/` 区切りの相対パスを受け付けるよう変更。各パスコンポーネントを個別に検証してパストラバーサルをブロック
+- `save_file()` — `path.parent.mkdir(parents=True, exist_ok=True)` を追加してサブディレクトリを自動作成。レスポンスに `dir`、`wc_name` を追加
+
+#### `static/js/prompt-tab.js`
+
+- `wcRenderFileList()` — ファイルをディレクトリごとにグループ化して表示（ルートが先、サブディレクトリはヘッダ付き）。サブディレクトリ内ファイルは `wfm-wc-file-item--sub` クラスでインデント。挿入テキストを `__f.name__` → `__f.wc_name__`（例: `__color/animals__`）に変更
+- `wcUpdateFilePicker()` — 同様にディレクトリグループ表示。挿入テキストを `wc_name` ベースに変更
+- Editor Save ハンドラ — `name` のバリデーションを `folder/name` 形式に対応。`\` を `/` に正規化して各コンポーネントを個別検証。`filename` を `name.ext`（例: `color/animals.txt`）として構築
+
+#### `templates/index.html`
+
+- エディタ名入力の placeholder を `"name or folder/name"` に更新
+
+#### `static/css/main.css`
+
+- `.wfm-wc-dir-header` — ファイル一覧のディレクトリ区切りヘッダ
+- `.wfm-wc-file-item--sub` — サブディレクトリファイルの左インデント
+- `.wfm-wc-picker-dir` — ファイルピッカーのディレクトリ区切りラベル
+- `.wfm-wc-picker-item--sub` — ファイルピッカー内サブディレクトリファイルのインデント
+- Safari 向け `-webkit-user-select` を追加
+
+### GenerateUI: ImpactWildcardEncode バリデーションエラー修正
+
+#### `static/js/comfyui-workflow.js`
+
+- `convertUiToApi()` — COMBO 型ウィジェット値を `/object_info` の選択肢リストと照合し、値が存在しない場合は先頭の有効な選択肢にフォールバック。Impact Pack の `ImpactWildcardEncode` ノードが `"Select Wildcard 🟢 Full Cache"` 等の動的プレースホルダー値を持つ場合でも `"Prompt outputs failed validation"` エラーが発生しなくなる
+- `analyzeWorkflow()` — `ImpactWildcardEncode` / `ImpactWildcardProcessor` を `prompt_nodes` として認識（KSampler の positive/negative 接続からロールを判定）。テキストフィールドキーを `text` ではなく `wildcard_text` として記録
+
+#### `static/js/comfyui-editor.js`
+
+- `renderPromptTab()` — select の option に `data-text-key` 属性を追加（`CLIPTextEncode` = `"text"`、`ImpactWildcardEncode` = `"wildcard_text"`）
+- Apply ハンドラ — `analysis.prompt_nodes` から `textKey` を取得して `inputs[textKey]` に書き込むよう変更（従来は `inputs.text` 固定）
+- `syncToWorkflow()` — 選択中の option の `data-text-key` を読んで正しいフィールドに書き込むよう変更。生成前の同期（`_coreGenerate` 直前の `comfyEditor.syncToWorkflow()` 経由）でも正しく反映される
 
 ---
 
