@@ -594,6 +594,191 @@ function applyToGenerateUI(text) {
 }
 
 // ============================================
+// Wildcard API helpers
+// ============================================
+
+async function wcFetchFiles() {
+    try {
+        const res = await fetch("/api/wfm/wildcards");
+        return res.ok ? await res.json() : [];
+    } catch { return []; }
+}
+
+async function wcFetchContent(filename) {
+    try {
+        const res = await fetch(`/api/wfm/wildcards/content?filename=${encodeURIComponent(filename)}`);
+        const data = await res.json();
+        return data.content ?? null;
+    } catch { return null; }
+}
+
+async function wcSaveFile(filename, content) {
+    try {
+        const res = await fetch("/api/wfm/wildcards/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename, content }),
+        });
+        const data = await res.json();
+        return data.status === "ok" ? data.file : null;
+    } catch { return null; }
+}
+
+async function wcDeleteFile(filename) {
+    try {
+        await fetch("/api/wfm/wildcards/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename }),
+        });
+    } catch { /* ignore */ }
+}
+
+// ============================================
+// Wildcard state & helpers
+// ============================================
+
+let wcFiles = [];
+let wcEditingFilename = null; // null = new file
+
+// Insert text at cursor; if open+close provided wraps selection
+function wcInsertAtCursor(textarea, open, close = "") {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = textarea.value.substring(start, end);
+    let inserted, cursorStart, cursorEnd;
+
+    if (selected && close) {
+        inserted = open + selected + close;
+        cursorStart = start + open.length;
+        cursorEnd = cursorStart + selected.length;
+    } else if (close) {
+        inserted = open + close;
+        cursorStart = start + open.length;
+        cursorEnd = cursorStart;
+    } else {
+        inserted = open;
+        cursorStart = start + open.length;
+        cursorEnd = cursorStart;
+    }
+
+    textarea.value =
+        textarea.value.substring(0, start) +
+        inserted +
+        textarea.value.substring(end);
+    textarea.setSelectionRange(cursorStart, cursorEnd);
+    textarea.focus();
+    textarea.dispatchEvent(new Event("input"));
+}
+
+// ============================================
+// Wildcard file list rendering
+// ============================================
+
+function wcRenderFileList() {
+    const list = document.getElementById("wfm-wc-file-list");
+    if (!list) return;
+    list.innerHTML = "";
+
+    if (wcFiles.length === 0) {
+        list.innerHTML = `<div class="wfm-pm-empty" style="font-size:12px;">No wildcard files yet.<br><small>Click "+ New" to create one.</small></div>`;
+        return;
+    }
+
+    for (const f of wcFiles) {
+        const item = document.createElement("div");
+        item.className = "wfm-wc-file-item";
+        item.innerHTML = `
+            <div class="wfm-wc-file-item-info">
+                <span class="wfm-wc-file-name">${esc(f.name)}</span>
+                <span class="wfm-wc-file-ext">.${esc(f.ext)}</span>
+            </div>
+            <div class="wfm-wc-file-item-actions">
+                <button class="wfm-pm-action-btn wfm-wc-use-btn" title="Insert __${esc(f.name)}__ at cursor">Use</button>
+                <button class="wfm-pm-action-btn wfm-wc-edit-btn" title="Edit file">&#9998;</button>
+            </div>
+        `;
+        // Insert reference into wildcard prompt
+        item.querySelector(".wfm-wc-use-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            const ta = document.getElementById("wfm-wc-prompt");
+            if (ta) wcInsertAtCursor(ta, `__${f.name}__`);
+        });
+        // Open editor
+        item.querySelector(".wfm-wc-edit-btn").addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const content = await wcFetchContent(f.filename);
+            wcOpenEditor(f.name, f.ext, content ?? "", f.filename);
+        });
+        // Click row = same as Use
+        item.addEventListener("click", () => {
+            const ta = document.getElementById("wfm-wc-prompt");
+            if (ta) wcInsertAtCursor(ta, `__${f.name}__`);
+        });
+        list.appendChild(item);
+    }
+}
+
+// ============================================
+// Wildcard file editor
+// ============================================
+
+function wcOpenEditor(name, ext, content, existingFilename) {
+    wcEditingFilename = existingFilename || null;
+
+    const editor = document.getElementById("wfm-wc-editor");
+    const nameInput = document.getElementById("wfm-wc-editor-name");
+    const extSelect = document.getElementById("wfm-wc-editor-ext");
+    const contentTA = document.getElementById("wfm-wc-editor-content");
+    const deleteBtn = document.getElementById("wfm-wc-editor-delete-btn");
+
+    if (!editor) return;
+    nameInput.value = name || "";
+    extSelect.value = ext || "txt";
+    contentTA.value = content || "";
+    deleteBtn.style.display = existingFilename ? "" : "none";
+    editor.style.display = "";
+    nameInput.focus();
+}
+
+function wcCloseEditor() {
+    wcEditingFilename = null;
+    const editor = document.getElementById("wfm-wc-editor");
+    if (editor) editor.style.display = "none";
+}
+
+async function wcRefreshFiles() {
+    wcFiles = await wcFetchFiles();
+    wcRenderFileList();
+    wcUpdateFilePicker();
+}
+
+// ============================================
+// Wildcard file picker popup
+// ============================================
+
+function wcUpdateFilePicker() {
+    const picker = document.getElementById("wfm-wc-file-picker");
+    if (!picker) return;
+    picker.innerHTML = "";
+    if (wcFiles.length === 0) {
+        picker.innerHTML = `<div style="padding:8px;font-size:11px;color:var(--wfm-text-secondary);">No wildcard files</div>`;
+        return;
+    }
+    for (const f of wcFiles) {
+        const btn = document.createElement("button");
+        btn.className = "wfm-wc-picker-item";
+        btn.textContent = `__${f.name}__`;
+        btn.addEventListener("click", () => {
+            const ta = document.getElementById("wfm-wc-prompt");
+            if (ta) wcInsertAtCursor(ta, `__${f.name}__`);
+            picker.style.display = "none";
+        });
+        picker.appendChild(btn);
+    }
+}
+
+// ============================================
 // Initialize
 // ============================================
 
@@ -853,4 +1038,151 @@ export function initPromptTab() {
         pmSearchText = e.target.value.trim();
         renderPresetManager();
     });
+
+    // ── Center column tab switching ──────────────────────────
+    document.querySelectorAll(".wfm-prompt-center-tab").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const target = btn.dataset.ptab;
+            document.querySelectorAll(".wfm-prompt-center-tab").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            document.querySelectorAll(".wfm-prompt-center-pane").forEach(p => {
+                p.style.display = p.id === `wfm-ptab-${target}` ? "" : "none";
+            });
+        });
+    });
+
+    // ── Wildcard syntax buttons ──────────────────────────────
+    document.querySelectorAll(".wfm-wc-btn[data-wc-open]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const ta = document.getElementById("wfm-wc-prompt");
+            if (!ta) return;
+            const open = btn.dataset.wcOpen || "";
+            const close = btn.dataset.wcClose || "";
+            wcInsertAtCursor(ta, open, close);
+        });
+    });
+
+    // LoRA LBW template button
+    document.getElementById("wfm-wc-lora-btn")?.addEventListener("click", () => {
+        const ta = document.getElementById("wfm-wc-prompt");
+        if (!ta) return;
+        wcInsertAtCursor(ta, "<lora::1:LBW=;>");
+        // Move cursor to after "lora:" for the name
+        const pos = ta.selectionStart - "<lora::1:LBW=;>".length + 6;
+        ta.setSelectionRange(pos, pos);
+        ta.focus();
+    });
+
+    // n$${ } button — asks for n then inserts multi-pick template
+    document.getElementById("wfm-wc-nset-btn")?.addEventListener("click", () => {
+        const ta = document.getElementById("wfm-wc-prompt");
+        if (!ta) return;
+        const n = prompt("Number of items to pick (n):", "2");
+        if (n === null) return;
+        const num = parseInt(n, 10);
+        if (isNaN(num) || num < 1) { showToast("Enter a positive integer", "error"); return; }
+        const template = "{" + num + "$$|}";
+        const start = ta.selectionStart;
+        wcInsertAtCursor(ta, template);
+        // Move cursor between $$ and |
+        const inner = start + ("{" + num + "$$").length;
+        ta.setSelectionRange(inner, inner);
+        ta.focus();
+    });
+
+    // File picker toggle
+    const filePickBtn = document.getElementById("wfm-wc-filepick-btn");
+    const filePicker = document.getElementById("wfm-wc-file-picker");
+    filePickBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!filePicker) return;
+        const isOpen = filePicker.style.display !== "none";
+        filePicker.style.display = isOpen ? "none" : "";
+        if (!isOpen) wcUpdateFilePicker();
+    });
+    document.addEventListener("click", () => {
+        if (filePicker) filePicker.style.display = "none";
+    });
+
+    // ── Wildcard prompt actions ──────────────────────────────
+    document.getElementById("wfm-wc-copy-btn")?.addEventListener("click", () => {
+        const ta = document.getElementById("wfm-wc-prompt");
+        const text = ta?.value || "";
+        if (!text.trim()) { showToast(t("noTextToCopy"), "error"); return; }
+        navigator.clipboard.writeText(text).then(() => showToast(t("copiedToClipboard"), "success"));
+    });
+
+    document.getElementById("wfm-wc-to-pos-btn")?.addEventListener("click", () => {
+        const src = document.getElementById("wfm-wc-prompt");
+        const dst = document.getElementById("wfm-preset-pos");
+        if (!src || !dst) return;
+        dst.value = src.value;
+        dst.dispatchEvent(new Event("input", { bubbles: true }));
+        showToast("Sent to Positive Prompt", "success");
+    });
+
+    document.getElementById("wfm-wc-to-neg-btn")?.addEventListener("click", () => {
+        const src = document.getElementById("wfm-wc-prompt");
+        const dst = document.getElementById("wfm-preset-neg");
+        if (!src || !dst) return;
+        dst.value = src.value;
+        dst.dispatchEvent(new Event("input", { bubbles: true }));
+        showToast("Sent to Negative Prompt", "success");
+    });
+
+    document.getElementById("wfm-wc-clear-btn")?.addEventListener("click", () => {
+        const ta = document.getElementById("wfm-wc-prompt");
+        if (ta) { ta.value = ""; ta.focus(); }
+    });
+
+    // ── Wildcard file manager ────────────────────────────────
+    document.getElementById("wfm-wc-new-file-btn")?.addEventListener("click", () => {
+        wcOpenEditor("", "txt", "", null);
+    });
+
+    document.getElementById("wfm-wc-files-refresh-btn")?.addEventListener("click", () => {
+        wcRefreshFiles();
+    });
+
+    // Editor: save
+    document.getElementById("wfm-wc-editor-save-btn")?.addEventListener("click", async () => {
+        const nameInput = document.getElementById("wfm-wc-editor-name");
+        const extSelect = document.getElementById("wfm-wc-editor-ext");
+        const contentTA = document.getElementById("wfm-wc-editor-content");
+
+        const name = nameInput?.value.trim();
+        const ext = extSelect?.value || "txt";
+        const content = contentTA?.value || "";
+
+        if (!name) { showToast("Enter a filename", "error"); return; }
+        if (!/^[\w\-. ]+$/.test(name)) { showToast("Filename can only contain letters, numbers, -, _, .", "error"); return; }
+
+        const filename = `${name}.${ext}`;
+        const saved = await wcSaveFile(filename, content);
+        if (saved) {
+            showToast(`Saved: ${filename}`, "success");
+            wcCloseEditor();
+            wcRefreshFiles();
+        } else {
+            showToast("Failed to save file", "error");
+        }
+    });
+
+    // Editor: delete
+    document.getElementById("wfm-wc-editor-delete-btn")?.addEventListener("click", async () => {
+        if (!wcEditingFilename) return;
+        if (!confirm(`Delete "${wcEditingFilename}"?`)) return;
+        await wcDeleteFile(wcEditingFilename);
+        showToast(`Deleted: ${wcEditingFilename}`, "success");
+        wcCloseEditor();
+        wcRefreshFiles();
+    });
+
+    // Editor: cancel
+    document.getElementById("wfm-wc-editor-cancel-btn")?.addEventListener("click", () => {
+        wcCloseEditor();
+    });
+
+    // Initial wildcard file load
+    wcRefreshFiles();
 }

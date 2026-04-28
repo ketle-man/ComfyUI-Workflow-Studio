@@ -1,5 +1,102 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-28: v0.3.3 Promptタブ — ワイルドカード支援パネル・Impact Packシンボリックリンク連携
+
+### 概要
+
+- Promptタブのレイアウトを3カラム構成に変更
+  - 中央ペイン（Col2）: Presets / Preset Manager をタブ切り替え化
+  - 右ペイン（Col3）: ワイルドカード支援パネルを新設
+- ワイルドカードファイル管理（txt/yaml）の CRUD API を追加
+- Settingsタブに Wildcard Integration セクションを追加（Impact Pack ジャンクション/シンボリックリンク連携）
+
+### 変更内容
+
+#### `py/config.py`
+
+- `COMFYUI_ROOT = _COMFYUI_ROOT` を追加（外部モジュールから参照可能に）
+- `WILDCARD_DIR = DATA_DIR / "wildcard"` を追加
+
+#### `py/services/wildcard_service.py` — 新規作成
+
+- `WildcardService(wildcard_dir)` クラス
+  - `list_wildcards()` — txt/yaml/yml ファイル一覧を返す
+  - `get_content(filename)` — ファイル内容を取得
+  - `save_file(filename, content)` — ファイルを保存（新規/上書き）
+  - `delete_file(filename)` — ファイルを削除
+  - `_safe_path(filename)` — `..` / スラッシュ / 拡張子チェックによるパストラバーサル防止
+- Impact Pack 連携メソッド
+  - `find_impact_pack_wildcards(comfyui_root)` — `custom_nodes/` 以下で "impact-pack" ディレクトリを検索
+  - `get_link_status(comfyui_root)` — インストール状況・リンク状態・パスを返す dict
+  - `create_link(comfyui_root)` — 既存 WFS ファイルを Impact Pack dir へ移行後、ジャンクション/シンボリックリンクを作成
+  - `remove_link()` — ジャンクション/シンボリックリンクを削除して通常ディレクトリに復元
+- プラットフォームヘルパー
+  - `_is_junction(path)` — Windows の `GetFileAttributesW` + `FILE_ATTRIBUTE_REPARSE_POINT` でジャンクション検出（`os.path.islink()` では検出不可）
+  - `_create_junction_or_symlink(link, target)` — Windows は `mklink /J`、他 OS は `os.symlink`
+  - `_remove_junction_or_symlink(path)` — Windows は `rmdir`（ジャンクションを削除、中身に影響なし）、他は `os.unlink`
+- コンストラクタ: `_is_junction()` で事前確認し、ジャンクション/シンボリックリンクの場合は mkdir をスキップ
+
+#### `py/routes/wildcard_routes.py` — 新規作成
+
+- `GET /api/wfm/wildcards` — ファイル一覧
+- `GET /api/wfm/wildcards/content?filename=` — ファイル内容取得
+- `POST /api/wfm/wildcards/save` — ファイル保存
+- `POST /api/wfm/wildcards/delete` — ファイル削除
+- `GET /api/wfm/wildcards/link-status` — Impact Pack リンク状態取得
+- `POST /api/wfm/wildcards/create-link` — ジャンクション/シンボリックリンク作成（移行ファイルリストを返す）
+- `POST /api/wfm/wildcards/remove-link` — リンク解除
+
+#### `py/wfm.py`
+
+- `wildcard_routes.setup_routes(app)` を追加
+
+#### `templates/index.html`
+
+- Promptタブ Col2 をタブ切り替え構造（`.wfm-prompt-center-tabnav` + `.wfm-prompt-center-pane`）に変更
+- Promptタブ Col3 にワイルドカード支援パネル（`.wfm-wc-panel`）を新設
+  - ツールバー: `{|}`, `|`, `__`, `:`, `;`, `$`, `<lora:>`, `[]`, `{n$|}`, ファイルピッカーボタン
+  - プロンプトテキストエリア（`.wfm-wc-prompt-ta`）
+  - ファイル管理セクション（ファイル一覧 + インラインエディタ）
+- Helpタブ: `wfm-help-prompt-8`、`wfm-help-prompt-9`、`wfm-help-settings-10` を追加
+
+#### `static/js/prompt-tab.js`
+
+- ワイルドカード API ヘルパー: `wcFetchFiles()`、`wcFetchContent()`、`wcSaveFile()`、`wcDeleteFile()`
+- `wcInsertAtCursor(textarea, open, close)` — 選択テキストをラップ、または `open+close` を挿入してカーソルを `open` の末尾に移動
+- `wcRenderFileList()`、`wcOpenEditor()`、`wcCloseEditor()`、`wcRefreshFiles()`、`wcUpdateFilePicker()`
+- `initPromptTab()` に追加:
+  - 中央ペインのタブ切り替えハンドラ
+  - ワイルドカードツールバーボタン（`data-wc-open` / `data-wc-close` 属性で制御）
+  - Loraボタン: `<lora::1:LBW=;>` を挿入してカーソル位置調整
+  - `{n$|}` ボタン: `prompt()` で n を入力し `{n$|}` を挿入
+  - ファイルピッカー（ポップアップ型、クリックで `__filename__` 挿入）
+  - ファイルマネージャのイベントハンドラ（新規作成・保存・削除）
+
+#### `static/js/settings-tab.js`
+
+- Data Management セクションの直後に **Wildcard Integration** `<details>` セクションを追加
+- セクション展開時に `GET /api/wfm/wildcards/link-status` を呼び出して動的 UI をレンダリング
+  - Impact Pack 未インストール: インストール誘導メッセージ + GitHub リンク
+  - インストール済み・リンクなし: Impact Pack パス表示 + 「リンクを作成」ボタン（移行ファイル名を表示）
+  - リンク済み: リンク先パス表示 + 「リンクを解除」ボタン
+
+#### `static/js/app.js`
+
+- `wfm-help-prompt-8`、`wfm-help-prompt-9`、`wfm-help-settings-10` の ID マッピングを追加
+
+#### `static/js/i18n.js`
+
+- `helpPrompt8`、`helpPrompt9`、`helpSettings10` を EN/JA/ZH に追加
+
+#### `static/css/main.css`
+
+- `.wfm-prompt-center-tabnav`、`.wfm-prompt-center-tab`、`.wfm-prompt-center-pane` — 中央ペインタブ UI
+- `.wfm-wc-panel`、`.wfm-wc-toolbar`、`.wfm-wc-btn`、`.wfm-wc-prompt-ta` — ワイルドカードパネル
+- `.wfm-wc-file-picker-wrap`、`.wfm-wc-file-picker`、`.wfm-wc-picker-item` — ファイルピッカー
+- `.wfm-wc-files-section`、`.wfm-wc-file-list`、`.wfm-wc-file-item`、`.wfm-wc-editor` — ファイルマネージャ
+
+---
+
 ## 2026-04-28: v0.3.2 生成UIタブ — Checkpoint Batch・Seed UIレイアウト修正
 
 ### 概要

@@ -620,6 +620,12 @@ export async function initSettingsTab() {
             <div id="wfm-settings-data-status" style="font-size:12px;margin-top:8px;"></div>
         </details>
 
+        <!-- Wildcard Integration -->
+        <details class="wfm-settings-section" id="wfm-wildcard-integration-section">
+            <summary class="wfm-settings-summary">Wildcard Integration</summary>
+            <div id="wfm-wildcard-link-status" style="font-size:13px;color:var(--wfm-text-secondary);">Loading...</div>
+        </details>
+
         <!-- Save Button -->
         <button class="wfm-btn wfm-btn-primary" id="wfm-settings-save" style="min-width:120px;">${t("saveSettings")}</button>
 
@@ -1050,6 +1056,89 @@ export async function initSettingsTab() {
     if (savedUrl) {
         comfyUI.updateUrl(savedUrl);
     }
+
+    // --- Wildcard Integration ---
+    async function wcLoadLinkStatus() {
+        const el = document.getElementById("wfm-wildcard-link-status");
+        if (!el) return;
+        try {
+            const res = await fetch("/api/wfm/wildcards/link-status");
+            const data = await res.json();
+            wcRenderLinkStatus(el, data);
+        } catch (e) {
+            el.innerHTML = `<span style="color:var(--wfm-error,#f44336)">Error: ${e.message}</span>`;
+        }
+    }
+
+    function wcRenderLinkStatus(el, data) {
+        if (!data.impact_pack_installed) {
+            el.innerHTML = `
+                <p style="margin:0 0 8px;">ComfyUI-Impact-Pack がインストールされていません。</p>
+                <p style="margin:0;font-size:12px;color:var(--wfm-text-secondary);">
+                    ワイルドカードを Impact Pack と共有するには、先に
+                    <a href="https://github.com/ltdrdata/ComfyUI-Impact-Pack" target="_blank" rel="noopener"
+                       style="color:var(--wfm-accent);">ComfyUI-Impact-Pack</a>
+                    をインストールしてください。
+                </p>`;
+            return;
+        }
+
+        if (data.is_linked) {
+            el.innerHTML = `
+                <p style="margin:0 0 4px;color:var(--wfm-success,#4caf50);">✓ リンク済み</p>
+                <p style="margin:0 0 8px;font-size:12px;color:var(--wfm-text-secondary);">
+                    WFS wildcard → ${data.link_target || data.impact_pack_wildcards_dir}
+                </p>
+                <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-wc-remove-link">リンクを解除</button>
+                <div id="wfm-wc-link-msg" style="font-size:12px;margin-top:8px;"></div>`;
+            document.getElementById("wfm-wc-remove-link")?.addEventListener("click", async () => {
+                const msg = document.getElementById("wfm-wc-link-msg");
+                try {
+                    const r = await fetch("/api/wfm/wildcards/remove-link", { method: "POST" });
+                    const d = await r.json();
+                    if (!r.ok) throw new Error(d.error || r.statusText);
+                    msg.textContent = "リンクを解除しました。";
+                    msg.style.color = "var(--wfm-success,#4caf50)";
+                    setTimeout(wcLoadLinkStatus, 800);
+                } catch (e) {
+                    msg.textContent = "エラー: " + e.message;
+                    msg.style.color = "var(--wfm-error,#f44336)";
+                }
+            });
+        } else {
+            el.innerHTML = `
+                <p style="margin:0 0 4px;">Impact Pack wildcards ディレクトリ:</p>
+                <p style="margin:0 0 8px;font-size:12px;color:var(--wfm-text-secondary);">${data.impact_pack_wildcards_dir}</p>
+                <p style="margin:0 0 8px;font-size:12px;color:var(--wfm-text-secondary);">
+                    WFS の wildcard ディレクトリを Impact Pack の wildcards ディレクトリへのリンクに置き換えます。
+                    既存の WFS ワイルドカードファイルは Impact Pack ディレクトリへ移行されます。
+                </p>
+                <button class="wfm-btn wfm-btn-sm" id="wfm-wc-create-link">リンクを作成</button>
+                <div id="wfm-wc-link-msg" style="font-size:12px;margin-top:8px;"></div>`;
+            document.getElementById("wfm-wc-create-link")?.addEventListener("click", async () => {
+                const msg = document.getElementById("wfm-wc-link-msg");
+                try {
+                    const r = await fetch("/api/wfm/wildcards/create-link", { method: "POST" });
+                    const d = await r.json();
+                    if (!r.ok) throw new Error(d.error || r.statusText);
+                    const migrated = d.migrated_files?.length
+                        ? ` (移行: ${d.migrated_files.join(", ")})`
+                        : "";
+                    msg.textContent = "リンクを作成しました。" + migrated;
+                    msg.style.color = "var(--wfm-success,#4caf50)";
+                    setTimeout(wcLoadLinkStatus, 800);
+                } catch (e) {
+                    msg.textContent = "エラー: " + e.message;
+                    msg.style.color = "var(--wfm-error,#f44336)";
+                }
+            });
+        }
+    }
+
+    // Load wildcard link status when section is opened
+    document.getElementById("wfm-wildcard-integration-section")?.addEventListener("toggle", (e) => {
+        if (e.target.open) wcLoadLinkStatus();
+    });
 
     // --- Data Export ---
     document.getElementById("wfm-settings-export")?.addEventListener("click", async () => {

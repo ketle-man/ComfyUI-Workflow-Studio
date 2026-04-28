@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.2-green)
+![Version](https://img.shields.io/badge/version-0.3.3-green)
 
 ## Screenshots
 
@@ -63,7 +63,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
 ### Prompt Tab
-- **3-column layout** — AI Assistant, Presets editor, and Preset Manager displayed side-by-side
+- **3-column layout** — AI Assistant (left), Presets/Preset Manager tab-panel (center), Wildcard support (right)
 - **AI chat assistant** — powered by [Ollama](https://ollama.com/), generate and refine prompts interactively
 - **Image attachment** — attach reference images for vision-capable models
 - **Translation** — JA/EN/ZH translation buttons for multilingual prompt creation
@@ -72,6 +72,8 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Group management** — create groups, assign/remove presets, delete groups from the Presets panel
 - **Clipboard copy** — copy positive/negative prompts individually (PP Copy / NP Copy)
 - **GenUI Set** — apply preset prompts directly to the GenerateUI interface
+- **Wildcard input toolbar** — one-click buttons to insert `{|}`, `{n$|}`, `__|__`, `<lora::1:LBW=;>` and other wildcard syntax; wraps selected text when applicable
+- **Wildcard file manager** — create, view, and edit `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; click a filename in the file picker to insert `__filename__` at cursor
 
 ### Settings Tab
 - **2-column layout** — left column for all settings; right column shows the Theme panel fixed in place (sticky)
@@ -84,6 +86,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Ollama connection** — configure Ollama server URL
 - **Default workflow** — set a workflow to auto-load on startup
 - **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling)
+- **Wildcard Integration** — link the WFS wildcard directory to ComfyUI-Impact-Pack's `wildcards/` directory (directory junction on Windows, symlink on other OS); existing WFS wildcard files are automatically migrated; requires [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)
 - **Language** — English / Japanese / Chinese
 
 ### Gallery Tab (v0.3.1)
@@ -214,6 +217,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.3
+- **Wildcard support panel** — new right column in the Prompt tab with a one-click toolbar for inserting wildcard syntax (`{|}`, `{n$|}`, `__|__`, `:`, `;`, `$`, `<lora::1:LBW=;>`, `[]`, single/multi pick) and wrapping selected text; dedicated prompt textarea and wildcard file picker (click to insert `__filename__`)
+- **Wildcard file manager** — create, view, edit, and delete `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; editor opens inline with filename input and save/cancel controls
+- **Preset/Preset Manager tab switch** — the center pane of the Prompt tab is now a two-tab panel (Presets / Preset Manager) to reclaim horizontal space for the new wildcard panel
+- **Wildcard Integration setting** — new accordion section in Settings tab; auto-detects ComfyUI-Impact-Pack; when installed, provides a button to create a directory junction (Windows) or symlink (other OS) from the WFS wildcard directory to Impact Pack's `wildcards/` directory; existing WFS files are migrated automatically; a Remove Link button reverses the operation
 
 ### v0.3.2
 - **Checkpoint Batch** — new panel in the GenerateUI right column (below Seed, above results); enable via checkbox to auto-generate once per checkpoint model; filter included/excluded subfolders by comma-separated names (empty = all checkpoints); real-time preview of matched model count; amber progress bar shows current model name and index; Stop button aborts the loop after the current generation completes; failed models are counted and reported in the summary toast

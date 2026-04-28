@@ -434,61 +434,139 @@
                     </div>
                 </div>
 
-                <!-- Col 2: Preset Editor -->
+                <!-- Col 2: Presets + Preset Manager (tabbed) -->
                 <div class="wfm-prompt-split-col">
-                    <div class="wfm-prompt-split-header">Presets</div>
-                    <div class="wfm-preset-panel">
-                        <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
-                            <select id="wfm-preset-select" class="wfm-select" style="flex:1;">
-                                <option value="">New Preset (none selected)</option>
-                            </select>
-                            <button id="wfm-preset-apply-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">GenUI Set</button>
+                    <!-- Center column tab navigation -->
+                    <div class="wfm-prompt-center-tabnav">
+                        <button class="wfm-prompt-center-tab active" data-ptab="presets">Presets</button>
+                        <button class="wfm-prompt-center-tab" data-ptab="manager">Preset Manager</button>
+                    </div>
+
+                    <!-- Presets pane -->
+                    <div id="wfm-ptab-presets" class="wfm-prompt-center-pane">
+                        <div class="wfm-preset-panel">
+                            <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
+                                <select id="wfm-preset-select" class="wfm-select" style="flex:1;">
+                                    <option value="">New Preset (none selected)</option>
+                                </select>
+                                <button id="wfm-preset-apply-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">GenUI Set</button>
+                            </div>
+                            <div class="wfm-form-group">
+                                <label>Preset Name</label>
+                                <input type="text" id="wfm-preset-name" class="wfm-input" placeholder="Enter preset name...">
+                            </div>
+                            <div class="wfm-form-group">
+                                <label>Category</label>
+                                <input type="text" id="wfm-preset-category" class="wfm-input" placeholder="e.g. Portrait, Landscape...">
+                            </div>
+                            <div class="wfm-form-group" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+                                <label>Positive Prompt</label>
+                                <textarea id="wfm-preset-pos" class="wfm-textarea" style="flex:1;" placeholder="Positive prompt..."></textarea>
+                            </div>
+                            <div class="wfm-form-group" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+                                <label>Negative Prompt</label>
+                                <textarea id="wfm-preset-neg" class="wfm-textarea" style="flex:1;" placeholder="Negative prompt..."></textarea>
+                            </div>
+                            <div style="display:flex; gap:4px;">
+                                <button id="wfm-preset-copy-pos-btn" class="wfm-btn" style="flex:2;" title="Copy Positive Prompt">PP Copy</button>
+                                <button id="wfm-preset-copy-neg-btn" class="wfm-btn" style="flex:2;" title="Copy Negative Prompt">NP Copy</button>
+                                <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Save</button>
+                            </div>
+                            <div style="display:flex; gap:4px; margin-top:4px;">
+                                <select id="wfm-preset-group-select" class="wfm-select" style="flex:1;">
+                                    <option value="">Select group...</option>
+                                </select>
+                                <button id="wfm-preset-add-to-group-btn" class="wfm-btn wfm-btn-sm">Add to Group</button>
+                                <button id="wfm-preset-new-group-btn" class="wfm-btn wfm-btn-sm">+ Group</button>
+                                <button id="wfm-preset-del-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" title="Delete selected group">Del Group</button>
+                            </div>
                         </div>
-                        <div class="wfm-form-group">
-                            <label>Preset Name</label>
-                            <input type="text" id="wfm-preset-name" class="wfm-input" placeholder="Enter preset name...">
-                        </div>
-                        <div class="wfm-form-group">
-                            <label>Category</label>
-                            <input type="text" id="wfm-preset-category" class="wfm-input" placeholder="e.g. Portrait, Landscape...">
-                        </div>
-                        <div class="wfm-form-group" style="flex:1;min-height:0;display:flex;flex-direction:column;">
-                            <label>Positive Prompt</label>
-                            <textarea id="wfm-preset-pos" class="wfm-textarea" style="flex:1;" placeholder="Positive prompt..."></textarea>
-                        </div>
-                        <div class="wfm-form-group" style="flex:1;min-height:0;display:flex;flex-direction:column;">
-                            <label>Negative Prompt</label>
-                            <textarea id="wfm-preset-neg" class="wfm-textarea" style="flex:1;" placeholder="Negative prompt..."></textarea>
-                        </div>
-                        <div style="display:flex; gap:4px;">
-                            <button id="wfm-preset-copy-pos-btn" class="wfm-btn" style="flex:2;" title="Copy Positive Prompt">PP Copy</button>
-                            <button id="wfm-preset-copy-neg-btn" class="wfm-btn" style="flex:2;" title="Copy Negative Prompt">NP Copy</button>
-                            <button id="wfm-preset-save-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Save</button>
-                        </div>
-                        <div style="display:flex; gap:4px; margin-top:4px;">
-                            <select id="wfm-preset-group-select" class="wfm-select" style="flex:1;">
-                                <option value="">Select group...</option>
-                            </select>
-                            <button id="wfm-preset-add-to-group-btn" class="wfm-btn wfm-btn-sm">Add to Group</button>
-                            <button id="wfm-preset-new-group-btn" class="wfm-btn wfm-btn-sm">+ Group</button>
-                            <button id="wfm-preset-del-group-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" title="Delete selected group">Del Group</button>
+                    </div>
+
+                    <!-- Preset Manager pane -->
+                    <div id="wfm-ptab-manager" class="wfm-prompt-center-pane" style="display:none;">
+                        <div class="wfm-preset-manager">
+                            <div class="wfm-pm-tabs">
+                                <button class="wfm-pm-tab active" data-pmtab="all">All</button>
+                                <button class="wfm-pm-tab" data-pmtab="favorites">&#9733;</button>
+                                <button class="wfm-pm-tab" data-pmtab="groups">Groups</button>
+                            </div>
+                            <div class="wfm-pm-search">
+                                <input type="text" id="wfm-pm-search-input" class="wfm-input" placeholder="Search presets...">
+                            </div>
+                            <div id="wfm-pm-list" class="wfm-pm-list"></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Col 3: Preset Manager (list, favorites, groups) -->
+                <!-- Col 3: Wildcard support -->
                 <div class="wfm-prompt-split-col">
-                    <div class="wfm-prompt-split-header">Preset Manager</div>
-                    <div class="wfm-preset-manager">
-                        <div class="wfm-pm-tabs">
-                            <button class="wfm-pm-tab active" data-pmtab="all">All</button>
-                            <button class="wfm-pm-tab" data-pmtab="favorites">&#9733;</button>
-                            <button class="wfm-pm-tab" data-pmtab="groups">Groups</button>
+                    <div class="wfm-prompt-split-header">Wildcard</div>
+                    <div class="wfm-wc-panel">
+
+                        <!-- Input assistance section -->
+                        <div class="wfm-wc-input-section">
+                            <!-- Wildcard syntax buttons -->
+                            <div class="wfm-wc-toolbar">
+                                <button class="wfm-wc-btn" data-wc-open="{" data-wc-close="}" title="Random pick set  e.g. {cat|dog}">{ }</button>
+                                <button class="wfm-wc-btn" data-wc-open="|" title="Separator">|</button>
+                                <button class="wfm-wc-btn" data-wc-open="__" data-wc-close="__" title="Wildcard file reference  e.g. __animals__">__</button>
+                                <button class="wfm-wc-btn" data-wc-open=":" title="Colon">:</button>
+                                <button class="wfm-wc-btn" data-wc-open=";" title="Semicolon">;</button>
+                                <button class="wfm-wc-btn" data-wc-open="$$" title="Multi-pick  e.g. {2$$cat|dog|bird}">$$</button>
+                                <button class="wfm-wc-btn" data-wc-open="[" data-wc-close="]" title="Bracket set  e.g. [cat|dog]">[ ]</button>
+                                <button class="wfm-wc-btn" id="wfm-wc-lora-btn" title="LoRA with LBW  e.g. &lt;lora:name:1:LBW=...;...&gt;">&lt;lora&gt;</button>
+                                <button class="wfm-wc-btn" id="wfm-wc-nset-btn" title="Multi-pick set  e.g. {2$$cat|dog|bird}">n$${ }</button>
+                                <div class="wfm-wc-file-picker-wrap">
+                                    <button class="wfm-wc-btn" id="wfm-wc-filepick-btn" title="Insert wildcard file reference">&#128194; File</button>
+                                    <div id="wfm-wc-file-picker" class="wfm-wc-file-picker" style="display:none;"></div>
+                                </div>
+                            </div>
+                            <!-- Prompt textarea -->
+                            <textarea id="wfm-wc-prompt" class="wfm-textarea wfm-wc-prompt-ta" rows="4" placeholder="Compose wildcard prompt here...&#10;e.g. a photo of {cat|dog}, __colors__ background"></textarea>
+                            <!-- Action buttons -->
+                            <div class="wfm-wc-prompt-actions">
+                                <button id="wfm-wc-copy-btn" class="wfm-btn wfm-btn-sm">Copy</button>
+                                <button id="wfm-wc-to-pos-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" title="Send to Preset Positive Prompt">&#8594; Pos</button>
+                                <button id="wfm-wc-to-neg-btn" class="wfm-btn wfm-btn-sm" title="Send to Preset Negative Prompt">&#8594; Neg</button>
+                                <button id="wfm-wc-clear-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Clear</button>
+                            </div>
                         </div>
-                        <div class="wfm-pm-search">
-                            <input type="text" id="wfm-pm-search-input" class="wfm-input" placeholder="Search presets...">
+
+                        <!-- Wildcard file manager section -->
+                        <div class="wfm-wc-files-section">
+                            <div class="wfm-wc-files-header">
+                                <span class="wfm-wc-files-title">Wildcard Files</span>
+                                <div style="display:flex;gap:4px;">
+                                    <button id="wfm-wc-new-file-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New</button>
+                                    <button id="wfm-wc-files-refresh-btn" class="wfm-btn wfm-btn-sm" title="Reload file list">&#8635;</button>
+                                </div>
+                            </div>
+                            <!-- File list -->
+                            <div id="wfm-wc-file-list" class="wfm-wc-file-list">
+                                <p class="wfm-placeholder" style="padding:12px;font-size:12px;">Loading...</p>
+                            </div>
+                            <!-- Editor (shown when a file is selected or New is clicked) -->
+                            <div id="wfm-wc-editor" class="wfm-wc-editor" style="display:none;">
+                                <div class="wfm-wc-editor-header">
+                                    <input type="text" id="wfm-wc-editor-name" class="wfm-input" placeholder="filename (no extension)" style="flex:1;min-width:0;">
+                                    <select id="wfm-wc-editor-ext" class="wfm-select" style="width:70px;">
+                                        <option value="txt">txt</option>
+                                        <option value="yaml">yaml</option>
+                                    </select>
+                                </div>
+                                <div class="wfm-wc-editor-hint">
+                                    txt: one item per line &nbsp;|&nbsp; yaml: key: [item1, item2, ...]
+                                </div>
+                                <textarea id="wfm-wc-editor-content" class="wfm-textarea wfm-wc-editor-ta" rows="8" placeholder="one item per line (txt)&#10;or YAML format (yaml)"></textarea>
+                                <div class="wfm-wc-editor-actions">
+                                    <button id="wfm-wc-editor-save-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Save</button>
+                                    <button id="wfm-wc-editor-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" style="display:none;">Delete</button>
+                                    <button id="wfm-wc-editor-cancel-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Cancel</button>
+                                </div>
+                            </div>
                         </div>
-                        <div id="wfm-pm-list" class="wfm-pm-list"></div>
+
                     </div>
                 </div>
             </div>
@@ -556,6 +634,8 @@
                             <li id="wfm-help-prompt-5">Preset Manager: browse all presets, favorites, and group-based filtering</li>
                             <li id="wfm-help-prompt-6">Group management: create groups, assign/remove presets, delete groups</li>
                             <li id="wfm-help-prompt-7">GenUI Set: apply preset prompts directly to GenerateUI</li>
+                            <li id="wfm-help-prompt-8">Wildcard toolbar: one-click buttons to insert wildcard syntax ({|}, {n$|}, __|__, &lt;lora:&gt;, etc.); wraps selected text</li>
+                            <li id="wfm-help-prompt-9">Wildcard file manager: create/edit/delete .txt/.yaml wildcard files; click filename to insert __filename__ at cursor</li>
                         </ul>
                     </div>
 
@@ -571,6 +651,7 @@
                             <li id="wfm-help-settings-7">Eagle integration URL and auto-save toggle</li>
                             <li id="wfm-help-settings-8">Data Management: export all plugin data to JSON / import to restore</li>
                             <li id="wfm-help-settings-9">All sections are collapsible accordion panels</li>
+                            <li id="wfm-help-settings-10">Wildcard Integration: link WFS wildcard dir to ComfyUI-Impact-Pack wildcards (junction/symlink); existing files migrated automatically</li>
                         </ul>
                     </div>
 

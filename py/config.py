@@ -13,6 +13,7 @@ STATIC_DIR = PLUGIN_DIR / "static"
 
 # ComfyUI root is custom_nodes/../../ = two levels up
 _COMFYUI_ROOT = PLUGIN_DIR.parent.parent
+COMFYUI_ROOT = _COMFYUI_ROOT  # exposed for external use
 
 # Data directory: prefer ComfyUI's user/default/Workflow-Studio/, fallback to plugin data/
 _COMFYUI_USER_DEFAULT = _COMFYUI_ROOT / "user" / "default"
@@ -67,3 +68,4 @@ NODE_METADATA_FILE = DATA_DIR / "node_metadata.json"
 NODE_SETS_FILE = DATA_DIR / "node_sets.json"
 PROMPTS_FILE = DATA_DIR / "prompts.json"
 MODEL_METADATA_FILE = DATA_DIR / "model_metadata.json"
+WILDCARD_DIR = DATA_DIR / "wildcard"

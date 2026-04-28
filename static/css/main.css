@@ -1924,6 +1924,287 @@ body {
 }
 
 /* ============================================
+   Prompt Tab — Center column tabs
+   ============================================ */
+
+.wfm-prompt-center-tabnav {
+    display: flex;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-prompt-center-tab {
+    flex: 1;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--wfm-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.wfm-prompt-center-tab:hover {
+    color: var(--wfm-text);
+}
+
+.wfm-prompt-center-tab.active {
+    color: var(--wfm-text);
+    border-bottom-color: var(--wfm-primary);
+}
+
+.wfm-prompt-center-pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ============================================
+   Wildcard Panel
+   ============================================ */
+
+.wfm-wc-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 12px;
+    gap: 0;
+}
+
+/* Input assistance section */
+.wfm-wc-input-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Wildcard syntax button toolbar */
+.wfm-wc-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.wfm-wc-btn {
+    padding: 3px 7px;
+    font-size: 11px;
+    font-family: monospace;
+    background: var(--wfm-surface);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius-sm);
+    color: var(--wfm-text);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.wfm-wc-btn:hover {
+    background: var(--wfm-surface-2, var(--wfm-surface));
+    border-color: var(--wfm-primary);
+    color: var(--wfm-primary);
+}
+
+.wfm-wc-prompt-ta {
+    resize: vertical;
+    min-height: 70px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.wfm-wc-prompt-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* File picker popup */
+.wfm-wc-file-picker-wrap {
+    position: relative;
+}
+
+.wfm-wc-file-picker {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 200;
+    background: var(--wfm-bg);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius);
+    min-width: 160px;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.wfm-wc-picker-item {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--wfm-border);
+    color: var(--wfm-text);
+    font-size: 11px;
+    font-family: monospace;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.wfm-wc-picker-item:last-child {
+    border-bottom: none;
+}
+
+.wfm-wc-picker-item:hover {
+    background: var(--wfm-surface);
+    color: var(--wfm-primary);
+}
+
+/* File manager section */
+.wfm-wc-files-section {
+    display: flex;
+    flex-direction: column;
+    margin-top: 10px;
+    border-top: 1px solid var(--wfm-border);
+    padding-top: 8px;
+    flex: 1;
+    min-height: 0;
+}
+
+.wfm-wc-files-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.wfm-wc-files-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.wfm-wc-file-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius-sm);
+    max-height: 180px;
+}
+
+.wfm-wc-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--wfm-border);
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.wfm-wc-file-item:last-child {
+    border-bottom: none;
+}
+
+.wfm-wc-file-item:hover {
+    background: var(--wfm-surface);
+}
+
+.wfm-wc-file-item-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+.wfm-wc-file-name {
+    font-size: 12px;
+    font-family: monospace;
+    color: var(--wfm-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wfm-wc-file-ext {
+    font-size: 10px;
+    color: var(--wfm-text-secondary);
+    background: var(--wfm-surface);
+    border: 1px solid var(--wfm-border);
+    border-radius: 3px;
+    padding: 1px 4px;
+    flex-shrink: 0;
+}
+
+.wfm-wc-file-item-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.12s;
+    flex-shrink: 0;
+}
+
+.wfm-wc-file-item:hover .wfm-wc-file-item-actions {
+    opacity: 1;
+}
+
+.wfm-wc-use-btn {
+    font-size: 10px !important;
+    color: var(--wfm-primary) !important;
+}
+
+/* File editor */
+.wfm-wc-editor {
+    margin-top: 8px;
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius);
+    padding: 8px;
+    background: var(--wfm-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.wfm-wc-editor-header {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.wfm-wc-editor-hint {
+    font-size: 10px;
+    color: var(--wfm-text-secondary);
+    padding: 0 2px;
+}
+
+.wfm-wc-editor-ta {
+    font-family: monospace;
+    font-size: 12px;
+    resize: vertical;
+    min-height: 120px;
+}
+
+.wfm-wc-editor-actions {
+    display: flex;
+    gap: 4px;
+}
+
+/* ============================================
    Image Input (I2I) Slots
    ============================================ */
 
