@@ -1,5 +1,53 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-04-28: v0.3.2 生成UIタブ — Checkpoint Batch・Seed UIレイアウト修正
+
+### 概要
+
+- 生成UIタブの右パネルに **Checkpoint Batch** 機能を追加
+- Seed行のレイアウトを2段構成に変更（seed値とモード選択が見切れる問題を解消）
+
+### 変更内容
+
+#### `templates/index.html` — UI要素追加・修正
+
+**Checkpoint Batch パネル追加:**
+- 右パネル（Seed行の下・結果表示の上）に `wfm-ckpt-batch-panel` を追加
+- チェックボックス ON/OFF でバッチ設定欄を展開/折りたたみ
+- Include Folders テキスト入力 — カンマ区切りでサブフォルダ名を指定。空欄でcheckpointフォルダ内の全モデルを対象
+- Exclude Folders テキスト入力 — カンマ区切りで除外するサブフォルダ名を指定
+- 対象モデル数プレビュー表示 (`wfm-ckpt-batch-info`)
+- バッチ進捗エリア — 現在のモデル名、インデックス/総数、アンバー色プログレスバー (`wfm-ckpt-batch-bar`)
+
+**Seed レイアウト修正:**
+- 横並び1行（`flex-direction: row`）→ 縦2行（`flex-direction: column`）に変更
+- 1行目: `Seed:` ラベル + 数値入力（`flex:1` で横幅いっぱい）
+- 2行目: モード選択セレクト（`width:100%`）
+
+**ヘルプタブ:**
+- GenerateUI タブ説明に gen-11（Checkpoint Batch の説明）を追加
+- gen-8（Seed control）に2段レイアウト化の補足を追加
+
+#### `static/js/generate-tab.js` — バッチロジック追加・生成処理リファクタリング
+
+**新規追加:**
+- `_ckptBatch` — `{ aborted: false }` バッチ中断フラグ
+- `_parseFolderList(str)` — カンマ区切り文字列をトリム・小文字化して配列に変換
+- `_getModelFolder(modelPath)` — パスの最初の `/` より前を抽出してフォルダ名を取得。`\\` を `/` に正規化、ルート直下は `""` を返す
+- `_filterCheckpoints(checkpoints, includeStr, excludeStr)` — include/exclude フィルタを適用したチェックポイントリストを返す。大文字小文字を区別しない
+- `_updateBatchInfo()` — チェックポイントリストのフィルタ済み件数を `wfm-ckpt-batch-info` に即時反映
+- `initCheckpointBatch()` — チェックボックス・include/exclude 入力のイベントリスナーを登録
+- `_coreGenerate(silent)` — 1回の生成コア処理（`silent=true` のとき完了トーストを省略）。エラー時はスローする
+- `_runBatchGenerate()` — チェックポイントリストをループし `_coreGenerate` を順番に呼び出す。各反復でワークフロー内の全checkpointノードの `ckpt_name` を書き換える。エラーは件数カウントして継続。完了後に結果サマリをトースト表示
+
+**変更:**
+- `handleGenerate()` — バッチが有効な場合は `_runBatchGenerate()` を、無効の場合は `_coreGenerate(false)` を呼び出すよう分岐。ボタン管理（disabled / Stop 表示）を共通 try/finally で処理
+- interrupt ボタンのハンドラ — `_ckptBatch.aborted = true` を設定してから `comfyUI.interrupt()` を呼び出し、単発生成とバッチの両方を停止できるように
+- Refresh Models ボタンのハンドラ — モデルリスト再取得後に `_updateBatchInfo()` を呼び出してバッチ件数を更新
+- `initGenerateTab()` — 末尾で `initCheckpointBatch()` を呼び出し。初期接続成功時に `_updateBatchInfo()` を呼び出し
+
+---
+
 ## 2026-04-27: v0.3.1 ギャラリー拡張（フォルダ/ファイル操作・ワークフロー保存）
 
 ### 概要

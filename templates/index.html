@@ -330,15 +330,45 @@
                         </div>
 
                         <!-- Seed -->
-                        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-                            <label style="font-size:12px;color:var(--wfm-text-secondary);white-space:nowrap;">Seed:</label>
-                            <input type="number" id="wfm-gen-seed-value" class="wfm-input" value="-1" style="width:130px;">
-                            <select id="wfm-gen-seed-mode" class="wfm-select" style="width:auto;">
+                        <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;">
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <label style="font-size:12px;color:var(--wfm-text-secondary);white-space:nowrap;">Seed:</label>
+                                <input type="number" id="wfm-gen-seed-value" class="wfm-input" value="-1" style="flex:1;min-width:0;">
+                            </div>
+                            <select id="wfm-gen-seed-mode" class="wfm-select" style="width:100%;">
                                 <option value="random">Random</option>
                                 <option value="fixed">Fixed</option>
                                 <option value="increment">Increment</option>
                                 <option value="decrement">Decrement</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <!-- Checkpoint Batch Panel -->
+                    <div class="wfm-gen-panel" id="wfm-ckpt-batch-panel">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input type="checkbox" id="wfm-ckpt-batch-enabled" style="width:14px;height:14px;cursor:pointer;accent-color:var(--wfm-primary);">
+                            <label for="wfm-ckpt-batch-enabled" style="font-weight:600;font-size:13px;cursor:pointer;">Checkpoint Batch</label>
+                        </div>
+                        <div id="wfm-ckpt-batch-body" style="display:none;margin-top:8px;">
+                            <div style="margin-bottom:6px;">
+                                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:3px;">Include Folders (empty = all, comma-separated)</div>
+                                <input type="text" id="wfm-ckpt-batch-include" class="wfm-input" placeholder="e.g. sdxl, flux">
+                            </div>
+                            <div style="margin-bottom:6px;">
+                                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:3px;">Exclude Folders (comma-separated)</div>
+                                <input type="text" id="wfm-ckpt-batch-exclude" class="wfm-input" placeholder="e.g. old, test">
+                            </div>
+                            <div id="wfm-ckpt-batch-info" style="font-size:11px;color:var(--wfm-text-secondary);"></div>
+                            <div id="wfm-ckpt-batch-progress" style="margin-top:8px;display:none;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11px;">
+                                    <span id="wfm-ckpt-batch-current-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75%;color:var(--wfm-text-primary);"></span>
+                                    <span id="wfm-ckpt-batch-count" style="color:var(--wfm-text-secondary);white-space:nowrap;margin-left:8px;"></span>
+                                </div>
+                                <div class="wfm-gen-progress-track">
+                                    <div id="wfm-ckpt-batch-bar" class="wfm-gen-progress-bar" style="background:var(--wfm-warning,#f59e0b);"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -509,9 +539,10 @@
                             <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter</li>
                             <li id="wfm-help-gen-6">Settings tab: KSampler (top) and LatentImage (bottom) in the left column</li>
                             <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow</li>
-                            <li id="wfm-help-gen-8">Seed control: random, fixed, increment, decrement</li>
+                            <li id="wfm-help-gen-8">Seed control: random, fixed, increment, decrement — seed input and mode selector stacked vertically for readability</li>
                             <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
                             <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle</li>
+                            <li id="wfm-help-gen-11">Checkpoint Batch: enable via checkbox in the right panel to auto-generate once per checkpoint model; filter by include folders (comma-separated), exclude folders, or leave blank to use all checkpoints; Stop button aborts the loop after the current generation; per-model progress bar shown in amber</li>
                         </ul>
                     </div>
 

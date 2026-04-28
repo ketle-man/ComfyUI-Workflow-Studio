@@ -150,7 +150,199 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
 }
 
 // ============================================
-// Generation
+// Checkpoint Batch
+// ============================================
+
+const _ckptBatch = { aborted: false };
+
+function _parseFolderList(str) {
+    return str.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+
+function _getModelFolder(modelPath) {
+    const normalized = modelPath.replace(/\\/g, "/");
+    const idx = normalized.indexOf("/");
+    return idx === -1 ? "" : normalized.substring(0, idx).toLowerCase();
+}
+
+function _filterCheckpoints(checkpoints, includeStr, excludeStr) {
+    const inc = _parseFolderList(includeStr);
+    const exc = _parseFolderList(excludeStr);
+    return checkpoints.filter((m) => {
+        const folder = _getModelFolder(m);
+        if (inc.length > 0 && !inc.includes(folder)) return false;
+        if (exc.length > 0 && exc.includes(folder)) return false;
+        return true;
+    });
+}
+
+function _updateBatchInfo() {
+    const infoEl = document.getElementById("wfm-ckpt-batch-info");
+    if (!infoEl) return;
+    const inc = document.getElementById("wfm-ckpt-batch-include")?.value || "";
+    const exc = document.getElementById("wfm-ckpt-batch-exclude")?.value || "";
+    const n = _filterCheckpoints(comfyEditor.models.checkpoints, inc, exc).length;
+    infoEl.textContent = `${n} checkpoint${n !== 1 ? "s" : ""} will be processed`;
+}
+
+function initCheckpointBatch() {
+    const checkbox = document.getElementById("wfm-ckpt-batch-enabled");
+    const body = document.getElementById("wfm-ckpt-batch-body");
+
+    checkbox?.addEventListener("change", () => {
+        if (body) body.style.display = checkbox.checked ? "block" : "none";
+        if (checkbox.checked) _updateBatchInfo();
+    });
+
+    document.getElementById("wfm-ckpt-batch-include")?.addEventListener("input", _updateBatchInfo);
+    document.getElementById("wfm-ckpt-batch-exclude")?.addEventListener("input", _updateBatchInfo);
+}
+
+// ============================================
+// Generation (core — throws on error)
+// ============================================
+
+async function _coreGenerate(silent = false) {
+    const progressBar = document.getElementById("wfm-gen-progress-bar");
+    const progressText = document.getElementById("wfm-gen-progress-text");
+    const resultImg = document.getElementById("wfm-gen-result-img");
+    const resultThumbs = document.getElementById("wfm-gen-result-thumbs");
+
+    const seedMode = document.getElementById("wfm-gen-seed-mode")?.value || "random";
+    const seedValue = parseInt(document.getElementById("wfm-gen-seed-value")?.value) || -1;
+
+    if (progressBar) progressBar.style.width = "0%";
+    if (progressText) progressText.textContent = "Starting...";
+
+    const { images, seed } = await comfyUI.generate(
+        { ...comfyUI.currentWorkflow },
+        {
+            seedMode,
+            seedValue,
+            onProgress: (pct) => {
+                if (progressBar) progressBar.style.width = `${(pct * 100).toFixed(1)}%`;
+                if (progressText) progressText.textContent = `${(pct * 100).toFixed(0)}%`;
+            },
+        }
+    );
+
+    const seedEl = document.getElementById("wfm-gen-seed-value");
+    if (seedEl) seedEl.value = seed;
+
+    if (progressText) progressText.textContent = `Done (${images.length} image${images.length !== 1 ? "s" : ""})`;
+    if (progressBar) progressBar.style.width = "100%";
+
+    if (images.length > 0) {
+        const blob = await comfyUI.getImageBlob(images[0]);
+        const url = URL.createObjectURL(blob);
+        if (resultImg) {
+            resultImg.src = url;
+            resultImg.style.display = "block";
+        }
+
+        if (resultThumbs && images.length > 1) {
+            resultThumbs.innerHTML = "";
+            for (let i = 0; i < images.length; i++) {
+                const b = i === 0 ? blob : await comfyUI.getImageBlob(images[i]);
+                const u = i === 0 ? url : URL.createObjectURL(b);
+                const thumb = document.createElement("img");
+                thumb.src = u;
+                thumb.className = `wfm-gen-thumb ${i === 0 ? "active" : ""}`;
+                thumb.addEventListener("click", () => {
+                    resultImg.src = u;
+                    resultThumbs.querySelectorAll(".wfm-gen-thumb").forEach((t) => t.classList.remove("active"));
+                    thumb.classList.add("active");
+                });
+                resultThumbs.appendChild(thumb);
+            }
+        }
+    }
+
+    if (getEagleSettings().autoSave && images.length > 0) {
+        for (const img of images) {
+            const viewUrl = `/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${encodeURIComponent(img.type || "output")}`;
+            saveToEagle(viewUrl, img.filename);
+        }
+    }
+
+    if (images.length > 0) {
+        saveGeneratedImagesMeta(images, { ...comfyUI.currentWorkflow }).catch(() => {});
+    }
+
+    if (!silent) showToast("Generation complete", "success");
+}
+
+// ============================================
+// Batch generation loop
+// ============================================
+
+async function _runBatchGenerate() {
+    const ckptNodes = comfyUI.currentAnalysis?.checkpoint_nodes || [];
+    if (ckptNodes.length === 0) {
+        showToast("No checkpoint node found in workflow", "error");
+        return;
+    }
+
+    const inc = document.getElementById("wfm-ckpt-batch-include")?.value || "";
+    const exc = document.getElementById("wfm-ckpt-batch-exclude")?.value || "";
+    const list = _filterCheckpoints(comfyEditor.models.checkpoints, inc, exc);
+
+    if (list.length === 0) {
+        showToast("No checkpoints match the folder filter", "error");
+        return;
+    }
+
+    const batchProgress = document.getElementById("wfm-ckpt-batch-progress");
+    const batchCurrentName = document.getElementById("wfm-ckpt-batch-current-name");
+    const batchCount = document.getElementById("wfm-ckpt-batch-count");
+    const batchBar = document.getElementById("wfm-ckpt-batch-bar");
+    const progressText = document.getElementById("wfm-gen-progress-text");
+
+    if (batchProgress) batchProgress.style.display = "block";
+
+    let completed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < list.length; i++) {
+        if (_ckptBatch.aborted) break;
+
+        const model = list[i];
+        if (batchCurrentName) batchCurrentName.textContent = model;
+        if (batchCount) batchCount.textContent = `${i + 1} / ${list.length}`;
+        if (batchBar) batchBar.style.width = `${((i / list.length) * 100).toFixed(1)}%`;
+        if (progressText) progressText.textContent = `[${i + 1}/${list.length}] Loading...`;
+
+        for (const node of ckptNodes) {
+            if (comfyUI.currentWorkflow?.[node.id]) {
+                comfyUI.currentWorkflow[node.id].inputs.ckpt_name = model;
+            }
+        }
+
+        try {
+            await _coreGenerate(true);
+            completed++;
+        } catch (err) {
+            if (_ckptBatch.aborted) break;
+            failed++;
+            showToast(`[${i + 1}/${list.length}] Failed: ${err.message}`, "error");
+        }
+    }
+
+    if (batchBar) batchBar.style.width = "100%";
+    if (batchCurrentName) batchCurrentName.textContent = _ckptBatch.aborted ? "Stopped" : "Done";
+
+    if (_ckptBatch.aborted) {
+        showToast(`Batch stopped — ${completed} completed, ${failed} failed`, "info");
+    } else {
+        showToast(
+            `Batch complete: ${completed}/${list.length}${failed > 0 ? ` (${failed} failed)` : ""}`,
+            failed > 0 ? "error" : "success"
+        );
+    }
+}
+
+// ============================================
+// Generate entry point
 // ============================================
 
 async function handleGenerate() {
@@ -160,89 +352,29 @@ async function handleGenerate() {
     }
     if (comfyUI.generating) return;
 
-    const genBtn = document.getElementById("wfm-gen-generate-btn");
-    const progressBar = document.getElementById("wfm-gen-progress-bar");
-    const progressText = document.getElementById("wfm-gen-progress-text");
-    const interruptBtn = document.getElementById("wfm-gen-interrupt-btn");
-    const resultImg = document.getElementById("wfm-gen-result-img");
-    const resultThumbs = document.getElementById("wfm-gen-result-thumbs");
-
-    // Sync prompts to workflow
     comfyEditor.syncToWorkflow();
 
-    const seedMode = document.getElementById("wfm-gen-seed-mode")?.value || "random";
-    const seedValue = parseInt(document.getElementById("wfm-gen-seed-value")?.value) || -1;
+    const genBtn = document.getElementById("wfm-gen-generate-btn");
+    const interruptBtn = document.getElementById("wfm-gen-interrupt-btn");
 
     genBtn.disabled = true;
     if (interruptBtn) interruptBtn.style.display = "inline-block";
-    if (progressBar) progressBar.style.width = "0%";
-    if (progressText) progressText.textContent = "Starting...";
+    _ckptBatch.aborted = false;
+
+    const batchEnabled = document.getElementById("wfm-ckpt-batch-enabled")?.checked;
 
     try {
-        const { images, seed } = await comfyUI.generate(
-            { ...comfyUI.currentWorkflow },
-            {
-                seedMode,
-                seedValue,
-                onProgress: (pct) => {
-                    if (progressBar) progressBar.style.width = `${(pct * 100).toFixed(1)}%`;
-                    if (progressText) progressText.textContent = `${(pct * 100).toFixed(0)}%`;
-                },
-            }
-        );
-
-        // Update seed display
-        const seedEl = document.getElementById("wfm-gen-seed-value");
-        if (seedEl) seedEl.value = seed;
-
-        if (progressText) progressText.textContent = `Done (${images.length} image${images.length !== 1 ? "s" : ""})`;
-        if (progressBar) progressBar.style.width = "100%";
-
-        // Display results
-        if (images.length > 0) {
-            const blob = await comfyUI.getImageBlob(images[0]);
-            const url = URL.createObjectURL(blob);
-            if (resultImg) {
-                resultImg.src = url;
-                resultImg.style.display = "block";
-            }
-
-            // Thumbnails for multiple images
-            if (resultThumbs && images.length > 1) {
-                resultThumbs.innerHTML = "";
-                for (let i = 0; i < images.length; i++) {
-                    const b = i === 0 ? blob : await comfyUI.getImageBlob(images[i]);
-                    const u = i === 0 ? url : URL.createObjectURL(b);
-                    const thumb = document.createElement("img");
-                    thumb.src = u;
-                    thumb.className = `wfm-gen-thumb ${i === 0 ? "active" : ""}`;
-                    thumb.addEventListener("click", () => {
-                        resultImg.src = u;
-                        resultThumbs.querySelectorAll(".wfm-gen-thumb").forEach((t) => t.classList.remove("active"));
-                        thumb.classList.add("active");
-                    });
-                    resultThumbs.appendChild(thumb);
-                }
+        if (batchEnabled) {
+            await _runBatchGenerate();
+        } else {
+            try {
+                await _coreGenerate(false);
+            } catch (err) {
+                const progressText = document.getElementById("wfm-gen-progress-text");
+                if (progressText) progressText.textContent = "Error";
+                showToast("Generation error: " + err.message, "error");
             }
         }
-
-        // Eagle auto-save
-        if (getEagleSettings().autoSave && images.length > 0) {
-            for (const img of images) {
-                const viewUrl = `/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${encodeURIComponent(img.type || "output")}`;
-                saveToEagle(viewUrl, img.filename);
-            }
-        }
-
-        // ギャラリーメタデータ: 生成ワークフローを保存
-        if (images.length > 0) {
-            saveGeneratedImagesMeta(images, { ...comfyUI.currentWorkflow }).catch(() => {});
-        }
-
-        showToast("Generation complete", "success");
-    } catch (err) {
-        if (progressText) progressText.textContent = "Error";
-        showToast("Generation error: " + err.message, "error");
     } finally {
         genBtn.disabled = false;
         if (interruptBtn) interruptBtn.style.display = "none";
@@ -276,13 +408,15 @@ export async function initGenerateTab() {
             comfyEditor.renderAll(comfyUI.currentAnalysis, comfyUI.currentWorkflow);
         }
         showToast("Model lists refreshed", "success");
+        _updateBatchInfo();
     });
 
     // Generate button
     document.getElementById("wfm-gen-generate-btn")?.addEventListener("click", handleGenerate);
 
-    // Interrupt button
+    // Interrupt button (stops both single generation and batch loop)
     document.getElementById("wfm-gen-interrupt-btn")?.addEventListener("click", async () => {
+        _ckptBatch.aborted = true;
         await comfyUI.interrupt();
         showToast("Interrupted", "info");
     });
@@ -350,11 +484,15 @@ export async function initGenerateTab() {
         _outputDir = (e.detail?.path || "").replace(/\\/g, "/").replace(/\/$/, "");
     });
 
+    // Checkpoint batch UI
+    initCheckpointBatch();
+
     // Auto-connect on init
     const connected = await comfyUI.checkConnection();
     updateStatus(connected);
     if (connected) {
         await comfyEditor.loadModelLists();
+        _updateBatchInfo();
     }
 
     // Auto-load default workflow (doesn't require ComfyUI connection)

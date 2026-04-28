@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.1-green)
+![Version](https://img.shields.io/badge/version-0.3.2-green)
 
 ## Screenshots
 
@@ -50,14 +50,15 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Embedded workflow metadata** — workflow JSON is embedded in the PNG (tEXt chunk), compatible with ComfyUI's drag-and-drop import
 - **Auto-import** — the captured workflow is automatically imported and appears in the Workflow tab
 
-### GenerateUI Tab (v0.2.4)
+### GenerateUI Tab (v0.3.2)
 - **3-tab layout** — Input / Model / Settings tabs, each with a Raw JSON column on the right for instant preview and direct editing
 - **Input tab** — Prompt (top) and Image drag-and-drop (bottom) in the left column; Raw JSON (540px) in the right column
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler (top) and LatentImage (bottom) in the left column; Raw JSON on the right
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
-- **Seed control** — randomize, lock, or manually set seeds
+- **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
+- **Checkpoint Batch** — enable via checkbox in the right panel to sequentially generate with every checkpoint model; filter by include folders (comma-separated subfolder names, empty = all) and/or exclude folders; Stop button aborts after the current generation completes; amber progress bar tracks per-model progress
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
@@ -213,6 +214,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.2
+- **Checkpoint Batch** — new panel in the GenerateUI right column (below Seed, above results); enable via checkbox to auto-generate once per checkpoint model; filter included/excluded subfolders by comma-separated names (empty = all checkpoints); real-time preview of matched model count; amber progress bar shows current model name and index; Stop button aborts the loop after the current generation completes; failed models are counted and reported in the summary toast
+- **Seed layout fix** — seed value input and mode selector (Random / Fixed / Increment / Decrement) now stacked vertically so neither is clipped in narrow panels
 
 ### v0.3.1
 - **Folder operations** — create subfolders and delete folders (with all contents) directly from the folder tree header buttons
