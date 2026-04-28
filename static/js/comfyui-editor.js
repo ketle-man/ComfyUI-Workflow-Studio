@@ -77,7 +77,7 @@ export const comfyEditor = {
                 <label>Positive Prompt</label>
                 <div style="display:flex;gap:8px;margin-bottom:6px;">
                     <select id="wfm-prompt-pos-target" class="wfm-select" style="width:auto;flex:1">
-                        ${positiveNodes.map((n) => `<option value="${n.id}" selected>ID:${n.id} (${n.title})</option>`).join("")}
+                        ${positiveNodes.map((n) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" selected>ID:${n.id} (${n.title})</option>`).join("")}
                         ${nodeOpts}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-apply">Apply</button>
@@ -88,7 +88,7 @@ export const comfyEditor = {
                 <label>Negative Prompt</label>
                 <div style="display:flex;gap:8px;margin-bottom:6px;">
                     <select id="wfm-prompt-neg-target" class="wfm-select" style="width:auto;flex:1">
-                        ${negativeNodes.map((n) => `<option value="${n.id}" selected>ID:${n.id} (${n.title})</option>`).join("")}
+                        ${negativeNodes.map((n) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" selected>ID:${n.id} (${n.title})</option>`).join("")}
                         ${nodeOpts}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-neg-apply">Apply</button>
@@ -101,7 +101,9 @@ export const comfyEditor = {
             const nodeId = document.getElementById("wfm-prompt-pos-target")?.value;
             const text = document.getElementById("wfm-prompt-pos-text")?.value;
             if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
-                comfyUI.currentWorkflow[nodeId].inputs.text = text;
+                const promptNode = (analysis.prompt_nodes || []).find(n => n.id === nodeId);
+                const textKey = promptNode?.textKey || "text";
+                comfyUI.currentWorkflow[nodeId].inputs[textKey] = text;
                 _syncRawJson();
             }
         });
@@ -110,7 +112,9 @@ export const comfyEditor = {
             const nodeId = document.getElementById("wfm-prompt-neg-target")?.value;
             const text = document.getElementById("wfm-prompt-neg-text")?.value;
             if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
-                comfyUI.currentWorkflow[nodeId].inputs.text = text;
+                const promptNode = (analysis.prompt_nodes || []).find(n => n.id === nodeId);
+                const textKey = promptNode?.textKey || "text";
+                comfyUI.currentWorkflow[nodeId].inputs[textKey] = text;
                 _syncRawJson();
             }
         });
@@ -402,16 +406,20 @@ export const comfyEditor = {
 
     syncToWorkflow() {
         // Sync prompt texts before generation
-        const posTarget = document.getElementById("wfm-prompt-pos-target")?.value;
+        const posSelect = document.getElementById("wfm-prompt-pos-target");
+        const posTarget = posSelect?.value;
         const posText = document.getElementById("wfm-prompt-pos-text")?.value;
         if (posTarget && comfyUI.currentWorkflow?.[posTarget]) {
-            comfyUI.currentWorkflow[posTarget].inputs.text = posText;
+            const posTextKey = posSelect.selectedOptions[0]?.dataset?.textKey || "text";
+            comfyUI.currentWorkflow[posTarget].inputs[posTextKey] = posText;
         }
 
-        const negTarget = document.getElementById("wfm-prompt-neg-target")?.value;
+        const negSelect = document.getElementById("wfm-prompt-neg-target");
+        const negTarget = negSelect?.value;
         const negText = document.getElementById("wfm-prompt-neg-text")?.value;
         if (negTarget && comfyUI.currentWorkflow?.[negTarget]) {
-            comfyUI.currentWorkflow[negTarget].inputs.text = negText;
+            const negTextKey = negSelect.selectedOptions[0]?.dataset?.textKey || "text";
+            comfyUI.currentWorkflow[negTarget].inputs[negTextKey] = negText;
         }
     },
 };

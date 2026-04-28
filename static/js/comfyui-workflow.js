@@ -343,6 +343,24 @@ export const comfyWorkflow = {
                                 wIdx++;
                             }
                         }
+                        // For COMBO inputs, validate the value against the available choices.
+                        // Dynamic COMBO options (e.g. Impact Pack's "Select to add Wildcard") may
+                        // differ between the saved workflow and the current ComfyUI instance
+                        // (e.g. "Select Wildcard 🟢 Full Cache" vs "Select Wildcard"), causing
+                        // "Prompt outputs failed validation". Fall back to first choice when mismatch.
+                        if (expectedType === "COMBO") {
+                            const allInputDefs = {
+                                ...(objectInfo[node.type]?.input?.required || {}),
+                                ...(objectInfo[node.type]?.input?.optional || {}),
+                            };
+                            const spec = allInputDefs[name];
+                            if (spec) {
+                                const choices = Array.isArray(spec[0]) ? spec[0] : null;
+                                if (choices && choices.length > 0 && !choices.includes(val)) {
+                                    val = choices[0];
+                                }
+                            }
+                        }
                         inputs[name] = val;
                     }
                 } else {
@@ -493,6 +511,21 @@ export const comfyWorkflow = {
                 result.prompt_nodes.push({
                     id, type: ct, title, role,
                     text: inputs.text,
+                    textKey: "text",
+                });
+            }
+
+            // ImpactWildcardEncode / ImpactWildcardProcessor — treat wildcard_text as prompt
+            if (ct === "ImpactWildcardEncode" || ct === "ImpactWildcardProcessor") {
+                let role = "unknown";
+                if (samplerPositiveRef[id]) role = "positive";
+                else if (samplerNegativeRef[id]) role = "negative";
+                else if (/pos|正/i.test(title)) role = "positive";
+                else if (/neg|負/i.test(title)) role = "negative";
+                result.prompt_nodes.push({
+                    id, type: ct, title, role,
+                    text: inputs.wildcard_text,
+                    textKey: "wildcard_text",
                 });
             }
 
