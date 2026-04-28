@@ -685,37 +685,59 @@ function wcRenderFileList() {
         return;
     }
 
+    // Group by directory; root ("") first, then alphabetical
+    const grouped = {};
     for (const f of wcFiles) {
+        const dir = f.dir || "";
+        if (!grouped[dir]) grouped[dir] = [];
+        grouped[dir].push(f);
+    }
+    const dirs = Object.keys(grouped).sort((a, b) => {
+        if (a === "") return -1;
+        if (b === "") return 1;
+        return a.localeCompare(b);
+    });
+
+    function addFileItem(f, indented) {
         const item = document.createElement("div");
-        item.className = "wfm-wc-file-item";
+        item.className = "wfm-wc-file-item" + (indented ? " wfm-wc-file-item--sub" : "");
         item.innerHTML = `
             <div class="wfm-wc-file-item-info">
                 <span class="wfm-wc-file-name">${esc(f.name)}</span>
                 <span class="wfm-wc-file-ext">.${esc(f.ext)}</span>
             </div>
             <div class="wfm-wc-file-item-actions">
-                <button class="wfm-pm-action-btn wfm-wc-use-btn" title="Insert __${esc(f.name)}__ at cursor">Use</button>
+                <button class="wfm-pm-action-btn wfm-wc-use-btn" title="Insert __${esc(f.wc_name)}__ at cursor">Use</button>
                 <button class="wfm-pm-action-btn wfm-wc-edit-btn" title="Edit file">&#9998;</button>
             </div>
         `;
-        // Insert reference into wildcard prompt
         item.querySelector(".wfm-wc-use-btn").addEventListener("click", (e) => {
             e.stopPropagation();
             const ta = document.getElementById("wfm-wc-prompt");
-            if (ta) wcInsertAtCursor(ta, `__${f.name}__`);
+            if (ta) wcInsertAtCursor(ta, `__${f.wc_name}__`);
         });
-        // Open editor
         item.querySelector(".wfm-wc-edit-btn").addEventListener("click", async (e) => {
             e.stopPropagation();
             const content = await wcFetchContent(f.filename);
-            wcOpenEditor(f.name, f.ext, content ?? "", f.filename);
+            wcOpenEditor(f.wc_name, f.ext, content ?? "", f.filename);
         });
-        // Click row = same as Use
         item.addEventListener("click", () => {
             const ta = document.getElementById("wfm-wc-prompt");
-            if (ta) wcInsertAtCursor(ta, `__${f.name}__`);
+            if (ta) wcInsertAtCursor(ta, `__${f.wc_name}__`);
         });
         list.appendChild(item);
+    }
+
+    for (const dir of dirs) {
+        if (dir) {
+            const header = document.createElement("div");
+            header.className = "wfm-wc-dir-header";
+            header.textContent = dir + "/";
+            list.appendChild(header);
+        }
+        for (const f of grouped[dir]) {
+            addFileItem(f, dir !== "");
+        }
     }
 }
 
@@ -765,16 +787,36 @@ function wcUpdateFilePicker() {
         picker.innerHTML = `<div style="padding:8px;font-size:11px;color:var(--wfm-text-secondary);">No wildcard files</div>`;
         return;
     }
+    // Group by directory same as file list
+    const grouped = {};
     for (const f of wcFiles) {
-        const btn = document.createElement("button");
-        btn.className = "wfm-wc-picker-item";
-        btn.textContent = `__${f.name}__`;
-        btn.addEventListener("click", () => {
-            const ta = document.getElementById("wfm-wc-prompt");
-            if (ta) wcInsertAtCursor(ta, `__${f.name}__`);
-            picker.style.display = "none";
-        });
-        picker.appendChild(btn);
+        const dir = f.dir || "";
+        if (!grouped[dir]) grouped[dir] = [];
+        grouped[dir].push(f);
+    }
+    const dirs = Object.keys(grouped).sort((a, b) => {
+        if (a === "") return -1;
+        if (b === "") return 1;
+        return a.localeCompare(b);
+    });
+    for (const dir of dirs) {
+        if (dir) {
+            const sep = document.createElement("div");
+            sep.className = "wfm-wc-picker-dir";
+            sep.textContent = dir + "/";
+            picker.appendChild(sep);
+        }
+        for (const f of grouped[dir]) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-wc-picker-item" + (dir ? " wfm-wc-picker-item--sub" : "");
+            btn.textContent = `__${f.wc_name}__`;
+            btn.addEventListener("click", () => {
+                const ta = document.getElementById("wfm-wc-prompt");
+                if (ta) wcInsertAtCursor(ta, `__${f.wc_name}__`);
+                picker.style.display = "none";
+            });
+            picker.appendChild(btn);
+        }
     }
 }
 
@@ -1150,13 +1192,19 @@ export function initPromptTab() {
         const extSelect = document.getElementById("wfm-wc-editor-ext");
         const contentTA = document.getElementById("wfm-wc-editor-content");
 
-        const name = nameInput?.value.trim();
+        // Normalize separators and strip leading/trailing slashes
+        const rawName = (nameInput?.value || "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
         const ext = extSelect?.value || "txt";
         const content = contentTA?.value || "";
 
-        if (!name) { showToast("Enter a filename", "error"); return; }
-        if (!/^[\w\-. ]+$/.test(name)) { showToast("Filename can only contain letters, numbers, -, _, .", "error"); return; }
-
+        if (!rawName) { showToast("Enter a filename", "error"); return; }
+        // Validate each path component (allow letters, numbers, -, _, ., space)
+        const nameParts = rawName.split("/");
+        if (nameParts.some(p => !p || !/^[\w\-. ]+$/.test(p))) {
+            showToast("Invalid path. Use folder/name format, each part: letters, numbers, -, _, . only", "error");
+            return;
+        }
+        const name = rawName;
         const filename = `${name}.${ext}`;
         const saved = await wcSaveFile(filename, content);
         if (saved) {

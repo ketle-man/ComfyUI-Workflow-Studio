@@ -2069,6 +2069,23 @@ body {
     color: var(--wfm-primary);
 }
 
+.wfm-wc-picker-dir {
+    padding: 4px 10px 2px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    background: var(--wfm-bg);
+    border-bottom: 1px solid var(--wfm-border);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.wfm-wc-picker-item--sub {
+    padding-left: 18px;
+}
+
 /* File manager section */
 .wfm-wc-files-section {
     display: flex;
@@ -2105,6 +2122,19 @@ body {
     max-height: 180px;
 }
 
+.wfm-wc-dir-header {
+    padding: 4px 8px 2px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    background: var(--wfm-bg);
+    border-bottom: 1px solid var(--wfm-border);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 .wfm-wc-file-item {
     display: flex;
     align-items: center;
@@ -2113,6 +2143,10 @@ body {
     border-bottom: 1px solid var(--wfm-border);
     cursor: pointer;
     transition: background 0.1s;
+}
+
+.wfm-wc-file-item--sub {
+    padding-left: 16px;
 }
 
 .wfm-wc-file-item:last-child {

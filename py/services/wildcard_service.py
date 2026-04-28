@@ -24,17 +24,23 @@ class WildcardService:
     # ------------------------------------------------------------------
 
     def list_wildcards(self) -> list[dict]:
-        """Return sorted list of wildcard files (follows junction/symlink)."""
+        """Return sorted list of wildcard files recursively (follows junction/symlink)."""
         if not self.wildcard_dir.exists():
             return []
         files = []
-        for path in sorted(self.wildcard_dir.iterdir()):
+        for path in sorted(self.wildcard_dir.rglob("*")):
             if path.is_file() and path.suffix.lstrip(".").lower() in ALLOWED_EXTS:
+                rel = path.relative_to(self.wildcard_dir)
+                dir_posix = rel.parent.as_posix()
+                if dir_posix == ".":
+                    dir_posix = ""
                 files.append({
                     "name": path.stem,
-                    "filename": path.name,
+                    "filename": rel.as_posix(),
                     "ext": path.suffix.lstrip(".").lower(),
                     "size": path.stat().st_size,
+                    "dir": dir_posix,
+                    "wc_name": rel.with_suffix("").as_posix(),
                 })
         return files
 
@@ -50,12 +56,19 @@ class WildcardService:
         path = self._safe_path(filename)
         if path is None:
             raise ValueError(f"Invalid filename: {filename}")
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+        rel = path.relative_to(self.wildcard_dir)
+        dir_posix = rel.parent.as_posix()
+        if dir_posix == ".":
+            dir_posix = ""
         return {
             "name": path.stem,
-            "filename": path.name,
+            "filename": rel.as_posix(),
             "ext": path.suffix.lstrip(".").lower(),
             "size": path.stat().st_size,
+            "dir": dir_posix,
+            "wc_name": rel.with_suffix("").as_posix(),
         }
 
     def delete_file(self, filename: str) -> None:
@@ -66,12 +79,19 @@ class WildcardService:
             path.unlink()
 
     def _safe_path(self, filename: str) -> Path | None:
-        if not filename or ".." in filename or "/" in filename or "\\" in filename:
+        if not filename or not filename.strip():
             return None
-        ext = Path(filename).suffix.lstrip(".").lower()
+        # Normalize to forward slashes and strip leading/trailing slashes
+        filename = filename.replace("\\", "/").strip("/")
+        # Validate each path component — block traversal and empty parts
+        parts = filename.split("/")
+        for p in parts:
+            if not p or p == ".." or p == ".":
+                return None
+        ext = Path(parts[-1]).suffix.lstrip(".").lower()
         if ext not in ALLOWED_EXTS:
             return None
-        return self.wildcard_dir / filename
+        return self.wildcard_dir.joinpath(*parts)
 
     # ------------------------------------------------------------------
     # Impact Pack integration
