@@ -1,5 +1,101 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-09: v0.3.5 GenerateUI — Feeder サブタブ・ワークフロー解析精度向上
+
+### 概要
+
+- comfyui-image-feeder カスタムノード対応の Feeder サブタブを GenerateUI タブに追加
+- `analyzeWorkflow` の精度向上（SDXL 多段 CONDITIONING チェーン BFS 展開、新ノード種対応、KSamplerAdvanced seed 修正）
+- Help タブに Feeder サブタブの説明カードを追加（EN/JA/ZH i18n 対応）
+
+### 変更内容
+
+#### `static/js/feeder-tab.js` — 新規作成
+
+- `_s = { dir, images, selected (Set), presets, running }` モジュール状態
+- `_feederNodes()` — currentWorkflow から `class_type === "ImageFeeder"` のノードを列挙
+- `refreshFeederNodeList()` — ノードセレクターを再描画（ワークフロー読み込み時に呼ばれる）
+- `_loadFromNode(nodeId)` — ノード inputs を左ペインの各フィールドに反映
+- `_applyToNode(nodeId)` — フィールド値を currentWorkflow のノード inputs に書き戻す
+- `_applyToWorkflow()` — Apply ボタン用（`_applyToNode` 呼び出し＋toast）
+- フォルダツリー: `_loadTree()` / `_renderTree()` / `_makeTreeRow()` / `_selectDir()` / `_highlightTreeRow()` — `/image_loop/tree` API からツリーを描画
+- 画像グリッド: `_loadImages()` / `_renderGrid()` / `_makeCard()` / `_refreshGridCbs()` / `_selectAll()` / `_deselectAll()` — `/image_loop/images` API からサムネイルカードを描画、チェックボックスで選択管理
+- プレビュー: `_showPreview()` — カードクリックで右ペインに拡大プレビューと `/image_loop/image_info` の情報を表示
+- プリセット: `_loadPresets()` / `_renderPresets()` / `_savePreset()` / `_applyPreset()` / `_deletePreset()` — `/image_feeder/presets` API を使用
+- ステータスバー: `_updateStatus()` — 現在フォルダと選択枚数/総枚数を表示
+- Run ループ: `_startRun()` / `_stopRun()` / `_setRunUI()`
+  - Run 前に WebSocket を接続し `image_loop_node_sync` メッセージを専用ハンドラで捕捉
+  - 各反復で `_applyToNode` → `comfyUI.generate()` → 結果画像を右ペインに表示
+  - `comfyUI.generate` には右ペインの seed mode/value を使用（KSampler のシードを正しく制御）
+  - After gen モード (`wfm-feeder-control-after`):
+    - `loop`: `_lastSync.next_index` で index を更新し無限継続（`has_next=false` でも折り返して継続）
+    - `increment`: index を更新し `has_next=false` で自動停止
+    - `fixed`: index を変えず同じ画像で繰り返し
+  - 生成ごとに右ペインの seed 表示を更新
+- `initFeederTab()` — 全コントロールのイベントリスナーを登録し `_loadTree()` / `_loadPresets()` を並列実行
+
+#### `static/js/generate-tab.js`
+
+- `import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js"` を追加
+- `loadWorkflowIntoEditor()` に `refreshFeederNodeList()` 呼び出しを追加
+- `moveRawJsonToTab()`: `tabKey === "feeder"` の場合は Raw JSON ウィジェットを非表示（feeder タブには rawjson-col がないため）
+- `initGenerateTab()` に `await initFeederTab()` を追加
+
+#### `templates/index.html`
+
+- サブタブナビに `<button data-subtab="feeder">Feeder</button>` を追加
+- `wfm-gen-subtab-feeder` コンテンツ div を追加:
+  - 左ペイン (`.wfm-feeder-settings`): ノードセレクター・Apply・全パラメータフィールド・プリセット管理・Run セクション（After gen セレクト + Run/Stop ボタン）
+  - 中央ペイン (`.wfm-feeder-library`): ステータスバー + ライブラリ本体（フォルダツリー・画像グリッド・プレビューパネル）
+- Help タブ: GenerateUI Tab カードの説明を "4-tab layout" に更新
+- Help タブ: Feeder サブタブ説明カードを追加（`wfm-help-feeder-title` / `wfm-help-feeder-desc` / `wfm-help-feeder-1`〜`9` の id 付き）
+
+#### `static/css/main.css`
+
+Feeder 専用スタイルを末尾に追加:
+- `.wfm-feeder-layout` — flex 横並び全体レイアウト
+- `.wfm-feeder-settings` — 左ペイン（幅 220px、縦スクロール）
+- `.wfm-feeder-pane-header` / `.wfm-feeder-field-row` / `.wfm-feeder-label` / `.wfm-feeder-input` — フォームレイアウト
+- `.wfm-feeder-library` / `.wfm-feeder-status-bar` / `.wfm-feeder-library-body` — 中央ペイン構造
+- `.wfm-feeder-tree-pane` / `.wfm-feeder-tree-scroll` / `.wfm-feeder-tree-row` (+ `:hover` / `.active`) / `.wfm-feeder-tree-msg` — フォルダツリー
+- `.wfm-feeder-grid-pane` / `.wfm-feeder-grid` / `.wfm-feeder-grid-msg` — 画像グリッドコンテナ
+- `.wfm-feeder-card` (+ `:hover` / `.selected`) / `.wfm-feeder-card-cb` / `.wfm-feeder-card-img` / `.wfm-feeder-card-name` — 画像カード
+- `.wfm-feeder-preview-pane` / `.wfm-feeder-preview-img` / `.wfm-feeder-preview-name` / `.wfm-feeder-preview-info` — プレビューパネル
+
+#### `static/js/comfyui-workflow.js`
+
+`analyzeWorkflow` を3パス構成に再構成:
+
+- **Pass 1**: KSampler / KSamplerAdvanced を検出し `sampler_nodes` に追加
+  - `seedKey`: `"seed" in inputs ? "seed" : "noise_seed"` で KSamplerAdvanced の `noise_seed` に対応
+  - LoraLoader 検出を追加
+- **Pass 1b**: BFS 展開（最大5イテレーション）で CONDITIONING チェーンの positive/negative 帰属を伝播
+  - `COND_PASSTHROUGH` セット: ConditioningCombine / ConditioningConcat / ConditioningAverage / ConditioningZeroOut / ConditioningSetTimestepRange / ControlNetApply / ControlNetApplyAdvanced / IPAdapterApply / IPAdapterApplyFaceID / StyleModelApply
+  - リンク接続入力を持つノードも帰属を伝播（CLIPTextEncodeSDXL の text_g / text_l が他ノードにリンクされている場合）
+- **Pass 2**: 新ノード種の検出
+  - `CLIPTextEncodeSDXL` / `CLIPTextEncodeSDXLRefiner`: `text_g` / `text_l` が文字列値の場合のみ prompt_nodes に追加
+  - `TextEncodeQwenImageEditPlus`: `inputs.prompt` を prompt_nodes に追加
+  - `SDXLPromptStyler` / `SDXLPromptStylerAdvanced`: `text_positive` / `text_negative` をそれぞれ role 付きで追加
+  - `CheckpointLoader` (WAS): `ct === "Checkpoint Loader"`（スペースあり）を含む判定に修正
+  - `PrimitiveStringMultiline` / `PrimitiveString`: positive/negative ref がある場合のみ prompt_nodes に追加
+  - `Power Lora Loader (rgthree)`: `lora_\d+` キーをスキャンして lora_nodes に追加
+
+#### `static/js/comfyui-editor.js`
+
+- KSampler パラメータエディタの hidden input に `data-seed-key` 属性を追加
+- Apply 時に `dataset.seedKey`（`"seed"` または `"noise_seed"`）を参照して正しいキーに書き込む
+
+#### `static/js/i18n.js`
+
+- EN / JA / ZH: `helpGen3` を "4-tab layout" / "4タブ構成" / "4标签布局" に更新
+- EN / JA / ZH: `helpFeederTitle` / `helpFeederDesc` / `helpFeeder1`〜`9` を追加
+
+#### `static/js/app.js`
+
+- `helpIdMap` に `wfm-help-feeder-title` / `wfm-help-feeder-desc` / `wfm-help-feeder-1`〜`9` を追加
+
+---
+
 ## 2026-04-29: v0.3.4 GenerateUI — Checkpoint Batch 刷新・Settings 横並びレイアウト・ヘルプ i18n 修正
 
 ### 概要

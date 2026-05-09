@@ -8,6 +8,7 @@ import { comfyWorkflow } from "./comfyui-workflow.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { t } from "./i18n.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
+import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js";
 
 // ============================================
 // Eagle Auto-Save
@@ -144,6 +145,8 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
     // Enable generate button
     const genBtn = document.getElementById("wfm-gen-generate-btn");
     if (genBtn) genBtn.disabled = !comfyUI.connected;
+
+    refreshFeederNodeList();
 
     showToast(`Workflow loaded: ${filename || ""}`, "success");
     return true;
@@ -689,8 +692,13 @@ export async function initGenerateTab() {
     // Move shared Raw JSON widget into the active tab's rawjson-col
     function moveRawJsonToTab(tabKey) {
         const widget = document.getElementById("wfm-gen-rawjson-widget");
+        if (!widget) return;
+        if (tabKey === "feeder") {
+            widget.style.display = "none";
+            return;
+        }
         const col = document.getElementById(`wfm-gen-rawjson-col-${tabKey}`);
-        if (widget && col) {
+        if (col) {
             col.appendChild(widget);
             widget.style.display = "flex";
         }
@@ -751,6 +759,9 @@ export async function initGenerateTab() {
 
     // Checkpoint batch UI
     initCheckpointBatch();
+
+    // Feeder tab
+    await initFeederTab();
 
     // Auto-connect on init
     const connected = await comfyUI.checkConnection();

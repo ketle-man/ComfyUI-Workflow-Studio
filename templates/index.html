@@ -264,6 +264,7 @@
                         <button class="wfm-gen-subtab-btn active" data-subtab="input">Input</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="model">Model</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="settings">Settings</button>
+                        <button class="wfm-gen-subtab-btn" data-subtab="feeder">Feeder</button>
                     </div>
 
                     <!-- Tab: Input — left sub-col: Prompt(top)+Image(bottom), right sub-col: Raw JSON -->
@@ -308,6 +309,121 @@
                                 </div>
                             </div>
                             <div class="wfm-gen-rawjson-col" id="wfm-gen-rawjson-col-settings"></div>
+                        </div>
+                    </div>
+                    <!-- Tab: Feeder — full-width: settings(left) + library(center) -->
+                    <div id="wfm-gen-subtab-feeder" class="wfm-gen-subtab-content">
+                        <div class="wfm-feeder-layout">
+                            <!-- Left: Node selector + params + presets -->
+                            <div class="wfm-feeder-settings">
+                                <div class="wfm-feeder-pane-header">ImageFeeder Node</div>
+                                <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+                                    <select id="wfm-feeder-node-sel" class="wfm-select" style="flex:1;min-width:0;"></select>
+                                    <button id="wfm-feeder-apply-btn" class="wfm-btn wfm-btn-primary" style="white-space:nowrap;">Apply</button>
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Directory</label>
+                                    <input type="text" id="wfm-feeder-dir-input" class="wfm-input wfm-feeder-input" placeholder="e.g. subdir">
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Sort Mode</label>
+                                    <select id="wfm-feeder-sort" class="wfm-select wfm-feeder-input">
+                                        <option value="ascending">ascending</option>
+                                        <option value="descending">descending</option>
+                                        <option value="random">random</option>
+                                    </select>
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Index</label>
+                                    <input type="number" id="wfm-feeder-index" class="wfm-input wfm-feeder-input" value="0" min="0">
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Start Index</label>
+                                    <input type="number" id="wfm-feeder-start" class="wfm-input wfm-feeder-input" value="0" min="0">
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">End Index</label>
+                                    <input type="number" id="wfm-feeder-end" class="wfm-input wfm-feeder-input" value="0" min="0">
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Batch Size</label>
+                                    <input type="number" id="wfm-feeder-batch" class="wfm-input wfm-feeder-input" value="1" min="1">
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Seed</label>
+                                    <input type="number" id="wfm-feeder-seed" class="wfm-input wfm-feeder-input" value="0">
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Use Selection</label>
+                                    <input type="checkbox" id="wfm-feeder-use-sel" checked style="width:16px;height:16px;accent-color:var(--wfm-primary);">
+                                </div>
+
+                                <div class="wfm-feeder-pane-header" style="margin-top:12px;">Presets</div>
+                                <div style="display:flex;gap:6px;margin-bottom:6px;">
+                                    <input type="text" id="wfm-feeder-preset-name" class="wfm-input" style="flex:1;min-width:0;" placeholder="Preset name">
+                                    <button id="wfm-feeder-preset-save" class="wfm-btn wfm-btn-sm" style="white-space:nowrap;">Save</button>
+                                </div>
+                                <div style="display:flex;gap:6px;">
+                                    <select id="wfm-feeder-preset-sel" class="wfm-select" style="flex:1;min-width:0;"></select>
+                                    <button id="wfm-feeder-preset-load" class="wfm-btn wfm-btn-sm wfm-btn-primary" style="white-space:nowrap;">Load</button>
+                                    <button id="wfm-feeder-preset-del" class="wfm-btn wfm-btn-sm wfm-btn-danger" style="white-space:nowrap;">Del</button>
+                                </div>
+
+                                <div class="wfm-feeder-pane-header" style="margin-top:12px;">Run</div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">After gen</label>
+                                    <select id="wfm-feeder-control-after" class="wfm-select wfm-feeder-input">
+                                        <option value="loop">Loop</option>
+                                        <option value="increment">Increment</option>
+                                        <option value="fixed">Fixed</option>
+                                    </select>
+                                </div>
+                                <div style="display:flex;gap:8px;margin-top:4px;">
+                                    <button id="wfm-feeder-run-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">▶ Run</button>
+                                    <button id="wfm-feeder-stop-btn" class="wfm-btn wfm-btn-danger" style="flex:1;" disabled>■ Stop</button>
+                                </div>
+                            </div>
+
+                            <!-- Center: Image Library -->
+                            <div class="wfm-feeder-library">
+                                <!-- Status bar -->
+                                <div id="wfm-feeder-status" class="wfm-feeder-status-bar">Select a folder</div>
+
+                                <div class="wfm-feeder-library-body">
+                                    <!-- Folder tree -->
+                                    <div class="wfm-feeder-tree-pane">
+                                        <div class="wfm-feeder-pane-header" style="display:flex;align-items:center;justify-content:space-between;">
+                                            <span>Folders</span>
+                                            <button id="wfm-feeder-reload-tree" class="wfm-btn wfm-btn-sm" title="Reload">↺</button>
+                                        </div>
+                                        <div id="wfm-feeder-tree" class="wfm-feeder-tree-scroll">
+                                            <div class="wfm-feeder-tree-msg">Loading...</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Image grid -->
+                                    <div class="wfm-feeder-grid-pane">
+                                        <div class="wfm-feeder-pane-header" style="display:flex;align-items:center;justify-content:space-between;">
+                                            <span>Images</span>
+                                            <div style="display:flex;gap:4px;">
+                                                <button id="wfm-feeder-sel-all" class="wfm-btn wfm-btn-sm">All</button>
+                                                <button id="wfm-feeder-desel-all" class="wfm-btn wfm-btn-sm">None</button>
+                                            </div>
+                                        </div>
+                                        <div id="wfm-feeder-grid" class="wfm-feeder-grid">
+                                            <div class="wfm-feeder-grid-msg">Select a folder</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preview -->
+                                    <div class="wfm-feeder-preview-pane">
+                                        <div class="wfm-feeder-pane-header">Preview</div>
+                                        <img id="wfm-feeder-preview-img" class="wfm-feeder-preview-img" style="display:none;" alt="">
+                                        <div id="wfm-feeder-preview-name" class="wfm-feeder-preview-name"></div>
+                                        <pre id="wfm-feeder-preview-info" class="wfm-feeder-preview-info"></pre>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -626,7 +742,7 @@
                         <ul>
                             <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
                             <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported)</li>
-                            <li id="wfm-help-gen-3">3-tab layout — Input (Prompt + Image), Model, Settings — each with a Raw JSON column for instant preview and direct editing</li>
+                            <li id="wfm-help-gen-3">4-tab layout — Input (Prompt + Image), Model, Settings, Feeder — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
                             <li id="wfm-help-gen-4">Input tab: Prompt (top) and Image drag-and-drop (bottom) in the left column</li>
                             <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter</li>
                             <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
@@ -635,6 +751,22 @@
                             <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
                             <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle</li>
                             <li id="wfm-help-gen-11">Checkpoint Batch: select checkpoints by folder from the dropdown — check a folder to select all its files, or expand with ▶ to check individual files; use Filter to search; Pause/Resume suspends and continues between models; Stop aborts after the current generation</li>
+                        </ul>
+                    </div>
+
+                    <div class="wfm-help-card">
+                        <h3 id="wfm-help-feeder-title">GenerateUI Tab — Feeder subtab</h3>
+                        <p id="wfm-help-feeder-desc">Requires the comfyui-image-feeder custom node. Controls ImageFeeder nodes and runs continuous generation loops over an image library stored in user/default/image-loop-data/.</p>
+                        <ul>
+                            <li id="wfm-help-feeder-1">Left pane — Node settings: select the target ImageFeeder node from the dropdown; edit all node parameters (Directory, Sort Mode, Index, Start/End Index, Batch Size, Seed, Use Selection); click Apply to write changes to the loaded workflow</li>
+                            <li id="wfm-help-feeder-2">Left pane — Presets: save the current directory + selection as a named preset; load or delete saved presets</li>
+                            <li id="wfm-help-feeder-3">Left pane — Run: After gen mode determines index behavior after each generation — Loop (wrap back to 0 and continue indefinitely), Increment (advance index and stop when all images are exhausted), Fixed (always use the same index); click Run to start the loop, Stop to interrupt</li>
+                            <li id="wfm-help-feeder-4">Center pane — Folder tree: browse subfolders inside image-loop-data; click a folder to load its images; click ↺ to reload the tree</li>
+                            <li id="wfm-help-feeder-5">Center pane — Image grid: displays thumbnails of all images in the selected folder; check individual images to add them to the selection; All / None buttons select or clear the entire folder; click an image to open the preview panel</li>
+                            <li id="wfm-help-feeder-6">Center pane — Preview panel: shows the clicked image at larger size with filename, resolution, and file size</li>
+                            <li id="wfm-help-feeder-7">Status bar: shows the current folder path and how many images are selected out of the total in the folder</li>
+                            <li id="wfm-help-feeder-8">Seed during Run: uses the right-pane seed setting (Random / Fixed / Increment / Decrement) — the ImageFeeder's own Seed field controls random sort order only</li>
+                            <li id="wfm-help-feeder-9">Index sync: after each generation the node returns the next index via WebSocket; the Index field updates automatically so the display stays in sync</li>
                         </ul>
                     </div>
 

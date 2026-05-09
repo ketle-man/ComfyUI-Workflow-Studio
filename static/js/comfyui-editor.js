@@ -217,7 +217,7 @@ export const comfyEditor = {
                 <div style="flex:1;min-width:0;padding-right:14px;border-right:1px solid var(--wfm-border);">
                     <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">KSampler</h3>
                     ${sampler ? `
-                    <input type="hidden" id="wfm-settings-sampler-id" value="${sampler.id}">
+                    <input type="hidden" id="wfm-settings-sampler-id" value="${sampler.id}" data-seed-key="${sampler.seedKey || "seed"}">
                     <div class="wfm-form-group">
                         <label>Seed</label>
                         <input type="number" class="wfm-input" id="wfm-settings-seed" value="${sampler.seed ?? -1}">
@@ -275,7 +275,9 @@ export const comfyEditor = {
             const nodeId = document.getElementById("wfm-settings-sampler-id")?.value;
             if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
             const inputs = comfyUI.currentWorkflow[nodeId].inputs;
-            inputs.seed = parseInt(document.getElementById("wfm-settings-seed")?.value) || -1;
+            // KSamplerAdvanced uses noise_seed; fall back to seed
+            const seedKey = document.getElementById("wfm-settings-sampler-id")?.dataset?.seedKey || "seed";
+            inputs[seedKey] = parseInt(document.getElementById("wfm-settings-seed")?.value) || -1;
             inputs.steps = parseInt(document.getElementById("wfm-settings-steps")?.value) || 20;
             inputs.cfg = parseFloat(document.getElementById("wfm-settings-cfg")?.value) || 7;
             inputs.sampler_name = document.getElementById("wfm-settings-sampler-name")?.value;

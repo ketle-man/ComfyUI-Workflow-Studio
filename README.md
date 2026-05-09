@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.4-green)
+![Version](https://img.shields.io/badge/version-0.3.5-green)
 
 ## Screenshots
 
@@ -50,8 +50,8 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Embedded workflow metadata** — workflow JSON is embedded in the PNG (tEXt chunk), compatible with ComfyUI's drag-and-drop import
 - **Auto-import** — the captured workflow is automatically imported and appears in the Workflow tab
 
-### GenerateUI Tab (v0.3.4)
-- **3-tab layout** — Input / Model / Settings tabs, each with a Raw JSON column on the right for instant preview and direct editing
+### GenerateUI Tab (v0.3.5)
+- **4-tab layout** — Input / Model / Settings / Feeder tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Input tab** — Prompt (top) and Image drag-and-drop (bottom) in the left column; Raw JSON (540px) in the right column
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
@@ -59,8 +59,21 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
 - **Checkpoint Batch** — enable via checkbox in the right panel to sequentially generate with every checkpoint model; select checkpoints by folder from the dropdown (check a folder to select all its files, expand with ▶ for individual file selection, supports any subfolder depth); Filter input to search; All / None buttons for quick selection; **Pause/Resume** suspends processing between models; Stop aborts after the current generation; amber progress bar tracks per-model progress
-- **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion
+- **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and more
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
+
+### Feeder subtab (v0.3.5)
+Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder)** custom node.
+- **ImageFeeder node control** — select the target node from a dropdown auto-populated from the loaded workflow; edit all node parameters (Directory, Sort Mode, Index, Start/End Index, Batch Size, Seed, Use Selection) and Apply to the workflow
+- **Image library** — 3-pane layout: folder tree (left) browsing `user/default/image-loop-data/`, image grid with checkbox selection (center), preview panel with resolution and file size (right)
+- **Selection management** — check individual images; All / None buttons for the current folder; selected files are reflected in `selected_files` on Apply
+- **Presets** — save the current directory + selection as a named preset; load or delete presets (server-side persistence via `image-feeder-presets.json`)
+- **Continuous Run loop** — Run / Stop buttons below the presets; **After gen** mode controls index behavior after each generation:
+  - **Loop** — advance index and wrap back to 0 when all images are exhausted (runs indefinitely)
+  - **Increment** — advance index and auto-stop when all images are consumed
+  - **Fixed** — always use the same index
+- **Index sync** — after each generation the node returns `next_index` via WebSocket (`image_loop_node_sync`); the Index field updates automatically
+- **Seed** — Run loop uses the right-pane seed setting (Random / Fixed / Increment / Decrement); the node's own Seed field only affects random sort order
 
 ### Prompt Tab
 - **3-column layout** — AI Assistant (left), Presets/Preset Manager tab-panel (center), Wildcard support (right)
@@ -218,7 +231,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
-### v0.3.3
+### v0.3.5
+- **Feeder subtab** — new subtab in GenerateUI for controlling [comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder) nodes; left pane: node selector + all ImageFeeder parameters + presets + Run/Stop controls; center pane: folder tree, image grid with checkbox selection, and preview panel
+- **Run loop with After gen modes** — Loop (wrap and continue), Increment (advance and auto-stop), Fixed (constant index); index updates automatically via WebSocket `image_loop_node_sync` after each generation; seed comes from the right-pane seed setting
+- **Workflow analysis improvements** — `analyzeWorkflow` now handles multi-hop CONDITIONING chains via BFS (up to 5 iterations), CLIPTextEncodeSDXL / CLIPTextEncodeSDXLRefiner, SDXLPromptStyler / SDXLPromptStylerAdvanced, KSamplerAdvanced (`noise_seed`), TextEncodeQwenImageEditPlus, PrimitiveStringMultiline, Power Lora Loader (rgthree), and `Checkpoint Loader` (WAS) with space in the class name
+
+### v0.3.4
 - **Wildcard support panel** — new right column in the Prompt tab with a one-click toolbar for inserting wildcard syntax (`{|}`, `{n$|}`, `__|__`, `:`, `;`, `$`, `<lora::1:LBW=;>`, `[]`, single/multi pick) and wrapping selected text; dedicated prompt textarea and wildcard file picker (click to insert `__filename__`)
 - **Wildcard file manager** — create, view, edit, and delete `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; editor opens inline with filename input and save/cancel controls
 - **Preset/Preset Manager tab switch** — the center pane of the Prompt tab is now a two-tab panel (Presets / Preset Manager) to reclaim horizontal space for the new wildcard panel
@@ -383,6 +401,7 @@ ComfyUI-Workflow-Studio/
 │       ├── app.js               # App initialization & routing
 │       ├── workflow-tab.js      # Workflow browser
 │       ├── generate-tab.js      # Generation UI
+│       ├── feeder-tab.js        # Feeder subtab (ImageFeeder node control + image library)
 │       ├── prompt-tab.js        # AI assistant & presets
 │       ├── settings-tab.js      # Settings panel
 │       ├── comfyui-client.js    # ComfyUI WebSocket/API client

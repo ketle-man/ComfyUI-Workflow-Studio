@@ -464,7 +464,7 @@ export const comfyWorkflow = {
 
         if (!workflow) return result;
 
-        // Build sampler connections for prompt classification
+        // === Pass 1: Collect sampler refs + all_nodes ===
         const samplerPositiveRef = {};
         const samplerNegativeRef = {};
 
@@ -480,55 +480,174 @@ export const comfyWorkflow = {
                 if (Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
                 if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
 
+                // KSamplerAdvanced uses noise_seed instead of seed
+                const seedKey = "seed" in inputs ? "seed" : "noise_seed";
                 result.sampler_nodes.push({
                     id, type: ct, title,
-                    seed: inputs.seed, steps: inputs.steps, cfg: inputs.cfg,
+                    seed: inputs.seed ?? inputs.noise_seed,
+                    seedKey,
+                    steps: inputs.steps, cfg: inputs.cfg,
                     sampler_name: inputs.sampler_name, scheduler: inputs.scheduler,
                     denoise: inputs.denoise,
                 });
             }
         }
 
+        // === Pass 1b: Expand refs through CONDITIONING graph (BFS, 5 iterations) ===
+        // Nodes that pass CONDITIONING through without changing positive/negative role
+        const COND_PASSTHROUGH = new Set([
+            "ConditioningCombine", "ConditioningConcat", "ConditioningAverage",
+            "ConditioningZeroOut", "ConditioningSetTimestepRange",
+            "ControlNetApply", "ControlNetApplyAdvanced",
+            "IPAdapterApply", "IPAdapterApplyFaceID",
+            "StyleModelApply",
+        ]);
+
+        for (let iter = 0; iter < 5; iter++) {
+            for (const [id, node] of Object.entries(workflow)) {
+                if (!node?.class_type) continue;
+                const ct = node.class_type;
+                const inputs = node.inputs || {};
+                const isPos = !!samplerPositiveRef[id];
+                const isNeg = !!samplerNegativeRef[id];
+                if (!isPos && !isNeg) continue;
+
+                if (COND_PASSTHROUGH.has(ct)) {
+                    for (const v of Object.values(inputs)) {
+                        if (Array.isArray(v)) {
+                            if (isPos) samplerPositiveRef[v[0]] = true;
+                            if (isNeg) samplerNegativeRef[v[0]] = true;
+                        }
+                    }
+                }
+
+                // Propagate role through text encoder linked inputs (CLIPTextEncode → upstream text source)
+                if (ct === "CLIPTextEncode") {
+                    const tv = inputs.text;
+                    if (Array.isArray(tv)) {
+                        if (isPos) samplerPositiveRef[tv[0]] = true;
+                        if (isNeg) samplerNegativeRef[tv[0]] = true;
+                    }
+                }
+                if (ct === "CLIPTextEncodeSDXL" || ct === "CLIPTextEncodeSDXLRefiner") {
+                    for (const key of ["text_g", "text_l"]) {
+                        const tv = inputs[key];
+                        if (Array.isArray(tv)) {
+                            if (isPos) samplerPositiveRef[tv[0]] = true;
+                            if (isNeg) samplerNegativeRef[tv[0]] = true;
+                        }
+                    }
+                }
+                if (ct === "ImpactWildcardEncode" || ct === "ImpactWildcardProcessor") {
+                    const tv = inputs.wildcard_text;
+                    if (Array.isArray(tv)) {
+                        if (isPos) samplerPositiveRef[tv[0]] = true;
+                        if (isNeg) samplerNegativeRef[tv[0]] = true;
+                    }
+                }
+            }
+        }
+
+        // === Pass 2: Main analysis ===
         for (const [id, node] of Object.entries(workflow)) {
             if (!node?.class_type) continue;
             const ct = node.class_type;
             const inputs = node.inputs || {};
             const title = node._meta?.title || ct;
 
-            if (ct.includes("CheckpointLoader")) {
+            const isPos = !!samplerPositiveRef[id];
+            const isNeg = !!samplerNegativeRef[id];
+
+            const getRole = () => {
+                if (isPos && !isNeg) return "positive";
+                if (isNeg && !isPos) return "negative";
+                if (/pos|正/i.test(title)) return "positive";
+                if (/neg|負/i.test(title)) return "negative";
+                return "unknown";
+            };
+
+            // --- Checkpoint nodes ---
+            // Matches: CheckpointLoaderSimple, CheckpointLoader, "Checkpoint Loader" (WAS), etc.
+            if (ct.includes("CheckpointLoader") || ct === "Checkpoint Loader") {
                 result.checkpoint_nodes.push({
                     id, type: ct, title,
                     ckpt_name: inputs.ckpt_name,
                 });
             }
 
+            // --- Prompt nodes ---
+
             if (ct === "CLIPTextEncode") {
-                let role = "unknown";
-                if (samplerPositiveRef[id]) role = "positive";
-                else if (samplerNegativeRef[id]) role = "negative";
-                else if (/pos|正/i.test(title)) role = "positive";
-                else if (/neg|負/i.test(title)) role = "negative";
+                // Only add when text is a direct string (if linked, upstream node will be detected)
+                const textVal = inputs.text;
+                if (typeof textVal === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title, role: getRole(),
+                        text: textVal, textKey: "text",
+                    });
+                }
+            }
+
+            // SDXL dual-text encoder
+            if (ct === "CLIPTextEncodeSDXL" || ct === "CLIPTextEncodeSDXLRefiner") {
+                const textG = inputs.text_g;
+                const textL = inputs.text_l;
+                // Add only if at least one text field is a direct string
+                if (typeof textG === "string" || typeof textL === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title, role: getRole(),
+                        text: typeof textG === "string" ? textG : (typeof textL === "string" ? textL : ""),
+                        textKey: typeof textG === "string" ? "text_g" : "text_l",
+                    });
+                }
+            }
+
+            // Qwen-based image+text encoder
+            if (ct === "TextEncodeQwenImageEditPlus") {
                 result.prompt_nodes.push({
-                    id, type: ct, title, role,
-                    text: inputs.text,
-                    textKey: "text",
+                    id, type: ct, title, role: getRole(),
+                    text: inputs.prompt || "",
+                    textKey: "prompt",
                 });
+            }
+
+            // SDXLPromptStyler / SDXLPromptStylerAdvanced — contains both pos & neg in one node
+            if (ct === "SDXLPromptStyler" || ct === "SDXLPromptStylerAdvanced") {
+                if (inputs.text_positive !== undefined) {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [positive]`, role: "positive",
+                        text: inputs.text_positive || "", textKey: "text_positive",
+                    });
+                }
+                if (inputs.text_negative !== undefined) {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [negative]`, role: "negative",
+                        text: inputs.text_negative || "", textKey: "text_negative",
+                    });
+                }
             }
 
             // ImpactWildcardEncode / ImpactWildcardProcessor — treat wildcard_text as prompt
             if (ct === "ImpactWildcardEncode" || ct === "ImpactWildcardProcessor") {
-                let role = "unknown";
-                if (samplerPositiveRef[id]) role = "positive";
-                else if (samplerNegativeRef[id]) role = "negative";
-                else if (/pos|正/i.test(title)) role = "positive";
-                else if (/neg|負/i.test(title)) role = "negative";
+                const textVal = inputs.wildcard_text;
+                if (typeof textVal === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title, role: getRole(),
+                        text: textVal, textKey: "wildcard_text",
+                    });
+                }
+            }
+
+            // PrimitiveStringMultiline / PrimitiveString — when feeding a prompt node
+            if ((ct === "PrimitiveStringMultiline" || ct === "PrimitiveString") && (isPos || isNeg)) {
                 result.prompt_nodes.push({
-                    id, type: ct, title, role,
-                    text: inputs.wildcard_text,
-                    textKey: "wildcard_text",
+                    id, type: ct, title, role: getRole(),
+                    text: inputs.value || "",
+                    textKey: "value",
                 });
             }
 
+            // --- Latent nodes ---
             if (ct === "EmptyLatentImage" || ct === "EmptySD3LatentImage") {
                 result.latent_nodes.push({
                     id, type: ct, title,
@@ -537,6 +656,7 @@ export const comfyWorkflow = {
                 });
             }
 
+            // --- LoRA nodes ---
             if (ct === "LoraLoader" || ct === "LoraLoaderModelOnly") {
                 result.lora_nodes.push({
                     id, type: ct, title,
@@ -546,14 +666,31 @@ export const comfyWorkflow = {
                 });
             }
 
+            // Power Lora Loader (rgthree) — dynamic lora_N inputs in API format
+            if (ct === "Power Lora Loader (rgthree)") {
+                for (const [k, v] of Object.entries(inputs)) {
+                    if (/^lora_\d+$/.test(k) && typeof v === "string") {
+                        result.lora_nodes.push({
+                            id, type: ct, title,
+                            lora_name: v,
+                            strength_model: inputs[k.replace("lora_", "strength_")] ?? 1,
+                            strength_clip: inputs[k.replace("lora_", "strength_clip_")] ?? 1,
+                        });
+                    }
+                }
+            }
+
+            // --- VAE nodes ---
             if (ct === "VAELoader") {
                 result.vae_nodes.push({ id, type: ct, title, vae_name: inputs.vae_name });
             }
 
+            // --- Save/preview nodes ---
             if (ct === "SaveImage" || ct === "PreviewImage") {
                 result.save_nodes.push({ id, type: ct, title });
             }
 
+            // --- Load image nodes ---
             if (ct === "LoadImage" || ct === "LoadImageMask"
                 || (ct.toLowerCase().includes("load") && ct.toLowerCase().includes("image") && inputs.image !== undefined)) {
                 result.load_image_nodes.push({
@@ -561,6 +698,7 @@ export const comfyWorkflow = {
                 });
             }
 
+            // --- Text encoder (CLIP) nodes ---
             if (ct === "DualCLIPLoader" || ct === "CLIPLoader") {
                 result.text_encoder_nodes.push({
                     id, type: ct, title,
@@ -569,12 +707,14 @@ export const comfyWorkflow = {
                 });
             }
 
+            // --- Diffusion model nodes ---
             if (ct === "UNETLoader" || ct === "UnetLoaderGGUF") {
                 result.diffusion_model_nodes.push({
                     id, type: ct, title, unet_name: inputs.unet_name,
                 });
             }
 
+            // --- ControlNet loader nodes ---
             if (ct.includes("ControlNetLoader")) {
                 result.controlnet_nodes.push({
                     id, type: ct, title,
