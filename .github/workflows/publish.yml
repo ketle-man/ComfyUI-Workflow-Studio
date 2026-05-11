@@ -17,4 +17,4 @@ jobs:
         run: pip install comfy-cli
 
       - name: Publish to Registry
-        run: comfy node publish --token ${{ secrets.REGISTRY_TOKEN }}
+        run: echo "N" | comfy node publish --token ${{ secrets.REGISTRY_TOKEN }}
