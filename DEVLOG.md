@@ -1,5 +1,70 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-16: v0.3.8 Metadata タブ: data9 対応 / プロンプト判別不能テキスト
+
+### 概要
+
+data9 の新規ワークフロー（Flux.2 Dev fp8、Flux.2 Klein 4B Distilled、Ernie Image、
+Qwen-Image-Edit 2511、WAN2.2 14B Animate）の Metadata タブ表示に対応。
+あわせて、ポジティブ / ネガティブの判別ができないプロンプトを **Text（バッジなし）** として
+区別して表示する仕様に変更した。
+
+### 問題と原因
+
+| ファイル | 問題 |
+|---|---|
+| image_flux2_fp8.json | `SamplerCustomAdvanced` に positive/negative 入力ポートがなく、リンク解決でプロンプトが空になる |
+| image_ernie_image.json | `PrimitiveStringMultiline` がサブグラフ内にあり、ステップ4（トップのみ対象）で見つからない |
+| image_qwen_image_edit_2511.json | `TextEncodeQwenImageEditPlus` → `FluxKontextMultiReferenceLatentMethod` → KSampler という中間ノード経由で textMap にプロンプトが登録されない |
+| video_wan2_2_14B_animate.json | トップレベルの CLIPTextEncode とサブグラフ内の KSampler がクロスレベル接続され、単一レベル解析では取得できない |
+
+### 変更内容
+
+#### `static/js/metadata-tab.js`
+
+**`extractPromptsFromNodeSet`**
+
+- CLIPTextEncode のテキスト入力リンクのソースノードのタイプ制限を撤廃
+  - 旧: `isPromptStylerNode` または `WFS_PromptText` のみ
+  - 新: PromptStyler 以外は任意ノードの `widgets_values[originSlot]`（`ComfySwitchNode`、`PrimitiveStringMultiline` 等を包含）
+- テキスト入力名に `"prompt"` を追加（`TextEncodeQwenImageEditPlus` 対応）
+- `foundSampler = true` かつ pos / neg が両方空の場合（`SamplerCustomAdvanced` 等）、
+  textMap のテキストを `{ positives: [], negatives: [], texts: [...] }` として返すよう変更
+  （旧: `return null`）
+
+**`extractPromptsLiteGraph`**
+
+- ステップ4 `PrimitiveStringMultiline` — `nodes`（トップのみ）→ `collectAllNodes(wf)`（サブグラフ含む）に変更
+  - 戻り値: `{ positives: primTexts, negatives: [] }` → `{ positives: [], negatives: [], texts: primTexts }`
+- ステップ7 最終フォールバック — `nodes`（トップのみ）→ `collectAllNodes(wf)`（サブグラフ含む）に変更
+  - 戻り値: `{ positives: all, negatives: all }` → `{ positives: [], negatives: [], texts: all }`
+
+**`extractPromptsAPI`**
+
+- フォールバック時の戻り値: `{ positives: all, negatives: all }` → `{ positives: [], negatives: [], texts: all }`
+
+**UI**
+
+- `buildPromptItem`: `type === "text"` のときバッジ（POS/NEG）を表示しない
+- `buildPromptItem`: fullLabel に `t("metaPromptText")` を使用
+- `handleFile`: `(meta.texts ?? []).map(p => ({ type: "text", text: p }))` を allPrompts に追加
+
+#### `static/js/i18n.js`
+
+- `metaPromptText` を EN / JA / ZH に追加（"Text" / "テキスト" / "文本"）
+
+### 対応済みワークフロー（data/data9）
+
+| ファイル | 適用ステップ | プロンプト結果 |
+|---|---|---|
+| image_flux2_fp8.json | step5（サブグラフ + SamplerCustomAdvanced fallback） | texts（バッジなし） |
+| image_flux2_klein_image_edit_4b_distilled.json | step5（サブグラフ CLIPTextEncode + KSampler） | texts（バッジなし） |
+| image_ernie_image.json | step4（PrimitiveStringMultiline in subgraph） | texts（バッジなし） |
+| image_qwen_image_edit_2511.json | step5（TextEncodeQwenImageEditPlus fallback） | texts（バッジなし） |
+| video_wan2_2_14B_animate.json | step7（全ノード fallback） | texts（バッジなし） |
+
+---
+
 ## 2026-05-15: v0.3.7 Metadata タブ: Flux2 / Qwen / Z-Image 対応
 
 ### 概要

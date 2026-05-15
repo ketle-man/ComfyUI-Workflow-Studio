@@ -205,15 +205,19 @@ function extractPromptsFromNodeSet(nodes, links) {
         if (text && typeof text === "string") {
             textMap.set(n.id, text);
         } else if (Array.isArray(n.inputs)) {
-            const textInput = n.inputs.find(inp => inp.name === "text" || inp.name === "text_g");
+            const textInput = n.inputs.find(inp => inp.name === "text" || inp.name === "text_g" || inp.name === "prompt");
             if (textInput?.link != null) {
                 const originId = linkOrigin.get(textInput.link);
                 const originSlot = linkSlot.get(textInput.link) ?? 0;
                 const srcNode = originId != null ? nodeMap.get(originId) : null;
                 if (srcNode) {
                     const srcType = srcNode.type ?? "";
-                    if (isPromptStylerNode(srcType) || srcType === "WFS_PromptText") {
+                    if (isPromptStylerNode(srcType)) {
                         const v = srcNode.widgets_values?.[originSlot];
+                        if (v && typeof v === "string") textMap.set(n.id, v);
+                    } else {
+                        // WFS_PromptText, PrimitiveStringMultiline, ComfySwitchNode 等、任意の STRING 出力ノード
+                        const v = srcNode.widgets_values?.[originSlot] ?? srcNode.widgets_values?.[0];
                         if (v && typeof v === "string") textMap.set(n.id, v);
                     }
                 }
@@ -236,7 +240,13 @@ function extractPromptsFromNodeSet(nodes, links) {
             else if (name === "negative" || name.startsWith("negative")) neg.add(text);
         }
     }
-    if (!foundSampler || (pos.size === 0 && neg.size === 0)) return null;
+    if (!foundSampler) return null;
+    // SamplerCustomAdvanced などで positive/negative 直結がない場合、判別不能テキストとして返す
+    if (pos.size === 0 && neg.size === 0) {
+        const allTexts = [...textMap.values()].filter(t => t.trim());
+        if (allTexts.length > 0) return { positives: [], negatives: [], texts: allTexts };
+        return null;
+    }
     return { positives: [...pos], negatives: [...neg] };
 }
 
@@ -331,7 +341,7 @@ function extractPromptsAPI(wf) {
             else if (key === "negative" || key.startsWith("negative")) neg.add(text);
         }
     }
-    if (!foundSampler || (pos.size === 0 && neg.size === 0)) { const all = [...textMap.values()]; return { positives: all, negatives: all }; }
+    if (!foundSampler || (pos.size === 0 && neg.size === 0)) { const all = [...textMap.values()].filter(t => t && t.trim()); return { positives: [], negatives: [], texts: all }; }
     return { positives: [...pos], negatives: [...neg] };
 }
 
@@ -359,14 +369,14 @@ function extractPromptsLiteGraph(wf) {
     const topResult = extractPromptsFromNodeSet(nodes, links ?? []);
     if (topResult) return topResult;
 
-    // 4. PrimitiveStringMultiline（flux2-klein など）
+    // 4. PrimitiveStringMultiline（flux2-klein / ernie など）- サブグラフ内も探す
     const primTexts = [];
-    for (const n of nodes) {
+    for (const n of collectAllNodes(wf)) {
         if (n.type !== "PrimitiveStringMultiline") continue;
         const t = Array.isArray(n.widgets_values) ? n.widgets_values[0] : n.widgets_values;
         if (t && typeof t === "string" && t.trim()) primTexts.push(t.trim());
     }
-    if (primTexts.length > 0) return { positives: primTexts, negatives: [] };
+    if (primTexts.length > 0) return { positives: [], negatives: [], texts: primTexts };
 
     // 5. サブグラフ内の CLIPTextEncode + KSampler（z-image / qwen / flux など）
     for (const sg of wf.definitions?.subgraphs ?? []) {
@@ -388,14 +398,14 @@ function extractPromptsLiteGraph(wf) {
     }
     if (stylerPos.size > 0 || stylerNeg.size > 0) return { positives: [...stylerPos], negatives: [...stylerNeg] };
 
-    // 7. CLIPTextEncode 全テキスト（最終フォールバック）
+    // 7. テキストエンコーダー全テキスト（最終フォールバック）- サブグラフも含む・判別不能
     const all = [];
-    for (const n of nodes) {
+    for (const n of collectAllNodes(wf)) {
         if (!isTextEncoderNode(n.type ?? "")) continue;
         const t = n.widgets_values?.[0];
-        if (t && typeof t === "string") all.push(t);
+        if (t && typeof t === "string" && t.trim()) all.push(t);
     }
-    return { positives: all, negatives: all };
+    return { positives: [], negatives: [], texts: all };
 }
 
 // ── SD/Fooocus prompt extraction ──────────────────────────────
@@ -508,13 +518,17 @@ function buildPromptItem(label, type, full, fullArea, fullLabel, listEl) {
     const el = document.createElement("div");
     el.className = "wfm-meta-item wfm-meta-item-clickable";
     const snippet = label.length > 60 ? label.slice(0, 60) + "…" : label;
-    const typeBadge = type === "positive" ? `<span class="wfm-meta-badge-pos">POS</span>` : `<span class="wfm-meta-badge-neg">NEG</span>`;
+    const typeBadge = type === "positive" ? `<span class="wfm-meta-badge-pos">POS</span>`
+        : type === "negative" ? `<span class="wfm-meta-badge-neg">NEG</span>`
+        : ``;
     el.innerHTML = `${typeBadge}<span class="wfm-meta-item-name">${escapeHtml(snippet)}</span>`;
     el.addEventListener("click", () => {
         listEl.querySelectorAll(".wfm-meta-item-clickable").forEach(e => e.classList.remove("selected"));
         el.classList.add("selected");
         fullArea.value = full;
-        fullLabel.textContent = type === "positive" ? t("metaPromptPositive") : t("metaPromptNegative");
+        fullLabel.textContent = type === "positive" ? t("metaPromptPositive")
+            : type === "negative" ? t("metaPromptNegative")
+            : t("metaPromptText") || "Text";
     });
     return el;
 }
@@ -658,6 +672,7 @@ export function initMetadataTab() {
         const allPrompts = [
             ...meta.positives.map(p => ({ type: "positive", text: p })),
             ...meta.negatives.map(p => ({ type: "negative", text: p })),
+            ...(meta.texts ?? []).map(p => ({ type: "text", text: p })),
         ];
         if (allPrompts.length > 0) {
             promptSection.classList.remove("wfm-meta-section-empty");
