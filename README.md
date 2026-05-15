@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.6-green)
+![Version](https://img.shields.io/badge/version-0.3.7-green)
 
 ## Screenshots
 
@@ -92,15 +92,15 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Wildcard input toolbar** — one-click buttons to insert `{|}`, `{n$|}`, `__|__`, `<lora::1:LBW=;>` and other wildcard syntax; wraps selected text when applicable
 - **Wildcard file manager** — create, view, and edit `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; click a filename in the file picker to insert `__filename__` at cursor
 
-### Metadata Tab (v0.3.6)
+### Metadata Tab (v0.3.7)
 - **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
 - **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
-- **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the embedded workflow metadata
+- **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/Layered, Z-Image Base/Turbo)
 - **LoRA extraction** — lists all LoRA models with `strength_model / strength_clip` values
-- **Prompt extraction** — lists positive and negative prompts with POS/NEG badges; click any entry to view the full text below
+- **Prompt extraction** — lists positive and negative prompts with POS/NEG badges; click any entry to view the full text below; supports subgraph CLIPTextEncode chains and `PrimitiveStringMultiline` nodes
 - **Prompt actions** — Copy to clipboard, **GenUI:P/N** (set GenerateUI positive/negative prompt), **Prompt:P/N** (set Prompt tab preset positive/negative)
-- **Format support** — ComfyUI (PNG/WebP/JSON), SD WebUI, SD Forge, Fooocus; support for additional model types beyond SD1.5/SDXL/Illustrious is planned
-- **Format note** — supported formats are always shown in the left column; planned formats are noted in amber
+- **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image subgraph workflows), SD WebUI, SD Forge, Fooocus
+- **Format note** — supported formats and covered model types are always shown in the left column
 
 ### Settings Tab
 - **2-column layout** — left column for all settings; right column shows the Theme panel fixed in place (sticky)
@@ -245,11 +245,17 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.3.7
+- **Metadata Tab: subgraph workflow support** — Flux.2 (Dev fp8 / Klein), Qwen-Image-Edit (/ 2511 / Layered), and Z-Image (Base / Turbo) official templates now correctly extract models and prompts; these use ComfyUI's `definitions.subgraphs` format with `UNETLoader`, `CLIPLoader`, and `VAELoader` inside the subgraph
+- **Prompt extraction improvements** — 7-stage fallback chain: ImageMetadataPromptLoader → WFS_PromptText → top-level CLIPTextEncode+KSampler → `PrimitiveStringMultiline` (flux2-klein) → subgraph CLIPTextEncode+KSampler → PromptStyler → all CLIPTextEncode text
+- **MarkdownNote model fallback** — `extractMarkdownNoteModels()` parses `**section** → - [model](url)` patterns from MarkdownNote nodes as a supplemental model source
+- **Format note updated** — "Flux.2 / Qwen-Image / Z-Image subgraph workflows supported" (EN/JA/ZH)
+
 ### v0.3.6
 - **Metadata Tab** — new tab (between Prompt and Gallery) that extracts model and prompt information from ComfyUI-generated PNG/WebP images and workflow JSON files; 3-column layout: drop zone with image preview (left), Checkpoint/VAE/Diffusion Model/Text Encoder lists (center), LoRA list with strength values + Prompt list with full-text viewer (right)
 - **Prompt action buttons** — Copy, GenUI:P/N (set GenerateUI prompts), Prompt:P/N (set Prompt tab preset prompts) directly from the extracted prompt text
 - **SDXL Prompt Styler support** — improved prompt extraction resolves `PromptStyler → CLIPTextEncode` link chains in both LiteGraph and API workflow formats
-- **Format support** — ComfyUI (PNG/WebP/JSON), SD WebUI, SD Forge, Fooocus; format note in the left column indicates planned support for additional model types
+- **Format support** — ComfyUI (PNG/WebP/JSON), SD WebUI, SD Forge, Fooocus
 
 ### v0.3.5
 - **Feeder subtab** — new subtab in GenerateUI for controlling [comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder) nodes; left pane: node selector + all ImageFeeder parameters + presets + Run/Stop controls; center pane: folder tree, image grid with checkbox selection, and preview panel
