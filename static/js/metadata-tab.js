@@ -112,12 +112,12 @@ const VAE_NONE = "None";
 
 function extractCheckpoints(wf) {
     if (!wf || typeof wf !== "object") return [];
-    if (Array.isArray(wf.nodes)) return collectUnique(wf.nodes.filter(n => n.type?.toLowerCase().includes("checkpoint") || META_NODE_TYPES.has(n.type)).map(n => n.widgets_values?.[0]));
+    if (Array.isArray(wf.nodes)) return collectUnique(collectAllNodes(wf).filter(n => n.type?.toLowerCase().includes("checkpoint") || META_NODE_TYPES.has(n.type)).map(n => n.widgets_values?.[0]));
     return collectUnique(Object.values(wf).filter(n => n?.class_type?.toLowerCase().includes("checkpoint") || META_NODE_TYPES.has(n?.class_type)).map(n => n.inputs?.ckpt_name));
 }
 function extractVAEs(wf) {
     if (!wf || typeof wf !== "object") return [];
-    if (Array.isArray(wf.nodes)) return collectUnique(wf.nodes.flatMap(n => { if (n.type === "VAELoader") return [n.widgets_values?.[0]]; if (META_NODE_TYPES.has(n.type ?? "")) { const v = n.widgets_values?.[1]; return v && v !== VAE_NONE ? [v] : []; } return []; }));
+    if (Array.isArray(wf.nodes)) return collectUnique(collectAllNodes(wf).flatMap(n => { if (n.type === "VAELoader") return [n.widgets_values?.[0]]; if (META_NODE_TYPES.has(n.type ?? "")) { const v = n.widgets_values?.[1]; return v && v !== VAE_NONE ? [v] : []; } return []; }));
     return collectUnique(Object.values(wf).flatMap(n => { if (!n || typeof n !== "object") return []; if (n.class_type === "VAELoader") return [n.inputs?.vae_name]; if (META_NODE_TYPES.has(n.class_type ?? "")) { const v = n.inputs?.vae_name; return v && v !== VAE_NONE ? [v] : []; } return []; }));
 }
 function extractDiffusionModels(wf) {
@@ -181,6 +181,103 @@ function extractPrompts(wf) {
     return Array.isArray(wf.nodes) ? extractPromptsLiteGraph(wf) : extractPromptsAPI(wf);
 }
 
+// CLIPTextEncode + KSampler でプロンプト抽出（トップレベル・サブグラフ共用）
+// サンプラーが見つかりテキストが取れた場合のみ非null を返す
+function extractPromptsFromNodeSet(nodes, links) {
+    const nodeMap = new Map();
+    for (const n of nodes) nodeMap.set(n.id, n);
+    const linkOrigin = new Map(), linkSlot = new Map();
+    if (Array.isArray(links)) {
+        for (const lk of links) {
+            if (Array.isArray(lk)) {
+                linkOrigin.set(lk[0], lk[1]);
+                linkSlot.set(lk[0], lk[2] ?? 0);
+            } else if (lk && typeof lk === "object") {
+                const id = lk.id ?? lk[0], origin = lk.origin_id ?? lk[1], slot = lk.origin_slot ?? lk[2] ?? 0;
+                if (id != null && origin != null) { linkOrigin.set(id, origin); linkSlot.set(id, slot); }
+            }
+        }
+    }
+    const textMap = new Map();
+    for (const n of nodes) {
+        if (!isTextEncoderNode(n.type ?? "")) continue;
+        const text = n.widgets_values?.[0];
+        if (text && typeof text === "string") {
+            textMap.set(n.id, text);
+        } else if (Array.isArray(n.inputs)) {
+            const textInput = n.inputs.find(inp => inp.name === "text" || inp.name === "text_g");
+            if (textInput?.link != null) {
+                const originId = linkOrigin.get(textInput.link);
+                const originSlot = linkSlot.get(textInput.link) ?? 0;
+                const srcNode = originId != null ? nodeMap.get(originId) : null;
+                if (srcNode) {
+                    const srcType = srcNode.type ?? "";
+                    if (isPromptStylerNode(srcType) || srcType === "WFS_PromptText") {
+                        const v = srcNode.widgets_values?.[originSlot];
+                        if (v && typeof v === "string") textMap.set(n.id, v);
+                    }
+                }
+            }
+        }
+    }
+    const pos = new Set(), neg = new Set();
+    let foundSampler = false;
+    for (const n of nodes) {
+        if (!isSamplerNode(n.type ?? "") || !Array.isArray(n.inputs)) continue;
+        foundSampler = true;
+        for (const inp of n.inputs) {
+            if (!inp || inp.link == null) continue;
+            const originId = linkOrigin.get(inp.link);
+            if (originId == null) continue;
+            const text = textMap.get(originId);
+            if (!text) continue;
+            const name = inp.name ?? "";
+            if (name === "positive" || name.startsWith("positive")) pos.add(text);
+            else if (name === "negative" || name.startsWith("negative")) neg.add(text);
+        }
+    }
+    if (!foundSampler || (pos.size === 0 && neg.size === 0)) return null;
+    return { positives: [...pos], negatives: [...neg] };
+}
+
+// MarkdownNote の **section** → - [name](url) パターンからモデルを抽出
+// flux/qwen/z-image などのサブグラフ形式ワークフロー向け補完用
+function extractMarkdownNoteModels(wf) {
+    const allNodes = [];
+    if (Array.isArray(wf.nodes)) allNodes.push(...wf.nodes);
+    for (const sg of wf.definitions?.subgraphs ?? []) if (Array.isArray(sg.nodes)) allNodes.push(...sg.nodes);
+    const result = { checkpoints: [], vaes: [], diffusionModels: [], textEncoders: [], loras: [] };
+    const seen = { checkpoints: new Set(), vaes: new Set(), diffusionModels: new Set(), textEncoders: new Set(), loras: new Set() };
+    function addU(arr, set, name) { if (name && typeof name === "string" && !set.has(name)) { set.add(name); arr.push(name); } }
+    for (const n of allNodes) {
+        if (n.type !== "MarkdownNote") continue;
+        const raw = n.widgets_values;
+        const text = Array.isArray(raw) ? raw[0] : (typeof raw === "string" ? raw : null);
+        if (!text) continue;
+        const sRe = /\*\*([^*\n]+)\*\*/g;
+        let sm;
+        while ((sm = sRe.exec(text)) !== null) {
+            const sec = sm[1].trim().toLowerCase().replace(/\s+/g, "_");
+            if (!["text_encoders", "diffusion_models", "vae", "checkpoints", "loras"].includes(sec)) continue;
+            const rest = text.slice(sm.index + sm[0].length);
+            const end = rest.search(/\n\*\*|\n##/);
+            const content = end >= 0 ? rest.slice(0, end) : rest;
+            const lRe = /^- \[([^\]]+)\]/gm;
+            let lm;
+            while ((lm = lRe.exec(content)) !== null) {
+                const name = lm[1].trim();
+                if (sec === "text_encoders") addU(result.textEncoders, seen.textEncoders, name);
+                else if (sec === "diffusion_models") addU(result.diffusionModels, seen.diffusionModels, name);
+                else if (sec === "vae") addU(result.vaes, seen.vaes, name);
+                else if (sec === "checkpoints") addU(result.checkpoints, seen.checkpoints, name);
+                else if (sec === "loras") addU(result.loras, seen.loras, name);
+            }
+        }
+    }
+    const hasAny = result.checkpoints.length || result.vaes.length || result.diffusionModels.length || result.textEncoders.length || result.loras.length;
+    return hasAny ? result : null;
+}
+
 // API形式: リンク参照 [srcNodeId, slot] からテキストを解決
 function resolveLinkedText(wf, srcId, slot) {
     const src = wf[String(srcId)];
@@ -241,12 +338,16 @@ function extractPromptsAPI(wf) {
 function extractPromptsLiteGraph(wf) {
     const { nodes, links } = wf;
     if (!Array.isArray(nodes)) return { positives: [], negatives: [] };
+
+    // 1. ImageMetadataPromptLoader (WFS専用)
     const metaNodes = nodes.filter(n => n.type === "ImageMetadataPromptLoader");
     if (metaNodes.length > 0) {
         const pos = new Set(), neg = new Set();
         for (const n of metaNodes) { const p = n.widgets_values?.[2], ng = n.widgets_values?.[3]; if (p) pos.add(p); if (ng) neg.add(ng); }
         if (pos.size > 0 || neg.size > 0) return { positives: [...pos], negatives: [...neg] };
     }
+
+    // 2. WFS_PromptText (WFS専用)
     const wfsNodes = nodes.filter(n => n.type === "WFS_PromptText");
     if (wfsNodes.length > 0) {
         const pos = new Set(), neg = new Set();
@@ -254,89 +355,47 @@ function extractPromptsLiteGraph(wf) {
         if (pos.size > 0 || neg.size > 0) return { positives: [...pos], negatives: [...neg] };
     }
 
-    const nodeMap = new Map(); for (const n of nodes) nodeMap.set(n.id, n);
+    // 3. トップレベルの CLIPTextEncode + KSampler
+    const topResult = extractPromptsFromNodeSet(nodes, links ?? []);
+    if (topResult) return topResult;
 
-    // links[]: [id, origin_id, origin_slot, dest_id, dest_slot, type]
-    const linkOrigin = new Map(); // linkId → originNodeId
-    const linkSlot = new Map();   // linkId → originSlot
-    if (Array.isArray(links)) {
-        for (const lk of links) {
-            if (Array.isArray(lk)) {
-                linkOrigin.set(lk[0], lk[1]);
-                linkSlot.set(lk[0], lk[2] ?? 0);
-            } else if (lk && typeof lk === "object") {
-                const id = lk.id ?? lk[0], origin = lk.origin_id ?? lk[1], slot = lk.origin_slot ?? lk[2] ?? 0;
-                if (id != null && origin != null) { linkOrigin.set(id, origin); linkSlot.set(id, slot); }
-            }
-        }
+    // 4. PrimitiveStringMultiline（flux2-klein など）
+    const primTexts = [];
+    for (const n of nodes) {
+        if (n.type !== "PrimitiveStringMultiline") continue;
+        const t = Array.isArray(n.widgets_values) ? n.widgets_values[0] : n.widgets_values;
+        if (t && typeof t === "string" && t.trim()) primTexts.push(t.trim());
+    }
+    if (primTexts.length > 0) return { positives: primTexts, negatives: [] };
+
+    // 5. サブグラフ内の CLIPTextEncode + KSampler（z-image / qwen / flux など）
+    for (const sg of wf.definitions?.subgraphs ?? []) {
+        if (!Array.isArray(sg.nodes)) continue;
+        const sgResult = extractPromptsFromNodeSet(sg.nodes, sg.links ?? []);
+        if (sgResult) return sgResult;
     }
 
-    // CLIPTextEncode系ノードからテキストを収集
-    // ・widgets_values[0] に直接入っている場合
-    // ・inputs にリンクがある場合（PromptStyler → CLIPTextEncode）
-    const textMap = new Map();
+    // 6. PromptStyler フォールバック
+    const stylerPos = new Set(), stylerNeg = new Set();
+    for (const n of nodes) {
+        if (!isPromptStylerNode(n.type ?? "")) continue;
+        const vals = n.widgets_values ?? [];
+        for (let i = 0; i < vals.length; i++) {
+            if (typeof vals[i] !== "string" || !vals[i].trim()) continue;
+            if (i % 2 === 0) stylerPos.add(vals[i]);
+            else stylerNeg.add(vals[i]);
+        }
+    }
+    if (stylerPos.size > 0 || stylerNeg.size > 0) return { positives: [...stylerPos], negatives: [...stylerNeg] };
+
+    // 7. CLIPTextEncode 全テキスト（最終フォールバック）
+    const all = [];
     for (const n of nodes) {
         if (!isTextEncoderNode(n.type ?? "")) continue;
-        const text = n.widgets_values?.[0];
-        if (text && typeof text === "string") {
-            textMap.set(n.id, text);
-        } else if (Array.isArray(n.inputs)) {
-            // テキスト入力がリンクの場合 → リンク先ノードから解決
-            const textInput = n.inputs.find(inp => inp.name === "text" || inp.name === "text_g");
-            if (textInput?.link != null) {
-                const originId = linkOrigin.get(textInput.link);
-                const originSlot = linkSlot.get(textInput.link) ?? 0;
-                const srcNode = originId != null ? nodeMap.get(originId) : null;
-                if (srcNode) {
-                    const srcType = srcNode.type ?? "";
-                    if (isPromptStylerNode(srcType) || srcType === "WFS_PromptText") {
-                        const v = srcNode.widgets_values?.[originSlot];
-                        if (v && typeof v === "string") textMap.set(n.id, v);
-                    }
-                }
-            }
-        }
+        const t = n.widgets_values?.[0];
+        if (t && typeof t === "string") all.push(t);
     }
-
-    const pos = new Set(), neg = new Set();
-    let foundSampler = false;
-    for (const n of nodes) {
-        if (!isSamplerNode(n.type ?? "") || !Array.isArray(n.inputs)) continue;
-        foundSampler = true;
-        for (const inp of n.inputs) {
-            if (!inp || inp.link == null) continue;
-            const originId = linkOrigin.get(inp.link);
-            if (originId == null) continue;
-            const text = textMap.get(originId);
-            if (!text) continue;
-            const name = inp.name ?? "";
-            if (name === "positive" || name.startsWith("positive")) pos.add(text);
-            else if (name === "negative" || name.startsWith("negative")) neg.add(text);
-        }
-    }
-
-    // フォールバック: サンプラーが見つからないか両方空
-    if (!foundSampler || (pos.size === 0 && neg.size === 0)) {
-        // PromptStylerノードを直接スキャン
-        const stylerPos = new Set(), stylerNeg = new Set();
-        for (const n of nodes) {
-            if (!isPromptStylerNode(n.type ?? "")) continue;
-            // widgets_values からポジティブ/ネガティブを探す
-            // 多くのPromptStylerはindex 0=positive, 1=negativeまたはスタイル文字列
-            const vals = n.widgets_values ?? [];
-            for (let i = 0; i < vals.length; i++) {
-                if (typeof vals[i] !== "string" || !vals[i].trim()) continue;
-                if (i % 2 === 0) stylerPos.add(vals[i]);
-                else stylerNeg.add(vals[i]);
-            }
-        }
-        if (stylerPos.size > 0 || stylerNeg.size > 0) {
-            return { positives: [...stylerPos], negatives: [...stylerNeg] };
-        }
-        const all = [...textMap.values()];
-        return { positives: all, negatives: all };
-    }
-    return { positives: [...pos], negatives: [...neg] };
+    return { positives: all, negatives: all };
 }
 
 // ── SD/Fooocus prompt extraction ──────────────────────────────
@@ -372,7 +431,17 @@ async function extractAllMetadata(file) {
     const isWebP = file.type === "image/webp" || name.endsWith(".webp");
 
     function fromWorkflow(wf, source) {
-        return { source, checkpoints: extractCheckpoints(wf), vaes: extractVAEs(wf), diffusionModels: extractDiffusionModels(wf), textEncoders: extractTextEncoders(wf), loras: extractLoRAs(wf), ...extractPrompts(wf) };
+        const base = { source, checkpoints: extractCheckpoints(wf), vaes: extractVAEs(wf), diffusionModels: extractDiffusionModels(wf), textEncoders: extractTextEncoders(wf), loras: extractLoRAs(wf), ...extractPrompts(wf) };
+        // MarkdownNote からモデル情報を補完（subgraph形式の flux/qwen/z-image など）
+        const mdm = extractMarkdownNoteModels(wf);
+        if (mdm) {
+            if (!base.checkpoints.length) base.checkpoints = mdm.checkpoints;
+            if (!base.vaes.length) base.vaes = mdm.vaes;
+            if (!base.diffusionModels.length) base.diffusionModels = mdm.diffusionModels;
+            if (!base.textEncoders.length) base.textEncoders = mdm.textEncoders;
+            if (!base.loras.length) base.loras = mdm.loras;
+        }
+        return base;
     }
 
     if (isJSON) {

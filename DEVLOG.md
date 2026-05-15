@@ -1,5 +1,47 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-15: v0.3.7 Metadata タブ: Flux2 / Qwen / Z-Image 対応
+
+### 概要
+
+ComfyUI 公式テンプレート（Flux.2 Dev/Klein、Qwen-Image-Edit、Z-Image）で使われる
+**サブグラフ（subgraph）形式**ワークフローの Metadata タブ読み込みに対応。
+
+- `definitions.subgraphs` 内の `UNETLoader` / `CLIPLoader` / `VAELoader` / `LoraLoaderModelOnly` からモデルを抽出
+- `MarkdownNote` ノードの `**section** → - [model](url)` パターンからモデルを補完（フォールバック）
+- サブグラフ内の `CLIPTextEncode + KSampler` リンクを辿ってプロンプトを取得
+- `PrimitiveStringMultiline` ノード（flux2-klein など）からプロンプトを取得
+
+### 変更内容
+
+#### `static/js/metadata-tab.js`
+
+- **`extractPromptsFromNodeSet(nodes, links)`** 新規追加
+  CLIPTextEncode + KSampler によるプロンプト抽出ロジックを汎用化。トップレベル・サブグラフの両方で再利用
+- **`extractMarkdownNoteModels(wf)`** 新規追加
+  `MarkdownNote` の `**section**` → `- [name](url)` を正規表現で解析し、text_encoders / diffusion_models / vae / loras を抽出
+- **`extractCheckpoints` / `extractVAEs`** を `collectAllNodes()` 使用に修正
+  サブグラフ内のノードも走査対象に
+- **`extractPromptsLiteGraph`** を 7 段階フォールバック構成に再設計
+  1. ImageMetadataPromptLoader → 2. WFS_PromptText → 3. トップレベルCLIPTextEncode+KSampler →
+  4. PrimitiveStringMultiline → **5. サブグラフCLIPTextEncode+KSampler（新規）** →
+  6. PromptStyler → 7. 全CLIPTextEncodeテキスト
+- **`fromWorkflow`** に MarkdownNote フォールバック補完を追加
+
+### 対応済みワークフロー（data/data8）
+
+| ファイル | モデル抽出 | プロンプト抽出 |
+|---|---|---|
+| image_flux2_fp8.json | UNETLoader + CLIPLoader + VAELoader + LoraLoader (subgraph) | CLIPTextEncode (subgraph) |
+| image_flux2_klein_text_to_image.json | UNETLoader + CLIPLoader + VAELoader (subgraph) | PrimitiveStringMultiline |
+| image_qwen_image_edit.json | UNETLoader + CLIPLoader + VAELoader + LoraLoader (subgraph) | なし（画像入力のみ） |
+| image_qwen_image_edit_2511.json | 同上 | なし |
+| image_qwen_image_layered.json | UNETLoader + CLIPLoader + VAELoader (subgraph) | PrimitiveStringMultiline |
+| image_z_image.json | UNETLoader + CLIPLoader + VAELoader (subgraph) | CLIPTextEncode (subgraph) |
+| image_z_image_turbo.json | 同上 | CLIPTextEncode (subgraph) |
+
+---
+
 ## 2026-05-15: v0.3.6 Metadata タブ追加
 
 ### 概要
