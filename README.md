@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.5-green)
+![Version](https://img.shields.io/badge/version-0.3.6-green)
 
 ## Screenshots
 
@@ -13,17 +13,21 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 |:---:|:---:|
 | ![Workflow](docs/screenshot_workflow.png) | ![GenerateUI](docs/screenshot_generate.png) |
 
-| Prompt Tab | Settings Tab |
+| Prompt Tab | Metadata Tab |
 |:---:|:---:|
-| ![Prompt](docs/screenshot_prompt.png) | ![Settings](docs/screenshot_settings.png) |
+| ![Prompt](docs/screenshot_prompt.png) | ![Metadata](docs/screenshot_metadata.png) |
+
+| Settings Tab | Help & Support Tab |
+|:---:|:---:|
+| ![Settings](docs/screenshot_settings.png) | ![Help](docs/screenshot_help.png) |
 
 | Nodes Tab | Models Tab |
 |:---:|:---:|
 | ![Nodes](docs/screenshot_nodes.png) | ![Models](docs/screenshot_models.png) |
 
-| Gallery Tab | Help & Support Tab |
+| Gallery Tab | Nodes Tab |
 |:---:|:---:|
-| ![Gallery](docs/screenshot_gallery.png) | ![Help](docs/screenshot_help.png) |
+| ![Gallery](docs/screenshot_gallery.png) | ![Nodes](docs/screenshot_nodes.png) |
 
 | Workflow Studio Library (ComfyUI) | ComfyUI Integration |
 |:---:|:---:|
@@ -87,6 +91,16 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **GenUI Set** — apply preset prompts directly to the GenerateUI interface
 - **Wildcard input toolbar** — one-click buttons to insert `{|}`, `{n$|}`, `__|__`, `<lora::1:LBW=;>` and other wildcard syntax; wraps selected text when applicable
 - **Wildcard file manager** — create, view, and edit `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; click a filename in the file picker to insert `__filename__` at cursor
+
+### Metadata Tab (v0.3.6)
+- **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
+- **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
+- **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the embedded workflow metadata
+- **LoRA extraction** — lists all LoRA models with `strength_model / strength_clip` values
+- **Prompt extraction** — lists positive and negative prompts with POS/NEG badges; click any entry to view the full text below
+- **Prompt actions** — Copy to clipboard, **GenUI:P/N** (set GenerateUI positive/negative prompt), **Prompt:P/N** (set Prompt tab preset positive/negative)
+- **Format support** — ComfyUI (PNG/WebP/JSON), SD WebUI, SD Forge, Fooocus; support for additional model types beyond SD1.5/SDXL/Illustrious is planned
+- **Format note** — supported formats are always shown in the left column; planned formats are noted in amber
 
 ### Settings Tab
 - **2-column layout** — left column for all settings; right column shows the Theme panel fixed in place (sticky)
@@ -230,6 +244,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.6
+- **Metadata Tab** — new tab (between Prompt and Gallery) that extracts model and prompt information from ComfyUI-generated PNG/WebP images and workflow JSON files; 3-column layout: drop zone with image preview (left), Checkpoint/VAE/Diffusion Model/Text Encoder lists (center), LoRA list with strength values + Prompt list with full-text viewer (right)
+- **Prompt action buttons** — Copy, GenUI:P/N (set GenerateUI prompts), Prompt:P/N (set Prompt tab preset prompts) directly from the extracted prompt text
+- **SDXL Prompt Styler support** — improved prompt extraction resolves `PromptStyler → CLIPTextEncode` link chains in both LiteGraph and API workflow formats
+- **Format support** — ComfyUI (PNG/WebP/JSON), SD WebUI, SD Forge, Fooocus; format note in the left column indicates planned support for additional model types
 
 ### v0.3.5
 - **Feeder subtab** — new subtab in GenerateUI for controlling [comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder) nodes; left pane: node selector + all ImageFeeder parameters + presets + Run/Stop controls; center pane: folder tree, image grid with checkbox selection, and preview panel
@@ -393,7 +413,7 @@ ComfyUI-Workflow-Studio/
 │       ├── settings_service.py  # Settings persistence
 │       └── png_extractor.py     # PNG metadata extraction
 ├── templates/
-│   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Settings/Nodes/Models/Help)
+│   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Metadata/Gallery/Nodes/Models/Settings/Help)
 ├── static/
 │   ├── favicon.svg              # Browser tab icon (W+S Wave)
 │   ├── css/main.css             # Styles
@@ -403,6 +423,7 @@ ComfyUI-Workflow-Studio/
 │       ├── generate-tab.js      # Generation UI
 │       ├── feeder-tab.js        # Feeder subtab (ImageFeeder node control + image library)
 │       ├── prompt-tab.js        # AI assistant & presets
+│       ├── metadata-tab.js      # Metadata extraction & display (PNG/WebP/JSON)
 │       ├── settings-tab.js      # Settings panel
 │       ├── comfyui-client.js    # ComfyUI WebSocket/API client
 │       ├── nodes-tab.js          # Node browser & node sets

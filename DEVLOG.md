@@ -1,5 +1,102 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-15: v0.3.6 Metadata タブ追加
+
+### 概要
+
+- PNG / WebP / JSON からモデル・LoRA・プロンプト情報を抽出・表示する Metadata タブを追加
+- タブ位置は Prompt タブの右隣（Prompt → Metadata → Gallery）
+- プロンプト抽出ロジックを改善し SDXL Prompt Styler を使用したワークフローにも対応
+- 抽出プロンプトを GenerateUI タブ・Prompt タブのプリセットへワンクリックで転記するボタンを追加
+- 左ペインに対応フォーマット説明と今後の対応予定ノートを追加
+- ヘルプタブに Metadata タブの説明カードを追加（EN/JA/ZH i18n 対応）
+
+### 変更内容
+
+#### `static/js/metadata-tab.js` — 新規作成
+
+**メタデータ抽出ロジック（`model-and-prompt-from-metadata` の `workflow_utils.js` ベース）**
+
+- `sanitizeJSON(text)` — JSON に含まれる `NaN` / `Infinity` を `null` に置換
+- `readWebPEXIFChunk(file)` — WebP RIFF チャンクから EXIF を読み取る
+- `extractWorkflowFromEXIF(exifBytes)` — EXIF バイト列から `workflow:` / `prompt:` キーを検索してワークフロー JSON を返す
+- `readAllPNGTextChunks(file)` — PNG tEXt / iTXt チャンクをすべて読み取って `{ keyword: text }` マップを返す（IEND 以降のチャンクも読む）
+- `extractCheckpoints / extractVAEs / extractDiffusionModels / extractTextEncoders / extractLoRAs` — LiteGraph 形式・API 形式の両方に対応したモデル抽出関数群
+- `extractPrompts(wf)` — 形式を判定して `extractPromptsLiteGraph` / `extractPromptsAPI` に振り分け
+- **`resolveLinkedText(wf, srcId, slot)`** — API 形式でのリンク参照 `[nodeId, slot]` を解決。`PromptStyler` 系ノードは `text_positive` / `text_negative` を slot に応じて返す
+- `extractPromptsAPI(wf)` — CLIPTextEncode の text 入力がリンク参照（配列）の場合に `resolveLinkedText` で解決するよう修正
+- `extractPromptsLiteGraph(wf)` — **`linkSlot` マップを追加**（リンクの origin_slot を追跡）; CLIPTextEncode の inputs にリンクがある場合に `PromptStyler` / `WFS_PromptText` の `widgets_values[originSlot]` を解決; フォールバック時にも `PromptStyler` ノードを直接スキャン
+- SD WebUI / SD Forge / Fooocus の `parameters` チャンク解析（`parseSDAParameters`, `parseFooocusMetadata`）
+- `extractAllMetadata(file)` — PNG / WebP / JSON を統合して `{ source, checkpoints, vaes, diffusionModels, textEncoders, loras, positives, negatives }` を返す
+
+**UI**
+
+- `buildModelItem(label)` — モデル名アイテム（テキストオーバーフロー省略）
+- `buildLoRAItem(lora)` — LoRA 名 ＋ `strength_model/strength_clip` バッジ付きアイテム
+- `buildPromptItem(label, type, full, ...)` — POS/NEG バッジ付きクリッカブルアイテム。クリックで下部テキストエリアに全文を表示し選択ハイライト
+- `renderSection(sectionEl, listEl, items, buildFn)` — アイテムが空の場合は `.wfm-meta-section-empty` クラスを付与してリストを非表示
+- `initMetadataTab()` — タブ初期化
+  - ドロップゾーン / クリックでファイル選択 / drag-over スタイル切り替え
+  - 画像ファイルはプレビューとして表示、JSON はドロップラベルを維持
+  - ファイル処理後に各セクションをレンダリング。最初の positive プロンプトを自動選択
+  - セクションタイトル・フォーマットノート・ヘルプカードの i18n 適用
+  - **プロンプトアクションボタン**:
+    - Copy — `navigator.clipboard.writeText` でプレビュー内容をコピー
+    - GenUI:P / GenUI:N — `#wfm-prompt-pos-text` / `#wfm-prompt-neg-text` に値をセット
+    - Prompt:P / Prompt:N — `#wfm-preset-pos` / `#wfm-preset-neg` に値をセット
+    - 成功時は緑のフラッシュアニメーション（`wfm-meta-btn-flash`）
+
+#### `templates/index.html`
+
+- タブナビに `<button class="wfm-tab" data-tab="metadata">Metadata</button>` を Prompt と Gallery の間に追加
+- `#wfm-tab-metadata` セクションを追加（Prompt セクションの直後、Settings セクションの前）:
+  - `.wfm-metadata-layout`（3列グリッド: 220px | 1fr | 1fr）
+  - Col1: ドロップゾーン（`#wfm-meta-drop`）＋プレビュー画像＋ファイル情報（`#wfm-meta-file-info`）＋対応フォーマットノート（`#wfm-meta-format-note`）
+  - Col2: Checkpoint / VAE / Diffusion Model / Text Encoder の各セクション
+  - Col3: LoRA セクション＋Prompt セクション（リスト＋全文テキストエリア＋アクションボタン行）
+- Help タブ: Prompt Tab カードと Settings Tab カードの間に Metadata Tab カードを追加（`wfm-help-metadata-title/desc/1〜5`）
+
+#### `static/js/app.js`
+
+- `import { initMetadataTab } from "./metadata-tab.js"` を追加
+- `tabMap` に `metadata: "tabMetadata"` を追加
+- `DOMContentLoaded` 内に `initMetadataTab()` を追加（`initPromptTab()` の直後）
+
+#### `static/js/i18n.js`
+
+EN / JA / ZH の3言語に以下を追加:
+
+- `tabMetadata` — タブラベル
+- `metaSectionCkpt / Vae / Diff / Te / Lora / Prompt` — 各セクションタイトル
+- `metaDropMain / metaDropSub` — ドロップゾーンラベル
+- `metaParsing / metaFileTooLarge / metaNoMetadata / metaParseError` — ステータスメッセージ
+- `metaPromptPositive / metaPromptNegative / metaSelectPrompt` — プロンプトエリアラベル
+- `metaFormatNoteTitle / metaFmtComfyui / metaFmtSdwebui / metaFmtFooocus / metaFormatTodo` — フォーマットノート
+- `helpMetadataTitle / helpMetadataDesc / helpMetadata1〜5` — ヘルプカード
+
+#### `static/css/main.css`
+
+以下のスタイルを末尾に追加:
+
+- `#wfm-tab-metadata` / `.wfm-metadata-layout` — 3列グリッドレイアウト
+- `.wfm-metadata-col1/col2/col3` — 各列の flex レイアウト・ボーダー・スクロール
+- `.wfm-metadata-drop-zone` (+ `.drag-over` / `:hover`) — ドロップゾーンのボーダー・背景切り替え
+- `.wfm-meta-drop-label / main / sub` — ドロップラベル
+- `.wfm-meta-preview-img` — プレビュー画像（object-fit: contain）
+- `.wfm-meta-file-info` — ファイル情報テキスト
+- `.wfm-meta-section` (+ `.wfm-meta-section-empty`) — セクションコンテナ（空時はリストを非表示・タイトルを半透明）
+- `.wfm-meta-section-title` — セクション見出し（uppercase + letter-spacing）
+- `.wfm-meta-list` — スクロール可能アイテムリスト（`max-height: 140px`）
+- `.wfm-meta-item` / `.wfm-meta-item-clickable` (+ `:hover` / `.selected`) — アイテム行
+- `.wfm-meta-item-name / badge` — アイテム名・バッジ
+- `.wfm-meta-badge-pos / neg` — POS（緑）/ NEG（赤）バッジ
+- `.wfm-meta-prompt-section / full-wrap / full-label / full` — プロンプト全文エリア（`min-height: 80px`）
+- `.wfm-meta-prompt-actions` — ボタン行（flex wrap）
+- `.wfm-meta-btn-flash` — 成功時フラッシュアニメーション
+- `.wfm-meta-format-note / note-title / format-list / format-todo` — フォーマットノートスタイル
+
+---
+
 ## 2026-05-09: v0.3.5 GenerateUI — Feeder サブタブ・ワークフロー解析精度向上
 
 ### 概要

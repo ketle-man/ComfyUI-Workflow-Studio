@@ -20,6 +20,7 @@
             <button class="wfm-tab" data-tab="models">Models</button>
             <button class="wfm-tab" data-tab="generate">GenerateUI</button>
             <button class="wfm-tab" data-tab="prompt">Prompt</button>
+            <button class="wfm-tab" data-tab="metadata">Metadata</button>
             <button class="wfm-tab" data-tab="gallery">Gallery</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
@@ -702,6 +703,76 @@
             </div>
         </section>
 
+        <!-- Metadata Tab -->
+        <section id="wfm-tab-metadata" class="wfm-tab-content">
+            <div class="wfm-metadata-layout">
+                <!-- Col1: Drop zone + preview -->
+                <div class="wfm-metadata-col1">
+                    <div class="wfm-metadata-drop-zone" id="wfm-meta-drop">
+                        <div class="wfm-meta-drop-label" id="wfm-meta-drop-label">
+                            <div class="wfm-meta-drop-main">Drop image / JSON</div>
+                            <div class="wfm-meta-drop-sub">PNG · WebP · JSON</div>
+                        </div>
+                        <img id="wfm-meta-preview-img" class="wfm-meta-preview-img" style="display:none;" alt="preview">
+                    </div>
+                    <div class="wfm-meta-file-info" id="wfm-meta-file-info"></div>
+                    <div class="wfm-meta-format-note" id="wfm-meta-format-note">
+                        <div class="wfm-meta-format-note-title" id="wfm-meta-format-note-title">Supported formats</div>
+                        <ul class="wfm-meta-format-list">
+                            <li id="wfm-meta-fmt-comfyui">ComfyUI — PNG / WebP / JSON</li>
+                            <li id="wfm-meta-fmt-sdwebui">SD WebUI / SD Forge — PNG (parameters)</li>
+                            <li id="wfm-meta-fmt-fooocus">Fooocus — PNG (fooocus_scheme)</li>
+                        </ul>
+                        <div class="wfm-meta-format-todo" id="wfm-meta-format-todo">More formats planned (non-SD1.5/SDXL/Illustrious models)</div>
+                    </div>
+                    <input type="file" id="wfm-meta-file-input" accept="image/png,image/webp,.json,application/json" style="display:none;">
+                </div>
+
+                <!-- Col2: Model info -->
+                <div class="wfm-metadata-col2">
+                    <div class="wfm-meta-section" id="wfm-meta-ckpt-section">
+                        <div class="wfm-meta-section-title">Checkpoint</div>
+                        <div class="wfm-meta-list" id="wfm-meta-ckpt-list"></div>
+                    </div>
+                    <div class="wfm-meta-section" id="wfm-meta-vae-section">
+                        <div class="wfm-meta-section-title">VAE</div>
+                        <div class="wfm-meta-list" id="wfm-meta-vae-list"></div>
+                    </div>
+                    <div class="wfm-meta-section" id="wfm-meta-diff-section">
+                        <div class="wfm-meta-section-title">Diffusion Model</div>
+                        <div class="wfm-meta-list" id="wfm-meta-diff-list"></div>
+                    </div>
+                    <div class="wfm-meta-section" id="wfm-meta-te-section">
+                        <div class="wfm-meta-section-title">Text Encoder</div>
+                        <div class="wfm-meta-list" id="wfm-meta-te-list"></div>
+                    </div>
+                </div>
+
+                <!-- Col3: LoRA + Prompt -->
+                <div class="wfm-metadata-col3">
+                    <div class="wfm-meta-section" id="wfm-meta-lora-section">
+                        <div class="wfm-meta-section-title">LoRA</div>
+                        <div class="wfm-meta-list" id="wfm-meta-lora-list"></div>
+                    </div>
+                    <div class="wfm-meta-section wfm-meta-prompt-section" id="wfm-meta-prompt-section">
+                        <div class="wfm-meta-section-title">Prompt</div>
+                        <div class="wfm-meta-list" id="wfm-meta-prompt-list"></div>
+                        <div class="wfm-meta-prompt-full-wrap">
+                            <div class="wfm-meta-prompt-full-label" id="wfm-meta-prompt-full-label"></div>
+                            <textarea class="wfm-meta-prompt-full" id="wfm-meta-prompt-full" readonly placeholder="Select a prompt above to view full text..."></textarea>
+                            <div class="wfm-meta-prompt-actions">
+                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-copy-btn">Copy</button>
+                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-genui-pos-btn">GenUI:P</button>
+                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-genui-neg-btn">GenUI:N</button>
+                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-pos-btn">Prompt:P</button>
+                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-neg-btn">Prompt:N</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Settings Tab -->
         <section id="wfm-tab-settings" class="wfm-tab-content">
             <div class="wfm-settings-container">
@@ -782,6 +853,18 @@
                             <li id="wfm-help-prompt-7">GenUI Set: apply preset prompts directly to GenerateUI</li>
                             <li id="wfm-help-prompt-8">Wildcard toolbar: one-click buttons to insert wildcard syntax ({|}, {n$|}, __|__, &lt;lora:&gt;, etc.); wraps selected text</li>
                             <li id="wfm-help-prompt-9">Wildcard file manager: create/edit/delete .txt/.yaml wildcard files; click filename to insert __filename__ at cursor</li>
+                        </ul>
+                    </div>
+
+                    <div class="wfm-help-card">
+                        <h3 id="wfm-help-metadata-title">Metadata Tab</h3>
+                        <p id="wfm-help-metadata-desc">Drop a ComfyUI-generated PNG/WebP or workflow JSON to instantly extract and view the embedded model and prompt information.</p>
+                        <ul>
+                            <li id="wfm-help-metadata-1">Left column: drop zone (image preview for PNG/WebP) and file info; click or drop to load</li>
+                            <li id="wfm-help-metadata-2">Center column: Checkpoint, VAE, Diffusion Model, and Text Encoder lists extracted from the workflow</li>
+                            <li id="wfm-help-metadata-3">Right column: LoRA list (with strength values) and Prompt list (click to view full text below)</li>
+                            <li id="wfm-help-metadata-4">Prompt actions — Copy: copy to clipboard; GenUI:P/N: set GenerateUI positive/negative prompt; Prompt:P/N: set Prompt tab preset positive/negative</li>
+                            <li id="wfm-help-metadata-5">Supported formats: ComfyUI (PNG/WebP/JSON), SD WebUI, SD Forge, Fooocus. Support for additional model types (beyond SD1.5/SDXL/Illustrious) is planned.</li>
                         </ul>
                     </div>
 
