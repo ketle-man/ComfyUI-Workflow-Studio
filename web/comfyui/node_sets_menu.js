@@ -55,6 +55,9 @@ const state = {
     modelsLoaded: false,
     // Shared
     searchText: "",
+    // Info (Metadata) tab
+    infoSubTab: "info-model",   // "info-model" | "info-lora" | "info-prompt"
+    infoMeta: null,             // parsed metadata from dropped file
 };
 
 // ============================================
@@ -608,10 +611,11 @@ const createPanel = () => {
         </div>
         <div class="wfm-nlp-theme-panel" style="display:none;"></div>
         <div class="wfm-nlp-tabs">
-            <button class="wfm-nlp-tab wfm-nlp-top-tab active" data-toptab="workflows">Workflows</button>
-            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="nodes">Nodes</button>
-            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="prompts">Prompts</button>
-            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="models">Models</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab active" data-toptab="workflows" title="Workflows">W</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="nodes" title="Nodes">N</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="prompts" title="Prompts">P</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="models" title="Models">M</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="info" title="Information (Metadata)">I</button>
         </div>
         <div class="wfm-nlp-subtabs"></div>
         <div class="wfm-nlp-subtabs wfm-nlp-subtabs-row2"></div>
@@ -634,8 +638,8 @@ const createPanel = () => {
             const searchInput = panel.querySelector(".wfm-nlp-search-input");
             if (searchInput) {
                 searchInput.value = "";
-                const placeholders = { workflows: "Search workflows...", nodes: "Search nodes...", prompts: "Search prompts...", models: "Search models..." };
-                searchInput.placeholder = placeholders[tab] || "Search...";
+                const placeholders = { workflows: "Search workflows...", nodes: "Search nodes...", prompts: "Search prompts...", models: "Search models...", info: "" };
+                searchInput.placeholder = placeholders[tab] ?? "Search...";
             }
             panel.querySelectorAll(".wfm-nlp-top-tab").forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
@@ -723,7 +727,27 @@ const rebuildSubTabs = () => {
         row2.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
     };
 
-    if (state.topTab === "models") {
+    if (state.topTab === "info") {
+        const row1Tabs = [
+            { key: "info-model", label: "model" },
+            { key: "info-lora",  label: "lora" },
+            { key: "info-prompt", label: "Prompts" },
+        ];
+        const activeKey = state.infoSubTab;
+        for (const t of row1Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.infoSubTab = t.key;
+                updateAllActive();
+                btn.classList.add("active");
+                renderInfoSubContent();
+            });
+            row1.appendChild(btn);
+        }
+    } else if (state.topTab === "models") {
         const row1Tabs = [
             { key: "model-all", label: "All" },
             { key: "model-favorites", label: "\u2605 Favorites" },
@@ -878,6 +902,20 @@ const renderContent = () => {
 
     // Remove filter dropdowns from previous category/package views
     panelEl.querySelectorAll(".wfm-nlp-filter-row").forEach(e => e.remove());
+
+    // Show/hide search bar and adjust overflow for info tab
+    const searchEl = panelEl?.querySelector(".wfm-nlp-search");
+    if (state.topTab === "info") {
+        if (searchEl) searchEl.style.display = "none";
+        content.style.overflowY = "hidden";
+        content.style.padding = "0";
+        renderInfoTab(content);
+        return;
+    } else {
+        if (searchEl) searchEl.style.display = "";
+        content.style.overflowY = "auto";
+        content.style.padding = "4px 0";
+    }
 
     if (state.topTab === "models") {
         if (!state.modelsLoaded) {
@@ -1927,6 +1965,641 @@ const showToast = (message, type = "info") => {
 const esc = (s) => s ? String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : "";
 
 // ============================================
+// Info Tab – Metadata Parsing (ported from metadata-tab.js)
+// ============================================
+
+const INFO_MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+function _sanitizeJSON(text) {
+    return text
+        .replace(/-Infinity\b/g, "null")
+        .replace(/\bInfinity\b/g, "null")
+        .replace(/\bNaN\b/g, "null");
+}
+
+async function _readWebPEXIFChunk(file) {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    const ascii = new TextDecoder("latin1");
+    if (bytes.byteLength < 12) return null;
+    if (ascii.decode(bytes.slice(0, 4)) !== "RIFF") return null;
+    if (ascii.decode(bytes.slice(8, 12)) !== "WEBP") return null;
+    let offset = 12;
+    while (offset + 8 <= buffer.byteLength) {
+        const fourcc = ascii.decode(bytes.slice(offset, offset + 4));
+        const chunkSize = view.getUint32(offset + 4, true);
+        if (fourcc === "EXIF") return bytes.slice(offset + 8, offset + 8 + chunkSize);
+        offset += 8 + chunkSize;
+        if (chunkSize % 2 === 1) offset++;
+    }
+    return null;
+}
+
+function _extractWorkflowFromEXIF(exifBytes) {
+    const utf8 = new TextDecoder("utf-8", { fatal: false });
+    const text = utf8.decode(exifBytes);
+    for (const key of ["workflow:", "prompt:"]) {
+        const idx = text.indexOf(key + "{");
+        if (idx < 0) continue;
+        let jsonStr = text.slice(idx + key.length);
+        const nullIdx = jsonStr.indexOf("\x00");
+        if (nullIdx >= 0) jsonStr = jsonStr.slice(0, nullIdx);
+        try { return JSON.parse(_sanitizeJSON(jsonStr)); } catch {
+            const lb = jsonStr.lastIndexOf("}");
+            if (lb > 0) { try { return JSON.parse(_sanitizeJSON(jsonStr.slice(0, lb + 1))); } catch {} }
+        }
+    }
+    return null;
+}
+
+function _findNull(arr, start = 0) {
+    for (let i = start; i < arr.length; i++) if (arr[i] === 0) return i;
+    return -1;
+}
+function _parseTEXtChunk(data, latin1) {
+    const np = _findNull(data);
+    if (np === -1) return null;
+    return { keyword: latin1.decode(data.slice(0, np)), text: latin1.decode(data.slice(np + 1)) };
+}
+function _parseITXtChunk(data, latin1, utf8) {
+    const np = _findNull(data);
+    if (np === -1) return null;
+    const keyword = latin1.decode(data.slice(0, np));
+    let pos = np + 3;
+    pos = _findNull(data, pos); if (pos === -1) return null; pos++;
+    pos = _findNull(data, pos); if (pos === -1) return null; pos++;
+    return { keyword, text: utf8.decode(data.slice(pos)) };
+}
+async function _readAllPNGTextChunks(file) {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    for (let i = 0; i < 8; i++) if (bytes[i] !== PNG_SIG[i]) return null;
+    const view = new DataView(buffer);
+    const latin1 = new TextDecoder("latin1");
+    const utf8 = new TextDecoder("utf-8");
+    let offset = 8;
+    const chunks = {};
+    while (offset + 12 <= buffer.byteLength) {
+        const length = view.getUint32(offset);
+        if (offset + 12 + length > buffer.byteLength) break;
+        const type = latin1.decode(bytes.slice(offset + 4, offset + 8));
+        const data = bytes.slice(offset + 8, offset + 8 + length);
+        if (type === "tEXt") { const c = _parseTEXtChunk(data, latin1); if (c) chunks[c.keyword] = c.text; }
+        else if (type === "iTXt") { const c = _parseITXtChunk(data, latin1, utf8); if (c) chunks[c.keyword] = c.text; }
+        offset += 12 + length;
+    }
+    return chunks;
+}
+
+function _collectUnique(arr) {
+    const seen = new Set(), out = [];
+    for (const v of arr) { if (v && typeof v === "string" && !seen.has(v)) { seen.add(v); out.push(v); } }
+    return out;
+}
+function _collectAllNodes(wf) {
+    if (!Array.isArray(wf.nodes)) return [];
+    const all = [...wf.nodes];
+    for (const sg of wf.definitions?.subgraphs ?? []) if (Array.isArray(sg.nodes)) all.push(...sg.nodes);
+    return all;
+}
+const _META_NODE_TYPES = new Set(["ImageMetadataCheckpointLoader", "ImageMetadataPromptLoader"]);
+const _VAE_NONE = "None";
+
+function _extractCheckpoints(wf) {
+    if (!wf || typeof wf !== "object") return [];
+    if (Array.isArray(wf.nodes)) return _collectUnique(_collectAllNodes(wf).filter(n => n.type?.toLowerCase().includes("checkpoint") || _META_NODE_TYPES.has(n.type)).map(n => n.widgets_values?.[0]));
+    return _collectUnique(Object.values(wf).filter(n => n?.class_type?.toLowerCase().includes("checkpoint") || _META_NODE_TYPES.has(n?.class_type)).map(n => n.inputs?.ckpt_name));
+}
+function _extractVAEs(wf) {
+    if (!wf || typeof wf !== "object") return [];
+    if (Array.isArray(wf.nodes)) return _collectUnique(_collectAllNodes(wf).flatMap(n => { if (n.type === "VAELoader") return [n.widgets_values?.[0]]; if (_META_NODE_TYPES.has(n.type ?? "")) { const v = n.widgets_values?.[1]; return v && v !== _VAE_NONE ? [v] : []; } return []; }));
+    return _collectUnique(Object.values(wf).flatMap(n => { if (!n || typeof n !== "object") return []; if (n.class_type === "VAELoader") return [n.inputs?.vae_name]; if (_META_NODE_TYPES.has(n.class_type ?? "")) { const v = n.inputs?.vae_name; return v && v !== _VAE_NONE ? [v] : []; } return []; }));
+}
+function _extractDiffusionModels(wf) {
+    if (!wf || typeof wf !== "object") return [];
+    if (Array.isArray(wf.nodes)) return _collectUnique(_collectAllNodes(wf).filter(n => n.type === "UNETLoader").map(n => n.widgets_values?.[0]));
+    return _collectUnique(Object.values(wf).filter(n => n?.class_type === "UNETLoader").map(n => n.inputs?.unet_name));
+}
+function _extractTextEncoders(wf) {
+    if (!wf || typeof wf !== "object") return [];
+    const names = [];
+    if (Array.isArray(wf.nodes)) {
+        for (const n of _collectAllNodes(wf)) {
+            if (n.type === "CLIPLoader") { if (n.widgets_values?.[0]) names.push(n.widgets_values[0]); }
+            else if (n.type === "DualCLIPLoader") { [0,1].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
+            else if (n.type === "TripleCLIPLoader") { [0,1,2].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
+        }
+    } else {
+        for (const n of Object.values(wf)) {
+            if (!n || typeof n !== "object") continue;
+            const ct = n.class_type ?? "";
+            if (ct === "CLIPLoader") { if (n.inputs?.clip_name) names.push(n.inputs.clip_name); }
+            else if (ct === "DualCLIPLoader") { if (n.inputs?.clip_name1) names.push(n.inputs.clip_name1); if (n.inputs?.clip_name2) names.push(n.inputs.clip_name2); }
+            else if (ct === "TripleCLIPLoader") { ["clip_name1","clip_name2","clip_name3"].forEach(k => { if (n.inputs?.[k]) names.push(n.inputs[k]); }); }
+        }
+    }
+    return _collectUnique(names);
+}
+function _extractLoRAs(wf) {
+    if (!wf || typeof wf !== "object") return [];
+    const results = [], seen = new Set();
+    function add(name, sm, sc) {
+        if (!name || typeof name !== "string" || name === "None" || seen.has(name)) return;
+        seen.add(name);
+        results.push({ name, strength_model: typeof sm === "number" ? sm : 1.0, strength_clip: typeof sc === "number" ? sc : 1.0 });
+    }
+    if (Array.isArray(wf.nodes)) {
+        for (const n of _collectAllNodes(wf)) {
+            const type = n.type ?? "";
+            if (type === "LoraLoader") add(n.widgets_values?.[0], n.widgets_values?.[1], n.widgets_values?.[2]);
+            else if (type === "LoraLoaderModelOnly") add(n.widgets_values?.[0], n.widgets_values?.[1], 1.0);
+            else if (type === "ImageMetadataLoRALoader") { for (let i = 0; i < 3; i++) add(n.widgets_values?.[i*3], n.widgets_values?.[i*3+1], n.widgets_values?.[i*3+2]); }
+            else if (type === "Lora Loader (LoraManager)") { const list = n.widgets_values?.find(v => Array.isArray(v)); if (list) for (const l of list) { if (l?.active !== false) add(l?.name, l?.strength ?? 1.0, l?.clipStrength ?? l?.strength ?? 1.0); } }
+        }
+    } else {
+        for (const n of Object.values(wf)) {
+            if (!n || typeof n !== "object") continue;
+            const ct = n.class_type ?? "";
+            if (ct === "LoraLoader") add(n.inputs?.lora_name, n.inputs?.strength_model, n.inputs?.strength_clip);
+            else if (ct === "LoraLoaderModelOnly") add(n.inputs?.lora_name, n.inputs?.strength, 1.0);
+        }
+    }
+    return results;
+}
+
+function _isTextEncoderNode(ct) { return ct === "CLIPTextEncode" || ct.includes("TextEncode") || ct.includes("TextEncoderSD"); }
+function _isSamplerNode(ct) { return ct === "KSampler" || ct === "KSamplerAdvanced" || ct.includes("KSampler") || ct.includes("Sampler"); }
+function _isPromptStylerNode(ct) { return ct.includes("PromptStyler"); }
+
+function _extractPromptsFromNodeSet(nodes, links) {
+    const nodeMap = new Map();
+    for (const n of nodes) nodeMap.set(n.id, n);
+    const linkOrigin = new Map(), linkSlot = new Map();
+    if (Array.isArray(links)) {
+        for (const lk of links) {
+            if (Array.isArray(lk)) { linkOrigin.set(lk[0], lk[1]); linkSlot.set(lk[0], lk[2] ?? 0); }
+            else if (lk && typeof lk === "object") { const id = lk.id ?? lk[0], origin = lk.origin_id ?? lk[1], slot = lk.origin_slot ?? lk[2] ?? 0; if (id != null && origin != null) { linkOrigin.set(id, origin); linkSlot.set(id, slot); } }
+        }
+    }
+    const textMap = new Map();
+    for (const n of nodes) {
+        if (!_isTextEncoderNode(n.type ?? "")) continue;
+        const text = n.widgets_values?.[0];
+        if (text && typeof text === "string") { textMap.set(n.id, text); }
+        else if (Array.isArray(n.inputs)) {
+            const textInput = n.inputs.find(inp => inp.name === "text" || inp.name === "text_g" || inp.name === "prompt");
+            if (textInput?.link != null) {
+                const originId = linkOrigin.get(textInput.link);
+                const originSlot = linkSlot.get(textInput.link) ?? 0;
+                const srcNode = originId != null ? nodeMap.get(originId) : null;
+                if (srcNode) {
+                    const srcType = srcNode.type ?? "";
+                    if (_isPromptStylerNode(srcType)) { const v = srcNode.widgets_values?.[originSlot]; if (v && typeof v === "string") textMap.set(n.id, v); }
+                    else { const v = srcNode.widgets_values?.[originSlot] ?? srcNode.widgets_values?.[0]; if (v && typeof v === "string") textMap.set(n.id, v); }
+                }
+            }
+        }
+    }
+    const pos = new Set(), neg = new Set();
+    let foundSampler = false;
+    for (const n of nodes) {
+        if (!_isSamplerNode(n.type ?? "") || !Array.isArray(n.inputs)) continue;
+        foundSampler = true;
+        for (const inp of n.inputs) {
+            if (!inp || inp.link == null) continue;
+            const originId = linkOrigin.get(inp.link);
+            if (originId == null) continue;
+            const txt = textMap.get(originId);
+            if (!txt) continue;
+            const name = inp.name ?? "";
+            if (name === "positive" || name.startsWith("positive")) pos.add(txt);
+            else if (name === "negative" || name.startsWith("negative")) neg.add(txt);
+        }
+    }
+    if (!foundSampler) return null;
+    if (pos.size === 0 && neg.size === 0) {
+        const allTexts = [...textMap.values()].filter(t => t.trim());
+        if (allTexts.length > 0) return { positives: [], negatives: [], texts: allTexts };
+        return null;
+    }
+    return { positives: [...pos], negatives: [...neg] };
+}
+
+function _extractMarkdownNoteModels(wf) {
+    const allNodes = [];
+    if (Array.isArray(wf.nodes)) allNodes.push(...wf.nodes);
+    for (const sg of wf.definitions?.subgraphs ?? []) if (Array.isArray(sg.nodes)) allNodes.push(...sg.nodes);
+    const result = { checkpoints: [], vaes: [], diffusionModels: [], textEncoders: [], loras: [] };
+    const seen = { checkpoints: new Set(), vaes: new Set(), diffusionModels: new Set(), textEncoders: new Set(), loras: new Set() };
+    function addU(arr, set, name) { if (name && typeof name === "string" && !set.has(name)) { set.add(name); arr.push(name); } }
+    for (const n of allNodes) {
+        if (n.type !== "MarkdownNote") continue;
+        const raw = n.widgets_values;
+        const text = Array.isArray(raw) ? raw[0] : (typeof raw === "string" ? raw : null);
+        if (!text) continue;
+        const sRe = /\*\*([^*\n]+)\*\*/g;
+        let sm;
+        while ((sm = sRe.exec(text)) !== null) {
+            const sec = sm[1].trim().toLowerCase().replace(/\s+/g, "_");
+            if (!["text_encoders", "diffusion_models", "vae", "checkpoints", "loras"].includes(sec)) continue;
+            const rest = text.slice(sm.index + sm[0].length);
+            const end = rest.search(/\n\*\*|\n##/);
+            const content = end >= 0 ? rest.slice(0, end) : rest;
+            const lRe = /^- \[([^\]]+)\]/gm;
+            let lm;
+            while ((lm = lRe.exec(content)) !== null) {
+                const name = lm[1].trim();
+                if (sec === "text_encoders") addU(result.textEncoders, seen.textEncoders, name);
+                else if (sec === "diffusion_models") addU(result.diffusionModels, seen.diffusionModels, name);
+                else if (sec === "vae") addU(result.vaes, seen.vaes, name);
+                else if (sec === "checkpoints") addU(result.checkpoints, seen.checkpoints, name);
+                else if (sec === "loras") addU(result.loras, seen.loras, name);
+            }
+        }
+    }
+    const hasAny = result.checkpoints.length || result.vaes.length || result.diffusionModels.length || result.textEncoders.length || result.loras.length;
+    return hasAny ? result : null;
+}
+
+function _resolveLinkedText(wf, srcId, slot) {
+    const src = wf[String(srcId)];
+    if (!src || typeof src !== "object") return null;
+    const ct = src.class_type ?? "";
+    if (_isPromptStylerNode(ct)) { const v = slot === 0 ? src.inputs?.text_positive : src.inputs?.text_negative; return (v && typeof v === "string") ? v : null; }
+    const keys = slot === 0 ? ["text_positive", "text", "text_g", "prompt"] : ["text_negative", "text_l"];
+    for (const k of keys) { const v = src.inputs?.[k]; if (v && typeof v === "string") return v; }
+    return null;
+}
+
+function _extractPromptsAPI(wf) {
+    const metaNodes = Object.values(wf).filter(n => n?.class_type === "ImageMetadataPromptLoader");
+    if (metaNodes.length > 0) {
+        const pos = new Set(), neg = new Set();
+        for (const n of metaNodes) { if (n.inputs?.positive_text) pos.add(n.inputs.positive_text); if (n.inputs?.negative_text) neg.add(n.inputs.negative_text); }
+        if (pos.size > 0 || neg.size > 0) return { positives: [...pos], negatives: [...neg] };
+    }
+    const textMap = new Map();
+    for (const [id, n] of Object.entries(wf)) {
+        if (!n || !_isTextEncoderNode(n.class_type ?? "")) continue;
+        const raw = n.inputs?.text ?? n.inputs?.text_g ?? null;
+        if (raw && typeof raw === "string") { textMap.set(id, raw); }
+        else if (Array.isArray(raw)) { const txt = _resolveLinkedText(wf, raw[0], raw[1] ?? 0); if (txt) textMap.set(id, txt); }
+    }
+    const pos = new Set(), neg = new Set();
+    let foundSampler = false;
+    for (const n of Object.values(wf)) {
+        if (!n || !_isSamplerNode(n.class_type ?? "")) continue;
+        foundSampler = true;
+        for (const [key, val] of Object.entries(n.inputs ?? {})) {
+            if (!Array.isArray(val)) continue;
+            const txt = textMap.get(String(val[0]));
+            if (!txt) continue;
+            if (key === "positive" || key.startsWith("positive")) pos.add(txt);
+            else if (key === "negative" || key.startsWith("negative")) neg.add(txt);
+        }
+    }
+    if (!foundSampler || (pos.size === 0 && neg.size === 0)) { const all = [...textMap.values()].filter(t => t && t.trim()); return { positives: [], negatives: [], texts: all }; }
+    return { positives: [...pos], negatives: [...neg] };
+}
+
+function _extractPromptsLiteGraph(wf) {
+    const { nodes, links } = wf;
+    if (!Array.isArray(nodes)) return { positives: [], negatives: [] };
+    const metaNodes = nodes.filter(n => n.type === "ImageMetadataPromptLoader");
+    if (metaNodes.length > 0) {
+        const pos = new Set(), neg = new Set();
+        for (const n of metaNodes) { const p = n.widgets_values?.[2], ng = n.widgets_values?.[3]; if (p) pos.add(p); if (ng) neg.add(ng); }
+        if (pos.size > 0 || neg.size > 0) return { positives: [...pos], negatives: [...neg] };
+    }
+    const wfsNodes = nodes.filter(n => n.type === "WFS_PromptText");
+    if (wfsNodes.length > 0) {
+        const pos = new Set(), neg = new Set();
+        for (const n of wfsNodes) { const p = n.widgets_values?.[0], ng = n.widgets_values?.[1]; if (p) pos.add(p); if (ng) neg.add(ng); }
+        if (pos.size > 0 || neg.size > 0) return { positives: [...pos], negatives: [...neg] };
+    }
+    const topResult = _extractPromptsFromNodeSet(nodes, links ?? []);
+    if (topResult) return topResult;
+    const primTexts = [];
+    for (const n of _collectAllNodes(wf)) {
+        if (n.type !== "PrimitiveStringMultiline") continue;
+        const t = Array.isArray(n.widgets_values) ? n.widgets_values[0] : n.widgets_values;
+        if (t && typeof t === "string" && t.trim()) primTexts.push(t.trim());
+    }
+    if (primTexts.length > 0) return { positives: [], negatives: [], texts: primTexts };
+    for (const sg of wf.definitions?.subgraphs ?? []) {
+        if (!Array.isArray(sg.nodes)) continue;
+        const sgResult = _extractPromptsFromNodeSet(sg.nodes, sg.links ?? []);
+        if (sgResult) return sgResult;
+    }
+    const stylerPos = new Set(), stylerNeg = new Set();
+    for (const n of nodes) {
+        if (!_isPromptStylerNode(n.type ?? "")) continue;
+        const vals = n.widgets_values ?? [];
+        for (let i = 0; i < vals.length; i++) { if (typeof vals[i] !== "string" || !vals[i].trim()) continue; if (i % 2 === 0) stylerPos.add(vals[i]); else stylerNeg.add(vals[i]); }
+    }
+    if (stylerPos.size > 0 || stylerNeg.size > 0) return { positives: [...stylerPos], negatives: [...stylerNeg] };
+    const all = [];
+    for (const n of _collectAllNodes(wf)) {
+        if (!_isTextEncoderNode(n.type ?? "")) continue;
+        const t = n.widgets_values?.[0];
+        if (t && typeof t === "string" && t.trim()) all.push(t);
+    }
+    return { positives: [], negatives: [], texts: all };
+}
+
+function _extractPrompts(wf) {
+    if (!wf || typeof wf !== "object") return { positives: [], negatives: [] };
+    return Array.isArray(wf.nodes) ? _extractPromptsLiteGraph(wf) : _extractPromptsAPI(wf);
+}
+
+function _parseSDAParameters(raw) {
+    const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const stepsMatch = text.match(/\nSteps:\s+\d/);
+    if (!stepsMatch) return null;
+    const paramsStart = stepsMatch.index + 1;
+    const promptSection = text.slice(0, paramsStart - 1);
+    const paramsLine = text.slice(paramsStart);
+    const negSep = "\nNegative prompt: ";
+    const negIdx = promptSection.indexOf(negSep);
+    let positive = "", negative = "";
+    if (negIdx !== -1) { positive = promptSection.slice(0, negIdx).trim(); negative = promptSection.slice(negIdx + negSep.length).trim(); }
+    else positive = promptSection.trim();
+    const params = {};
+    const re = /,?\s*([A-Za-z][A-Za-z0-9 ]*):\s*("(?:[^"\\]|\\.)*"|[^,]+)/g;
+    let m;
+    while ((m = re.exec(paramsLine)) !== null) params[m[1].trim()] = m[2].trim().replace(/^"|"$/g, "");
+    return { positive, negative, params };
+}
+function _parseFooocusMetadata(raw) {
+    let obj; try { obj = JSON.parse(raw); } catch { return null; }
+    if (!obj?.base_model) return null;
+    const toArray = v => !v ? [] : Array.isArray(v) ? v.filter(Boolean) : [String(v)];
+    return { checkpoint: obj.base_model, vae: (obj.vae && obj.vae !== "Default") ? obj.vae : null, positives: toArray(obj.full_prompt ?? obj.prompt), negatives: toArray(obj.full_negative_prompt ?? obj.negative_prompt) };
+}
+
+async function _extractAllMetadata(file) {
+    const name = file.name.toLowerCase();
+    const isJSON = file.type === "application/json" || name.endsWith(".json");
+    const isWebP = file.type === "image/webp" || name.endsWith(".webp");
+
+    function fromWorkflow(wf, source) {
+        const base = { source, checkpoints: _extractCheckpoints(wf), vaes: _extractVAEs(wf), diffusionModels: _extractDiffusionModels(wf), textEncoders: _extractTextEncoders(wf), loras: _extractLoRAs(wf), ..._extractPrompts(wf) };
+        const mdm = _extractMarkdownNoteModels(wf);
+        if (mdm) {
+            if (!base.checkpoints.length) base.checkpoints = mdm.checkpoints;
+            if (!base.vaes.length) base.vaes = mdm.vaes;
+            if (!base.diffusionModels.length) base.diffusionModels = mdm.diffusionModels;
+            if (!base.textEncoders.length) base.textEncoders = mdm.textEncoders;
+            if (!base.loras.length) base.loras = mdm.loras;
+        }
+        return base;
+    }
+
+    if (isJSON) {
+        let wf; try { wf = JSON.parse(_sanitizeJSON(await file.text())); } catch { return null; }
+        return wf ? fromWorkflow(wf, "comfyui") : null;
+    }
+    if (isWebP) {
+        const exif = await _readWebPEXIFChunk(file);
+        if (!exif) return null;
+        const wf = _extractWorkflowFromEXIF(exif);
+        return wf ? fromWorkflow(wf, "comfyui") : null;
+    }
+    // PNG
+    const chunks = await _readAllPNGTextChunks(file);
+    if (!chunks) return null;
+    if (chunks.prompt) { let wf; try { wf = JSON.parse(_sanitizeJSON(chunks.prompt)); } catch { return null; } return wf ? fromWorkflow(wf, "comfyui") : null; }
+    if (chunks.workflow) { let wf; try { wf = JSON.parse(_sanitizeJSON(chunks.workflow)); } catch { return null; } return wf ? fromWorkflow(wf, "comfyui") : null; }
+    if (chunks.fooocus_scheme === "fooocus" && chunks.parameters) {
+        const f = _parseFooocusMetadata(chunks.parameters);
+        if (!f) return null;
+        return { source: "fooocus", checkpoints: [f.checkpoint], vaes: f.vae ? [f.vae] : [], diffusionModels: [], textEncoders: [], loras: [], positives: f.positives, negatives: f.negatives };
+    }
+    if (chunks.parameters) {
+        const p = _parseSDAParameters(chunks.parameters);
+        if (!p) return null;
+        const { positive, negative, params } = p;
+        const modelName = params["Model"];
+        if (!modelName) return null;
+        if (params["Module 2"] != null) {
+            const textEncoders = [];
+            for (let i = 2; i <= 9; i++) { const mod = params[`Module ${i}`]; if (!mod) break; textEncoders.push(mod); }
+            return { source: "sd_forge", checkpoints: [], vaes: params["Module 1"] ? [params["Module 1"]] : [], diffusionModels: [modelName], textEncoders, loras: [], positives: positive ? [positive] : [], negatives: negative ? [negative] : [] };
+        }
+        const vaeValue = params["Module 1"] ?? params["VAE"] ?? null;
+        return { source: "sd", checkpoints: [modelName], vaes: vaeValue ? [vaeValue] : [], diffusionModels: [], textEncoders: [], loras: [], positives: positive ? [positive] : [], negatives: negative ? [negative] : [] };
+    }
+    return null;
+}
+
+// ============================================
+// Info Tab – UI rendering
+// ============================================
+
+const handleInfoFile = async (file) => {
+    if (!file || !panelEl) return;
+    const fileInfo   = panelEl.querySelector("#wfm-nlp-info-fileinfo");
+    const previewImg = panelEl.querySelector("#wfm-nlp-info-preview-img");
+    const dropLabel  = panelEl.querySelector("#wfm-nlp-info-drop-label");
+
+    if (file.size > INFO_MAX_FILE_SIZE) {
+        if (fileInfo) fileInfo.textContent = "File too large (max 50MB)";
+        return;
+    }
+    if (fileInfo) fileInfo.textContent = "Parsing...";
+
+    const isImage = file.type.startsWith("image/") || /\.(png|webp|jpg|jpeg)$/i.test(file.name);
+    if (isImage && previewImg && dropLabel) {
+        const url = URL.createObjectURL(file);
+        previewImg.src = url;
+        previewImg.style.display = "block";
+        dropLabel.style.display = "none";
+        previewImg.onload = () => URL.revokeObjectURL(url);
+    } else if (previewImg && dropLabel) {
+        previewImg.style.display = "none";
+        dropLabel.style.display = "";
+    }
+
+    let meta;
+    try { meta = await _extractAllMetadata(file); }
+    catch (err) { if (fileInfo) fileInfo.textContent = "Parse error: " + err.message; return; }
+
+    if (!meta) {
+        if (fileInfo) fileInfo.textContent = "No metadata found in file";
+        state.infoMeta = null;
+        renderInfoSubContent();
+        return;
+    }
+
+    state.infoMeta = meta;
+    const sizeKB = (file.size / 1024).toFixed(1);
+    const srcLabel = { comfyui: "ComfyUI", sd: "SD WebUI", sd_forge: "SD Forge", fooocus: "Fooocus" }[meta.source] ?? meta.source;
+    if (fileInfo) fileInfo.textContent = `${file.name}  (${sizeKB} KB · ${srcLabel})`;
+    renderInfoSubContent();
+};
+
+const setupInfoDropHandlers = (container) => {
+    const dropZone  = container.querySelector("#wfm-nlp-info-drop");
+    const dropLabel = container.querySelector("#wfm-nlp-info-drop-label");
+    const previewImg = container.querySelector("#wfm-nlp-info-preview-img");
+    const fileInput = container.querySelector("#wfm-nlp-info-file-input");
+    if (!dropZone) return;
+
+    dropZone.addEventListener("dragover",  e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add("drag-over"); });
+    dropZone.addEventListener("dragleave", e => { e.stopPropagation(); dropZone.classList.remove("drag-over"); });
+    dropZone.addEventListener("drop", e => {
+        e.preventDefault(); e.stopPropagation();
+        dropZone.classList.remove("drag-over");
+        handleInfoFile(e.dataTransfer.files?.[0]);
+    });
+    dropZone.addEventListener("click", e => { if (e.target === previewImg) return; fileInput.click(); });
+    fileInput.addEventListener("change", () => { handleInfoFile(fileInput.files?.[0]); fileInput.value = ""; });
+
+    const copyBtn = container.querySelector("#wfm-nlp-info-copy-btn");
+    if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+            const textarea = container.querySelector("#wfm-nlp-info-prompt-full");
+            const text = textarea?.value;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                const orig = copyBtn.textContent;
+                copyBtn.textContent = "Copied!";
+                copyBtn.classList.add("wfm-nlp-info-copy-btn--done");
+                setTimeout(() => { copyBtn.textContent = orig; copyBtn.classList.remove("wfm-nlp-info-copy-btn--done"); }, 1200);
+            });
+        });
+    }
+};
+
+const renderInfoModels = (container, meta) => {
+    container.innerHTML = "";
+    if (!meta) {
+        container.innerHTML = `<div class="wfm-nlp-info-empty">Drop a PNG/WebP/JSON file to view model info</div>`;
+        return;
+    }
+    const sections = [
+        { label: "Checkpoint",     items: meta.checkpoints },
+        { label: "VAE",            items: meta.vaes },
+        { label: "Diffusion Model", items: meta.diffusionModels },
+        { label: "Text Encoder",   items: meta.textEncoders },
+    ];
+    let hasAny = false;
+    for (const { label, items } of sections) {
+        if (!items || items.length === 0) continue;
+        hasAny = true;
+        const sec = document.createElement("div");
+        sec.className = "wfm-nlp-info-section";
+        sec.innerHTML = `<div class="wfm-nlp-info-section-title">${esc(label)}</div>`;
+        for (const name of items) {
+            const item = document.createElement("div");
+            item.className = "wfm-nlp-info-item";
+            item.title = name;
+            item.innerHTML = `<span class="wfm-nlp-info-item-name">${esc(name)}</span>`;
+            sec.appendChild(item);
+        }
+        container.appendChild(sec);
+    }
+    if (!hasAny) container.innerHTML = `<div class="wfm-nlp-info-empty">No model info found</div>`;
+};
+
+const renderInfoLoras = (container, meta) => {
+    container.innerHTML = "";
+    if (!meta || !meta.loras || meta.loras.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-info-empty">${meta ? "No LoRA found" : "Drop a PNG/WebP/JSON file to view LoRA info"}</div>`;
+        return;
+    }
+    for (const lora of meta.loras) {
+        const item = document.createElement("div");
+        item.className = "wfm-nlp-info-item";
+        item.title = lora.name;
+        const sm = typeof lora.strength_model === "number" ? lora.strength_model.toFixed(2) : "—";
+        const sc = typeof lora.strength_clip  === "number" ? lora.strength_clip.toFixed(2)  : "—";
+        item.innerHTML = `<span class="wfm-nlp-info-item-name">${esc(lora.name)}</span><span class="wfm-nlp-info-item-badge">${sm}/${sc}</span>`;
+        container.appendChild(item);
+    }
+};
+
+const renderInfoPrompts = (container, meta) => {
+    container.innerHTML = "";
+    const promptFull      = panelEl?.querySelector("#wfm-nlp-info-prompt-full");
+    const promptFullLabel = panelEl?.querySelector("#wfm-nlp-info-prompt-full-label");
+    if (!meta) {
+        container.innerHTML = `<div class="wfm-nlp-info-empty">Drop a PNG/WebP/JSON file to view prompts</div>`;
+        return;
+    }
+    const allPrompts = [
+        ...(meta.positives || []).map(p => ({ type: "positive", text: p })),
+        ...(meta.negatives || []).map(p => ({ type: "negative", text: p })),
+        ...((meta.texts   || []).map(p => ({ type: "text",     text: p }))),
+    ];
+    if (allPrompts.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-info-empty">No prompts found</div>`;
+        return;
+    }
+    for (const { type, text } of allPrompts) {
+        const item = document.createElement("div");
+        item.className = "wfm-nlp-info-prompt-item";
+        const snippet = text.length > 55 ? text.slice(0, 55) + "…" : text;
+        const badge = type === "positive"
+            ? `<span class="wfm-nlp-info-badge-pos">POS</span>`
+            : type === "negative"
+            ? `<span class="wfm-nlp-info-badge-neg">NEG</span>`
+            : "";
+        item.innerHTML = `${badge}<span class="wfm-nlp-info-item-name">${esc(snippet)}</span>`;
+        item.addEventListener("click", () => {
+            container.querySelectorAll(".wfm-nlp-info-prompt-item").forEach(e => e.classList.remove("selected"));
+            item.classList.add("selected");
+            if (promptFull) promptFull.value = text;
+            if (promptFullLabel) promptFullLabel.textContent = type === "positive" ? "Positive" : type === "negative" ? "Negative" : "Text";
+        });
+        container.appendChild(item);
+    }
+    const first = container.querySelector(".wfm-nlp-info-prompt-item");
+    if (first) first.click();
+};
+
+const renderInfoSubContent = () => {
+    if (!panelEl) return;
+    const subContent    = panelEl.querySelector("#wfm-nlp-info-subcontent");
+    const promptPreview = panelEl.querySelector("#wfm-nlp-info-prompt-preview");
+    if (!subContent) return;
+    const meta = state.infoMeta;
+    if (state.infoSubTab === "info-prompt") {
+        if (promptPreview) promptPreview.style.display = "flex";
+        renderInfoPrompts(subContent, meta);
+    } else {
+        if (promptPreview) promptPreview.style.display = "none";
+        if (state.infoSubTab === "info-model") renderInfoModels(subContent, meta);
+        else renderInfoLoras(subContent, meta);
+    }
+};
+
+const renderInfoTab = (container) => {
+    if (!container.querySelector(".wfm-nlp-info-layout")) {
+        container.innerHTML = `
+            <div class="wfm-nlp-info-layout">
+                <div class="wfm-nlp-info-drop" id="wfm-nlp-info-drop">
+                    <img id="wfm-nlp-info-preview-img" style="display:none;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">
+                    <span id="wfm-nlp-info-drop-label" style="font-size:11px;color:var(--descrip-text,#999);pointer-events:none;">Drop PNG / WebP / JSON</span>
+                    <input type="file" id="wfm-nlp-info-file-input" accept=".png,.webp,.json,image/png,image/webp,application/json" style="display:none;">
+                </div>
+                <div id="wfm-nlp-info-fileinfo" class="wfm-nlp-info-fileinfo">—</div>
+                <div id="wfm-nlp-info-subcontent" class="wfm-nlp-info-subcontent"></div>
+                <div id="wfm-nlp-info-prompt-preview" class="wfm-nlp-info-prompt-preview" style="display:none;">
+                    <div id="wfm-nlp-info-prompt-full-label" class="wfm-nlp-info-prompt-label"></div>
+                    <textarea id="wfm-nlp-info-prompt-full" class="wfm-nlp-info-prompt-textarea" readonly></textarea>
+                    <button id="wfm-nlp-info-copy-btn" class="wfm-nlp-info-copy-btn">Copy</button>
+                </div>
+            </div>
+        `;
+        setupInfoDropHandlers(container);
+    }
+    renderInfoSubContent();
+};
+
+// ============================================
 // Save selected nodes as Node Set (context menu)
 // ============================================
 
@@ -2096,13 +2769,185 @@ const injectStyles = () => {
             border-bottom-color: var(--p-button-background, #4a9eff);
         }
         .wfm-nlp-top-tab {
-            font-size: 12px;
-            font-weight: 600;
-            padding: 9px 4px;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 6px 2px;
+            border-radius: 3px;
+            border: 1px solid transparent;
+            margin: 3px 1px;
+        }
+        .wfm-nlp-top-tab.active {
+            border-color: var(--p-button-background, #4a9eff);
         }
         .wfm-nlp-sub-tab {
             font-size: 10px;
             padding: 6px 4px;
+        }
+        /* Info tab layout */
+        .wfm-nlp-info-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        .wfm-nlp-info-drop {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 54px;
+            border: 2px dashed var(--border-color, #4e4e4e);
+            border-radius: 6px;
+            margin: 8px 8px 0;
+            cursor: pointer;
+            overflow: hidden;
+            flex-shrink: 0;
+            transition: border-color 0.15s;
+            position: relative;
+        }
+        .wfm-nlp-info-drop:hover,
+        .wfm-nlp-info-drop.drag-over {
+            border-color: var(--p-button-background, #4a9eff);
+            background: rgba(74,158,255,0.04);
+        }
+        .wfm-nlp-info-fileinfo {
+            font-size: 10px;
+            color: var(--descrip-text, #888);
+            padding: 4px 10px 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border-color, #3a3a3a);
+        }
+        .wfm-nlp-info-subcontent {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+        .wfm-nlp-info-section {
+            margin-bottom: 2px;
+        }
+        .wfm-nlp-info-section-title {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--descrip-text, #888);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            padding: 6px 10px 2px;
+        }
+        .wfm-nlp-info-item {
+            padding: 4px 10px;
+            font-size: 11px;
+            border-bottom: 1px solid var(--border-color, #3a3a3a);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+        .wfm-nlp-info-item-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px;
+        }
+        .wfm-nlp-info-item-badge {
+            font-size: 10px;
+            color: var(--descrip-text, #aaa);
+            flex-shrink: 0;
+        }
+        .wfm-nlp-info-empty {
+            padding: 20px 10px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--descrip-text, #888);
+            line-height: 1.6;
+        }
+        .wfm-nlp-info-prompt-item {
+            padding: 5px 10px;
+            font-size: 11px;
+            border-bottom: 1px solid var(--border-color, #3a3a3a);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background 0.12s;
+        }
+        .wfm-nlp-info-prompt-item:hover {
+            background: var(--comfy-input-bg, #333);
+        }
+        .wfm-nlp-info-prompt-item.selected {
+            background: rgba(74,158,255,0.15);
+        }
+        .wfm-nlp-info-badge-pos {
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: rgba(46,213,115,0.22);
+            color: #2ed573;
+            flex-shrink: 0;
+        }
+        .wfm-nlp-info-badge-neg {
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: rgba(255,71,87,0.22);
+            color: #ff4757;
+            flex-shrink: 0;
+        }
+        .wfm-nlp-info-prompt-preview {
+            flex-direction: column;
+            flex-shrink: 0;
+            border-top: 1px solid var(--border-color, #3a3a3a);
+            padding: 6px 8px;
+            gap: 3px;
+        }
+        .wfm-nlp-info-prompt-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--descrip-text, #888);
+        }
+        .wfm-nlp-info-prompt-textarea {
+            width: 100%;
+            height: 160px;
+            background: var(--comfy-input-bg, #1e1e1e);
+            border: 1px solid var(--border-color, #4e4e4e);
+            border-radius: 3px;
+            color: var(--input-text, #ddd);
+            font-size: 10px;
+            padding: 5px 7px;
+            box-sizing: border-box;
+            resize: none;
+            outline: none;
+            font-family: monospace;
+            line-height: 1.4;
+        }
+        .wfm-nlp-info-copy-btn {
+            align-self: flex-end;
+            margin-top: 4px;
+            padding: 3px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border-color, #555);
+            border-radius: 3px;
+            background: none;
+            color: var(--descrip-text, #aaa);
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .wfm-nlp-info-copy-btn:hover {
+            background: rgba(74,158,255,0.2);
+            color: #4a9eff;
+            border-color: #4a9eff;
+        }
+        .wfm-nlp-info-copy-btn--done {
+            background: rgba(46,213,115,0.2);
+            color: #2ed573;
+            border-color: #2ed573;
         }
         .wfm-nlp-search {
             padding: 8px;

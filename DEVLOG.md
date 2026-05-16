@@ -1,5 +1,46 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-16: v0.3.9 サイドパネル I タブ追加 / トップバーアイコン修正
+
+### 概要
+
+- ComfyUI サイドパネルのタブを W / N / P / M / **I** の 5 タブ構成に変更し、I タブ（Information / Metadata）を追加
+- トップバーアイコン（Workflow Studio / カメラ / Node Sets）が表示されない不具合を修正
+
+### 変更内容
+
+#### `web/comfyui/node_sets_menu.js`
+
+**タブラベル短縮（□スタイル）**
+
+- Workflows → **W**、Nodes → **N**、Prompts → **P**、Models → **M**
+- ホバー時に `title` 属性でフルネームを表示
+- CSS: 細ボーダー + アクティブ時に青ボーダーの□スタイル
+
+**I タブ（Information / Metadata）追加**
+
+- サブタブ: **model** / **lora** / **Prompts**
+- ファイルドロップエリア（常時表示、クリックでファイル選択も可）
+- ファイル情報行（ファイル名・サイズ・形式、常時表示）
+- model: Checkpoint / VAE / Diffusion Model / Text Encoder（LoRA 除く）
+- lora: LoRA 名 + strength_model / strength_clip 値
+- Prompts: POS / NEG バッジ付きリスト → クリックで全文プレビュー（height: 160px）+ Copy ボタン（1.2 秒「Copied!」表示）
+- メタデータ解析ロジックは `metadata-tab.js` から移植（関数名に `_` プレフィックス付き）
+- ドロップエリア min-height: 54px、プレビューエリア height: 160px
+
+#### `web/comfyui/top_menu_extension.js`
+
+**バグ修正: トップバーアイコン非表示**
+
+- **原因**: `applyButtonIcon()` 内の `if (button.querySelector("svg")) return` チェックにより、
+  新しい ComfyUI が Iconify で MDI クラス（`icon-[mdi--...]`）をインライン SVG に変換した際、
+  すでに SVG が存在すると判定されてカスタム SVG への置換がスキップされていた
+- **修正**: 早期リターンチェックを削除し、常に `innerHTML` を上書きするよう変更
+- MutationObserver ベースの監視を廃止し、lora-manager と同パターンの `requestAnimationFrame` リトライ方式に統一
+  - ボタン未発見時のみリトライ（発見後はリトライを停止）
+
+---
+
 ## 2026-05-16: v0.3.8 Metadata タブ: data9 対応 / プロンプト判別不能テキスト
 
 ### 概要

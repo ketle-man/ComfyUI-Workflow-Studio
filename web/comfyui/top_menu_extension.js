@@ -605,50 +605,33 @@ app.registerExtension({
         };
         injectStyles();
 
-        const applyButtonIcon = (button, className, getIconFn, extraStyles) => {
-            if (button.querySelector("svg")) return;
-            button.classList.add(className);
-            button.innerHTML = getIconFn();
-            button.style.borderRadius = "4px";
-            button.style.padding = "6px";
-            if (extraStyles) Object.assign(button.style, extraStyles);
-            const svg = button.querySelector("svg");
-            if (svg) {
-                svg.style.width = "20px";
-                svg.style.height = "20px";
-            }
-        };
-
         const buttonConfigs = [
             { tooltip: BUTTON_TOOLTIP, className: "wfm-top-menu-button", getIcon: getWfmIcon, styles: { backgroundColor: "var(--primary-bg)" } },
             { tooltip: SNAPSHOT_TOOLTIP, className: "wfm-snapshot-button", getIcon: getSnapshotIcon, styles: null },
             { tooltip: NODE_SETS_TOOLTIP, className: "wfm-node-sets-btn", getIcon: getNodeSetsIcon, styles: null },
         ];
 
-        const replaceAllIcons = () => {
+        const replaceButtonIcons = () => {
+            let foundAny = false;
             for (const cfg of buttonConfigs) {
                 document.querySelectorAll(`button[aria-label="${cfg.tooltip}"]`).forEach((btn) => {
-                    applyButtonIcon(btn, cfg.className, cfg.getIcon, cfg.styles);
+                    foundAny = true;
+                    btn.classList.add(cfg.className);
+                    btn.innerHTML = cfg.getIcon();
+                    btn.style.borderRadius = "4px";
+                    btn.style.padding = "6px";
+                    if (cfg.styles) Object.assign(btn.style, cfg.styles);
+                    const svg = btn.querySelector("svg");
+                    if (svg) {
+                        svg.style.width = "20px";
+                        svg.style.height = "20px";
+                    }
                 });
             }
-        };
-
-        const waitAndObserve = () => {
-            const firstBtn = document.querySelector(`button[aria-label="${BUTTON_TOOLTIP}"]`);
-            if (!firstBtn) {
-                requestAnimationFrame(waitAndObserve);
-                return;
-            }
-            replaceAllIcons();
-
-            const container = firstBtn.closest(".actionbar-container") || firstBtn.parentElement;
-            if (container) {
-                new MutationObserver(() => replaceAllIcons()).observe(container, {
-                    childList: true,
-                    subtree: true,
-                });
+            if (!foundAny) {
+                requestAnimationFrame(replaceButtonIcons);
             }
         };
-        requestAnimationFrame(waitAndObserve);
+        requestAnimationFrame(replaceButtonIcons);
     },
 });

@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.8-green)
+![Version](https://img.shields.io/badge/version-0.3.9-green)
 
 ## Screenshots
 
@@ -155,13 +155,18 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Enable / Disable models** — hide models from ComfyUI by renaming the file extension (`.disabled` suffix); toggle per card (⏸ button), per group (Enable All / Disable All), or filter by status (All / Enabled / Disabled)
 - **Multi-select & bulk operations** — enter selection mode to check multiple models; bulk action bar supports add/remove from groups and permanent file deletion (model file + preview images + sidecar files such as `.json` / `.info`)
 
-### Workflow Studio Library (ComfyUI Side Panel) (v0.2.5)
-- **Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
-- **Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs), ★ star shown for favorites in All view
+### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
+- **Tab layout (W / N / P / M / I)** — compact single-letter tabs with full name shown on hover
+- **W — Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
+- **N — Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs), ★ star shown for favorites in All view
   - **Category sub-tab** — dropdown to filter nodes by top-level category
   - **Package sub-tab** — dropdown to filter nodes by custom node package name
-- **Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs)
-- **Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
+- **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs)
+- **P — Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
+- **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON directly in the side panel to view its metadata without leaving the ComfyUI canvas
+  - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder extracted from the workflow
+  - **lora sub-tab** — LoRA names with `strength_model / strength_clip` values
+  - **Prompts sub-tab** — POS / NEG badge list; click any entry to view full text + Copy button
 - **Drag & drop workflows** — drag a workflow onto the canvas to load it
 - **Drag & drop nodes** — drag nodes/node sets onto the canvas to place them
 - **Drag & drop prompts** — drag a preset onto the canvas to create a WFS_PromptText node with positive/negative prompts
@@ -244,6 +249,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.9
+- **Side panel I tab** — new Information tab in the Workflow Studio Library side panel; drop a ComfyUI PNG/WebP/JSON directly in the panel to inspect models, LoRAs, and prompts without opening the Metadata tab; sub-tabs: model / lora / Prompts with full-text preview and Copy button
+- **Side panel tab redesign** — tabs shortened to single letters (W / N / P / M / I) with full name shown on hover
+- **Bug fix: top bar icons** — icons (Workflow Studio / camera / Node Sets) were invisible in newer ComfyUI versions because Iconify converted the MDI CSS class to an inline SVG before the custom SVG could be injected; fixed by removing the early-return guard and adopting the same simple `requestAnimationFrame` retry pattern used by lora-manager
 
 ### v0.3.8
 - **Metadata Tab: extended subgraph support** — added extraction for Flux.2 Dev fp8 (`SamplerCustomAdvanced`), Flux.2 Klein 4B Distilled (image edit), Ernie Image, Qwen-Image-Edit 2511 (`TextEncodeQwenImageEditPlus`), and WAN2.2 14B Animate (top-level CLIPTextEncode + subgraph KSampler)
