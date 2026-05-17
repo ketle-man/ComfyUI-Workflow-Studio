@@ -361,13 +361,19 @@ import { initWorkflowTab } from "./workflow-tab.js";
 import { initNodesTab } from "./nodes-tab.js";
 import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
-import { initSettingsTab, applyTheme, getSavedTheme } from "./settings-tab.js";
+import { initSettingsTab, applyTheme, getSavedTheme, applyTextareaFontSize } from "./settings-tab.js";
 import { initModelsTab } from "./models-tab.js";
 import { initGalleryTab } from "./gallery-tab.js";
 import { initMetadataTab } from "./metadata-tab.js";
 
 // Apply saved theme immediately to prevent flash of default theme
 applyTheme(getSavedTheme());
+
+// Apply saved textarea font size
+try {
+    const _s = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
+    if (_s.textareaFontSize) applyTextareaFontSize(_s.textareaFontSize);
+} catch {}
 
 document.addEventListener("DOMContentLoaded", () => {
     applyI18nToHtml();

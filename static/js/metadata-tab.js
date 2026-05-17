@@ -122,8 +122,9 @@ function extractVAEs(wf) {
 }
 function extractDiffusionModels(wf) {
     if (!wf || typeof wf !== "object") return [];
-    if (Array.isArray(wf.nodes)) return collectUnique(collectAllNodes(wf).filter(n => n.type === "UNETLoader").map(n => n.widgets_values?.[0]));
-    return collectUnique(Object.values(wf).filter(n => n?.class_type === "UNETLoader").map(n => n.inputs?.unet_name));
+    const UNET_TYPES = new Set(["UNETLoader", "UnetLoaderGGUF", "UNETLoaderGGUF"]);
+    if (Array.isArray(wf.nodes)) return collectUnique(collectAllNodes(wf).filter(n => UNET_TYPES.has(n.type)).map(n => n.widgets_values?.[0]));
+    return collectUnique(Object.values(wf).filter(n => UNET_TYPES.has(n?.class_type)).map(n => n.inputs?.unet_name));
 }
 function extractTextEncoders(wf) {
     if (!wf || typeof wf !== "object") return [];
@@ -133,6 +134,7 @@ function extractTextEncoders(wf) {
             if (n.type === "CLIPLoader") { if (n.widgets_values?.[0]) names.push(n.widgets_values[0]); }
             else if (n.type === "DualCLIPLoader") { [0,1].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
             else if (n.type === "TripleCLIPLoader") { [0,1,2].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
+            else if (n.type === "QuadrupleCLIPLoader") { [0,1,2,3].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
         }
     } else {
         for (const n of Object.values(wf)) {
@@ -141,6 +143,7 @@ function extractTextEncoders(wf) {
             if (ct === "CLIPLoader") { if (n.inputs?.clip_name) names.push(n.inputs.clip_name); }
             else if (ct === "DualCLIPLoader") { if (n.inputs?.clip_name1) names.push(n.inputs.clip_name1); if (n.inputs?.clip_name2) names.push(n.inputs.clip_name2); }
             else if (ct === "TripleCLIPLoader") { ["clip_name1","clip_name2","clip_name3"].forEach(k => { if (n.inputs?.[k]) names.push(n.inputs[k]); }); }
+            else if (ct === "QuadrupleCLIPLoader") { ["clip_name1","clip_name2","clip_name3","clip_name4"].forEach(k => { if (n.inputs?.[k]) names.push(n.inputs[k]); }); }
         }
     }
     return collectUnique(names);

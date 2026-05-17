@@ -314,6 +314,30 @@ function clearCustomOverrides() {
     if (fontEl) fontEl.remove();
 }
 
+const TEXTAREA_FONT_SIZE_DEFAULT = 13;
+const TEXTAREA_FONT_SIZE_STYLE_ID = "wfm-ta-font-size-style";
+const TEXTAREA_FONT_SIZE_TARGETS = [
+    "#wfm-prompt-pos-text",
+    "#wfm-prompt-neg-text",
+    "#wfm-ollama-input",
+    "#wfm-preset-pos",
+    "#wfm-preset-neg",
+    "#wfm-wc-prompt",
+    "#wfm-wc-editor-content",
+    "#wfm-meta-prompt-full",
+].join(",\n    ");
+
+export function applyTextareaFontSize(size) {
+    const px = Math.max(10, Math.min(28, parseInt(size) || TEXTAREA_FONT_SIZE_DEFAULT));
+    let el = document.getElementById(TEXTAREA_FONT_SIZE_STYLE_ID);
+    if (!el) {
+        el = document.createElement("style");
+        el.id = TEXTAREA_FONT_SIZE_STYLE_ID;
+        document.head.appendChild(el);
+    }
+    el.textContent = `${TEXTAREA_FONT_SIZE_TARGETS} { font-size: ${px}px !important; }`;
+}
+
 export function applyTheme(themeId) {
     if (themeId) {
         document.documentElement.setAttribute("data-theme", themeId);
@@ -481,6 +505,24 @@ export async function initSettingsTab() {
                 </select>
                 <small style="color:var(--wfm-warning);font-size:11px;display:block;margin-top:4px;">
                     ⚠ ${t("summaryLangNote")}
+                </small>
+            </div>
+        </details>
+
+        <!-- Text Size -->
+        <details class="wfm-settings-section" open>
+            <summary class="wfm-settings-summary">${t("textSizeLabel") || "Text Size"}</summary>
+            <div class="wfm-form-group">
+                <label style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>${t("textSizeTextarea") || "Prompt / Chat Textarea"}</span>
+                    <span id="wfm-ta-font-size-val" style="font-size:12px;color:var(--wfm-text-secondary);">${settings.textareaFontSize || TEXTAREA_FONT_SIZE_DEFAULT}px</span>
+                </label>
+                <input type="range" class="wfm-range" id="wfm-ta-font-size"
+                    min="10" max="28" step="1"
+                    value="${settings.textareaFontSize || TEXTAREA_FONT_SIZE_DEFAULT}"
+                    style="width:100%;margin-top:4px;">
+                <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-top:4px;">
+                    ${t("textSizeHint") || "Applies to: Generate UI prompts, AI Assistant chat, Preset prompts, Wildcard textarea, Metadata prompt preview"}
                 </small>
             </div>
         </details>
@@ -1032,8 +1074,17 @@ export async function initSettingsTab() {
         showToast(t("defaultWorkflowCleared"), "success");
     });
 
+    // --- Textarea font size slider ---
+    document.getElementById("wfm-ta-font-size")?.addEventListener("input", (e) => {
+        const px = parseInt(e.target.value);
+        const valEl = document.getElementById("wfm-ta-font-size-val");
+        if (valEl) valEl.textContent = `${px}px`;
+        applyTextareaFontSize(px);
+    });
+
     // Save (local settings)
     document.getElementById("wfm-settings-save")?.addEventListener("click", () => {
+        const taFontSize = parseInt(document.getElementById("wfm-ta-font-size")?.value) || TEXTAREA_FONT_SIZE_DEFAULT;
         const patch = {
             comfyuiUrl: document.getElementById("wfm-settings-comfyui-url")?.value.trim() || "",
             eagleUrl: document.getElementById("wfm-settings-eagle-url")?.value.trim() || "http://localhost:41595",
@@ -1041,6 +1092,7 @@ export async function initSettingsTab() {
             uiLang: getLang(),
             summaryLang: getSummaryLang(),
             theme: document.documentElement.getAttribute("data-theme") || "",
+            textareaFontSize: taFontSize,
         };
 
         saveLocalSettings(patch);

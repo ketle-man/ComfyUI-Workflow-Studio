@@ -1,5 +1,72 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-17: v0.3.11 Metadata タブ対応ノードタイプ拡張 / Settings テキストサイズ UI 追加
+
+### 概要
+
+- `metadata-tab.js`（Metadata タブ本体）に `UnetLoaderGGUF` / `UNETLoaderGGUF` / `QuadrupleCLIPLoader` 対応を追加
+  - `node_sets_menu.js` の I タブには v0.3.10 で追加済みだったが、Metadata タブには未反映だった
+- Settings タブに「Text Size」セクションを追加 — プロンプト・チャット系の全テキストエリアのフォントサイズを一括変更するスライダー
+
+### 変更内容
+
+#### `static/js/metadata-tab.js`
+
+**`extractDiffusionModels` 拡張**
+
+- `UNETLoader` のみ → `UNETLoader` / `UnetLoaderGGUF` / `UNETLoaderGGUF` に拡張（Set を使った判定に変更）
+- HiDream i1 Full GGUF など GGUF 形式の Diffusion Model が Metadata タブでも正しく読み取れるようになった
+
+**`extractTextEncoders` 拡張**
+
+- `QuadrupleCLIPLoader`（`clip_name1`〜`clip_name4`）を追加、LiteGraph 形式・API 形式の両方に対応
+- HiDream の 4-CLIP（clip_l / clip_g / t5xxl / llama_3.1）が全件表示されるようになった
+
+#### `static/js/settings-tab.js`
+
+**`applyTextareaFontSize(size)` 追加（export）**
+
+- `<style id="wfm-ta-font-size-style">` を `<head>` に注入
+- 対象セレクタ（対象を 8 箇所に一括適用）:
+
+  | 対象 | ID |
+  |---|---|
+  | Generate UI — Positive Prompt | `#wfm-prompt-pos-text` |
+  | Generate UI — Negative Prompt | `#wfm-prompt-neg-text` |
+  | Prompt タブ — AI Assistant チャット | `#wfm-ollama-input` |
+  | Prompt タブ — Preset Positive | `#wfm-preset-pos` |
+  | Prompt タブ — Preset Negative | `#wfm-preset-neg` |
+  | Prompt タブ — Wildcard プロンプト | `#wfm-wc-prompt` |
+  | Prompt タブ — Wildcard ファイルエディタ | `#wfm-wc-editor-content` |
+  | Metadata タブ — PROMPT 全文プレビュー | `#wfm-meta-prompt-full` |
+
+- 範囲: 10〜28px（clamp）、デフォルト 13px
+
+**Settings タブ HTML「Text Size」セクション追加**
+
+- Language Settings の下、Workflow Data Folder の上に新規 `<details>` セクション
+- `<input type="range">` スライダー (min=10, max=28, step=1) + px 値表示
+- スライダー操作でリアルタイム適用
+- 「Save Settings」ボタンで `textareaFontSize` を localStorage に保存
+
+#### `static/js/app.js`
+
+- `applyTextareaFontSize` をインポート
+- ページ読み込み直後（テーマ適用と同タイミング）に localStorage の保存値を読み込んで適用
+
+#### `templates/index.html`
+
+- `wfm-help-metadata-5`: 対応ローダーを明記（UNETLoader / UnetLoaderGGUF / UNETLoaderGGUF / CLIPLoader / DualCLIPLoader / TripleCLIPLoader / QuadrupleCLIPLoader）
+- `wfm-help-settings-11` 新規追加: Text Size スライダーの説明
+
+### 検証済みファイル
+
+| ファイル | Metadata タブでの検出内容 |
+|---|---|
+| `n-hidream_i1_full.png` | Diffusion Model: `hidream-i1-full-Q5_0.gguf`（UnetLoaderGGUF）、Text Encoder: 4 件（QuadrupleCLIPLoader）、VAE: 1 件 |
+
+---
+
 ## 2026-05-17: v0.3.10 Information タブ キャンバスドラッグ対応 / ノードタイプ拡張 / バグ修正
 
 ### 概要
