@@ -366,6 +366,33 @@ const placePromptNode = (posText, negText, promptName, pos) => {
 };
 
 // ============================================
+// CLIP Text Encode node placement
+// ============================================
+
+const placeClipTextEncodeNode = (text, pos) => {
+    const graph = app.graph;
+    if (!graph) return;
+    const node = LiteGraph.createNode("CLIPTextEncode");
+    if (!node) {
+        showToast("Node not found: CLIPTextEncode", "error");
+        return;
+    }
+    const canvas = app.canvas;
+    const centerPos = canvas
+        ? [-canvas.ds.offset[0] + canvas.canvas.width / 2 / canvas.ds.scale,
+           -canvas.ds.offset[1] + canvas.canvas.height / 2 / canvas.ds.scale]
+        : [100, 100];
+    node.pos = pos || centerPos;
+    graph.add(node);
+    if (node.widgets) {
+        const w = node.widgets.find(ww => ww.name === "text");
+        if (w) { w.value = text; if (w.callback) w.callback(text); }
+    }
+    app.canvas.setDirty(true, true);
+    showToast("Placed: CLIP Text Encode", "success");
+};
+
+// ============================================
 // Model node placement
 // ============================================
 
@@ -376,7 +403,7 @@ const MODEL_NODE_MAP = {
     vae:          { classType: "VAELoader",              widgetName: "vae_name" },
     controlnet:   { classType: "ControlNetLoader",       widgetName: "control_net_name" },
     unet:         { classType: "UNETLoader",             widgetName: "unet_name" },
-    textencoder:  { classType: "CLIPLoader",             widgetName: "clip_name1" },
+    textencoder:  { classType: "CLIPLoader",             widgetName: "clip_name" },
     hypernetwork: { classType: "HypernetworkLoader",     widgetName: "hypernetwork_name" },
     // embedding has no loader node — copy-only
 };
@@ -430,6 +457,34 @@ const placeModelNode = (modelName, modelType, pos) => {
 };
 
 // ============================================
+// Lora Loader (LoraManager) node placement
+// ============================================
+
+const placeLoraMgrNode = (loras, pos) => {
+    const graph = app.graph;
+    if (!graph) return;
+    const node = LiteGraph.createNode("Lora Loader (LoraManager)");
+    if (!node) {
+        showToast("Node not found: Lora Loader (LoraManager)", "error");
+        return;
+    }
+    const canvas = app.canvas;
+    const centerPos = canvas
+        ? [-canvas.ds.offset[0] + canvas.canvas.width / 2 / canvas.ds.scale,
+           -canvas.ds.offset[1] + canvas.canvas.height / 2 / canvas.ds.scale]
+        : [100, 100];
+    node.pos = pos || centerPos;
+    graph.add(node);
+    if (node.widgets) {
+        const loraList = loras.map(l => ({ name: l.name, strength: l.strength_model ?? 1.0, clipStrength: l.strength_clip ?? l.strength_model ?? 1.0, active: true }));
+        const w = node.widgets.find(ww => Array.isArray(ww.value) || ww.name === "loras");
+        if (w) { w.value = loraList; if (w.callback) w.callback(loraList); }
+    }
+    app.canvas.setDirty(true, true);
+    showToast(`Placed: Lora Loader (${loras.length} loras)`, "success");
+};
+
+// ============================================
 // Workflow canvas loading
 // ============================================
 
@@ -466,7 +521,9 @@ const installCanvasDropHandler = () => {
         if (e.dataTransfer.types.includes("application/x-wfm-node") ||
             e.dataTransfer.types.includes("application/x-wfm-workflow") ||
             e.dataTransfer.types.includes("application/x-wfm-prompt") ||
-            e.dataTransfer.types.includes("application/x-wfm-model")) {
+            e.dataTransfer.types.includes("application/x-wfm-model") ||
+            e.dataTransfer.types.includes("application/x-wfm-lora-multi") ||
+            e.dataTransfer.types.includes("application/x-wfm-clip-text")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
         }
@@ -480,6 +537,26 @@ const installCanvasDropHandler = () => {
             const { modelName, modelType } = JSON.parse(modelRaw);
             const pos = getCanvasDropPos(e);
             placeModelNode(modelName, modelType, pos);
+            return;
+        }
+
+        // Handle Lora Loader (LoraManager) multi-lora drop
+        const loraMultiRaw = e.dataTransfer.getData("application/x-wfm-lora-multi");
+        if (loraMultiRaw) {
+            e.preventDefault();
+            const { loras } = JSON.parse(loraMultiRaw);
+            const pos = getCanvasDropPos(e);
+            placeLoraMgrNode(loras, pos);
+            return;
+        }
+
+        // Handle CLIP Text Encode drop
+        const clipTextRaw = e.dataTransfer.getData("application/x-wfm-clip-text");
+        if (clipTextRaw) {
+            e.preventDefault();
+            const { text } = JSON.parse(clipTextRaw);
+            const pos = getCanvasDropPos(e);
+            placeClipTextEncodeNode(text, pos);
             return;
         }
 
@@ -2079,8 +2156,9 @@ function _extractVAEs(wf) {
 }
 function _extractDiffusionModels(wf) {
     if (!wf || typeof wf !== "object") return [];
-    if (Array.isArray(wf.nodes)) return _collectUnique(_collectAllNodes(wf).filter(n => n.type === "UNETLoader").map(n => n.widgets_values?.[0]));
-    return _collectUnique(Object.values(wf).filter(n => n?.class_type === "UNETLoader").map(n => n.inputs?.unet_name));
+    const _UNET_TYPES = new Set(["UNETLoader", "UnetLoaderGGUF", "UNETLoaderGGUF"]);
+    if (Array.isArray(wf.nodes)) return _collectUnique(_collectAllNodes(wf).filter(n => _UNET_TYPES.has(n.type)).map(n => n.widgets_values?.[0]));
+    return _collectUnique(Object.values(wf).filter(n => _UNET_TYPES.has(n?.class_type)).map(n => n.inputs?.unet_name));
 }
 function _extractTextEncoders(wf) {
     if (!wf || typeof wf !== "object") return [];
@@ -2090,6 +2168,7 @@ function _extractTextEncoders(wf) {
             if (n.type === "CLIPLoader") { if (n.widgets_values?.[0]) names.push(n.widgets_values[0]); }
             else if (n.type === "DualCLIPLoader") { [0,1].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
             else if (n.type === "TripleCLIPLoader") { [0,1,2].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
+            else if (n.type === "QuadrupleCLIPLoader") { [0,1,2,3].forEach(i => { if (n.widgets_values?.[i]) names.push(n.widgets_values[i]); }); }
         }
     } else {
         for (const n of Object.values(wf)) {
@@ -2098,6 +2177,7 @@ function _extractTextEncoders(wf) {
             if (ct === "CLIPLoader") { if (n.inputs?.clip_name) names.push(n.inputs.clip_name); }
             else if (ct === "DualCLIPLoader") { if (n.inputs?.clip_name1) names.push(n.inputs.clip_name1); if (n.inputs?.clip_name2) names.push(n.inputs.clip_name2); }
             else if (ct === "TripleCLIPLoader") { ["clip_name1","clip_name2","clip_name3"].forEach(k => { if (n.inputs?.[k]) names.push(n.inputs[k]); }); }
+            else if (ct === "QuadrupleCLIPLoader") { ["clip_name1","clip_name2","clip_name3","clip_name4"].forEach(k => { if (n.inputs?.[k]) names.push(n.inputs[k]); }); }
         }
     }
     return _collectUnique(names);
@@ -2480,13 +2560,13 @@ const renderInfoModels = (container, meta) => {
         return;
     }
     const sections = [
-        { label: "Checkpoint",     items: meta.checkpoints },
-        { label: "VAE",            items: meta.vaes },
-        { label: "Diffusion Model", items: meta.diffusionModels },
-        { label: "Text Encoder",   items: meta.textEncoders },
+        { label: "Checkpoint",     items: meta.checkpoints,     modelType: "checkpoint" },
+        { label: "VAE",            items: meta.vaes,            modelType: "vae" },
+        { label: "Diffusion Model", items: meta.diffusionModels, modelType: "unet" },
+        { label: "Text Encoder",   items: meta.textEncoders,    modelType: "textencoder" },
     ];
     let hasAny = false;
-    for (const { label, items } of sections) {
+    for (const { label, items, modelType } of sections) {
         if (!items || items.length === 0) continue;
         hasAny = true;
         const sec = document.createElement("div");
@@ -2494,9 +2574,17 @@ const renderInfoModels = (container, meta) => {
         sec.innerHTML = `<div class="wfm-nlp-info-section-title">${esc(label)}</div>`;
         for (const name of items) {
             const item = document.createElement("div");
-            item.className = "wfm-nlp-info-item";
-            item.title = name;
+            item.className = "wfm-nlp-info-item wfm-nlp-info-item--draggable";
+            item.draggable = true;
+            item.title = `${name}\nDrag to canvas to place node`;
             item.innerHTML = `<span class="wfm-nlp-info-item-name">${esc(name)}</span>`;
+            item.addEventListener("dragstart", (e) => {
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData("application/x-wfm-model", JSON.stringify({ modelName: name, modelType }));
+                item.classList.add("dragging");
+            });
+            item.addEventListener("dragend", () => item.classList.remove("dragging"));
+            item.addEventListener("dblclick", () => placeModelNode(name, modelType));
             sec.appendChild(item);
         }
         container.appendChild(sec);
@@ -2512,12 +2600,42 @@ const renderInfoLoras = (container, meta) => {
     }
     for (const lora of meta.loras) {
         const item = document.createElement("div");
-        item.className = "wfm-nlp-info-item";
-        item.title = lora.name;
+        item.className = "wfm-nlp-info-item wfm-nlp-info-item--draggable";
+        item.draggable = true;
+        item.title = `${lora.name}\nDrag to canvas to place LoRA node`;
         const sm = typeof lora.strength_model === "number" ? lora.strength_model.toFixed(2) : "—";
         const sc = typeof lora.strength_clip  === "number" ? lora.strength_clip.toFixed(2)  : "—";
         item.innerHTML = `<span class="wfm-nlp-info-item-name">${esc(lora.name)}</span><span class="wfm-nlp-info-item-badge">${sm}/${sc}</span>`;
+        item.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "copy";
+            e.dataTransfer.setData("application/x-wfm-model", JSON.stringify({ modelName: lora.name, modelType: "lora" }));
+            item.classList.add("dragging");
+        });
+        item.addEventListener("dragend", () => item.classList.remove("dragging"));
+        item.addEventListener("dblclick", () => placeModelNode(lora.name, "lora"));
         container.appendChild(item);
+    }
+
+    if (meta.loras.length >= 1) {
+        const sep = document.createElement("div");
+        sep.className = "wfm-nlp-info-section-title";
+        sep.style.marginTop = "8px";
+        sep.textContent = "Multiple LORA";
+        container.appendChild(sep);
+
+        const multiItem = document.createElement("div");
+        multiItem.className = "wfm-nlp-info-item wfm-nlp-info-item--draggable";
+        multiItem.draggable = true;
+        multiItem.title = `Drag to canvas to place Lora Loader (LoraManager) with all ${meta.loras.length} loras`;
+        multiItem.innerHTML = `<span class="wfm-nlp-info-item-name">All ${meta.loras.length} LoRAs</span><span class="wfm-nlp-info-item-badge">LoraManager</span>`;
+        multiItem.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "copy";
+            e.dataTransfer.setData("application/x-wfm-lora-multi", JSON.stringify({ loras: meta.loras }));
+            multiItem.classList.add("dragging");
+        });
+        multiItem.addEventListener("dragend", () => multiItem.classList.remove("dragging"));
+        multiItem.addEventListener("dblclick", () => placeLoraMgrNode(meta.loras));
+        container.appendChild(multiItem);
     }
 };
 
@@ -2541,6 +2659,8 @@ const renderInfoPrompts = (container, meta) => {
     for (const { type, text } of allPrompts) {
         const item = document.createElement("div");
         item.className = "wfm-nlp-info-prompt-item";
+        item.draggable = true;
+        item.title = `Drag to canvas to place CLIP Text Encode node`;
         const snippet = text.length > 55 ? text.slice(0, 55) + "…" : text;
         const badge = type === "positive"
             ? `<span class="wfm-nlp-info-badge-pos">POS</span>`
@@ -2554,6 +2674,13 @@ const renderInfoPrompts = (container, meta) => {
             if (promptFull) promptFull.value = text;
             if (promptFullLabel) promptFullLabel.textContent = type === "positive" ? "Positive" : type === "negative" ? "Negative" : "Text";
         });
+        item.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "copy";
+            e.dataTransfer.setData("application/x-wfm-clip-text", JSON.stringify({ text }));
+            item.classList.add("dragging");
+        });
+        item.addEventListener("dragend", () => item.classList.remove("dragging"));
+        item.addEventListener("dblclick", () => placeClipTextEncodeNode(text));
         container.appendChild(item);
     }
     const first = container.querySelector(".wfm-nlp-info-prompt-item");
@@ -2794,13 +2921,13 @@ const injectStyles = () => {
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 54px;
+            height: 110px;
+            flex-shrink: 0;
             border: 2px dashed var(--border-color, #4e4e4e);
             border-radius: 6px;
             margin: 8px 8px 0;
             cursor: pointer;
             overflow: hidden;
-            flex-shrink: 0;
             transition: border-color 0.15s;
             position: relative;
         }
@@ -2844,6 +2971,19 @@ const injectStyles = () => {
             justify-content: space-between;
             gap: 6px;
         }
+        .wfm-nlp-info-item--draggable {
+            cursor: grab;
+            transition: background 0.12s;
+            user-select: none;
+        }
+        .wfm-nlp-info-item--draggable:hover {
+            background: var(--comfy-input-bg, #333);
+        }
+        .wfm-nlp-info-item--draggable.dragging,
+        .wfm-nlp-info-prompt-item.dragging {
+            opacity: 0.5;
+            background: var(--comfy-input-bg, #333);
+        }
         .wfm-nlp-info-item-name {
             flex: 1;
             overflow: hidden;
@@ -2867,11 +3007,12 @@ const injectStyles = () => {
             padding: 5px 10px;
             font-size: 11px;
             border-bottom: 1px solid var(--border-color, #3a3a3a);
-            cursor: pointer;
+            cursor: grab;
             display: flex;
             align-items: center;
             gap: 5px;
             transition: background 0.12s;
+            user-select: none;
         }
         .wfm-nlp-info-prompt-item:hover {
             background: var(--comfy-input-bg, #333);

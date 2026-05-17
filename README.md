@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.9-green)
+![Version](https://img.shields.io/badge/version-0.3.10-green)
 
 ## Screenshots
 
@@ -163,10 +163,10 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
   - **Package sub-tab** — dropdown to filter nodes by custom node package name
 - **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs)
 - **P — Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
-- **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON directly in the side panel to view its metadata without leaving the ComfyUI canvas
-  - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder extracted from the workflow
-  - **lora sub-tab** — LoRA names with `strength_model / strength_clip` values
-  - **Prompts sub-tab** — POS / NEG badge list; click any entry to view full text + Copy button
+- **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON in the side panel to view its metadata; supports `UnetLoaderGGUF` and `QuadrupleCLIPLoader` node types; preview area fixed at 110px
+  - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder; drag items to canvas to place the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`); double-click also places at canvas center
+  - **lora sub-tab** — LoRA names with `strength_model / strength_clip` values; drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (appears for 1+ LoRAs) drags all LoRAs into a single `Lora Loader (LoraManager)` node
+  - **Prompts sub-tab** — POS / NEG badge list; drag a prompt to place `CLIPTextEncode` with text pre-filled; click any entry to view full text + Copy button
 - **Drag & drop workflows** — drag a workflow onto the canvas to load it
 - **Drag & drop nodes** — drag nodes/node sets onto the canvas to place them
 - **Drag & drop prompts** — drag a preset onto the canvas to create a WFS_PromptText node with positive/negative prompts
@@ -249,6 +249,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.10
+- **Information tab — drag to canvas** — model, lora, and Prompts sub-tabs in the side panel I tab now support drag & drop onto the ComfyUI canvas; double-click also places nodes at canvas center
+  - model sub-tab: each item places the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`)
+  - lora sub-tab: drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (shown for 1+ LoRAs) places all LoRAs in a single `Lora Loader (LoraManager)` node
+  - Prompts sub-tab: drag a prompt to place `CLIPTextEncode` with the full text pre-filled
+- **Extended node type support** — `UnetLoaderGGUF` / `UNETLoaderGGUF` now detected as Diffusion Model; `QuadrupleCLIPLoader` (HiDream and similar 4-CLIP workflows) now detected as Text Encoder
+- **Bug fix: CLIPLoader widget name** — `textencoder` type in `MODEL_NODE_MAP` was incorrectly using `clip_name1` (DualCLIPLoader's widget) instead of `clip_name`; Text Encoder models now drop with the correct filename
+- **Preview area fixed height** — Information tab drop zone fixed at 110px so model/prompt lists are no longer compressed when a large image is loaded
 
 ### v0.3.9
 - **Side panel I tab** — new Information tab in the Workflow Studio Library side panel; drop a ComfyUI PNG/WebP/JSON directly in the panel to inspect models, LoRAs, and prompts without opening the Metadata tab; sub-tabs: model / lora / Prompts with full-text preview and Copy button

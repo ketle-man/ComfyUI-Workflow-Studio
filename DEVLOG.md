@@ -1,5 +1,84 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-17: v0.3.10 Information タブ キャンバスドラッグ対応 / ノードタイプ拡張 / バグ修正
+
+### 概要
+
+- サイドパネル I タブ（model / lora / Prompts）からキャンバスへのドラッグ＆ドロップでノードを配置できるようにした
+- Multiple LORA セクションの追加（全 LoRA を Lora Loader (LoraManager) に一括配置）
+- `UnetLoaderGGUF` / `QuadrupleCLIPLoader` 対応（HiDream 等の GGUF / 4-CLIP ワークフロー）
+- `CLIPLoader` のウィジェット名誤りを修正
+- プレビューエリアの高さを固定し、モデル/プロンプトリストが潰れる問題を修正
+
+### 変更内容
+
+#### `web/comfyui/node_sets_menu.js`
+
+**キャンバスドラッグ対応（新規）**
+
+- `placeClipTextEncodeNode(text, pos)` 追加 — `CLIPTextEncode` ノードをテキスト入力済みで配置
+- `placeLoraMgrNode(loras, pos)` 追加 — `Lora Loader (LoraManager)` ノードを全 LoRA データ付きで配置
+- キャンバスドロップハンドラに新 MIME タイプを追加:
+  - `application/x-wfm-lora-multi` → `placeLoraMgrNode`
+  - `application/x-wfm-clip-text` → `placeClipTextEncodeNode`
+
+**`renderInfoModels` 更新**
+
+- 各セクションに `modelType`（`checkpoint` / `vae` / `unet` / `textencoder`）を追加
+- アイテムを `draggable = true` に設定、`dragstart` で `application/x-wfm-model` を送信
+- ダブルクリックで `placeModelNode` 呼び出し
+
+**`renderInfoLoras` 更新**
+
+- 各 LoRA アイテムを `draggable = true` に設定、`dragstart` で `application/x-wfm-model`（type: `"lora"`）を送信
+- ダブルクリックで `placeModelNode` 呼び出し
+- **Multiple LORA セクション追加** — LoRA が 1 件以上あれば下部に表示
+  - `application/x-wfm-lora-multi` で全 LoRA データを転送
+  - ダブルクリックで `placeLoraMgrNode` 呼び出し
+
+**`renderInfoPrompts` 更新**
+
+- 各プロンプトアイテムを `draggable = true` に設定、`dragstart` で `application/x-wfm-clip-text` を送信
+- ダブルクリックで `placeClipTextEncodeNode` 呼び出し
+
+**`_extractDiffusionModels` 更新**
+
+- `UNETLoader` のみ → `UNETLoader` / `UnetLoaderGGUF` / `UNETLoaderGGUF` に拡張（GGUF 形式対応）
+
+**`_extractTextEncoders` 更新**
+
+- `QuadrupleCLIPLoader`（`clip_name1`〜`clip_name4`）を追加（HiDream 等 4-CLIP モデル対応）
+- LiteGraph 形式・API 形式の両方に対応
+
+**バグ修正: `MODEL_NODE_MAP` の `textencoder` ウィジェット名**
+
+- `clip_name1`（DualCLIPLoader のウィジェット名）→ `clip_name`（CLIPLoader の正しいウィジェット名）に修正
+- これにより Text Encoder ドラッグ時に正しいモデルファイル名が設定される
+
+**プレビューエリア高さ固定**
+
+- `.wfm-nlp-info-drop` を `min-height: 54px`（可変）→ `height: 110px`（固定）に変更
+- 大きな画像ロード時にモデル/プロンプトリストが圧迫される問題を解消
+
+**CSS 追加**
+
+- `.wfm-nlp-info-item--draggable` — `cursor: grab`、ホバー背景、ドラッグ中 `opacity: 0.5`
+- `.wfm-nlp-info-prompt-item` — `cursor: pointer` → `cursor: grab` に変更、`user-select: none` 追加
+
+**ヘルプ更新**
+
+- `index.html`: `wfm-help-sidepanel-13` 更新、`wfm-help-sidepanel-14` / `15` 新規追加
+- `app.js`: i18n マッピングに `14` / `15` 追加
+- `i18n.js`: EN / JA / ZH 3 言語すべてに `helpSidepanel13` 更新と `helpSidepanel14` / `15` 追加
+
+### 対応確認済みワークフロー
+
+| ファイル | 検出内容 |
+|---|---|
+| `non-hidream_i1_full.png` | Diffusion Model: `hidream-i1-full-Q5_0.gguf`（UnetLoaderGGUF）、Text Encoder: 4 件（QuadrupleCLIPLoader）、VAE: 1 件 |
+
+---
+
 ## 2026-05-16: v0.3.9 サイドパネル I タブ追加 / トップバーアイコン修正
 
 ### 概要
