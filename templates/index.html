@@ -517,8 +517,16 @@
                     <span class="wfm-gen-rawjson-label">Raw JSON</span>
                     <button id="wfm-gen-apply-raw-btn" class="wfm-btn wfm-btn-sm">Apply</button>
                 </div>
+                <div class="wfm-rawjson-search">
+                    <input type="text" id="wfm-gen-raw-search" class="wfm-rawjson-search-input" placeholder="Search...">
+                    <span id="wfm-gen-raw-search-count" class="wfm-rawjson-search-count"></span>
+                    <button id="wfm-gen-raw-search-prev" class="wfm-rawjson-search-btn" title="Previous match">↑</button>
+                    <button id="wfm-gen-raw-search-next" class="wfm-rawjson-search-btn" title="Next match">↓</button>
+                    <button id="wfm-gen-raw-search-clear" class="wfm-rawjson-search-btn wfm-rawjson-search-clear" title="Clear search">✕</button>
+                </div>
                 <div class="wfm-json-container wfm-gen-rawjson-editor">
                     <pre id="wfm-gen-raw-json-highlight" class="wfm-json-highlight"></pre>
+                    <pre id="wfm-gen-raw-json-search-overlay" class="wfm-json-highlight wfm-json-search-overlay"></pre>
                     <textarea id="wfm-gen-raw-json" class="wfm-json-editor" spellcheck="false" placeholder="Paste workflow JSON here..."></textarea>
                 </div>
             </div>

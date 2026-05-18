@@ -677,6 +677,69 @@ body {
     height: auto !important;
 }
 
+/* RAW JSON search bar */
+.wfm-rawjson-search {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--wfm-bg-secondary);
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-rawjson-search-input {
+    flex: 1;
+    height: 22px;
+    padding: 0 6px;
+    background: var(--wfm-bg);
+    border: 1px solid var(--wfm-border);
+    border-radius: 3px;
+    color: var(--wfm-text);
+    font-size: 12px;
+    outline: none;
+    min-width: 0;
+}
+
+.wfm-rawjson-search-input:focus {
+    border-color: var(--wfm-accent);
+}
+
+.wfm-rawjson-search-count {
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    white-space: nowrap;
+    min-width: 56px;
+    text-align: center;
+}
+
+.wfm-rawjson-search-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--wfm-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.wfm-rawjson-search-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--wfm-border);
+    color: var(--wfm-text);
+}
+
+.wfm-rawjson-search-clear {
+    font-size: 14px;
+}
+
 .wfm-gen-col-title {
     font-size: 12px;
     font-weight: 600;
@@ -1334,8 +1397,27 @@ body {
     pointer-events: none;
 }
 
-.wfm-json-editor {
+/* Search match overlay: transparent text, mark backgrounds only */
+.wfm-json-search-overlay {
     z-index: 2;
+    color: transparent !important;
+}
+
+.wfm-json-search-overlay mark.wfm-search-match {
+    background: rgba(234, 201, 70, 0.35);
+    color: transparent;
+    border-radius: 2px;
+}
+
+.wfm-json-search-overlay mark.wfm-search-current {
+    background: rgba(255, 150, 0, 0.65);
+    color: transparent;
+    border-radius: 2px;
+    outline: 1px solid rgba(255, 150, 0, 0.9);
+}
+
+.wfm-json-editor {
+    z-index: 3;
     color: transparent;
     caret-color: #ffffff;
     outline: none;

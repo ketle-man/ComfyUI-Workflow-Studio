@@ -731,14 +731,119 @@ export async function initGenerateTab() {
         }
     });
 
-    // Raw JSON highlight sync on input/scroll
+    // Raw JSON highlight sync + search
     {
         const editor = document.getElementById("wfm-gen-raw-json");
         const highlight = document.getElementById("wfm-gen-raw-json-highlight");
-        if (editor && highlight) {
-            editor.addEventListener("input", () => syncJsonHighlight(highlight, editor.value));
-            editor.addEventListener("scroll", () => syncScroll(editor, highlight));
+        const searchOverlay = document.getElementById("wfm-gen-raw-json-search-overlay");
+        const searchInput = document.getElementById("wfm-gen-raw-search");
+        const searchCount = document.getElementById("wfm-gen-raw-search-count");
+        const searchPrev = document.getElementById("wfm-gen-raw-search-prev");
+        const searchNext = document.getElementById("wfm-gen-raw-search-next");
+        const searchClear = document.getElementById("wfm-gen-raw-search-clear");
+
+        let currentMatchIndex = 0;
+        let matchPositions = [];
+
+        function updateSearchOverlay() {
+            if (!editor || !searchOverlay || !searchInput) return;
+            const term = searchInput.value;
+            if (!term) {
+                searchOverlay.innerHTML = "";
+                if (searchCount) { searchCount.textContent = ""; searchCount.style.color = ""; }
+                matchPositions = [];
+                return;
+            }
+
+            const text = editor.value;
+            const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const regex = new RegExp(escapedTerm, "gi");
+
+            matchPositions = [];
+            let m;
+            while ((m = regex.exec(text)) !== null) matchPositions.push(m.index);
+
+            if (matchPositions.length === 0) {
+                searchOverlay.innerHTML = "";
+                if (searchCount) { searchCount.textContent = "No results"; searchCount.style.color = "#e06c75"; }
+                return;
+            }
+
+            if (searchCount) searchCount.style.color = "";
+            if (currentMatchIndex >= matchPositions.length) currentMatchIndex = 0;
+            if (searchCount) searchCount.textContent = `${currentMatchIndex + 1}/${matchPositions.length}`;
+
+            const escapedHtml = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            let matchIdx = 0;
+            const html = escapedHtml.replace(new RegExp(escapedTerm, "gi"), (match) => {
+                const cls = matchIdx === currentMatchIndex ? "wfm-search-current" : "wfm-search-match";
+                matchIdx++;
+                return `<mark class="${cls}">${match}</mark>`;
+            });
+            searchOverlay.innerHTML = html + "\n";
+
+            // Scroll editor to current match
+            const pos = matchPositions[currentMatchIndex];
+            editor.focus();
+            editor.setSelectionRange(pos, pos + term.length);
+            const lineNum = (text.slice(0, pos).match(/\n/g) || []).length;
+            const lineH = parseFloat(getComputedStyle(editor).lineHeight) || 18;
+            editor.scrollTop = Math.max(0, lineH * lineNum - editor.clientHeight / 2);
+            searchOverlay.scrollTop = editor.scrollTop;
+            searchOverlay.scrollLeft = editor.scrollLeft;
+            if (highlight) highlight.scrollTop = editor.scrollTop;
         }
+
+        if (editor && highlight) {
+            editor.addEventListener("input", () => {
+                syncJsonHighlight(highlight, editor.value);
+                if (searchInput?.value) updateSearchOverlay();
+            });
+            editor.addEventListener("scroll", () => {
+                syncScroll(editor, highlight);
+                if (searchOverlay) {
+                    searchOverlay.scrollTop = editor.scrollTop;
+                    searchOverlay.scrollLeft = editor.scrollLeft;
+                }
+            });
+        }
+
+        searchInput?.addEventListener("input", () => { currentMatchIndex = 0; updateSearchOverlay(); });
+
+        searchNext?.addEventListener("click", () => {
+            if (!matchPositions.length) return;
+            currentMatchIndex = (currentMatchIndex + 1) % matchPositions.length;
+            updateSearchOverlay();
+        });
+
+        searchPrev?.addEventListener("click", () => {
+            if (!matchPositions.length) return;
+            currentMatchIndex = (currentMatchIndex - 1 + matchPositions.length) % matchPositions.length;
+            updateSearchOverlay();
+        });
+
+        function clearSearch() {
+            if (searchInput) searchInput.value = "";
+            currentMatchIndex = 0;
+            matchPositions = [];
+            if (searchOverlay) searchOverlay.innerHTML = "";
+            if (searchCount) { searchCount.textContent = ""; searchCount.style.color = ""; }
+        }
+
+        searchClear?.addEventListener("click", clearSearch);
+
+        searchInput?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                if (!matchPositions.length) return;
+                currentMatchIndex = e.shiftKey
+                    ? (currentMatchIndex - 1 + matchPositions.length) % matchPositions.length
+                    : (currentMatchIndex + 1) % matchPositions.length;
+                updateSearchOverlay();
+                e.preventDefault();
+            } else if (e.key === "Escape") {
+                clearSearch();
+            }
+        });
     }
 
     // Check for workflow loaded from Workflow tab (via sessionStorage)

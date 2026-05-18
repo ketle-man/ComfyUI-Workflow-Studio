@@ -1,5 +1,100 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-18: v0.3.12 リリース — README スクリーンショット刷新 / workflow_analyzer 拡張
+
+### 概要
+
+- README Screenshots を旧タブ別画像（12枚）から機能特徴別の新画像（8枚）に刷新
+- `workflow_analyzer.py` に CLIPLoader type フィールド対応・新モデル種別検出を追加（NewBie / Ovis / HiDream / Wan / Cosmos / Lumina 等）
+
+### 変更内容
+
+#### `README.md`
+
+- バージョンバッジを `0.3.12` に更新
+- Screenshots セクションを全面刷新
+  - 旧: `docs/screenshot_*.png` 参照の 6 テーブル（タブ別 12 枚）
+  - 新: `docs/1_workflowtab.png`〜`docs/8_Customize.png` の機能特徴別 8 枚を 2 カラムグリッドで表示
+  - キャプションはファイル名のプレフィックスを除いて整形（例: `1_workflowtab` → **Workflow Tab**）
+- `v0.3.12` changelog エントリを新規追加（RAW JSON 検索 + workflow_analyzer 拡張）
+
+#### `docs/`
+
+- 旧スクリーンショット 11 枚（`screenshot_*.png`）を削除
+- 新スクリーンショット 8 枚（`1_workflowtab.png`〜`8_Customize.png`）を追加
+
+#### `py/services/workflow_analyzer.py`
+
+**`_CLIP_TYPE_TO_MODEL` 追加**
+
+- CLIPLoader の type 文字列（`"flux"`, `"hidream_i"`, `"wan"`, `"cosmos"` 等）→ モデル種別名のマッピング辞書
+
+**`_clip_type_from_ui_node(node)` 追加**
+
+- UI フォーマットノードの `widgets_values` から CLIPLoader / DualCLIPLoader / TripleCLIPLoader の type 文字列を取得
+
+**`_collect_all_ui_nodes(workflow_data)` 追加**
+
+- `nodes[]` だけでなく `definitions.subgraphs[].nodes[]` も走査するジェネレータ
+- サブグラフ内のローダーノードも model_type 検出の対象になった
+
+**`_detect_model_type_from_name(mn_base, model_types)` 追加**
+
+- モデルファイル名から種別を判定するヘルパー関数に切り出し（従来はインライン記述）
+- 追加対応: NewBie / Ovis / HiDream / Wan（`wan-N` / `wan-video` パターン）
+
+**`analyze_workflow()` 改修**
+
+- ファイル名検出に NewBie / Ovis / HiDream / Wan を追加
+- `UnetLoaderGGUF` 等を含む `UnetLoader` 系を一括マッチ (`"UnetLoader" in ntype`)
+- CLIPLoader 系ノードで `clip_type` → `_CLIP_TYPE_TO_MODEL` → モデル種別を検出
+- `_model_name_from_api_node` に `clip_name1` / `clip_name` を追加（CLIPLoader の API フォーマット対応）
+- node_iter のタプルに `clip_type` を追加（`(ntype, title, mn, clip_type)`）
+- タイトル検出に HiDream / Ovis / NewBie を追加
+
+---
+
+## 2026-05-17: RAW JSON パネルに検索機能を追加
+
+### 概要
+
+生成 UI タブの RAW JSON パネルに VSCode 風の検索バーを追加。常時表示で、マッチ間ナビゲーションとクリアボタンを備える。
+
+### 変更内容
+
+#### `templates/index.html`
+
+- `#wfm-gen-rawjson-widget` 内にヘッダーとエディターの間で `.wfm-rawjson-search` バーを追加
+  - 検索入力 (`#wfm-gen-raw-search`)
+  - マッチ数表示 (`#wfm-gen-raw-search-count`、例: `3/12`)
+  - 前へ ↑ / 次へ ↓ ボタン
+  - ✕ クリアボタン
+- JSON コンテナ内に検索ハイライト専用オーバーレイ `<pre id="wfm-gen-raw-json-search-overlay">` を追加（シンタックスハイライト層と textarea 層の間）
+
+#### `static/css/main.css`
+
+- `.wfm-rawjson-search` — 検索バー全体のレイアウト
+- `.wfm-rawjson-search-input` — 検索入力フィールド（フォーカス時 accent カラーのボーダー）
+- `.wfm-rawjson-search-count` — マッチ数表示（min-width: 56px、中央揃え）
+- `.wfm-rawjson-search-btn` / `.wfm-rawjson-search-clear` — ナビ・クリアボタン
+- `.wfm-json-search-overlay` — 文字色を透明にし `<mark>` の背景のみを表示するオーバーレイ
+  - `.wfm-search-match` — 通常マッチ: 黄色半透明
+  - `.wfm-search-current` — 現在マッチ: オレンジ強調 + アウトライン
+- `.wfm-json-editor` の z-index を 2 → 3 に更新（オーバーレイが z-index: 2 を占有するため）
+
+#### `static/js/generate-tab.js`
+
+既存の「Raw JSON highlight sync on input/scroll」ブロックを拡張:
+
+- `updateSearchOverlay()` — 検索語でテキストを走査し `matchPositions[]` を構築、オーバーレイ HTML を生成
+  - マッチなし時: カウント欄を赤字で "No results" 表示
+  - 現在マッチへ自動スクロール + テキストエリアのカーソルをマッチ位置に移動
+- スクロール同期: エディター scroll イベントでオーバーレイの scrollTop/Left を追従
+- エディター入力時: シンタックスハイライト更新と並行して検索オーバーレイも更新
+- キーボード: Enter（次へ）/ Shift+Enter（前へ）/ Escape（クリア）対応
+
+---
+
 ## 2026-05-17: v0.3.11 Metadata タブ対応ノードタイプ拡張 / Settings テキストサイズ UI 追加
 
 ### 概要

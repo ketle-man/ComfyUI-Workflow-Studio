@@ -5,33 +5,25 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.11-green)
+![Version](https://img.shields.io/badge/version-0.3.12-green)
 
 ## Screenshots
 
-| Workflow Tab | GenerateUI Tab |
+| Workflow Tab | Models Tab |
 |:---:|:---:|
-| ![Workflow](docs/screenshot_workflow.png) | ![GenerateUI](docs/screenshot_generate.png) |
+| ![Workflow Tab](docs/1_workflowtab.png) | ![Models Tab](docs/2_modelstab.png) |
 
-| Prompt Tab | Metadata Tab |
+| Prompt Input Assistance | Gen UI Feeder |
 |:---:|:---:|
-| ![Prompt](docs/screenshot_prompt.png) | ![Metadata](docs/screenshot_metadata.png) |
+| ![Prompt Input Assistance](docs/3_PromptInputAssistance.png) | ![Gen UI Feeder](docs/4_GenUI_feeder.png) |
 
-| Settings Tab | Help & Support Tab |
+| Top Bar | WS Library |
 |:---:|:---:|
-| ![Settings](docs/screenshot_settings.png) | ![Help](docs/screenshot_help.png) |
+| ![Top Bar](docs/5_topbar.png) | ![WS Library](docs/6_ws_library.png) |
 
-| Nodes Tab | Models Tab |
+| Library Information | Customize |
 |:---:|:---:|
-| ![Nodes](docs/screenshot_nodes.png) | ![Models](docs/screenshot_models.png) |
-
-| Gallery Tab | Nodes Tab |
-|:---:|:---:|
-| ![Gallery](docs/screenshot_gallery.png) | ![Nodes](docs/screenshot_nodes.png) |
-
-| Workflow Studio Library (ComfyUI) | ComfyUI Integration |
-|:---:|:---:|
-| ![Workflow Studio Library](docs/screenshot_wf_node_library.png) | ![ComfyUI Top Bar](docs/screenshot_comfyui_topbar.png) |
+| ![Library Information](docs/7_library_Infomation.png) | ![Customize](docs/8_Customize.png) |
 
 ---
 
@@ -59,7 +51,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Input tab** — Prompt (top) and Image drag-and-drop (bottom) in the left column; Raw JSON (540px) in the right column
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
-- **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow
+- **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
 - **Checkpoint Batch** — enable via checkbox in the right panel to sequentially generate with every checkpoint model; select checkpoints by folder from the dropdown (check a folder to select all its files, expand with ▶ for individual file selection, supports any subfolder depth); Filter input to search; All / None buttons for quick selection; **Pause/Resume** suspends processing between models; Stop aborts after the current generation; amber progress bar tracks per-model progress
@@ -250,6 +242,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.12
+- **GenerateUI — Raw JSON search** — always-visible search bar above the Raw JSON editor; finds all matches as you type with match count (`3/12`); navigate forward/back with ↑/↓ buttons, Enter / Shift+Enter, or Escape / ✕ to clear; current match highlighted in orange, other matches in yellow; search overlay syncs with editor scroll and stays updated while editing
+- **Workflow analyzer — extended model type detection** — added CLIPLoader `type` field mapping to model family (`flux`, `hidream_i`, `wan`, `cosmos`, `lumina`, `ovis`, etc.) via `_CLIP_TYPE_TO_MODEL`; subgraph nodes (`definitions.subgraphs`) now scanned for model detection; `UnetLoaderGGUF` and similar loaders matched via `"UnetLoader" in ntype`; new families added: NewBie, Ovis, HiDream, Wan, Cosmos, Lumina; model-name detection refactored into reusable `_detect_model_type_from_name()`
+- **Screenshots refreshed** — replaced tab-by-tab screenshots with 8 feature-focused images
 
 ### v0.3.11
 - **Metadata Tab — extended loader support** — `metadata-tab.js` now recognizes `UnetLoaderGGUF` and `UNETLoaderGGUF` as Diffusion Model (e.g. HiDream GGUF workflows), and `QuadrupleCLIPLoader` as Text Encoder (e.g. HiDream 4-CLIP); previously these were detected only in the side panel I tab, not in the Metadata tab itself
