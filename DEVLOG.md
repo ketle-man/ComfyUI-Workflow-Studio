@@ -1,5 +1,95 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-19: v0.3.13 — AI タブ（A）追加
+
+### 概要
+
+SPA および Workflow Studio Library サイドパネルの両方に AI タブ（A）を追加。Ollama・LM Studio をバックエンドとして翻訳・VLM（画像解析）機能を提供する。設定は `localStorage` 経由で両インターフェース間で共有。
+
+### 変更内容
+
+#### `templates/index.html`
+
+- タブバーに `<button class="wfm-tab" data-tab="ai">A</button>` を右端に追加
+- `<section id="wfm-tab-ai">` を新規追加（3 サブタブ構成）
+  - **翻訳サブタブ** (`wfm-ai-subtab-translate`): 入力テキストエリア・言語セレクター（日/英/中/Free）・⇄ 入替ボタン・翻訳ボタン・出力テキストエリア・コピーボタン・ステータス表示
+  - **VLM サブタブ** (`wfm-ai-subtab-vlm`): ドロップゾーン（110px）・タスクドロップダウン（画像の解説/プロンプト作成）・実行ボタン・結果エリア・コピーボタン
+  - **設定サブタブ** (`wfm-ai-subtab-settings`): バックエンド選択ラジオ・API URL 入力・接続テストボタン・モデル選択＋更新ボタン・Free 言語入力（入力/出力）・保存ボタン
+- ヘルプタブにAI タブ説明カード追加、Sidepanel カードに `wfm-help-sidepanel-16` を追加
+
+#### `static/js/ai-tab.js`（新規）
+
+- `import { showToast } from "./app.js"` / `import { t } from "./i18n.js"`
+- **定数**: `SETTINGS_KEY = "wfm_ai_settings"`、`LANG_NAMES`、`VLM_PROMPTS`（describe / prompt）
+- **`isValidBackendUrl(url)`**: `new URL()` で `http:` / `https:` スキームのみ許可
+- **`fileToBase64(file)`**: FileReader → `{ base64, mimeType }`
+- **`callVLM()`**: Ollama は `images:[b64]`、LM Studio は `image_url` コンテンツブロック
+- **`callLLM()`**: テキスト翻訳用 LLM 呼び出し（Ollama / LM Studio）
+- **`fetchModels()`**: Ollama `/api/tags`、LM Studio `/v1/models` からモデル一覧取得
+- **`buildTranslationPrompt()`**: Free 言語設定対応の翻訳プロンプト生成
+- **`initSubTabs()`** / **`initTranslateTab()`** / **`initVlmTab()`** / **`initSettingsTab()`**
+- すべての動的文字列を `t()` 経由で i18n 対応済み
+- **`export function initAiTab()`**: 全 init 関数のエントリポイント
+
+#### `static/js/app.js`
+
+- `import { initAiTab } from "./ai-tab.js"` を追加
+- `DOMContentLoaded` 内に `initAiTab()` を追加
+- `tabMap` に `ai: "tabAi"` を追加
+- `applyI18nToHtml()` に AI タブの全要素 id マッピングを追加
+  - サブタブボタン、言語セレクター option、placeholder、ボタンテキスト、セクションタイトル、ラベル
+  - ヘルプタブ新規 id（`wfm-help-sidepanel-16`、`wfm-help-ai-title`、`wfm-help-ai-1`〜`6`）
+
+#### `static/js/i18n.js`
+
+- `tabAi: "A"` を EN/JA/ZH に追加（タブボタンラベル）
+- AI タブ全キーブロックを EN/JA/ZH に追加（計 3 言語 × 約 40 キー）
+  - サブタブ名、言語オプション、placeholder、ボタンテキスト、ステータス文字列、トースト文字列
+  - `aiToastNoText`、`aiToastNoModel`、`aiToastInvalidUrl`、`aiToastInvalidUrlInput`
+  - `aiStatusTranslating`、`aiStatusRunning`、`aiStatusDone`、`aiStatusConnecting`、`aiStatusConnectOk`、`aiStatusConnectFail`
+  - `aiToastTransFailed`、`aiToastNoCopyText`、`aiToastCopied`、`aiToastNoModels`、`aiToastModelsFailed`
+  - `aiToastSettingsSaved`、`aiToastNoImage`、`aiToastVlmFailed`、`aiModels`
+  - ヘルプキー: `helpSidepanel16`、`helpAiTitle`、`helpAi1`〜`helpAi6`
+- `ollamaSettings` を EN/JA/ZH で "（プロンプトタブ）" サフィックス付きに改名
+
+#### `static/css/main.css`
+
+- AI サブタブナビ: `.wfm-ai-subtab-nav`、`.wfm-ai-subtab-btn`（`.active` 状態含む）、`.wfm-ai-subtab-content`
+- 翻訳タブ: `.wfm-ai-trans-container`、`.wfm-ai-trans-lang-row`、`.wfm-ai-lang-select`、`.wfm-ai-swap-btn`、`.wfm-ai-trans-textarea`、`.wfm-ai-trans-output`、`.wfm-ai-trans-actions`、`.wfm-ai-trans-status`
+- ステータス色: `.wfm-ai-status-working`（amber）、`.wfm-ai-status-ok`（green）、`.wfm-ai-status-error`（red）
+- VLM タブ: `.wfm-ai-vlm-container`、`.wfm-ai-vlm-drop`（height: 110px、破線ボーダー、I タブと統一）、`.wfm-ai-vlm-label`、`.wfm-ai-vlm-preview`、`.wfm-ai-vlm-task-row`、`.wfm-ai-vlm-result`、`.wfm-ai-vlm-copy-btn`
+- 設定タブ: `.wfm-ai-settings-*` 各セクション
+
+#### `web/comfyui/node_sets_menu.js`
+
+- `state` に `aiSubTab: "ai-translate"` を追加
+- トップタブバーに `data-toptab="ai"` の A ボタンを I タブの右に追加
+- `rebuildSubTabs()`: AI ケースを追加（翻訳/VLM/設定 サブタブ）
+- `renderContent()`: `topTab === "ai"` 分岐を追加、検索バー非表示、`renderAiTab()` を呼び出し
+- 追加関数:
+  - `isValidAiUrl()`: URL セキュリティ検証
+  - `loadAiCfg()` / `saveAiCfg()`: `localStorage` への設定読み書き（SPA と共有）
+  - `aiFileToBase64()` / `aiCallVLM()` / `aiCallLLM()` / `aiFetchModels()`: バックエンド API ラッパー
+  - `renderAiTab(container)`: 初回のみ HTML を構築し `setupAiHandlers()` を呼び出す
+  - `renderAiSubContent()`: サブタブに応じてペインを表示切替
+  - `setupAiHandlers(container)`: 翻訳・VLM・設定の全イベントハンドラ
+- `injectStyles()`: AI タブ CSS を追加（VLM ドロップゾーン高さ 110px を含む）
+
+#### `docs/6_ws_library.png`
+
+- A タブ追加後の Library パネルスクリーンショットに更新
+
+#### `README.md`
+
+- バージョンバッジを `0.3.13` に更新
+- Features に **AI Tab (A)** セクションを追加
+- Workflow Studio Library のタブ説明を `W/N/P/M/I` → `W/N/P/M/I/A` に更新、A タブ説明を追加
+- Requirements — Optional に LM Studio を追記
+- Project Structure に `ai-tab.js` を追加
+- Changelog に v0.3.13 エントリを追加
+
+---
+
 ## 2026-05-18: v0.3.12 リリース — README スクリーンショット刷新 / workflow_analyzer 拡張
 
 ### 概要

@@ -90,7 +90,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", metadata: "tabMetadata", gallery: "tabGallery", settings: "tabSettings", help: "tabHelp" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", metadata: "tabMetadata", gallery: "tabGallery", settings: "tabSettings", help: "tabHelp", ai: "tabAi" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -224,6 +224,67 @@ function applyI18nToHtml() {
     const presetCopyNegBtn = document.getElementById("wfm-preset-copy-neg-btn");
     if (presetCopyNegBtn) presetCopyNegBtn.textContent = t("copyNegativePrompt");
 
+    // AI tab
+    document.querySelectorAll(".wfm-ai-subtab-btn").forEach(btn => {
+        if (btn.dataset.aiSubtab === "translate") btn.textContent = t("aiSubTabTranslate");
+        if (btn.dataset.aiSubtab === "vlm") btn.textContent = t("aiSubTabVlm");
+        if (btn.dataset.aiSubtab === "ai-settings") btn.textContent = t("aiSubTabSettings");
+    });
+    const aiLangMap = { ja: "aiLangJa", en: "aiLangEn", zh: "aiLangZh", free: "aiLangFree" };
+    [document.getElementById("wfm-ai-src-lang"), document.getElementById("wfm-ai-dst-lang")].forEach(sel => {
+        if (!sel) return;
+        sel.querySelectorAll("option").forEach(opt => {
+            const key = aiLangMap[opt.value];
+            if (key) opt.textContent = t(key);
+        });
+    });
+    const aiTransInput = document.getElementById("wfm-ai-trans-input");
+    if (aiTransInput) aiTransInput.placeholder = t("aiTransInputPlaceholder");
+    const aiTransOutput = document.getElementById("wfm-ai-trans-output");
+    if (aiTransOutput) aiTransOutput.placeholder = t("aiTransOutputPlaceholder");
+    const aiTransBtn = document.getElementById("wfm-ai-trans-btn");
+    if (aiTransBtn) aiTransBtn.textContent = t("aiTranslateBtn");
+    const aiTransCopyBtn = document.getElementById("wfm-ai-trans-copy-btn");
+    if (aiTransCopyBtn) aiTransCopyBtn.textContent = t("aiCopyBtn");
+    const aiVlmLabel = document.getElementById("wfm-ai-vlm-label");
+    if (aiVlmLabel) aiVlmLabel.textContent = t("aiVlmDropLabel");
+    const aiVlmTask = document.getElementById("wfm-ai-vlm-task");
+    if (aiVlmTask) {
+        aiVlmTask.querySelectorAll("option").forEach(opt => {
+            if (opt.value === "describe") opt.textContent = t("aiVlmDescribe");
+            if (opt.value === "prompt") opt.textContent = t("aiVlmPromptCreate");
+        });
+    }
+    const aiVlmRunBtn = document.getElementById("wfm-ai-vlm-run");
+    if (aiVlmRunBtn) aiVlmRunBtn.textContent = t("aiVlmRunBtn");
+    const aiVlmResult = document.getElementById("wfm-ai-vlm-result");
+    if (aiVlmResult) aiVlmResult.placeholder = t("aiVlmResultPlaceholder");
+    const aiVlmCopyBtn = document.getElementById("wfm-ai-vlm-copy");
+    if (aiVlmCopyBtn) aiVlmCopyBtn.textContent = t("aiCopyBtn");
+    const aiBackendTitle = document.getElementById("wfm-ai-settings-backend-title");
+    if (aiBackendTitle) aiBackendTitle.textContent = t("aiSettingsBackend");
+    const aiConnTitle = document.getElementById("wfm-ai-settings-conn-title");
+    if (aiConnTitle) aiConnTitle.textContent = t("aiSettingsConnection");
+    const aiTestBtn = document.getElementById("wfm-ai-test-btn");
+    if (aiTestBtn) aiTestBtn.textContent = t("aiSettingsTestBtn");
+    const aiModelTitle = document.getElementById("wfm-ai-settings-model-title");
+    if (aiModelTitle) aiModelTitle.textContent = t("aiSettingsModelSection");
+    const aiModelSel = document.getElementById("wfm-ai-model-select");
+    if (aiModelSel) {
+        const firstOpt = aiModelSel.querySelector("option[value='']");
+        if (firstOpt) firstOpt.textContent = t("aiSettingsModelPlaceholder");
+    }
+    const aiModelRefreshBtn = document.getElementById("wfm-ai-model-refresh-btn");
+    if (aiModelRefreshBtn) aiModelRefreshBtn.textContent = t("aiSettingsRefreshBtn");
+    const aiFreeLangTitle = document.getElementById("wfm-ai-settings-freelang-title");
+    if (aiFreeLangTitle) aiFreeLangTitle.textContent = t("aiSettingsFreeLang");
+    const aiFreeSrcLabel = document.getElementById("wfm-ai-free-src-label");
+    if (aiFreeSrcLabel) aiFreeSrcLabel.textContent = t("aiSettingsInputLang");
+    const aiFreeDstLabel = document.getElementById("wfm-ai-free-dst-label");
+    if (aiFreeDstLabel) aiFreeDstLabel.textContent = t("aiSettingsOutputLang");
+    const aiSaveBtn = document.getElementById("wfm-ai-settings-save-btn");
+    if (aiSaveBtn) aiSaveBtn.textContent = t("aiSettingsSaveBtn");
+
     // Group panel labels
     const propTitle = document.querySelector("#wfm-side-tab-group .wfm-group-section-title");
     if (propTitle) propTitle.textContent = t("properties");
@@ -308,6 +369,10 @@ function applyI18nToHtml() {
         "wfm-help-sidepanel-11": "helpSidepanel11", "wfm-help-sidepanel-12": "helpSidepanel12",
         "wfm-help-sidepanel-13": "helpSidepanel13",
         "wfm-help-sidepanel-14": "helpSidepanel14", "wfm-help-sidepanel-15": "helpSidepanel15",
+        "wfm-help-sidepanel-16": "helpSidepanel16",
+        "wfm-help-ai-title": "helpAiTitle",
+        "wfm-help-ai-1": "helpAi1", "wfm-help-ai-2": "helpAi2", "wfm-help-ai-3": "helpAi3",
+        "wfm-help-ai-4": "helpAi4", "wfm-help-ai-5": "helpAi5", "wfm-help-ai-6": "helpAi6",
         "wfm-help-shortcuts-title": "helpShortcutsTitle",
         "wfm-help-shortcuts-1": "helpShortcuts1", "wfm-help-shortcuts-2": "helpShortcuts2",
         "wfm-help-shortcuts-3": "helpShortcuts3", "wfm-help-shortcuts-4": "helpShortcuts4",
@@ -365,6 +430,7 @@ import { initSettingsTab, applyTheme, getSavedTheme, applyTextareaFontSize } fro
 import { initModelsTab } from "./models-tab.js";
 import { initGalleryTab } from "./gallery-tab.js";
 import { initMetadataTab } from "./metadata-tab.js";
+import { initAiTab } from "./ai-tab.js";
 
 // Apply saved theme immediately to prevent flash of default theme
 applyTheme(getSavedTheme());
@@ -387,6 +453,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initPromptTab();
     initMetadataTab();
     initGalleryTab();
+    initAiTab();
 
     console.log("Workflow Studio: App initialized");
 });

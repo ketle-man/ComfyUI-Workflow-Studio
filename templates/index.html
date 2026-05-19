@@ -24,6 +24,7 @@
             <button class="wfm-tab" data-tab="gallery">Gallery</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
+            <button class="wfm-tab" data-tab="ai">A</button>
         </nav>
     </header>
 
@@ -957,6 +958,19 @@
                             <li id="wfm-help-sidepanel-13">I tab (Information): drop a ComfyUI PNG/WebP/JSON to inspect model, LoRA, and prompt metadata in the side panel — sub-tabs: model / lora / Prompts; supports UnetLoaderGGUF and QuadrupleCLIPLoader node types</li>
                             <li id="wfm-help-sidepanel-14">Information tab — drag items to canvas: model sub-tab places the loader node (Checkpoint → CheckpointLoaderSimple, VAE → VAELoader, Diffusion Model → UNETLoader, Text Encoder → CLIPLoader); double-click also places at canvas center</li>
                             <li id="wfm-help-sidepanel-15">Information tab — LoRA sub-tab: drag individual LoRA to place LoraLoader; "Multiple LORA" section at bottom places all LoRAs in a single Lora Loader (LoraManager) node; Prompts sub-tab: drag a prompt to place CLIPTextEncode node with text pre-filled; click prompt to view full text and copy</li>
+                            <li id="wfm-help-sidepanel-16">A tab (AI Tools): Translation and VLM sub-tabs powered by Ollama or LM Studio; settings (backend, URL, model) are shared with the SPA AI tab via localStorage</li>
+                        </ul>
+                    </div>
+
+                    <div class="wfm-help-card">
+                        <h3 id="wfm-help-ai-title">AI Tab (A)</h3>
+                        <ul>
+                            <li id="wfm-help-ai-1">Translation sub-tab: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio</li>
+                            <li id="wfm-help-ai-2">Language selectors for source and destination with ⇄ swap button; text content is also swapped; selections are saved automatically</li>
+                            <li id="wfm-help-ai-3">VLM sub-tab: drop an image into the drop zone and select a task — Describe Image or Create Prompt — then click Run to analyze with a vision model</li>
+                            <li id="wfm-help-ai-4">VLM result is displayed in the output area with a Copy button</li>
+                            <li id="wfm-help-ai-5">Settings sub-tab: choose backend (Ollama / LM Studio), set the API URL, test connection, select model, and configure Free language names for translation</li>
+                            <li id="wfm-help-ai-6">Settings are saved to localStorage and shared with the Library panel's A tab</li>
                         </ul>
                     </div>
 
@@ -1134,6 +1148,130 @@
                     <!-- Group タブ -->
                     <div id="wfm-gallery-detail-group" class="wfm-gallery-detail-tab-content" style="display:none;overflow-y:auto;">
                         <!-- JS動的生成: renderDetailGroup() -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- AI Tab -->
+        <section id="wfm-tab-ai" class="wfm-tab-content">
+            <!-- サブタブナビ -->
+            <div class="wfm-ai-subtab-nav">
+                <button class="wfm-ai-subtab-btn active" data-ai-subtab="translate">翻訳</button>
+                <button class="wfm-ai-subtab-btn" data-ai-subtab="vlm">VLM</button>
+                <button class="wfm-ai-subtab-btn" data-ai-subtab="ai-settings">設定</button>
+            </div>
+
+            <!-- 翻訳サブタブ -->
+            <div id="wfm-ai-subtab-translate" class="wfm-ai-subtab-content">
+                <div class="wfm-ai-trans-container">
+                    <!-- 言語選択行 -->
+                    <div class="wfm-ai-trans-lang-row">
+                        <select id="wfm-ai-src-lang" class="wfm-select wfm-ai-lang-select">
+                            <option value="ja">日本語</option>
+                            <option value="en">英語</option>
+                            <option value="zh">中国語</option>
+                            <option value="free">Free</option>
+                        </select>
+                        <button id="wfm-ai-trans-swap-btn" class="wfm-btn wfm-ai-swap-btn" title="言語を入れ替え">⇄</button>
+                        <select id="wfm-ai-dst-lang" class="wfm-select wfm-ai-lang-select">
+                            <option value="en">英語</option>
+                            <option value="ja">日本語</option>
+                            <option value="zh">中国語</option>
+                            <option value="free">Free</option>
+                        </select>
+                    </div>
+                    <!-- 入力テキストエリア -->
+                    <textarea id="wfm-ai-trans-input" class="wfm-ai-trans-textarea" placeholder="翻訳するテキストを入力..."></textarea>
+                    <!-- アクションボタン行 -->
+                    <div class="wfm-ai-trans-actions">
+                        <button id="wfm-ai-trans-btn" class="wfm-btn wfm-btn-primary">翻訳</button>
+                        <button id="wfm-ai-trans-copy-btn" class="wfm-btn">コピー</button>
+                        <span id="wfm-ai-trans-status" class="wfm-ai-trans-status"></span>
+                    </div>
+                    <!-- 出力テキストエリア -->
+                    <textarea id="wfm-ai-trans-output" class="wfm-ai-trans-textarea wfm-ai-trans-output" placeholder="翻訳結果がここに表示されます..." readonly></textarea>
+                </div>
+            </div>
+
+            <!-- VLM サブタブ -->
+            <div id="wfm-ai-subtab-vlm" class="wfm-ai-subtab-content" style="display:none">
+                <div class="wfm-ai-vlm-container">
+                    <!-- ドロップゾーン -->
+                    <div class="wfm-ai-vlm-drop" id="wfm-ai-vlm-drop">
+                        <img id="wfm-ai-vlm-preview" style="display:none;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">
+                        <span id="wfm-ai-vlm-label" class="wfm-ai-vlm-label">PNG / JPG / WebP をドロップまたはクリック</span>
+                        <input type="file" id="wfm-ai-vlm-file" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                    </div>
+                    <!-- タスク選択行 -->
+                    <div class="wfm-ai-vlm-task-row">
+                        <select id="wfm-ai-vlm-task" class="wfm-select">
+                            <option value="describe">画像の解説</option>
+                            <option value="prompt">プロンプト作成</option>
+                        </select>
+                        <button id="wfm-ai-vlm-run" class="wfm-btn wfm-btn-primary">実行</button>
+                    </div>
+                    <!-- ステータス -->
+                    <span id="wfm-ai-vlm-status" class="wfm-ai-trans-status"></span>
+                    <!-- 結果表示 -->
+                    <textarea id="wfm-ai-vlm-result" class="wfm-ai-vlm-result" placeholder="実行結果がここに表示されます..." readonly></textarea>
+                    <!-- コピーボタン -->
+                    <button id="wfm-ai-vlm-copy" class="wfm-btn wfm-ai-vlm-copy-btn">コピー</button>
+                </div>
+            </div>
+
+            <!-- 設定サブタブ -->
+            <div id="wfm-ai-subtab-ai-settings" class="wfm-ai-subtab-content" style="display:none">
+                <div class="wfm-ai-settings-container">
+                    <!-- バックエンド選択 -->
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-backend-title">バックエンド</div>
+                        <div class="wfm-ai-backend-row">
+                            <label class="wfm-ai-radio-label">
+                                <input type="radio" name="wfm-ai-backend" value="ollama" checked> Ollama
+                            </label>
+                            <label class="wfm-ai-radio-label">
+                                <input type="radio" name="wfm-ai-backend" value="lmstudio"> LM Studio
+                            </label>
+                        </div>
+                    </div>
+                    <!-- 接続設定 -->
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-conn-title">接続設定</div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label">URL</label>
+                            <input type="text" id="wfm-ai-backend-url" class="wfm-input wfm-ai-url-input" value="http://localhost:11434">
+                        </div>
+                        <div class="wfm-ai-settings-row">
+                            <button id="wfm-ai-test-btn" class="wfm-btn">接続テスト</button>
+                            <span id="wfm-ai-test-result" class="wfm-ai-test-result"></span>
+                        </div>
+                    </div>
+                    <!-- モデル選択 -->
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-model-title">モデル選択</div>
+                        <div class="wfm-ai-settings-row">
+                            <select id="wfm-ai-model-select" class="wfm-select wfm-ai-model-select">
+                                <option value="">-- モデルを選択 --</option>
+                            </select>
+                            <button id="wfm-ai-model-refresh-btn" class="wfm-btn">更新</button>
+                        </div>
+                    </div>
+                    <!-- Free 言語設定 -->
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-freelang-title">Free 言語設定</div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" id="wfm-ai-free-src-label">入力言語</label>
+                            <input type="text" id="wfm-ai-free-src-lang" class="wfm-input" placeholder="例: French">
+                        </div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" id="wfm-ai-free-dst-label">翻訳言語</label>
+                            <input type="text" id="wfm-ai-free-dst-lang" class="wfm-input" placeholder="例: German">
+                        </div>
+                    </div>
+                    <!-- 保存 -->
+                    <div class="wfm-ai-settings-section">
+                        <button id="wfm-ai-settings-save-btn" class="wfm-btn wfm-btn-primary">設定を保存</button>
                     </div>
                 </div>
             </div>

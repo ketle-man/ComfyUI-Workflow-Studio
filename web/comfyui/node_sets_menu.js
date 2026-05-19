@@ -58,6 +58,8 @@ const state = {
     // Info (Metadata) tab
     infoSubTab: "info-model",   // "info-model" | "info-lora" | "info-prompt"
     infoMeta: null,             // parsed metadata from dropped file
+    // AI tab
+    aiSubTab: "ai-translate",   // "ai-translate" | "ai-vlm" | "ai-settings"
 };
 
 // ============================================
@@ -693,6 +695,7 @@ const createPanel = () => {
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="prompts" title="Prompts">P</button>
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="models" title="Models">M</button>
             <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="info" title="Information (Metadata)">I</button>
+            <button class="wfm-nlp-tab wfm-nlp-top-tab" data-toptab="ai" title="AI Tools (Translation)">A</button>
         </div>
         <div class="wfm-nlp-subtabs"></div>
         <div class="wfm-nlp-subtabs wfm-nlp-subtabs-row2"></div>
@@ -715,7 +718,7 @@ const createPanel = () => {
             const searchInput = panel.querySelector(".wfm-nlp-search-input");
             if (searchInput) {
                 searchInput.value = "";
-                const placeholders = { workflows: "Search workflows...", nodes: "Search nodes...", prompts: "Search prompts...", models: "Search models...", info: "" };
+                const placeholders = { workflows: "Search workflows...", nodes: "Search nodes...", prompts: "Search prompts...", models: "Search models...", info: "", ai: "" };
                 searchInput.placeholder = placeholders[tab] ?? "Search...";
             }
             panel.querySelectorAll(".wfm-nlp-top-tab").forEach(b => b.classList.remove("active"));
@@ -804,7 +807,27 @@ const rebuildSubTabs = () => {
         row2.querySelectorAll(".wfm-nlp-sub-tab").forEach(b => b.classList.remove("active"));
     };
 
-    if (state.topTab === "info") {
+    if (state.topTab === "ai") {
+        const row1Tabs = [
+            { key: "ai-translate", label: "翻訳" },
+            { key: "ai-vlm",       label: "VLM" },
+            { key: "ai-settings",  label: "設定" },
+        ];
+        const activeKey = state.aiSubTab;
+        for (const t of row1Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.aiSubTab = t.key;
+                updateAllActive();
+                btn.classList.add("active");
+                renderAiSubContent();
+            });
+            row1.appendChild(btn);
+        }
+    } else if (state.topTab === "info") {
         const row1Tabs = [
             { key: "info-model", label: "model" },
             { key: "info-lora",  label: "lora" },
@@ -980,13 +1003,19 @@ const renderContent = () => {
     // Remove filter dropdowns from previous category/package views
     panelEl.querySelectorAll(".wfm-nlp-filter-row").forEach(e => e.remove());
 
-    // Show/hide search bar and adjust overflow for info tab
+    // Show/hide search bar and adjust overflow for info/ai tab
     const searchEl = panelEl?.querySelector(".wfm-nlp-search");
     if (state.topTab === "info") {
         if (searchEl) searchEl.style.display = "none";
         content.style.overflowY = "hidden";
         content.style.padding = "0";
         renderInfoTab(content);
+        return;
+    } else if (state.topTab === "ai") {
+        if (searchEl) searchEl.style.display = "none";
+        content.style.overflowY = "hidden";
+        content.style.padding = "0";
+        renderAiTab(content);
         return;
     } else {
         if (searchEl) searchEl.style.display = "";
@@ -2727,6 +2756,423 @@ const renderInfoTab = (container) => {
 };
 
 // ============================================
+// AI Tab
+// ============================================
+
+const AI_SETTINGS_KEY = "wfm_ai_settings";
+const AI_LANG_NAMES = { ja: "Japanese", en: "English", zh: "Chinese" };
+
+function isValidAiUrl(url) {
+    try {
+        const u = new URL(url);
+        return u.protocol === "http:" || u.protocol === "https:";
+    } catch {
+        return false;
+    }
+}
+
+function loadAiCfg() {
+    try { return JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || "{}"); } catch { return {}; }
+}
+function saveAiCfg(patch) {
+    const d = { ...loadAiCfg(), ...patch };
+    localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(d));
+    return d;
+}
+
+async function aiCallLLM(url, backend, model, prompt) {
+    if (backend === "ollama") {
+        const r = await fetch(`${url}/api/generate`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, prompt, stream: false }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()).response || "";
+    } else {
+        const r = await fetch(`${url}/v1/chat/completions`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], stream: false }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        return d.choices?.[0]?.message?.content || "";
+    }
+}
+
+function aiFileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const b64 = e.target.result.split(",")[1];
+            resolve({ base64: b64, mimeType: file.type });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+async function aiCallVLM(url, backend, model, prompt, base64Image, mimeType) {
+    if (backend === "ollama") {
+        const r = await fetch(`${url}/api/generate`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, prompt, images: [base64Image], stream: false }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()).response || "";
+    } else {
+        const r = await fetch(`${url}/v1/chat/completions`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model,
+                messages: [{ role: "user", content: [
+                    { type: "text", text: prompt },
+                    { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } },
+                ]}],
+                stream: false,
+            }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()).choices?.[0]?.message?.content || "";
+    }
+}
+
+async function aiFetchModels(url, backend) {
+    if (backend === "ollama") {
+        const r = await fetch(`${url}/api/tags`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return ((await r.json()).models || []).map(m => m.name);
+    } else {
+        const r = await fetch(`${url}/v1/models`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return ((await r.json()).data || []).map(m => m.id);
+    }
+}
+
+const renderAiTab = (container) => {
+    if (!container.querySelector(".wfm-nlp-ai-layout")) {
+        container.innerHTML = `
+            <div class="wfm-nlp-ai-layout">
+                <!-- 翻訳サブ -->
+                <div id="wfm-nlp-ai-translate" class="wfm-nlp-ai-pane">
+                    <div class="wfm-nlp-ai-lang-row">
+                        <select id="wfm-nlp-ai-src" class="wfm-nlp-ai-sel">
+                            <option value="ja">日本語</option>
+                            <option value="en">英語</option>
+                            <option value="zh">中国語</option>
+                            <option value="free">Free</option>
+                        </select>
+                        <button id="wfm-nlp-ai-swap" class="wfm-nlp-ai-swap" title="入替">⇄</button>
+                        <select id="wfm-nlp-ai-dst" class="wfm-nlp-ai-sel">
+                            <option value="en">英語</option>
+                            <option value="ja">日本語</option>
+                            <option value="zh">中国語</option>
+                            <option value="free">Free</option>
+                        </select>
+                    </div>
+                    <textarea id="wfm-nlp-ai-input" class="wfm-nlp-ai-textarea" placeholder="翻訳するテキストを入力..."></textarea>
+                    <div class="wfm-nlp-ai-actions">
+                        <button id="wfm-nlp-ai-trans-btn" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">翻訳</button>
+                        <button id="wfm-nlp-ai-copy-btn" class="wfm-nlp-ai-btn">コピー</button>
+                        <span id="wfm-nlp-ai-status" class="wfm-nlp-ai-status"></span>
+                    </div>
+                    <textarea id="wfm-nlp-ai-output" class="wfm-nlp-ai-textarea wfm-nlp-ai-output" placeholder="翻訳結果..." readonly></textarea>
+                </div>
+                <!-- VLM サブ -->
+                <div id="wfm-nlp-ai-vlm" class="wfm-nlp-ai-pane" style="display:none;">
+                    <div class="wfm-nlp-ai-vlm-drop" id="wfm-nlp-ai-vlm-drop">
+                        <img id="wfm-nlp-ai-vlm-preview" style="display:none;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">
+                        <span id="wfm-nlp-ai-vlm-label" class="wfm-nlp-ai-vlm-label">PNG / JPG / WebP をドロップ</span>
+                        <input type="file" id="wfm-nlp-ai-vlm-file" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                    </div>
+                    <div class="wfm-nlp-ai-row">
+                        <select id="wfm-nlp-ai-vlm-task" class="wfm-nlp-ai-sel" style="flex:1;">
+                            <option value="describe">画像の解説</option>
+                            <option value="prompt">プロンプト作成</option>
+                        </select>
+                        <button id="wfm-nlp-ai-vlm-run" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">実行</button>
+                    </div>
+                    <span id="wfm-nlp-ai-vlm-status" class="wfm-nlp-ai-status"></span>
+                    <textarea id="wfm-nlp-ai-vlm-result" class="wfm-nlp-ai-textarea wfm-nlp-ai-output" style="flex:1;min-height:60px;" placeholder="実行結果がここに表示されます..." readonly></textarea>
+                    <button id="wfm-nlp-ai-vlm-copy" class="wfm-nlp-ai-btn" style="align-self:flex-end;">コピー</button>
+                </div>
+                <!-- 設定サブ -->
+                <div id="wfm-nlp-ai-settings" class="wfm-nlp-ai-pane wfm-nlp-ai-settings-pane" style="display:none;">
+                    <div class="wfm-nlp-ai-sec">
+                        <div class="wfm-nlp-ai-sec-title">バックエンド</div>
+                        <div class="wfm-nlp-ai-radio-row">
+                            <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="ollama"> Ollama</label>
+                            <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="lmstudio"> LM Studio</label>
+                        </div>
+                    </div>
+                    <div class="wfm-nlp-ai-sec">
+                        <div class="wfm-nlp-ai-sec-title">接続設定</div>
+                        <input type="text" id="wfm-nlp-ai-url" class="wfm-nlp-ai-input" placeholder="http://localhost:11434">
+                        <div class="wfm-nlp-ai-row">
+                            <button id="wfm-nlp-ai-test" class="wfm-nlp-ai-btn">接続テスト</button>
+                            <span id="wfm-nlp-ai-test-result" class="wfm-nlp-ai-status"></span>
+                        </div>
+                    </div>
+                    <div class="wfm-nlp-ai-sec">
+                        <div class="wfm-nlp-ai-sec-title">モデル選択</div>
+                        <div class="wfm-nlp-ai-row">
+                            <select id="wfm-nlp-ai-model" class="wfm-nlp-ai-sel" style="flex:1;">
+                                <option value="">-- モデルを選択 --</option>
+                            </select>
+                            <button id="wfm-nlp-ai-model-refresh" class="wfm-nlp-ai-btn">↻</button>
+                        </div>
+                    </div>
+                    <div class="wfm-nlp-ai-sec">
+                        <div class="wfm-nlp-ai-sec-title">Free 言語設定</div>
+                        <div class="wfm-nlp-ai-row">
+                            <span class="wfm-nlp-ai-lbl">入力</span>
+                            <input type="text" id="wfm-nlp-ai-free-src" class="wfm-nlp-ai-input" placeholder="例: French" style="flex:1;">
+                        </div>
+                        <div class="wfm-nlp-ai-row">
+                            <span class="wfm-nlp-ai-lbl">翻訳</span>
+                            <input type="text" id="wfm-nlp-ai-free-dst" class="wfm-nlp-ai-input" placeholder="例: German" style="flex:1;">
+                        </div>
+                    </div>
+                    <div class="wfm-nlp-ai-sec">
+                        <button id="wfm-nlp-ai-save" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary" style="width:100%;">設定を保存</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        setupAiHandlers(container);
+    }
+    renderAiSubContent();
+};
+
+const renderAiSubContent = () => {
+    if (!panelEl) return;
+    const panes = { "ai-translate": "wfm-nlp-ai-translate", "ai-vlm": "wfm-nlp-ai-vlm", "ai-settings": "wfm-nlp-ai-settings" };
+    for (const [key, id] of Object.entries(panes)) {
+        const el = panelEl.querySelector(`#${id}`);
+        if (el) el.style.display = state.aiSubTab === key ? "flex" : "none";
+    }
+};
+
+const setupAiHandlers = (container) => {
+    const cfg = loadAiCfg();
+
+    // Restore settings
+    const backendRadios = container.querySelectorAll("input[name='wfm-nlp-ai-backend']");
+    backendRadios.forEach(r => { if (r.value === (cfg.backend || "ollama")) r.checked = true; });
+    const urlInput = container.querySelector("#wfm-nlp-ai-url");
+    if (urlInput && cfg.backendUrl) urlInput.value = cfg.backendUrl;
+    else if (urlInput) urlInput.value = "http://localhost:11434";
+
+    const freeSrcInput = container.querySelector("#wfm-nlp-ai-free-src");
+    const freeDstInput = container.querySelector("#wfm-nlp-ai-free-dst");
+    if (freeSrcInput && cfg.freeSrcLang) freeSrcInput.value = cfg.freeSrcLang;
+    if (freeDstInput && cfg.freeDstLang) freeDstInput.value = cfg.freeDstLang;
+
+    const srcSel = container.querySelector("#wfm-nlp-ai-src");
+    const dstSel = container.querySelector("#wfm-nlp-ai-dst");
+    if (srcSel && cfg.srcLang) srcSel.value = cfg.srcLang;
+    if (dstSel && cfg.dstLang) dstSel.value = cfg.dstLang;
+
+    // Swap
+    container.querySelector("#wfm-nlp-ai-swap")?.addEventListener("click", () => {
+        const tmp = srcSel.value; srcSel.value = dstSel.value; dstSel.value = tmp;
+        const inputEl = container.querySelector("#wfm-nlp-ai-input");
+        const outputEl = container.querySelector("#wfm-nlp-ai-output");
+        const tmpTxt = inputEl.value; inputEl.value = outputEl.value; outputEl.value = tmpTxt;
+        saveAiCfg({ srcLang: srcSel.value, dstLang: dstSel.value });
+    });
+
+    srcSel?.addEventListener("change", () => saveAiCfg({ srcLang: srcSel.value }));
+    dstSel?.addEventListener("change", () => saveAiCfg({ dstLang: dstSel.value }));
+
+    // Translate
+    container.querySelector("#wfm-nlp-ai-trans-btn")?.addEventListener("click", async () => {
+        const text = container.querySelector("#wfm-nlp-ai-input")?.value?.trim();
+        if (!text) { showToast("テキストを入力してください", "error"); return; }
+
+        const c = loadAiCfg();
+        const backend = c.backend || "ollama";
+        const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const model = c.model;
+        if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
+        if (!model) { showToast("設定タブでモデルを選択してください", "error"); return; }
+
+        const srcLang = srcSel?.value || "ja";
+        const dstLang = dstSel?.value || "en";
+        const srcName = srcLang === "free" ? (c.freeSrcLang || "Auto") : AI_LANG_NAMES[srcLang];
+        const dstName = dstLang === "free" ? (c.freeDstLang || "English") : AI_LANG_NAMES[dstLang];
+        const fromPart = srcLang === "free" ? "" : `from ${srcName} `;
+        const prompt = `Translate the following text ${fromPart}to ${dstName}. Output only the translated text, nothing else.\n\n${text}`;
+
+        const transBtn = container.querySelector("#wfm-nlp-ai-trans-btn");
+        const statusEl = container.querySelector("#wfm-nlp-ai-status");
+        const outputEl = container.querySelector("#wfm-nlp-ai-output");
+        transBtn.disabled = true;
+        statusEl.textContent = "翻訳中...";
+        statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
+        outputEl.value = "";
+
+        try {
+            const result = await aiCallLLM(url, backend, model, prompt);
+            outputEl.value = result.trim();
+            statusEl.textContent = "完了";
+            statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";
+        } catch (err) {
+            statusEl.textContent = `エラー: ${err.message}`;
+            statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
+        } finally {
+            transBtn.disabled = false;
+        }
+    });
+
+    // Copy
+    container.querySelector("#wfm-nlp-ai-copy-btn")?.addEventListener("click", () => {
+        const text = container.querySelector("#wfm-nlp-ai-output")?.value;
+        if (!text) { showToast("コピーするテキストがありません", "error"); return; }
+        navigator.clipboard.writeText(text).then(() => showToast("コピーしました", "success"));
+    });
+
+    // Model refresh helper
+    const refreshModels = async () => {
+        const c = loadAiCfg();
+        const backend = container.querySelector("input[name='wfm-nlp-ai-backend']:checked")?.value || "ollama";
+        const url = container.querySelector("#wfm-nlp-ai-url")?.value?.trim() || "";
+        const modelSel = container.querySelector("#wfm-nlp-ai-model");
+        try {
+            const models = await aiFetchModels(url, backend);
+            modelSel.innerHTML = '<option value="">-- モデルを選択 --</option>';
+            models.forEach(name => {
+                const opt = document.createElement("option");
+                opt.value = name; opt.textContent = name;
+                if (name === c.model) opt.selected = true;
+                modelSel.appendChild(opt);
+            });
+            if (!models.length) showToast("モデルが見つかりません", "error");
+        } catch (err) {
+            showToast("モデル取得失敗: " + err.message, "error");
+        }
+    };
+
+    // Connection test
+    container.querySelector("#wfm-nlp-ai-test")?.addEventListener("click", async () => {
+        const testBtn = container.querySelector("#wfm-nlp-ai-test");
+        const resultEl = container.querySelector("#wfm-nlp-ai-test-result");
+        const backend = container.querySelector("input[name='wfm-nlp-ai-backend']:checked")?.value || "ollama";
+        const url = container.querySelector("#wfm-nlp-ai-url")?.value?.trim() || "";
+        if (!isValidAiUrl(url)) {
+            resultEl.textContent = "http:// または https:// で始まるURLを入力してください";
+            resultEl.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
+            return;
+        }
+        testBtn.disabled = true;
+        resultEl.textContent = "接続中...";
+        resultEl.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
+        try {
+            const models = await aiFetchModels(url, backend);
+            resultEl.textContent = `OK (${models.length} モデル)`;
+            resultEl.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";
+            await refreshModels();
+        } catch (err) {
+            resultEl.textContent = `失敗: ${err.message}`;
+            resultEl.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
+        } finally {
+            testBtn.disabled = false;
+        }
+    });
+
+    // Model refresh button
+    container.querySelector("#wfm-nlp-ai-model-refresh")?.addEventListener("click", () => refreshModels());
+
+    // Save settings
+    container.querySelector("#wfm-nlp-ai-save")?.addEventListener("click", () => {
+        const backend = container.querySelector("input[name='wfm-nlp-ai-backend']:checked")?.value || "ollama";
+        const url = container.querySelector("#wfm-nlp-ai-url")?.value?.trim() || "";
+        const model = container.querySelector("#wfm-nlp-ai-model")?.value || "";
+        const freeSrcLang = container.querySelector("#wfm-nlp-ai-free-src")?.value?.trim() || "";
+        const freeDstLang = container.querySelector("#wfm-nlp-ai-free-dst")?.value?.trim() || "";
+        if (url && !isValidAiUrl(url)) {
+            showToast("URLは http:// または https:// で始まる必要があります", "error");
+            return;
+        }
+        saveAiCfg({ backend, backendUrl: url, model, freeSrcLang, freeDstLang });
+        showToast("設定を保存しました", "success");
+    });
+
+    // Auto-load models if settings exist
+    if (cfg.backendUrl && cfg.backend) refreshModels().catch(() => {});
+
+    // ---- VLM handlers ----
+    let vlmImage = null; // { base64, mimeType }
+
+    const vlmDrop    = container.querySelector("#wfm-nlp-ai-vlm-drop");
+    const vlmPreview = container.querySelector("#wfm-nlp-ai-vlm-preview");
+    const vlmLabel   = container.querySelector("#wfm-nlp-ai-vlm-label");
+    const vlmFile    = container.querySelector("#wfm-nlp-ai-vlm-file");
+    const vlmRunBtn  = container.querySelector("#wfm-nlp-ai-vlm-run");
+    const vlmStatus  = container.querySelector("#wfm-nlp-ai-vlm-status");
+    const vlmResult  = container.querySelector("#wfm-nlp-ai-vlm-result");
+    const vlmCopy    = container.querySelector("#wfm-nlp-ai-vlm-copy");
+
+    const loadVlmImage = async (file) => {
+        if (!file || !file.type.startsWith("image/")) return;
+        const data = await aiFileToBase64(file);
+        vlmImage = data;
+        vlmPreview.src = `data:${data.mimeType};base64,${data.base64}`;
+        vlmPreview.style.display = "block";
+        vlmLabel.style.display = "none";
+    };
+
+    vlmDrop?.addEventListener("click", () => vlmFile?.click());
+    vlmFile?.addEventListener("change", e => { if (e.target.files[0]) loadVlmImage(e.target.files[0]); });
+    vlmDrop?.addEventListener("dragover", e => { e.preventDefault(); vlmDrop.classList.add("drag-over"); });
+    vlmDrop?.addEventListener("dragleave", () => vlmDrop.classList.remove("drag-over"));
+    vlmDrop?.addEventListener("drop", e => {
+        e.preventDefault();
+        vlmDrop.classList.remove("drag-over");
+        const file = e.dataTransfer.files[0];
+        if (file) loadVlmImage(file);
+    });
+
+    const VLM_PROMPTS = {
+        describe: "Describe this image in detail.",
+        prompt: "Create a detailed Stable Diffusion image generation prompt based on this image. Output only the prompt text, nothing else.",
+    };
+
+    vlmRunBtn?.addEventListener("click", async () => {
+        if (!vlmImage) { showToast("画像をドロップしてください", "error"); return; }
+        const c = loadAiCfg();
+        const backend = c.backend || "ollama";
+        const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const model = c.model;
+        if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
+        if (!model) { showToast("設定タブでモデルを選択してください", "error"); return; }
+
+        const task = container.querySelector("#wfm-nlp-ai-vlm-task")?.value || "describe";
+        vlmRunBtn.disabled = true;
+        vlmStatus.textContent = "実行中...";
+        vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
+        vlmResult.value = "";
+
+        try {
+            const result = await aiCallVLM(url, backend, model, VLM_PROMPTS[task], vlmImage.base64, vlmImage.mimeType);
+            vlmResult.value = result.trim();
+            vlmStatus.textContent = "完了";
+            vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";
+        } catch (err) {
+            vlmStatus.textContent = `エラー: ${err.message}`;
+            vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
+        } finally {
+            vlmRunBtn.disabled = false;
+        }
+    });
+
+    vlmCopy?.addEventListener("click", () => {
+        const text = vlmResult?.value;
+        if (!text) { showToast("コピーするテキストがありません", "error"); return; }
+        navigator.clipboard.writeText(text).then(() => showToast("コピーしました", "success"));
+    });
+};
+
+// ============================================
 // Save selected nodes as Node Set (context menu)
 // ============================================
 
@@ -3371,6 +3817,192 @@ const injectStyles = () => {
             color: var(--descrip-text, #aaa);
         }
         .wfm-nlp-theme-reset-btn:hover { color: var(--input-text, #ddd); }
+        /* AI Tab */
+        .wfm-nlp-ai-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        .wfm-nlp-ai-pane {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+            gap: 6px;
+            padding: 8px;
+        }
+        .wfm-nlp-ai-settings-pane {
+            overflow-y: auto;
+        }
+        .wfm-nlp-ai-lang-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .wfm-nlp-ai-sel {
+            flex: 1;
+            padding: 4px 6px;
+            background: var(--comfy-input-bg, #2a2a2a);
+            border: 1px solid var(--border-color, #4e4e4e);
+            border-radius: 3px;
+            color: var(--input-text, #ddd);
+            font-size: 11px;
+            outline: none;
+        }
+        .wfm-nlp-ai-swap {
+            flex-shrink: 0;
+            padding: 4px 6px;
+            font-size: 14px;
+        }
+        .wfm-nlp-ai-textarea {
+            flex: 1;
+            min-height: 80px;
+            padding: 6px 8px;
+            background: var(--comfy-input-bg, #2a2a2a);
+            border: 1px solid var(--border-color, #4e4e4e);
+            border-radius: 3px;
+            color: var(--input-text, #ddd);
+            font-size: 11px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+            box-sizing: border-box;
+        }
+        .wfm-nlp-ai-textarea:focus {
+            border-color: var(--p-button-background, #4a9eff);
+        }
+        .wfm-nlp-ai-output {
+            background: var(--comfy-menu-bg, #1e1e1e);
+            color: var(--descrip-text, #aaa);
+        }
+        .wfm-nlp-ai-output:focus { border-color: var(--border-color, #4e4e4e); }
+        .wfm-nlp-ai-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .wfm-nlp-ai-status {
+            font-size: 10px;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .wfm-nlp-ai-working { color: var(--wfm-warning, #ffa502); }
+        .wfm-nlp-ai-ok      { color: #2ed573; }
+        .wfm-nlp-ai-err     { color: #ff4757; }
+        .wfm-nlp-ai-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border-color, #555);
+            border-radius: 3px;
+            background: none;
+            color: var(--descrip-text, #aaa);
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+        }
+        .wfm-nlp-ai-btn:hover {
+            background: rgba(74,158,255,0.2);
+            color: #4a9eff;
+            border-color: #4a9eff;
+        }
+        .wfm-nlp-ai-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .wfm-nlp-ai-btn-primary {
+            background: var(--p-button-background, #4a9eff);
+            color: #fff;
+            border-color: var(--p-button-background, #4a9eff);
+        }
+        .wfm-nlp-ai-btn-primary:hover { background: #3a8eef; border-color: #3a8eef; color: #fff; }
+        .wfm-nlp-ai-coming {
+            display: flex;
+            flex: 1;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: var(--descrip-text, #888);
+            text-align: center;
+            padding: 16px;
+        }
+        .wfm-nlp-ai-sec {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color, #3a3a3a);
+        }
+        .wfm-nlp-ai-sec:last-child { border-bottom: none; }
+        .wfm-nlp-ai-sec-title {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--descrip-text, #888);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .wfm-nlp-ai-radio-row {
+            display: flex;
+            gap: 12px;
+        }
+        .wfm-nlp-ai-radio {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: var(--input-text, #ddd);
+            cursor: pointer;
+        }
+        .wfm-nlp-ai-input {
+            padding: 5px 8px;
+            background: var(--comfy-input-bg, #2a2a2a);
+            border: 1px solid var(--border-color, #4e4e4e);
+            border-radius: 3px;
+            color: var(--input-text, #ddd);
+            font-size: 11px;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .wfm-nlp-ai-input:focus { border-color: var(--p-button-background, #4a9eff); }
+        .wfm-nlp-ai-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .wfm-nlp-ai-lbl {
+            font-size: 10px;
+            color: var(--descrip-text, #888);
+            white-space: nowrap;
+            width: 28px;
+            flex-shrink: 0;
+        }
+        /* VLM drop zone */
+        .wfm-nlp-ai-vlm-drop {
+            height: 110px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed var(--border-color, #4e4e4e);
+            border-radius: 6px;
+            cursor: pointer;
+            overflow: hidden;
+            transition: border-color 0.15s, background 0.15s;
+            position: relative;
+        }
+        .wfm-nlp-ai-vlm-drop:hover,
+        .wfm-nlp-ai-vlm-drop.drag-over {
+            border-color: var(--p-button-background, #4a9eff);
+            background: rgba(74,158,255,0.04);
+        }
+        .wfm-nlp-ai-vlm-label {
+            font-size: 11px;
+            color: var(--descrip-text, #999);
+            pointer-events: none;
+        }
     `;
     document.head.appendChild(style);
 };

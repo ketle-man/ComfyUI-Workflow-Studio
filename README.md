@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.12-green)
+![Version](https://img.shields.io/badge/version-0.3.13-green)
 
 ## Screenshots
 
@@ -148,8 +148,16 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Enable / Disable models** — hide models from ComfyUI by renaming the file extension (`.disabled` suffix); toggle per card (⏸ button), per group (Enable All / Disable All), or filter by status (All / Enabled / Disabled)
 - **Multi-select & bulk operations** — enter selection mode to check multiple models; bulk action bar supports add/remove from groups and permanent file deletion (model file + preview images + sidecar files such as `.json` / `.info`)
 
+### AI Tab (A) (v0.3.13)
+- **Translation sub-tab** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language and text content); selections saved automatically
+- **VLM sub-tab** — drop an image into the 110px drop zone, select a task (Describe Image / Create Prompt), and click Run to analyze with a vision model; result shown in the output area with a Copy button
+- **Settings sub-tab** — choose backend (Ollama / LM Studio), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
+- **Settings shared** — settings saved to `localStorage` under `wfm_ai_settings`; shared with the Library panel's A tab so configuration is consistent across both interfaces
+- **Backend support** — Ollama (`/api/generate` for text, `/api/tags` for model list); LM Studio OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio)
+- **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
+
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
-- **Tab layout (W / N / P / M / I)** — compact single-letter tabs with full name shown on hover
+- **Tab layout (W / N / P / M / I / A)** — compact single-letter tabs with full name shown on hover
 - **W — Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
 - **N — Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs), ★ star shown for favorites in All view
   - **Category sub-tab** — dropdown to filter nodes by top-level category
@@ -157,6 +165,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs)
 - **P — Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
 - **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON in the side panel to view its metadata; supports `UnetLoaderGGUF` and `QuadrupleCLIPLoader` node types; preview area fixed at 110px
+- **A — AI Tools tab** — Translation sub-tab and VLM sub-tab powered by Ollama or LM Studio; settings (backend, URL, model) shared with the SPA AI tab via `localStorage`
   - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder; drag items to canvas to place the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`); double-click also places at canvas center
   - **lora sub-tab** — LoRA names with `strength_model / strength_clip` values; drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (appears for 1+ LoRAs) drags all LoRAs into a single `Lora Loader (LoraManager)` node
   - **Prompts sub-tab** — POS / NEG badge list; drag a prompt to place `CLIPTextEncode` with text pre-filled; click any entry to view full text + Copy button
@@ -226,7 +235,8 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ### Optional
 
-- **[Ollama](https://ollama.com/)** — for AI chat assistant and translation features
+- **[Ollama](https://ollama.com/)** — for AI chat assistant, translation, and VLM features
+- **[LM Studio](https://lmstudio.ai/)** — alternative backend for translation and VLM (OpenAI-compatible API)
 - **[Eagle](https://eagle.cool/)** — for auto-saving generated images with metadata
 
 ---
@@ -242,6 +252,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.13
+- **AI Tab (A)** — new tab added to both the SPA and the Workflow Studio Library side panel (rightmost tab)
+  - **Translation sub-tab** — translate text via Ollama or LM Studio between Japanese, English, Chinese, or a custom Free language; ⇄ swap button exchanges both language selectors and text content simultaneously; language selections persisted automatically
+  - **VLM sub-tab** — drop zone (110px, matching the I tab) accepts images via drag & drop or click; task selector (Describe Image / Create Prompt); Run button streams result into output area with Copy button; Ollama uses `images:[base64]` payload, LM Studio uses `image_url` content block
+  - **Settings sub-tab** — backend radio (Ollama / LM Studio), API URL input, connection test with live status, model selector with refresh, Free language name fields (source and destination); saved to `localStorage` key `wfm_ai_settings` and shared between SPA and Library panel
+  - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme before any network call
+- **Settings Tab — Ollama section renamed** — "Ollama 設定" → "Ollama 設定（プロンプトタブ）" to distinguish it from the new AI tab's settings
+- **Help Tab updated** — added AI Tab (A) feature card and Library panel A tab entry; i18n support in EN/JA/ZH
 
 ### v0.3.12
 - **GenerateUI — Raw JSON search** — always-visible search bar above the Raw JSON editor; finds all matches as you type with match count (`3/12`); navigate forward/back with ↑/↓ buttons, Enter / Shift+Enter, or Escape / ✕ to clear; current match highlighted in orange, other matches in yellow; search overlay syncs with editor scroll and stays updated while editing
@@ -446,7 +465,7 @@ ComfyUI-Workflow-Studio/
 │       ├── settings_service.py  # Settings persistence
 │       └── png_extractor.py     # PNG metadata extraction
 ├── templates/
-│   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Metadata/Gallery/Nodes/Models/Settings/Help)
+│   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Metadata/Gallery/Nodes/Models/Settings/Help/AI)
 ├── static/
 │   ├── favicon.svg              # Browser tab icon (W+S Wave)
 │   ├── css/main.css             # Styles
@@ -461,6 +480,7 @@ ComfyUI-Workflow-Studio/
 │       ├── comfyui-client.js    # ComfyUI WebSocket/API client
 │       ├── nodes-tab.js          # Node browser & node sets
 │       ├── models-tab.js         # Model browser & CivitAI integration
+│       ├── ai-tab.js             # AI tab (Translation, VLM, Settings — Ollama / LM Studio)
 │       ├── comfyui-workflow.js  # UI-to-API format conversion
 │       ├── comfyui-editor.js    # Dynamic parameter editor
 │       ├── json-highlight.js    # JSON syntax highlighting
