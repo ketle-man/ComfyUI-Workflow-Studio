@@ -1,5 +1,31 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-20: AI TOOL タブ 英語化（SPA・Libraryパネル）
+
+### 概要
+
+SPA の AI TOOL タブおよびサイドパネル（Library）の AI タブで日本語固定になっていた静的ラベルをすべて英語に統一。他タブと同じ「英語固定の静的 HTML + JS 動的部分のみ `t()`」方式に揃えた。
+
+### 変更内容
+
+#### `templates/index.html`
+
+- ペインヘッダー: `翻訳` → `Translation`、`設定` → `Settings`
+- 言語 option: `日本語 / 英語 / 中国語` → `Japanese / English / Chinese`
+- ボタン: `翻訳` → `Translate`、`コピー` → `Copy`、`実行` → `Run`、`接続テスト` → `Test connection`、`更新` → `Refresh`、`設定を保存` → `Save`
+- タスク option: `画像の解説` → `Describe image`、`プロンプト作成` → `Create prompt`
+- プレースホルダー・ラベル: `翻訳するテキストを入力...` → `Enter text to translate...`、`翻訳結果がここに表示されます...` → `Translation result...`、`実行結果がここに表示されます...` → `Result...` 等
+- ドロップ説明: `PNG / JPG / WebP をドロップまたはクリック` → `Drop or click PNG / JPG / WebP`
+- 設定ラベル: `バックエンド` → `Backend`、`接続設定` → `Connection`、`モデル選択` → `Model`、`Free 言語設定` → `Free language`、`入力言語` → `Source`、`翻訳言語` → `Target`
+
+#### `web/comfyui/node_sets_menu.js`
+
+- サブタブラベル: `翻訳` → `Translation`、**`VLM` → `TOOLS`**、`設定` → `Settings`
+- HTML 内ラベル: SPA と同内容をすべて英語化
+- JS 動的文字列: `翻訳中...` → `Translating...`、`接続中...` → `Connecting...`、`実行中...` → `Running...`、`設定を保存しました` → `Settings saved`、`コピーしました` → `Copied`、`モデルが見つかりません` → `No models found`、`画像をドロップしてください` → `Please drop an image` 等
+
+---
+
 ## 2026-05-19: v0.3.14 — AI TOOL タブ 3ペイン化・RAW JSON 文字色カスタマイズ
 
 ### 概要
