@@ -1,5 +1,24 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-20: v0.3.16 — CivitAIプレビューフォールバック表示
+
+### 概要
+
+CivitAI情報を取得済みのモデルで、ローカルのプレビューファイルがない場合（バックエンドのダウンロード失敗時など）でも、CivitAIキャッシュの`images[0]`をブラウザが直接表示するフォールバックを追加。
+
+### 変更内容
+
+#### `static/js/models-tab.js`
+
+- **`loadPreviewImage()`** — `onerror` ハンドラーを拡張
+  - APIプレビューが404の場合、`state.modelMetadata[modelName].sha256` → `state.civitaiCache[sha256].images[0]` を参照してブラウザから直接表示
+  - CivitAI画像URLも取得できない場合のみ「プレビューなし」プレースホルダーを表示
+- **`fetchCivitaiForModel()`** — `preview_saved` に依存せず常に更新
+  - CivitAI情報取得成功時は `preview_saved` の値に関わらずサイドパネルと `renderModelGrid()` を更新
+  - ローカル保存なし（`preview_saved: false`）の場合もサイドパネルに `civitai.images[0]` を直接セット
+
+---
+
 ## 2026-05-20: v0.3.15 — サンプルワークフロー同梱・CivitAI自動プレビュー・Create Tagsオプション
 
 ### 概要

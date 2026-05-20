@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.15-green)
+![Version](https://img.shields.io/badge/version-0.3.16-green)
 
 ## Screenshots
 
@@ -270,6 +270,9 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.16
+- **CivitAI preview fallback** — model cards and the detail panel's Info tab now display the first CivitAI image directly when no local preview file exists; if the backend download fails (e.g. network restriction server-side), the browser fetches the image URL from the CivitAI cache as a fallback so the preview is always shown after fetching
 
 ### v0.3.15
 - **Sample workflows** — added `workflows/` directory containing 13 sample workflows (SD1.5 / SDXL / DWPose / Face Detailer / Image Editing) with PNG thumbnails, bundled in the package

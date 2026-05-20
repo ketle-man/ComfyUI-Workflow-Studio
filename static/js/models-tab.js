@@ -169,6 +169,7 @@ function previewUrl(modelName, modelType) {
 /**
  * Load preview image. Uses img onload/onerror instead of HEAD request
  * (aiohttp add_get does not auto-handle HEAD method).
+ * Falls back to CivitAI cached image if no local preview exists.
  */
 function loadPreviewImage(imgEl, placeholderEl, modelName, modelType) {
     const url = previewUrl(modelName, modelType);
@@ -177,8 +178,23 @@ function loadPreviewImage(imgEl, placeholderEl, modelName, modelType) {
         if (placeholderEl) placeholderEl.style.display = "none";
     };
     imgEl.onerror = () => {
-        imgEl.style.display = "none";
-        if (placeholderEl) placeholderEl.style.display = "";
+        // Fallback: use CivitAI cached image if available
+        const meta = state.modelMetadata[modelName] || {};
+        const sha256 = meta.sha256;
+        const civitai = sha256 && state.civitaiCache[sha256];
+        const civitaiImg = civitai && civitai.images && civitai.images[0];
+        if (civitaiImg) {
+            imgEl.onerror = () => {
+                imgEl.style.display = "none";
+                if (placeholderEl) placeholderEl.style.display = "";
+            };
+            imgEl.src = civitaiImg;
+            imgEl.style.display = "";
+            if (placeholderEl) placeholderEl.style.display = "none";
+        } else {
+            imgEl.style.display = "none";
+            if (placeholderEl) placeholderEl.style.display = "";
+        }
     };
     imgEl.src = url;
 }
@@ -1456,19 +1472,23 @@ async function fetchCivitaiForModel(modelName, el) {
             }
             renderCivitaiInfo(el, data.civitai, modelName);
             showToast(t("civitaiFound"), "success");
-            if (data.preview_saved) {
-                const sidePanel = document.getElementById("wfm-models-side-panel");
-                if (sidePanel) {
-                    const sideImg = sidePanel.querySelector(".wfm-side-thumb-img-wrap img");
-                    const sidePh = sidePanel.querySelector(".wfm-side-thumb-placeholder");
-                    if (sideImg) {
+            // Always refresh preview: local file if saved, otherwise civitai image as fallback
+            const sidePanel = document.getElementById("wfm-models-side-panel");
+            if (sidePanel) {
+                const sideImg = sidePanel.querySelector(".wfm-side-thumb-img-wrap img");
+                const sidePh = sidePanel.querySelector(".wfm-side-thumb-placeholder");
+                if (sideImg) {
+                    if (data.preview_saved) {
                         sideImg.src = previewUrl(modelName) + "&t=" + Date.now();
-                        sideImg.style.display = "";
-                        if (sidePh) sidePh.style.display = "none";
+                    } else {
+                        const civitaiImg = data.civitai.images && data.civitai.images[0];
+                        if (civitaiImg) sideImg.src = civitaiImg;
                     }
+                    sideImg.style.display = "";
+                    if (sidePh) sidePh.style.display = "none";
                 }
-                renderModelGrid();
             }
+            renderModelGrid();
         } else if (data.status === "not_found") {
             if (statusEl) statusEl.textContent = t("civitaiNotFound");
             if (fetchBtn) fetchBtn.disabled = false;
