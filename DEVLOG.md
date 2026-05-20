@@ -1,5 +1,62 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-20: v0.3.15 — サンプルワークフロー同梱・CivitAI自動プレビュー・Create Tagsオプション
+
+### 概要
+
+3つの機能追加。サンプルワークフローをパッケージに同梱、CivitAI情報取得時のプレビュー自動保存、AI TOOLタブのTOOLSペインにタグ作成タスクを追加。
+
+### 変更内容
+
+#### `workflows/`（新規）
+
+- SD1.5・SDXL・DWPose・Face Detailer・Image Editing の 13 ワークフロー（JSON + PNG サムネイル）を追加
+- Git 追跡対象に追加し、`comfy node publish` 時にパッケージへ同梱される
+
+#### `py/services/civitai_service.py`
+
+- **`download_image(url, save_path, timeout=15)`** 静的メソッドを追加
+  - `urlopen` で画像バイナリを取得し `save_path` に保存。失敗時は `False` を返しログ出力
+
+#### `py/routes/models_routes.py`
+
+- **`handle_civitai_fetch`**（個別取得）: CivitAI 情報取得成功後、`find_preview_image` でプレビューの有無を確認し、なければ `images[0]` を `{model_stem}.preview.png` として自動ダウンロード。レスポンスに `preview_saved: true/false` を追加
+- **`handle_civitai_batch`**（一括取得）: バッチ完了後、CivitAI 情報があってプレビューのない各モデルに対して同様の自動ダウンロードを実行。サマリーに `preview_saved` 件数を追加
+
+#### `static/js/models-tab.js`
+
+- 個別取得成功時: `data.preview_saved` が `true` の場合、サイドパネルのプレビュー画像を即時更新（`&t=` キャッシュバスター付き URL を再セット）し `renderModelGrid()` を呼び出してカードを更新
+- 一括取得完了時: `done` イベントのトーストに `+N preview` を付記（`preview_saved > 0` の場合のみ）
+
+#### `static/js/ai-tab.js`
+
+- **`VLM_PROMPTS`** に `tags` キーを追加:
+  `"Generate a list of descriptive tags for this image. Output only comma-separated tags in English, nothing else."`
+
+#### `templates/index.html`
+
+- SPA AI TOOL タブの `#wfm-ai-vlm-task` に `<option value="tags">Create tags</option>` を追加
+
+#### `web/comfyui/node_sets_menu.js`
+
+- Library A タブの `#wfm-nlp-ai-vlm-task` に `<option value="tags">Create tags</option>` を追加
+- ローカルの `VLM_PROMPTS` に `tags` キーを追加
+
+#### `static/js/i18n.js`
+
+- `helpModels5` (EN/JA/ZH): 「プレビューなしモデルに自動ダウンロード」の説明を追記
+- `helpAi3` (EN/JA/ZH): タスク一覧に「Create Tags / タグ作成 / 标签生成」を追加、ペイン名を「VLM サブタブ」→「TOOLS ペイン」に修正
+
+#### `README.md`
+
+- バージョンバッジを `0.3.14` → `0.3.15` に更新
+- Sample Workflows セクションを追加（Installation と Usage の間）
+- Models Tab Features: CivitAI 関連行にプレビュー自動保存の説明を追記
+- AI TOOL Tab Features: TOOLS ペインのタスクに `Create Tags` を追加
+- Changelog に `v0.3.15` エントリを追加
+
+---
+
 ## 2026-05-20: AI TOOL タブ 英語化（SPA・Libraryパネル）
 
 ### 概要
