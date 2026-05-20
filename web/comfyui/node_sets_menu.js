@@ -809,9 +809,9 @@ const rebuildSubTabs = () => {
 
     if (state.topTab === "ai") {
         const row1Tabs = [
-            { key: "ai-translate", label: "翻訳" },
-            { key: "ai-vlm",       label: "VLM" },
-            { key: "ai-settings",  label: "設定" },
+            { key: "ai-translate", label: "Translation" },
+            { key: "ai-vlm",       label: "TOOLS" },
+            { key: "ai-settings",  label: "Settings" },
         ];
         const activeKey = state.aiSubTab;
         for (const t of row1Tabs) {
@@ -2852,88 +2852,88 @@ const renderAiTab = (container) => {
     if (!container.querySelector(".wfm-nlp-ai-layout")) {
         container.innerHTML = `
             <div class="wfm-nlp-ai-layout">
-                <!-- 翻訳サブ -->
+                <!-- Translation sub -->
                 <div id="wfm-nlp-ai-translate" class="wfm-nlp-ai-pane">
                     <div class="wfm-nlp-ai-lang-row">
                         <select id="wfm-nlp-ai-src" class="wfm-nlp-ai-sel">
-                            <option value="ja">日本語</option>
-                            <option value="en">英語</option>
-                            <option value="zh">中国語</option>
+                            <option value="ja">Japanese</option>
+                            <option value="en">English</option>
+                            <option value="zh">Chinese</option>
                             <option value="free">Free</option>
                         </select>
-                        <button id="wfm-nlp-ai-swap" class="wfm-nlp-ai-swap" title="入替">⇄</button>
+                        <button id="wfm-nlp-ai-swap" class="wfm-nlp-ai-swap" title="Swap">⇄</button>
                         <select id="wfm-nlp-ai-dst" class="wfm-nlp-ai-sel">
-                            <option value="en">英語</option>
-                            <option value="ja">日本語</option>
-                            <option value="zh">中国語</option>
+                            <option value="en">English</option>
+                            <option value="ja">Japanese</option>
+                            <option value="zh">Chinese</option>
                             <option value="free">Free</option>
                         </select>
                     </div>
-                    <textarea id="wfm-nlp-ai-input" class="wfm-nlp-ai-textarea" placeholder="翻訳するテキストを入力..."></textarea>
+                    <textarea id="wfm-nlp-ai-input" class="wfm-nlp-ai-textarea" placeholder="Enter text to translate..."></textarea>
                     <div class="wfm-nlp-ai-actions">
-                        <button id="wfm-nlp-ai-trans-btn" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">翻訳</button>
-                        <button id="wfm-nlp-ai-copy-btn" class="wfm-nlp-ai-btn">コピー</button>
+                        <button id="wfm-nlp-ai-trans-btn" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">Translate</button>
+                        <button id="wfm-nlp-ai-copy-btn" class="wfm-nlp-ai-btn">Copy</button>
                         <span id="wfm-nlp-ai-status" class="wfm-nlp-ai-status"></span>
                     </div>
-                    <textarea id="wfm-nlp-ai-output" class="wfm-nlp-ai-textarea wfm-nlp-ai-output" placeholder="翻訳結果..." readonly></textarea>
+                    <textarea id="wfm-nlp-ai-output" class="wfm-nlp-ai-textarea wfm-nlp-ai-output" placeholder="Translation result..." readonly></textarea>
                 </div>
-                <!-- VLM サブ -->
+                <!-- TOOLS sub -->
                 <div id="wfm-nlp-ai-vlm" class="wfm-nlp-ai-pane" style="display:none;">
                     <div class="wfm-nlp-ai-vlm-drop" id="wfm-nlp-ai-vlm-drop">
                         <img id="wfm-nlp-ai-vlm-preview" style="display:none;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">
-                        <span id="wfm-nlp-ai-vlm-label" class="wfm-nlp-ai-vlm-label">PNG / JPG / WebP をドロップ</span>
+                        <span id="wfm-nlp-ai-vlm-label" class="wfm-nlp-ai-vlm-label">Drop PNG / JPG / WebP</span>
                         <input type="file" id="wfm-nlp-ai-vlm-file" accept="image/png,image/jpeg,image/webp" style="display:none;">
                     </div>
                     <div class="wfm-nlp-ai-row">
                         <select id="wfm-nlp-ai-vlm-task" class="wfm-nlp-ai-sel" style="flex:1;">
-                            <option value="describe">画像の解説</option>
-                            <option value="prompt">プロンプト作成</option>
+                            <option value="describe">Describe image</option>
+                            <option value="prompt">Create prompt</option>
                         </select>
-                        <button id="wfm-nlp-ai-vlm-run" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">実行</button>
+                        <button id="wfm-nlp-ai-vlm-run" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">Run</button>
                     </div>
                     <span id="wfm-nlp-ai-vlm-status" class="wfm-nlp-ai-status"></span>
-                    <textarea id="wfm-nlp-ai-vlm-result" class="wfm-nlp-ai-textarea wfm-nlp-ai-output" style="flex:1;min-height:60px;" placeholder="実行結果がここに表示されます..." readonly></textarea>
-                    <button id="wfm-nlp-ai-vlm-copy" class="wfm-nlp-ai-btn" style="align-self:flex-end;">コピー</button>
+                    <textarea id="wfm-nlp-ai-vlm-result" class="wfm-nlp-ai-textarea wfm-nlp-ai-output" style="flex:1;min-height:60px;" placeholder="Result..." readonly></textarea>
+                    <button id="wfm-nlp-ai-vlm-copy" class="wfm-nlp-ai-btn" style="align-self:flex-end;">Copy</button>
                 </div>
-                <!-- 設定サブ -->
+                <!-- Settings sub -->
                 <div id="wfm-nlp-ai-settings" class="wfm-nlp-ai-pane wfm-nlp-ai-settings-pane" style="display:none;">
                     <div class="wfm-nlp-ai-sec">
-                        <div class="wfm-nlp-ai-sec-title">バックエンド</div>
+                        <div class="wfm-nlp-ai-sec-title">Backend</div>
                         <div class="wfm-nlp-ai-radio-row">
                             <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="ollama"> Ollama</label>
                             <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="lmstudio"> LM Studio</label>
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">
-                        <div class="wfm-nlp-ai-sec-title">接続設定</div>
+                        <div class="wfm-nlp-ai-sec-title">Connection</div>
                         <input type="text" id="wfm-nlp-ai-url" class="wfm-nlp-ai-input" placeholder="http://localhost:11434">
                         <div class="wfm-nlp-ai-row">
-                            <button id="wfm-nlp-ai-test" class="wfm-nlp-ai-btn">接続テスト</button>
+                            <button id="wfm-nlp-ai-test" class="wfm-nlp-ai-btn">Test connection</button>
                             <span id="wfm-nlp-ai-test-result" class="wfm-nlp-ai-status"></span>
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">
-                        <div class="wfm-nlp-ai-sec-title">モデル選択</div>
+                        <div class="wfm-nlp-ai-sec-title">Model</div>
                         <div class="wfm-nlp-ai-row">
                             <select id="wfm-nlp-ai-model" class="wfm-nlp-ai-sel" style="flex:1;">
-                                <option value="">-- モデルを選択 --</option>
+                                <option value="">-- Select model --</option>
                             </select>
                             <button id="wfm-nlp-ai-model-refresh" class="wfm-nlp-ai-btn">↻</button>
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">
-                        <div class="wfm-nlp-ai-sec-title">Free 言語設定</div>
+                        <div class="wfm-nlp-ai-sec-title">Free language</div>
                         <div class="wfm-nlp-ai-row">
-                            <span class="wfm-nlp-ai-lbl">入力</span>
-                            <input type="text" id="wfm-nlp-ai-free-src" class="wfm-nlp-ai-input" placeholder="例: French" style="flex:1;">
+                            <span class="wfm-nlp-ai-lbl">Source</span>
+                            <input type="text" id="wfm-nlp-ai-free-src" class="wfm-nlp-ai-input" placeholder="e.g. French" style="flex:1;">
                         </div>
                         <div class="wfm-nlp-ai-row">
-                            <span class="wfm-nlp-ai-lbl">翻訳</span>
-                            <input type="text" id="wfm-nlp-ai-free-dst" class="wfm-nlp-ai-input" placeholder="例: German" style="flex:1;">
+                            <span class="wfm-nlp-ai-lbl">Target</span>
+                            <input type="text" id="wfm-nlp-ai-free-dst" class="wfm-nlp-ai-input" placeholder="e.g. German" style="flex:1;">
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">
-                        <button id="wfm-nlp-ai-save" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary" style="width:100%;">設定を保存</button>
+                        <button id="wfm-nlp-ai-save" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary" style="width:100%;">Save</button>
                     </div>
                 </div>
             </div>
@@ -2994,7 +2994,7 @@ const setupAiHandlers = (container) => {
         const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
         const model = c.model;
         if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
-        if (!model) { showToast("設定タブでモデルを選択してください", "error"); return; }
+        if (!model) { showToast("Please select a model in Settings", "error"); return; }
 
         const srcLang = srcSel?.value || "ja";
         const dstLang = dstSel?.value || "en";
@@ -3007,7 +3007,7 @@ const setupAiHandlers = (container) => {
         const statusEl = container.querySelector("#wfm-nlp-ai-status");
         const outputEl = container.querySelector("#wfm-nlp-ai-output");
         transBtn.disabled = true;
-        statusEl.textContent = "翻訳中...";
+        statusEl.textContent = "Translating...";
         statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
         outputEl.value = "";
 
@@ -3027,8 +3027,8 @@ const setupAiHandlers = (container) => {
     // Copy
     container.querySelector("#wfm-nlp-ai-copy-btn")?.addEventListener("click", () => {
         const text = container.querySelector("#wfm-nlp-ai-output")?.value;
-        if (!text) { showToast("コピーするテキストがありません", "error"); return; }
-        navigator.clipboard.writeText(text).then(() => showToast("コピーしました", "success"));
+        if (!text) { showToast("No text to copy", "error"); return; }
+        navigator.clipboard.writeText(text).then(() => showToast("Copied", "success"));
     });
 
     // Model refresh helper
@@ -3039,16 +3039,16 @@ const setupAiHandlers = (container) => {
         const modelSel = container.querySelector("#wfm-nlp-ai-model");
         try {
             const models = await aiFetchModels(url, backend);
-            modelSel.innerHTML = '<option value="">-- モデルを選択 --</option>';
+            modelSel.innerHTML = '<option value="">-- Select model --</option>';
             models.forEach(name => {
                 const opt = document.createElement("option");
                 opt.value = name; opt.textContent = name;
                 if (name === c.model) opt.selected = true;
                 modelSel.appendChild(opt);
             });
-            if (!models.length) showToast("モデルが見つかりません", "error");
+            if (!models.length) showToast("No models found", "error");
         } catch (err) {
-            showToast("モデル取得失敗: " + err.message, "error");
+            showToast("Failed to fetch models: " + err.message, "error");
         }
     };
 
@@ -3064,11 +3064,11 @@ const setupAiHandlers = (container) => {
             return;
         }
         testBtn.disabled = true;
-        resultEl.textContent = "接続中...";
+        resultEl.textContent = "Connecting...";
         resultEl.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
         try {
             const models = await aiFetchModels(url, backend);
-            resultEl.textContent = `OK (${models.length} モデル)`;
+            resultEl.textContent = `OK (${models.length} models)`;
             resultEl.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";
             await refreshModels();
         } catch (err) {
@@ -3094,7 +3094,7 @@ const setupAiHandlers = (container) => {
             return;
         }
         saveAiCfg({ backend, backendUrl: url, model, freeSrcLang, freeDstLang });
-        showToast("設定を保存しました", "success");
+        showToast("Settings saved", "success");
     });
 
     // Auto-load models if settings exist
@@ -3138,17 +3138,17 @@ const setupAiHandlers = (container) => {
     };
 
     vlmRunBtn?.addEventListener("click", async () => {
-        if (!vlmImage) { showToast("画像をドロップしてください", "error"); return; }
+        if (!vlmImage) { showToast("Please drop an image", "error"); return; }
         const c = loadAiCfg();
         const backend = c.backend || "ollama";
         const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
         const model = c.model;
         if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
-        if (!model) { showToast("設定タブでモデルを選択してください", "error"); return; }
+        if (!model) { showToast("Please select a model in Settings", "error"); return; }
 
         const task = container.querySelector("#wfm-nlp-ai-vlm-task")?.value || "describe";
         vlmRunBtn.disabled = true;
-        vlmStatus.textContent = "実行中...";
+        vlmStatus.textContent = "Running...";
         vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
         vlmResult.value = "";
 
@@ -3167,8 +3167,8 @@ const setupAiHandlers = (container) => {
 
     vlmCopy?.addEventListener("click", () => {
         const text = vlmResult?.value;
-        if (!text) { showToast("コピーするテキストがありません", "error"); return; }
-        navigator.clipboard.writeText(text).then(() => showToast("コピーしました", "success"));
+        if (!text) { showToast("No text to copy", "error"); return; }
+        navigator.clipboard.writeText(text).then(() => showToast("Copied", "success"));
     });
 };
 
