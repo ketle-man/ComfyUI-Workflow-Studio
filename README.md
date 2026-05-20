@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.13-green)
+![Version](https://img.shields.io/badge/version-0.3.14-green)
 
 ## Screenshots
 
@@ -106,6 +106,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Default workflow** — set a workflow to auto-load on startup
 - **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling)
 - **Text Size** — one slider (10–28 px) adjusts font size for all prompt and chat textareas at once: Generate UI positive/negative prompts, AI Assistant chat input, Preset prompts, Wildcard prompt and file editor, and Metadata prompt full preview; takes effect immediately and saved with Save Settings
+- **RAW JSON Colors** — customize the 6 syntax highlight colors for the Raw JSON editor in Generate UI: Default Text (base), Name/Scheduler (yellow), Title (pink), Width/Height (green), Prompt/Text (cyan), Image/File (red); changes apply immediately on color pick; Reset Defaults restores the original scheme; saved to `localStorage` under `wfm_settings.jsonColors` and applied on startup
 - **Wildcard Integration** — link the WFS wildcard directory to ComfyUI-Impact-Pack's `wildcards/` directory (directory junction on Windows, symlink on other OS); existing WFS wildcard files are automatically migrated; requires [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)
 - **Language** — English / Japanese / Chinese
 
@@ -148,11 +149,12 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Enable / Disable models** — hide models from ComfyUI by renaming the file extension (`.disabled` suffix); toggle per card (⏸ button), per group (Enable All / Disable All), or filter by status (All / Enabled / Disabled)
 - **Multi-select & bulk operations** — enter selection mode to check multiple models; bulk action bar supports add/remove from groups and permanent file deletion (model file + preview images + sidecar files such as `.json` / `.info`)
 
-### AI Tab (A) (v0.3.13)
-- **Translation sub-tab** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language and text content); selections saved automatically
-- **VLM sub-tab** — drop an image into the 110px drop zone, select a task (Describe Image / Create Prompt), and click Run to analyze with a vision model; result shown in the output area with a Copy button
-- **Settings sub-tab** — choose backend (Ollama / LM Studio), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
-- **Settings shared** — settings saved to `localStorage` under `wfm_ai_settings`; shared with the Library panel's A tab so configuration is consistent across both interfaces
+### AI TOOL Tab (v0.3.14)
+- **3-pane layout** — Translation (40%) | TOOLS (40%) | Settings (20%); all panes always visible simultaneously; no sub-tab switching required
+- **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
+- **TOOLS pane (VLM)** — drop an image into the 110px drop zone, select a task (Describe Image / Create Prompt), and click Run to analyze with a vision model; result shown in the output area with a Copy button
+- **Settings pane** — choose backend (Ollama / LM Studio), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
+- **Settings shared** — settings saved to `localStorage` under `wfm_ai_settings`; shared with the Library panel's AI TOOL tab so configuration is consistent across both interfaces
 - **Backend support** — Ollama (`/api/generate` for text, `/api/tags` for model list); LM Studio OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio)
 - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
 
@@ -165,7 +167,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs)
 - **P — Prompts tab** — browse prompt presets with All / Favorites / Categories sub-tabs
 - **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON in the side panel to view its metadata; supports `UnetLoaderGGUF` and `QuadrupleCLIPLoader` node types; preview area fixed at 110px
-- **A — AI Tools tab** — Translation sub-tab and VLM sub-tab powered by Ollama or LM Studio; settings (backend, URL, model) shared with the SPA AI tab via `localStorage`
+- **A — AI TOOL tab** — 3-pane layout (Translation | TOOLS | Settings) always visible; Translation and TOOLS (VLM) powered by Ollama or LM Studio; settings (backend, URL, model) shared with the SPA AI TOOL tab via `localStorage`
   - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder; drag items to canvas to place the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`); double-click also places at canvas center
   - **lora sub-tab** — LoRA names with `strength_model / strength_clip` values; drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (appears for 1+ LoRAs) drags all LoRAs into a single `Lora Loader (LoraManager)` node
   - **Prompts sub-tab** — POS / NEG badge list; drag a prompt to place `CLIPTextEncode` with text pre-filled; click any entry to view full text + Copy button
@@ -252,6 +254,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.14
+- **AI TOOL tab redesign** — tab renamed from "A" to "AI TOOL"; sub-tab navigation removed in favor of a permanent 3-pane layout (Translation 40% | TOOLS 40% | Settings 20%) — all panes always visible simultaneously; "VLM" pane renamed to "TOOLS"
+- **Settings — RAW JSON Colors** — new accordion section with 6 color pickers to customize the syntax highlight colors for the Raw JSON editor in Generate UI: Default Text, Name/Scheduler, Title, Width/Height, Prompt/Text, Image/File; changes apply immediately on color pick; Reset Defaults restores the original scheme; saved to `localStorage` under `wfm_settings.jsonColors` and applied on startup
+- **Help tab updated** — AI TOOL tab card rewritten; Settings card updated with RAW JSON Colors entry; Library panel sidepanel-16 entry updated
 
 ### v0.3.13
 - **AI Tab (A)** — new tab added to both the SPA and the Workflow Studio Library side panel (rightmost tab)
@@ -480,7 +487,7 @@ ComfyUI-Workflow-Studio/
 │       ├── comfyui-client.js    # ComfyUI WebSocket/API client
 │       ├── nodes-tab.js          # Node browser & node sets
 │       ├── models-tab.js         # Model browser & CivitAI integration
-│       ├── ai-tab.js             # AI tab (Translation, VLM, Settings — Ollama / LM Studio)
+│       ├── ai-tab.js             # AI TOOL tab (Translation | TOOLS/VLM | Settings — Ollama / LM Studio)
 │       ├── comfyui-workflow.js  # UI-to-API format conversion
 │       ├── comfyui-editor.js    # Dynamic parameter editor
 │       ├── json-highlight.js    # JSON syntax highlighting

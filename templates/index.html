@@ -24,7 +24,7 @@
             <button class="wfm-tab" data-tab="gallery">Gallery</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
-            <button class="wfm-tab" data-tab="ai">A</button>
+            <button class="wfm-tab" data-tab="ai">AI TOOL</button>
         </nav>
     </header>
 
@@ -891,6 +891,7 @@
                             <li id="wfm-help-settings-9">All sections are collapsible accordion panels</li>
                             <li id="wfm-help-settings-10">Wildcard Integration: link WFS wildcard dir to ComfyUI-Impact-Pack wildcards (junction/symlink); existing files migrated automatically</li>
                             <li id="wfm-help-settings-11">Text Size: one slider (10–28 px) adjusts font size for all prompt and chat textareas at once — Generate UI positive/negative prompts, AI Assistant chat input, Preset positive/negative, Wildcard prompt and file editor, and Metadata prompt full preview; takes effect immediately and saved with Save Settings</li>
+                            <li id="wfm-help-settings-12">RAW JSON Colors: customize the 6 syntax highlight colors for the Raw JSON editor in Generate UI — Default Text, Name/Scheduler, Title, Width/Height, Prompt/Text, Image/File; changes apply immediately on color pick; Reset Defaults restores the original color scheme</li>
                         </ul>
                     </div>
 
@@ -958,19 +959,18 @@
                             <li id="wfm-help-sidepanel-13">I tab (Information): drop a ComfyUI PNG/WebP/JSON to inspect model, LoRA, and prompt metadata in the side panel — sub-tabs: model / lora / Prompts; supports UnetLoaderGGUF and QuadrupleCLIPLoader node types</li>
                             <li id="wfm-help-sidepanel-14">Information tab — drag items to canvas: model sub-tab places the loader node (Checkpoint → CheckpointLoaderSimple, VAE → VAELoader, Diffusion Model → UNETLoader, Text Encoder → CLIPLoader); double-click also places at canvas center</li>
                             <li id="wfm-help-sidepanel-15">Information tab — LoRA sub-tab: drag individual LoRA to place LoraLoader; "Multiple LORA" section at bottom places all LoRAs in a single Lora Loader (LoraManager) node; Prompts sub-tab: drag a prompt to place CLIPTextEncode node with text pre-filled; click prompt to view full text and copy</li>
-                            <li id="wfm-help-sidepanel-16">A tab (AI Tools): Translation and VLM sub-tabs powered by Ollama or LM Studio; settings (backend, URL, model) are shared with the SPA AI tab via localStorage</li>
+                            <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation and TOOLS (VLM) panes powered by Ollama or LM Studio; 3-pane layout (Translation | TOOLS | Settings) always visible; settings (backend, URL, model) are shared with the SPA AI TOOL tab via localStorage</li>
                         </ul>
                     </div>
 
                     <div class="wfm-help-card">
-                        <h3 id="wfm-help-ai-title">AI Tab (A)</h3>
+                        <h3 id="wfm-help-ai-title">AI TOOL Tab</h3>
                         <ul>
-                            <li id="wfm-help-ai-1">Translation sub-tab: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio</li>
-                            <li id="wfm-help-ai-2">Language selectors for source and destination with ⇄ swap button; text content is also swapped; selections are saved automatically</li>
-                            <li id="wfm-help-ai-3">VLM sub-tab: drop an image into the drop zone and select a task — Describe Image or Create Prompt — then click Run to analyze with a vision model</li>
-                            <li id="wfm-help-ai-4">VLM result is displayed in the output area with a Copy button</li>
-                            <li id="wfm-help-ai-5">Settings sub-tab: choose backend (Ollama / LM Studio), set the API URL, test connection, select model, and configure Free language names for translation</li>
-                            <li id="wfm-help-ai-6">Settings are saved to localStorage and shared with the Library panel's A tab</li>
+                            <li id="wfm-help-ai-1">3-pane layout — Translation (40%) | TOOLS (40%) | Settings (20%) — all panes are always visible simultaneously</li>
+                            <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button; text content is also swapped on swap; selections are saved automatically</li>
+                            <li id="wfm-help-ai-3">TOOLS pane (VLM): drop an image into the drop zone and select a task — Describe Image or Create Prompt — then click Run to analyze with a vision model; result displayed with Copy button</li>
+                            <li id="wfm-help-ai-4">Settings pane: choose backend (Ollama / LM Studio), set the API URL, test connection, select model, and configure Free language names for translation</li>
+                            <li id="wfm-help-ai-5">Settings are saved to localStorage and shared with the Library panel's AI TOOL tab</li>
                         </ul>
                     </div>
 
@@ -1155,17 +1155,10 @@
 
         <!-- AI Tab -->
         <section id="wfm-tab-ai" class="wfm-tab-content">
-            <!-- サブタブナビ -->
-            <div class="wfm-ai-subtab-nav">
-                <button class="wfm-ai-subtab-btn active" data-ai-subtab="translate">翻訳</button>
-                <button class="wfm-ai-subtab-btn" data-ai-subtab="vlm">VLM</button>
-                <button class="wfm-ai-subtab-btn" data-ai-subtab="ai-settings">設定</button>
-            </div>
-
-            <!-- 翻訳サブタブ -->
-            <div id="wfm-ai-subtab-translate" class="wfm-ai-subtab-content">
+            <!-- 翻訳ペイン -->
+            <div class="wfm-ai-pane wfm-ai-pane-translate">
+                <div class="wfm-ai-pane-header">翻訳</div>
                 <div class="wfm-ai-trans-container">
-                    <!-- 言語選択行 -->
                     <div class="wfm-ai-trans-lang-row">
                         <select id="wfm-ai-src-lang" class="wfm-select wfm-ai-lang-select">
                             <option value="ja">日本語</option>
@@ -1181,29 +1174,25 @@
                             <option value="free">Free</option>
                         </select>
                     </div>
-                    <!-- 入力テキストエリア -->
                     <textarea id="wfm-ai-trans-input" class="wfm-ai-trans-textarea" placeholder="翻訳するテキストを入力..."></textarea>
-                    <!-- アクションボタン行 -->
                     <div class="wfm-ai-trans-actions">
                         <button id="wfm-ai-trans-btn" class="wfm-btn wfm-btn-primary">翻訳</button>
                         <button id="wfm-ai-trans-copy-btn" class="wfm-btn">コピー</button>
                         <span id="wfm-ai-trans-status" class="wfm-ai-trans-status"></span>
                     </div>
-                    <!-- 出力テキストエリア -->
                     <textarea id="wfm-ai-trans-output" class="wfm-ai-trans-textarea wfm-ai-trans-output" placeholder="翻訳結果がここに表示されます..." readonly></textarea>
                 </div>
             </div>
-
-            <!-- VLM サブタブ -->
-            <div id="wfm-ai-subtab-vlm" class="wfm-ai-subtab-content" style="display:none">
+            <div class="wfm-ai-pane-divider"></div>
+            <!-- TOOLSペイン -->
+            <div class="wfm-ai-pane wfm-ai-pane-tools">
+                <div class="wfm-ai-pane-header">TOOLS</div>
                 <div class="wfm-ai-vlm-container">
-                    <!-- ドロップゾーン -->
                     <div class="wfm-ai-vlm-drop" id="wfm-ai-vlm-drop">
                         <img id="wfm-ai-vlm-preview" style="display:none;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">
                         <span id="wfm-ai-vlm-label" class="wfm-ai-vlm-label">PNG / JPG / WebP をドロップまたはクリック</span>
                         <input type="file" id="wfm-ai-vlm-file" accept="image/png,image/jpeg,image/webp" style="display:none;">
                     </div>
-                    <!-- タスク選択行 -->
                     <div class="wfm-ai-vlm-task-row">
                         <select id="wfm-ai-vlm-task" class="wfm-select">
                             <option value="describe">画像の解説</option>
@@ -1211,19 +1200,16 @@
                         </select>
                         <button id="wfm-ai-vlm-run" class="wfm-btn wfm-btn-primary">実行</button>
                     </div>
-                    <!-- ステータス -->
                     <span id="wfm-ai-vlm-status" class="wfm-ai-trans-status"></span>
-                    <!-- 結果表示 -->
                     <textarea id="wfm-ai-vlm-result" class="wfm-ai-vlm-result" placeholder="実行結果がここに表示されます..." readonly></textarea>
-                    <!-- コピーボタン -->
                     <button id="wfm-ai-vlm-copy" class="wfm-btn wfm-ai-vlm-copy-btn">コピー</button>
                 </div>
             </div>
-
-            <!-- 設定サブタブ -->
-            <div id="wfm-ai-subtab-ai-settings" class="wfm-ai-subtab-content" style="display:none">
+            <div class="wfm-ai-pane-divider"></div>
+            <!-- 設定ペイン -->
+            <div class="wfm-ai-pane wfm-ai-pane-settings">
+                <div class="wfm-ai-pane-header">設定</div>
                 <div class="wfm-ai-settings-container">
-                    <!-- バックエンド選択 -->
                     <div class="wfm-ai-settings-section">
                         <div class="wfm-ai-settings-title" id="wfm-ai-settings-backend-title">バックエンド</div>
                         <div class="wfm-ai-backend-row">
@@ -1235,7 +1221,6 @@
                             </label>
                         </div>
                     </div>
-                    <!-- 接続設定 -->
                     <div class="wfm-ai-settings-section">
                         <div class="wfm-ai-settings-title" id="wfm-ai-settings-conn-title">接続設定</div>
                         <div class="wfm-ai-settings-row">
@@ -1247,7 +1232,6 @@
                             <span id="wfm-ai-test-result" class="wfm-ai-test-result"></span>
                         </div>
                     </div>
-                    <!-- モデル選択 -->
                     <div class="wfm-ai-settings-section">
                         <div class="wfm-ai-settings-title" id="wfm-ai-settings-model-title">モデル選択</div>
                         <div class="wfm-ai-settings-row">
@@ -1257,7 +1241,6 @@
                             <button id="wfm-ai-model-refresh-btn" class="wfm-btn">更新</button>
                         </div>
                     </div>
-                    <!-- Free 言語設定 -->
                     <div class="wfm-ai-settings-section">
                         <div class="wfm-ai-settings-title" id="wfm-ai-settings-freelang-title">Free 言語設定</div>
                         <div class="wfm-ai-settings-row">
@@ -1269,7 +1252,6 @@
                             <input type="text" id="wfm-ai-free-dst-lang" class="wfm-input" placeholder="例: German">
                         </div>
                     </div>
-                    <!-- 保存 -->
                     <div class="wfm-ai-settings-section">
                         <button id="wfm-ai-settings-save-btn" class="wfm-btn wfm-btn-primary">設定を保存</button>
                     </div>

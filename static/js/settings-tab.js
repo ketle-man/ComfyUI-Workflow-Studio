@@ -338,6 +338,36 @@ export function applyTextareaFontSize(size) {
     el.textContent = `${TEXTAREA_FONT_SIZE_TARGETS} { font-size: ${px}px !important; }`;
 }
 
+// JSON highlight color settings
+const JSON_COLOR_STYLE_ID = "wfm-json-color-style";
+
+const JSON_COLOR_DEFS = [
+    { id: "base",   label: () => t("jsonColorBase")   || "通常テキスト",         def: "#abb2bf" },
+    { id: "yellow", label: () => t("jsonColorYellow") || "名前 / スケジューラ",  def: "#e5c07b" },
+    { id: "pink",   label: () => t("jsonColorPink")   || "タイトル",             def: "#c678dd" },
+    { id: "green",  label: () => t("jsonColorGreen")  || "Width / Height",       def: "#98c379" },
+    { id: "cyan",   label: () => t("jsonColorCyan")   || "プロンプト / テキスト", def: "#61afef" },
+    { id: "red",    label: () => t("jsonColorRed")    || "画像 / ファイル",      def: "#e06c75" },
+];
+
+export function applyJsonColors(colors) {
+    const vals = Object.fromEntries(JSON_COLOR_DEFS.map(d => [d.id, colors?.[d.id] || d.def]));
+    let el = document.getElementById(JSON_COLOR_STYLE_ID);
+    if (!el) {
+        el = document.createElement("style");
+        el.id = JSON_COLOR_STYLE_ID;
+        document.head.appendChild(el);
+    }
+    el.textContent = [
+        `.wfm-json-highlight { color: ${vals.base}; }`,
+        `.json-key-yellow, .json-val-yellow { color: ${vals.yellow}; }`,
+        `.json-key-pink, .json-val-pink { color: ${vals.pink}; }`,
+        `.json-key-green, .json-val-green { color: ${vals.green}; }`,
+        `.json-key-cyan, .json-val-cyan { color: ${vals.cyan}; }`,
+        `.json-key-red, .json-val-red { color: ${vals.red}; }`,
+    ].join("\n");
+}
+
 export function applyTheme(themeId) {
     if (themeId) {
         document.documentElement.setAttribute("data-theme", themeId);
@@ -524,6 +554,23 @@ export async function initSettingsTab() {
                 <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-top:4px;">
                     ${t("textSizeHint") || "Applies to: Generate UI prompts, AI Assistant chat, Preset prompts, Wildcard textarea, Metadata prompt preview"}
                 </small>
+            </div>
+        </details>
+
+        <!-- RAW JSON Colors -->
+        <details class="wfm-settings-section" open>
+            <summary class="wfm-settings-summary">${t("jsonColorsSection") || "RAW JSON Colors"}</summary>
+            <div class="wfm-form-group">
+                <div class="wfm-color-grid" id="wfm-json-color-grid">
+                    ${JSON_COLOR_DEFS.map(d => {
+                        const saved = settings.jsonColors?.[d.id] || d.def;
+                        return `<div class="wfm-color-item">
+                            <label>${d.label()}</label>
+                            <input type="color" data-json-color="${d.id}" value="${saved}">
+                        </div>`;
+                    }).join("")}
+                </div>
+                <button class="wfm-btn wfm-btn-sm" id="wfm-json-color-reset" style="margin-top:8px;">${t("jsonColorReset") || "デフォルトに戻す"}</button>
             </div>
         </details>
 
@@ -1080,6 +1127,27 @@ export async function initSettingsTab() {
         const valEl = document.getElementById("wfm-ta-font-size-val");
         if (valEl) valEl.textContent = `${px}px`;
         applyTextareaFontSize(px);
+    });
+
+    // --- JSON highlight color pickers ---
+    document.getElementById("wfm-json-color-grid")?.addEventListener("input", (e) => {
+        if (e.target.type !== "color") return;
+        const id = e.target.dataset.jsonColor;
+        const jsonColors = { ...(loadLocalSettings().jsonColors || {}), [id]: e.target.value };
+        saveLocalSettings({ jsonColors });
+        applyJsonColors(jsonColors);
+    });
+
+    document.getElementById("wfm-json-color-reset")?.addEventListener("click", () => {
+        const cur = loadLocalSettings();
+        delete cur.jsonColors;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(cur));
+        applyJsonColors(undefined);
+        document.querySelectorAll("#wfm-json-color-grid input[type=color]").forEach(inp => {
+            const def = JSON_COLOR_DEFS.find(d => d.id === inp.dataset.jsonColor);
+            if (def) inp.value = def.def;
+        });
+        showToast(t("settingsSaved"), "success");
     });
 
     // Save (local settings)

@@ -152,28 +152,6 @@ function buildTranslationPrompt(text, srcLang, dstLang, settings) {
 }
 
 // ============================================
-// Sub-tab switching
-// ============================================
-
-function initSubTabs() {
-    document.querySelectorAll(".wfm-ai-subtab-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            document.querySelectorAll(".wfm-ai-subtab-btn").forEach((b) => b.classList.remove("active"));
-            btn.classList.add("active");
-            const tabId = btn.dataset.aiSubtab;
-            document.querySelectorAll(".wfm-ai-subtab-content").forEach((c) => {
-                c.style.display = "none";
-            });
-            const target = document.getElementById(`wfm-ai-subtab-${tabId}`);
-            if (target) target.style.display = "flex";
-        });
-    });
-    // Show first sub-tab on init
-    const first = document.getElementById("wfm-ai-subtab-translate");
-    if (first) first.style.display = "flex";
-}
-
-// ============================================
 // Translation tab
 // ============================================
 
@@ -470,7 +448,6 @@ function initVlmTab() {
 // ============================================
 
 export function initAiTab() {
-    initSubTabs();
     initTranslateTab();
     initVlmTab();
     initSettingsTab();

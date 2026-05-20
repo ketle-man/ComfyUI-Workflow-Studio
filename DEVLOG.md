@@ -1,5 +1,73 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-19: v0.3.14 — AI TOOL タブ 3ペイン化・RAW JSON 文字色カスタマイズ
+
+### 概要
+
+AI タブの UI を刷新し、サブタブ廃止・3 ペイン同時表示レイアウトへ移行。また Settings タブに RAW JSON シンタックスハイライトの文字色カスタマイズ機能を追加。
+
+### 変更内容
+
+#### `templates/index.html`
+
+- タブボタンラベルを `"A"` → `"AI TOOL"` に変更
+- `<section id="wfm-tab-ai">` をサブタブ構成から **3 ペインレイアウト** に刷新
+  - サブタブナビ（翻訳 / VLM / 設定ボタン）を削除
+  - `<div class="wfm-ai-pane wfm-ai-pane-translate">` — 翻訳ペイン（flex: 4）
+  - `<div class="wfm-ai-pane-divider">` — 縦区切り線
+  - `<div class="wfm-ai-pane wfm-ai-pane-tools">` — TOOLS ペイン（flex: 4、旧 VLM）
+  - `<div class="wfm-ai-pane-divider">` — 縦区切り線
+  - `<div class="wfm-ai-pane wfm-ai-pane-settings">` — 設定ペイン（flex: 2）
+  - 各ペインに `<div class="wfm-ai-pane-header">` を追加（翻訳 / TOOLS / 設定）
+- ヘルプタブ更新
+  - `wfm-help-sidepanel-16`: 「AI TOOL tab: Translation and TOOLS (VLM) panes … 3-pane layout always visible」に変更
+  - `wfm-help-ai-title`: "AI Tab (A)" → "AI TOOL Tab"
+  - `wfm-help-ai-1`〜`5`: 3 ペインレイアウトの説明に書き直し（項目数 6→5）
+  - `wfm-help-settings-12` 新規追加: RAW JSON Colors 設定の説明
+
+#### `static/css/main.css`
+
+- `#wfm-tab-ai` の `flex-direction` を `column` → `row` に変更
+- サブタブ関連 CSS を削除: `.wfm-ai-subtab-nav`、`.wfm-ai-subtab-btn`（`.active` 含む）、`.wfm-ai-subtab-content`
+- 3 ペイン用 CSS を追加:
+  - `.wfm-ai-pane` — `display:flex; flex-direction:column; overflow:hidden; min-width:0`
+  - `.wfm-ai-pane-translate { flex:4 }` / `.wfm-ai-pane-tools { flex:4 }` / `.wfm-ai-pane-settings { flex:2 }`
+  - `.wfm-ai-pane-header` — ペイン見出し（uppercase、border-bottom）
+  - `.wfm-ai-pane-divider` — 幅 1px の縦区切り線
+
+#### `static/js/ai-tab.js`
+
+- `initSubTabs()` 関数を削除（サブタブ切り替えロジック全体）
+- `initAiTab()` から `initSubTabs()` の呼び出しを削除
+- `initTranslateTab()`・`initVlmTab()`・`initSettingsTab()` はそのまま維持
+
+#### `static/js/i18n.js`
+
+- `tabAi` を `"A"` → `"AI TOOL"` に EN/JA/ZH 全言語で変更（`replace_all` で 3 箇所一括）
+
+#### `static/js/settings-tab.js`
+
+- **`JSON_COLOR_STYLE_ID`** 定数を追加 (`"wfm-json-color-style"`)
+- **`JSON_COLOR_DEFS`** 配列を追加（6 色定義: base / yellow / pink / green / cyan / red）
+  - 各要素: `{ id, label: () => t(key) || fallback, def: "#xxxxxx" }`
+- **`export function applyJsonColors(colors)`** を追加
+  - `<style id="wfm-json-color-style">` を動的生成・更新
+  - `.wfm-json-highlight`・`.json-key-*`・`.json-val-*` の 6 クラスを上書き
+  - `colors` が `undefined` のときはすべてデフォルト値を使用
+- 設定 HTML テンプレートに `<!-- RAW JSON Colors -->` セクションを追加
+  - `<details>` アコーディオン、`<div id="wfm-json-color-grid">` に 6 個のカラーピッカー
+  - `<button id="wfm-json-color-reset">` でデフォルト復元
+- イベントハンドラを追加
+  - `#wfm-json-color-grid` の `input` イベント: 色変更を即時反映 + `jsonColors` キーとして localStorage 保存
+  - `#wfm-json-color-reset` の `click` イベント: `jsonColors` キー削除・UI リセット・`applyJsonColors(undefined)` 呼び出し
+
+#### `static/js/app.js`
+
+- `import` に `applyJsonColors` を追加
+- 起動時ブロックに `applyJsonColors(_s.jsonColors)` を追加（テーマ・フォントサイズと同様に DOMContentLoaded 前に適用）
+
+---
+
 ## 2026-05-19: v0.3.13 — AI タブ（A）追加
 
 ### 概要

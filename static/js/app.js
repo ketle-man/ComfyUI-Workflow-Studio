@@ -426,7 +426,7 @@ import { initWorkflowTab } from "./workflow-tab.js";
 import { initNodesTab } from "./nodes-tab.js";
 import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
-import { initSettingsTab, applyTheme, getSavedTheme, applyTextareaFontSize } from "./settings-tab.js";
+import { initSettingsTab, applyTheme, getSavedTheme, applyTextareaFontSize, applyJsonColors } from "./settings-tab.js";
 import { initModelsTab } from "./models-tab.js";
 import { initGalleryTab } from "./gallery-tab.js";
 import { initMetadataTab } from "./metadata-tab.js";
@@ -439,6 +439,12 @@ applyTheme(getSavedTheme());
 try {
     const _s = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
     if (_s.textareaFontSize) applyTextareaFontSize(_s.textareaFontSize);
+} catch {}
+
+// Apply saved JSON highlight colors
+try {
+    const _s = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
+    applyJsonColors(_s.jsonColors);
 } catch {}
 
 document.addEventListener("DOMContentLoaded", () => {

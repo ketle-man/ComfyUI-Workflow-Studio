@@ -324,7 +324,7 @@ const LANGUAGES = {
         galleryOutputDirLabel: "Output Folder Path",
         galleryOutputDirHint: "Set the ComfyUI output folder to browse in the Gallery tab. Leave blank to use ComfyUI's default output directory.",
 
-        tabAi: "A",
+        tabAi: "AI TOOL",
 
         // -- AI Tab --
         aiSubTabTranslate: "Translate",
@@ -951,7 +951,7 @@ const LANGUAGES = {
         galleryOutputDirLabel: "Outputフォルダのパス",
         galleryOutputDirHint: "ギャラリータブで参照するComfyUIのoutputフォルダを設定します。空欄の場合はComfyUIのデフォルトoutputディレクトリを使用します。",
 
-        tabAi: "A",
+        tabAi: "AI TOOL",
 
         // -- AI Tab --
         aiSubTabTranslate: "翻訳",
@@ -1574,7 +1574,7 @@ const LANGUAGES = {
         galleryOutputDirLabel: "输出文件夹路径",
         galleryOutputDirHint: "设置图库标签页浏览的ComfyUI输出文件夹。留空则使用ComfyUI默认输出目录。",
 
-        tabAi: "A",
+        tabAi: "AI TOOL",
 
         // -- AI Tab --
         aiSubTabTranslate: "翻译",
