@@ -150,10 +150,24 @@ async def handle_civitai_fetch(request: web.Request) -> web.Response:
                 "message": "Model not found on CivitAI"
             })
 
+        # Auto-set preview if none exists and CivitAI has images
+        preview_saved = False
+        if info.get("images"):
+            has_preview = await asyncio.to_thread(_service.find_preview_image, model_type, model_name)
+            if not has_preview:
+                image_url = info["images"][0]
+                preview_path = file_path.parent / (file_path.stem + ".preview.png")
+                preview_saved = await asyncio.to_thread(
+                    CivitaiService.download_image, image_url, preview_path
+                )
+                if preview_saved:
+                    logger.info("Auto-saved preview for %s from CivitAI", model_name)
+
         return web.json_response({
             "status": "ok",
             "sha256": sha256,
             "civitai": info,
+            "preview_saved": preview_saved,
         })
     except Exception as e:
         logger.error("CivitAI fetch error: %s", e)
@@ -269,6 +283,28 @@ async def handle_civitai_batch(request: web.Request) -> web.Response:
             all_meta[mname]["sha256"] = sha
         _service._save_metadata(all_meta)
 
+    # Auto-set previews for models without preview image
+    dirs = _get_model_dirs(model_type)
+    preview_saved_count = 0
+    for model_name, result in results.items():
+        civitai = result.get("civitai")
+        if not civitai or not civitai.get("images"):
+            continue
+        if _service.find_preview_image(model_type, model_name):
+            continue
+        model_file = None
+        for d in dirs:
+            p = d / model_name
+            if p.is_file():
+                model_file = p
+                break
+        if not model_file:
+            continue
+        preview_path = model_file.parent / (model_file.stem + ".preview.png")
+        if CivitaiService.download_image(civitai["images"][0], preview_path):
+            preview_saved_count += 1
+            logger.info("Auto-saved preview for %s from CivitAI", model_name)
+
     # Send final result
     summary = {
         "total": len(model_files),
@@ -276,6 +312,7 @@ async def handle_civitai_batch(request: web.Request) -> web.Response:
         "not_found": sum(1 for r in results.values() if r.get("sha256") and not r.get("civitai")),
         "errors": sum(1 for r in results.values() if r.get("error")),
         "hashes": {name: r.get("sha256") for name, r in results.items() if r.get("sha256")},
+        "preview_saved": preview_saved_count,
     }
     await response.write(send_sse("done", summary))
     await response.write_eof()

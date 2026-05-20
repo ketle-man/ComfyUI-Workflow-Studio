@@ -196,6 +196,20 @@ class CivitaiService:
 
         return results
 
+    @staticmethod
+    def download_image(url, save_path, timeout=15):
+        """Download an image from URL and save to save_path. Returns True on success."""
+        try:
+            req = Request(url, headers={"User-Agent": "ComfyUI-Workflow-Studio/1.0"})
+            with urlopen(req, timeout=timeout) as resp:
+                data = resp.read()
+            with open(save_path, "wb") as f:
+                f.write(data)
+            return True
+        except Exception as e:
+            logger.warning("Failed to download preview from %s: %s", url, e)
+            return False
+
     def clear_cache(self, sha256_hash=None):
         """Clear cache for a specific hash or all."""
         cache = self._load_cache()

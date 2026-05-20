@@ -1456,6 +1456,19 @@ async function fetchCivitaiForModel(modelName, el) {
             }
             renderCivitaiInfo(el, data.civitai, modelName);
             showToast(t("civitaiFound"), "success");
+            if (data.preview_saved) {
+                const sidePanel = document.getElementById("wfm-models-side-panel");
+                if (sidePanel) {
+                    const sideImg = sidePanel.querySelector(".wfm-side-thumb-img-wrap img");
+                    const sidePh = sidePanel.querySelector(".wfm-side-thumb-placeholder");
+                    if (sideImg) {
+                        sideImg.src = previewUrl(modelName) + "&t=" + Date.now();
+                        sideImg.style.display = "";
+                        if (sidePh) sidePh.style.display = "none";
+                    }
+                }
+                renderModelGrid();
+            }
         } else if (data.status === "not_found") {
             if (statusEl) statusEl.textContent = t("civitaiNotFound");
             if (fetchBtn) fetchBtn.disabled = false;
@@ -1637,7 +1650,8 @@ async function batchFetchCivitai() {
                         if (progressEl) progressEl.textContent = `${pct}% (${data.current}/${data.total}) ${statusText}`;
                     } else if (eventType === "done") {
                         if (progressEl) progressEl.textContent = "";
-                        showToast(t("civitaiBatchDone", data.found, data.not_found), "success");
+                        const previewNote = data.preview_saved > 0 ? ` (+${data.preview_saved} preview)` : "";
+                        showToast(t("civitaiBatchDone", data.found, data.not_found) + previewNote, "success");
                         // Reload caches
                         const [newMeta, newCache] = await Promise.all([fetchModelMetadata(), fetchCivitaiCache()]);
                         state.modelMetadata = newMeta;
