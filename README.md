@@ -203,6 +203,22 @@ Restart ComfyUI after installation.
 
 ---
 
+## Sample Workflows
+
+Sample workflows are included in the `workflows/` folder. You can open them directly in ComfyUI via drag & drop, or load them from the Workflow tab.
+
+> **Note:** Some sample workflows require additional custom nodes.
+> If a node is shown as missing (red/unknown) after loading, install the required custom nodes via **ComfyUI Manager** or by cloning the repository from GitHub into your `ComfyUI/custom_nodes/` directory.
+>
+> ```bash
+> cd ComfyUI/custom_nodes
+> git clone <repository-url>
+> ```
+>
+> After installation, restart ComfyUI to activate the new nodes.
+
+---
+
 ## Usage
 
 ### Launch
