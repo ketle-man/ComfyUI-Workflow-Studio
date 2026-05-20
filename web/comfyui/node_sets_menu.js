@@ -2888,6 +2888,7 @@ const renderAiTab = (container) => {
                         <select id="wfm-nlp-ai-vlm-task" class="wfm-nlp-ai-sel" style="flex:1;">
                             <option value="describe">Describe image</option>
                             <option value="prompt">Create prompt</option>
+                            <option value="tags">Create tags</option>
                         </select>
                         <button id="wfm-nlp-ai-vlm-run" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">Run</button>
                     </div>
@@ -3135,6 +3136,7 @@ const setupAiHandlers = (container) => {
     const VLM_PROMPTS = {
         describe: "Describe this image in detail.",
         prompt: "Create a detailed Stable Diffusion image generation prompt based on this image. Output only the prompt text, nothing else.",
+        tags: "Generate a list of descriptive tags for this image. Output only comma-separated tags in English, nothing else.",
     };
 
     vlmRunBtn?.addEventListener("click", async () => {
