@@ -305,6 +305,21 @@ export const comfyWorkflow = {
             // 2. Map widgets_values to widget input names using object_info
             const widgets = node.widgets_values || [];
             if (widgets.length > 0) {
+                // Lora Loader (LoraManager): use __lm_widget_ids from node properties
+                // widgets_values: [autocomplete_meta_obj, text_str, loras_array]
+                // API format:     {__lm_autocomplete_meta_text: obj, text: str, loras: {__value__: arr}}
+                const lmWidgetIds = node.properties?.__lm_widget_ids;
+                if (lmWidgetIds && Array.isArray(lmWidgetIds)) {
+                    lmWidgetIds.forEach((name, idx) => {
+                        if (idx >= widgets.length || linkedInputNames.has(name)) return;
+                        let val = widgets[idx];
+                        if (name === "loras" && Array.isArray(val)) {
+                            val = { "__value__": val };
+                        }
+                        inputs[name] = val;
+                    });
+                } else {
+
                 const widgetNames = _getWidgetInputNames(objectInfo, node.type);
 
                 if (widgetNames.length > 0) {
@@ -374,6 +389,7 @@ export const comfyWorkflow = {
                         });
                     }
                 }
+                } // end else (non-LoraManager path)
             }
 
             api[nodeId] = {

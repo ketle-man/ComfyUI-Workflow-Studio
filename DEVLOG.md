@@ -1,5 +1,32 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-30: v0.3.17 — SSL証明書エラー修正・Lora Manager対応
+
+### 概要
+
+2つのバグ修正。CivitAI APIへのリクエストでSSL証明書の検証エラーが発生する問題（Windows Portable Python環境で再現）の修正と、ComfyUI-Lora-ManagerのLoRAローダーノードをGenerateUIタブで正しく変換・生成できるよう対応。
+
+### 変更内容
+
+#### `py/services/civitai_service.py`
+
+- **`_make_ssl_context()`** ヘルパー関数を追加
+  1. `certifi` がインストールされていればそのCA束を使用
+  2. `certifi` がなければシステムデフォルトのSSLコンテキストを使用
+  3. いずれも失敗した場合（Windows Portable Python等でCA束が壊れている環境）は `CERT_NONE` でフォールバック（ログ警告を出力）
+- **`_get_ssl_context()`** — モジュールレベルでSSLコンテキストを1回だけ生成してキャッシュ
+- `fetch_by_hash()` および `download_image()` の `urlopen` 呼び出しに `context=_get_ssl_context()` を追加
+- 修正対象エラー: `SSL: CERTIFICATE_VERIFY_FAILED certificate verify failed: certificate has expired`
+
+#### `static/js/comfyui-workflow.js`
+
+- **`convertUiToApi()`** — Lora Loader (LoraManager) ノードの特殊ウィジェットマッピングを追加
+  - ノードの `properties.__lm_widget_ids`（LoRA Managerが設定するウィジェット識別子配列）が存在する場合、`widgets_values` をその配列のインデックスで直接マッピング
+  - `loras` キーの値（UI形式: 配列 `[...]`）をAPI形式 `{"__value__": [...]}` にラップして出力
+  - 修正前は `object_info` ベースのウィジェットマッピングが LoRA Manager の独自型（非 INT/FLOAT/STRING/BOOLEAN/COMBO）を認識できずスキップされていた
+
+---
+
 ## 2026-05-20: v0.3.16 — CivitAIプレビューフォールバック表示
 
 ### 概要

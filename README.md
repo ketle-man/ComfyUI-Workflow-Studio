@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.16-green)
+![Version](https://img.shields.io/badge/version-0.3.17-green)
 
 ## Screenshots
 
@@ -270,6 +270,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.17
+- **CivitAI SSL fix** — resolved `CERTIFICATE_VERIFY_FAILED` errors when fetching model info on Windows Portable Python environments; uses `certifi` CA bundle when available, falls back to system store, and disables verification only as a last resort with a warning log
+- **Lora Manager support** — `Lora Loader (LoraManager)` nodes (ComfyUI-Lora-Manager) are now correctly converted from UI format to API format in the GenerateUI tab; the `loras` widget array is wrapped to `{"__value__": [...]}` as required by the node, enabling generation with LoRA Manager workflows
 
 ### v0.3.16
 - **CivitAI preview fallback** — model cards and the detail panel's Info tab now display the first CivitAI image directly when no local preview file exists; if the backend download fails (e.g. network restriction server-side), the browser fetches the image URL from the CivitAI cache as a fallback so the preview is always shown after fetching

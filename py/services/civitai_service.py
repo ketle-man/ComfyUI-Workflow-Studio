@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import ssl
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -10,6 +11,40 @@ from urllib.error import URLError, HTTPError
 from ..config import DATA_DIR
 
 logger = logging.getLogger(__name__)
+
+
+def _make_ssl_context():
+    """Return an SSL context with CA verification.
+
+    Tries certifi first (bundled CA store, available in most ComfyUI envs).
+    Falls back to an unverified context when certifi is absent or the system
+    store is broken (common with Windows portable Python builds).
+    """
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        pass
+    try:
+        ctx = ssl.create_default_context()
+        return ctx
+    except Exception:
+        pass
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    logger.warning("CivitAI: SSL certificate verification disabled (no CA bundle found)")
+    return ctx
+
+
+_SSL_CONTEXT = None
+
+
+def _get_ssl_context():
+    global _SSL_CONTEXT
+    if _SSL_CONTEXT is None:
+        _SSL_CONTEXT = _make_ssl_context()
+    return _SSL_CONTEXT
 
 CIVITAI_API_BASE = "https://civitai.com/api/v1"
 CIVITAI_CACHE_FILE = DATA_DIR / "civitai_cache.json"
@@ -77,7 +112,7 @@ class CivitaiService:
         url = f"{CIVITAI_API_BASE}/model-versions/by-hash/{sha256_hash}"
         try:
             req = Request(url, headers={"User-Agent": "ComfyUI-Workflow-Studio/1.0"})
-            with urlopen(req, timeout=15) as resp:
+            with urlopen(req, timeout=15, context=_get_ssl_context()) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
 
             if not data or "id" not in data:
@@ -201,7 +236,7 @@ class CivitaiService:
         """Download an image from URL and save to save_path. Returns True on success."""
         try:
             req = Request(url, headers={"User-Agent": "ComfyUI-Workflow-Studio/1.0"})
-            with urlopen(req, timeout=timeout) as resp:
+            with urlopen(req, timeout=timeout, context=_get_ssl_context()) as resp:
                 data = resp.read()
             with open(save_path, "wb") as f:
                 f.write(data)
