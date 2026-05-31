@@ -1739,6 +1739,14 @@ async function batchFetchCivitai() {
                         showToast(t("civitaiBatchDone", data.found, data.not_found) + previewNote, "success");
                         // Reload caches
                         const [newMeta, newCache] = await Promise.all([fetchModelMetadata(), fetchCivitaiCache()]);
+                        // Apply sha256 hashes from batch result directly in case fetchModelMetadata
+                        // returns before the server has flushed updated metadata to disk
+                        if (data.hashes) {
+                            for (const [modelName, sha256] of Object.entries(data.hashes)) {
+                                if (!newMeta[modelName]) newMeta[modelName] = {};
+                                if (!newMeta[modelName].sha256) newMeta[modelName].sha256 = sha256;
+                            }
+                        }
                         state.modelMetadata = newMeta;
                         state.civitaiCache = newCache;
                         renderModelGrid();

@@ -659,6 +659,26 @@ export async function initSettingsTab() {
             </div>
         </details>
 
+        <!-- CivitAI API Key -->
+        <details class="wfm-settings-section">
+            <summary class="wfm-settings-summary">${t("civitaiApiKeySetting")}</summary>
+            <div class="wfm-form-group">
+                <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-bottom:8px;">
+                    ${t("civitaiApiKeyHint")}
+                </small>
+                <div style="display:flex;gap:8px;">
+                    <input type="password" class="wfm-input" id="wfm-settings-civitai-api-key"
+                        value="${serverSettings.civitai_api_key || ""}"
+                        placeholder="${t("civitaiApiKeyPlaceholder")}"
+                        style="flex:1;">
+                    <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-civitai-api-key-save">
+                        ${t("civitaiApiKeySave")}
+                    </button>
+                </div>
+                <div id="wfm-settings-civitai-api-key-status" style="font-size:12px;margin-top:4px;"></div>
+            </div>
+        </details>
+
         <!-- Default Workflow -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">${t("defaultWorkflow")}</summary>
@@ -1068,6 +1088,23 @@ export async function initSettingsTab() {
             showToast(t("ollamaSaved"), "success");
         } catch (err) {
             showToast(`${t("saveError")}: ${err.message}`, "error");
+        }
+    });
+
+    // Save CivitAI API key
+    document.getElementById("wfm-settings-civitai-api-key-save")?.addEventListener("click", async () => {
+        const apiKey = document.getElementById("wfm-settings-civitai-api-key")?.value.trim() || "";
+        const statusEl = document.getElementById("wfm-settings-civitai-api-key-status");
+        try {
+            await saveServerSettings({ civitai_api_key: apiKey });
+            serverSettings.civitai_api_key = apiKey;
+            showToast(t("civitaiApiKeySaved"), "success");
+            if (statusEl) { statusEl.textContent = ""; }
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = `${t("saveError")}: ${err.message}`;
+                statusEl.style.color = "var(--wfm-danger)";
+            }
         }
     });
 

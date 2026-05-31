@@ -1,5 +1,75 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-31: v0.3.19 — CivitAI 連携強化（バッチ高速化・リトライ・APIキー・フィールド拡充）
+
+### 概要
+
+CivitAI API との連携を全面的に改善。バッチ取得を `POST /model-versions/by-hash` 一括リクエストに変更して大幅に高速化。
+429/5xx エラーへの指数バックオフリトライを追加。APIキーをオプション対応し設定UIとエクスポート除外を実装。
+取得フィールドを `nsfwLevel`・`air`・`stats`・`updatedAt` 等に拡充。
+
+### 変更内容
+
+#### `py/services/civitai_service.py` — 全面改修
+
+**バッチ高速化 (POST 一括取得)**
+- `_batch_fetch_post(sha256_hashes)` を新設 — `POST /model-versions/by-hash` で最大 100 件を 1 リクエストで取得
+  - レスポンスの `files[].hashes.SHA256` でリクエストのハッシュと照合してキャッシュに保存
+  - 100 件超は `_BATCH_CHUNK_SIZE = 100` 単位でチャンク処理
+- `batch_fetch()` を 2 フェーズ構成に変更
+  - **Phase 1 (hashing)**: 全モデルの SHA256 を計算。キャッシュ済みはここでスキップ
+  - **Phase 2 (fetching)**: 未キャッシュ分をまとめて `_batch_fetch_post()` に投げる
+  - 以前の 1 件ずつ GET + 0.5 秒ウェイト方式を廃止 → 100 モデルで約 50 秒→数秒に短縮
+
+**429/5xx 指数バックオフリトライ**
+- `fetch_by_hash()` および `_batch_fetch_post()` 両方に実装
+- 対象コード: `{429, 500, 502, 503, 504}`。1s → 2s → 4s、最大 3 回
+- 404 はリトライせず即 `None` を返す（従来通り）
+
+**APIキー対応**
+- `_get_api_key()` を新設 — 環境変数 `CIVITAI_API_KEY` を優先し、なければ `settings.json` の `civitai_api_key` にフォールバック
+- `_build_headers()` を新設 — APIキーがあれば `Authorization: Bearer ...` ヘッダーを付与
+
+**ハッシュの大文字/小文字統一**
+- キャッシュキー: 小文字 `sha256_lower`
+- API 送信 (GET URL パス・POST ボディ): `sha256.upper()`
+- `get_cached()` も `.lower()` を適用してキー不一致を防止
+
+**`_extract_info()` 拡張**
+| 追加フィールド | 内容 |
+|---|---|
+| `nsfwLevel` | 数値 NSFW レベル（0〜6）|
+| `air` | AIR 識別子 (`urn:air:sdxl:lora:civitai:xxx@yyy`) |
+| `stats` | `downloadCount` / `thumbsUpCount` / `thumbsDownCount` |
+| `updatedAt` | バージョン最終更新日時 |
+| `publishedAt` | バージョン公開日時 |
+| `imageDetails` | 画像の `url`・`width`・`height`・`nsfwLevel` を含む配列 |
+| `fileMeta` | プライマリファイルの `fp`・`size`・`format` |
+
+- `images` URLリストは後方互換のため維持
+
+#### `py/routes/settings_routes.py`
+
+- `_SETTINGS_EXPORT_EXCLUDE = {"civitai_api_key"}` を定義
+- `_build_export_bundle()` でエクスポート時に `settings.json` から除外キーをフィルタリング — APIキーが誤って他人に渡るリスクを排除
+
+#### `static/js/settings-tab.js`
+
+- Ollama 設定セクションの直後に **CivitAI API Key** セクションを追加
+  - `type="password"` 入力フィールド（`wfm-settings-civitai-api-key`）
+  - 保存ボタン → `saveServerSettings({ civitai_api_key })` を呼び `settings.json` に保存
+
+#### `static/js/i18n.js`
+
+- `civitaiApiKeySetting` / `civitaiApiKeyHint` / `civitaiApiKeyPlaceholder` / `civitaiApiKeySave` / `civitaiApiKeySaved` を EN・JA・ZH の 3 言語に追加
+
+#### `static/js/models-tab.js`
+
+- バッチ完了 `done` イベント処理で `data.hashes`（`{モデル名: sha256}`）を直接 `state.modelMetadata` に適用
+  - `fetchModelMetadata()` の結果に sha256 が含まれない場合のタイミング問題によるサイドパネル CivitAI タブ表示バグを修正
+
+---
+
 ## 2026-05-31: v0.3.18 — Batch タブ追加・Models 複数選択強化
 
 ### 概要

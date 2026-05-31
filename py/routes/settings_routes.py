@@ -179,13 +179,20 @@ def _load_data_file(filename: str):
         return None
 
 
+# エクスポートから除外するsettings.jsonのキー（APIキーなどの機密情報）
+_SETTINGS_EXPORT_EXCLUDE = {"civitai_api_key"}
+
+
 def _build_export_bundle() -> dict:
     """Collect all data files into a single export bundle."""
     bundle = {"__version": 1, "__source": "ComfyUI-Workflow-Studio"}
     for filename in _DATA_FILES:
         data = _load_data_file(filename)
-        if data is not None:
-            bundle[filename] = data
+        if data is None:
+            continue
+        if filename == "settings.json" and isinstance(data, dict):
+            data = {k: v for k, v in data.items() if k not in _SETTINGS_EXPORT_EXCLUDE}
+        bundle[filename] = data
     return bundle
 
 

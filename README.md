@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.18-green)
+![Version](https://img.shields.io/badge/version-0.3.19-green)
 
 ## Screenshots
 
@@ -107,8 +107,9 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Gallery output directory** — configure which output folder the Gallery tab scans for images
 - **Eagle connection** — set Eagle API endpoint for auto-save
 - **Ollama connection** — configure Ollama server URL
+- **CivitAI API Key** — optional Bearer token for authenticated CivitAI access; stored in `settings.json` (excluded from data exports); environment variable `CIVITAI_API_KEY` takes priority if set
 - **Default workflow** — set a workflow to auto-load on startup
-- **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling)
+- **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling); API keys are excluded from exports for security
 - **Text Size** — one slider (10–28 px) adjusts font size for all prompt and chat textareas at once: Generate UI positive/negative prompts, AI Assistant chat input, Preset prompts, Wildcard prompt and file editor, and Metadata prompt full preview; takes effect immediately and saved with Save Settings
 - **RAW JSON Colors** — customize the 6 syntax highlight colors for the Raw JSON editor in Generate UI: Default Text (base), Name/Scheduler (yellow), Title (pink), Width/Height (green), Prompt/Text (cyan), Image/File (red); changes apply immediately on color pick; Reset Defaults restores the original scheme; saved to `localStorage` under `wfm_settings.jsonColors` and applied on startup
 - **Wildcard Integration** — link the WFS wildcard directory to ComfyUI-Impact-Pack's `wildcards/` directory (directory junction on Windows, symlink on other OS); existing WFS wildcard files are automatically migrated; requires [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)
@@ -143,8 +144,8 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
 - **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
 - **Side panel tabs** — Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
-- **CivitAI integration** — fetch model metadata by SHA256 hash, view base model, trained words, tags, and model page link; preview image is automatically downloaded and saved if none exists
-- **Batch CivitAI fetch** — one-click batch fetch for all models of a type with SSE progress streaming; previews are auto-saved for models without one
+- **CivitAI integration** — fetch model metadata by SHA256 hash; displays base model, trained words, tags, NSFW level, download/like stats, AIR identifier, and model page link; preview image is automatically downloaded and saved if none exists
+- **Batch CivitAI fetch** — one-click batch fetch using `POST /model-versions/by-hash` (up to 100 models per request) with SSE progress streaming; previews are auto-saved for models without one
 - **Detail modal** — preview image, CivitAI info, thumbnail change via file upload
 - **GenUI Model button** — apply the selected model directly to the corresponding node in GenerateUI's current workflow (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder)
 - **Group management** — create, rename, delete groups and assign/remove models; groups are scoped per model type (checkpoint groups only appear in the Checkpoint tab)
@@ -274,6 +275,14 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.19
+- **CivitAI batch fetch — major speedup** — switched from one-by-one `GET` requests (0.5 s delay each) to `POST /model-versions/by-hash` batch endpoint; up to 100 hashes per request, reducing 100-model fetch from ~50 s to a few seconds
+- **Retry with exponential backoff** — `fetch_by_hash` and the new batch POST both retry on HTTP 429 / 500 / 502 / 503 / 504 with 1 s → 2 s → 4 s delays (max 3 attempts), as recommended in the CivitAI API docs
+- **CivitAI API key support** — optional Bearer token can be set in Settings tab (CivitAI API Key section); environment variable `CIVITAI_API_KEY` takes priority over the stored key; API keys are excluded from data exports
+- **Richer metadata** — `_extract_info` now captures `nsfwLevel` (numeric), `air` (AIR URN identifier), `stats` (download count, thumbs-up/down), `updatedAt`, `publishedAt`, image dimensions / per-image NSFW level (`imageDetails`), and primary file precision / format (`fileMeta`)
+- **Hash consistency** — cache keys use lowercase hex; API requests send uppercase hex as required by the CivitAI spec
+- **Bug fix: CivitAI tab blank after batch fetch** — the `done` SSE event now applies `data.hashes` directly to `state.modelMetadata` so the side-panel CivitAI tab renders correctly even when the subsequent `fetchModelMetadata()` call races ahead of the server flush
 
 ### v0.3.18
 - **Batch tab** — new 5th subtab in GenerateUI with a dedicated 3-pane layout for assembling checkpoint batch queues; left pane: file-tree checkpoint selection (filter, All/None, initially unchecked); center pane: group-based selection with inner tabs (Checkpoint / Lora / Prompt / Workflow — Lora/Prompt/Workflow coming soon); right pane: live Batch Queue preview combining both pane selections with duplicates removed

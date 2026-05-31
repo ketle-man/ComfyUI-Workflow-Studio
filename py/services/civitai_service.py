@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import ssl
+import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -44,8 +45,15 @@ def _get_ssl_context():
         _SSL_CONTEXT = _make_ssl_context()
     return _SSL_CONTEXT
 
+
 CIVITAI_API_BASE = "https://civitai.com/api/v1"
 CIVITAI_CACHE_FILE = DATA_DIR / "civitai_cache.json"
+
+# HTTPステータスコード: 指数バックオフでリトライする対象
+_RETRY_CODES = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 3
+# POST /model-versions/by-hash は最大100件まで一括送信可能
+_BATCH_CHUNK_SIZE = 100
 
 
 class CivitaiService:
@@ -53,6 +61,8 @@ class CivitaiService:
 
     def __init__(self):
         self._cache = None
+
+    # ── キャッシュ管理 ────────────────────────────────────────
 
     def _load_cache(self):
         if self._cache is not None:
@@ -75,11 +85,36 @@ class CivitaiService:
     def get_cached(self, sha256_hash):
         """Return cached CivitAI data for a given hash, or None."""
         cache = self._load_cache()
-        return cache.get(sha256_hash)
+        return cache.get(sha256_hash.lower())
 
     def get_all_cached(self):
         """Return the full cache dict."""
         return self._load_cache()
+
+    # ── APIキー / ヘッダー ────────────────────────────────────
+
+    @staticmethod
+    def _get_api_key():
+        """Return CivitAI API key. Env var CIVITAI_API_KEY takes priority over settings.json."""
+        import os
+        env_key = os.environ.get("CIVITAI_API_KEY", "").strip()
+        if env_key:
+            return env_key
+        try:
+            from ..services.settings_service import SettingsService
+            return SettingsService().load().get("civitai_api_key", "").strip() or None
+        except Exception:
+            return None
+
+    def _build_headers(self):
+        """Build request headers, optionally including Bearer token."""
+        headers = {"User-Agent": "ComfyUI-Workflow-Studio/1.0"}
+        api_key = self._get_api_key()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        return headers
+
+    # ── ハッシュ計算 ──────────────────────────────────────────
 
     @staticmethod
     def calculate_sha256(file_path, chunk_size=65536):
@@ -94,43 +129,130 @@ class CivitaiService:
                 if not chunk:
                     break
                 h.update(chunk)
-        return h.hexdigest()
+        return h.hexdigest()  # 小文字16進数
+
+    # ── 単体フェッチ (GET) ────────────────────────────────────
 
     def fetch_by_hash(self, sha256_hash):
-        """Fetch model version info from CivitAI by SHA256 hash.
+        """Fetch model version info from CivitAI by SHA256 hash (GET).
 
+        429/5xx は指数バックオフでリトライ。
         Returns dict with model info, or None if not found.
         Caches successful results.
         """
-        # Check cache first
+        sha256_lower = sha256_hash.lower()
         cache = self._load_cache()
-        if sha256_hash in cache:
-            return cache[sha256_hash]
+        if sha256_lower in cache:
+            return cache[sha256_lower]
 
-        url = f"{CIVITAI_API_BASE}/model-versions/by-hash/{sha256_hash}"
-        try:
-            req = Request(url, headers={"User-Agent": "ComfyUI-Workflow-Studio/1.0"})
-            with urlopen(req, timeout=15, context=_get_ssl_context()) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+        url = f"{CIVITAI_API_BASE}/model-versions/by-hash/{sha256_hash.upper()}"
 
-            if not data or "id" not in data:
+        for attempt in range(_MAX_RETRIES):
+            try:
+                req = Request(url, headers=self._build_headers())
+                with urlopen(req, timeout=15, context=_get_ssl_context()) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+
+                if not data or "id" not in data:
+                    return None
+
+                info = self._extract_info(data)
+                cache[sha256_lower] = info
+                self._save_cache()
+                return info
+
+            except HTTPError as e:
+                if e.code == 404:
+                    logger.debug("CivitAI: model not found for hash %s", sha256_hash[:16])
+                    return None
+                if e.code in _RETRY_CODES and attempt < _MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning("CivitAI %s: retrying in %ss (attempt %d/%d)",
+                                   e.code, wait, attempt + 1, _MAX_RETRIES)
+                    time.sleep(wait)
+                    continue
+                logger.warning("CivitAI API error: %s %s", e.code, e.reason)
+                return None
+            except (URLError, Exception) as e:
+                if attempt < _MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning("CivitAI request failed: %s — retrying in %ss", e, wait)
+                    time.sleep(wait)
+                    continue
+                logger.warning("CivitAI request failed: %s", e)
                 return None
 
-            # Extract useful fields
-            info = self._extract_info(data)
-            cache[sha256_hash] = info
-            self._save_cache()
-            return info
+        return None
 
-        except HTTPError as e:
-            if e.code == 404:
-                logger.debug("CivitAI: model not found for hash %s", sha256_hash[:16])
-                return None
-            logger.warning("CivitAI API error: %s %s", e.code, e.reason)
-            return None
-        except (URLError, Exception) as e:
-            logger.warning("CivitAI request failed: %s", e)
-            return None
+    # ── 一括フェッチ (POST) ───────────────────────────────────
+
+    def _batch_fetch_post(self, sha256_hashes):
+        """POST /model-versions/by-hash でハッシュリストを一括取得（最大100件/リクエスト）。
+
+        レスポンスの files[].hashes.SHA256 でリクエストのハッシュと照合する。
+        Returns: { sha256_lower: info_or_none }
+        """
+        if not sha256_hashes:
+            return {}
+
+        url = f"{CIVITAI_API_BASE}/model-versions/by-hash"
+        results = {h.lower(): None for h in sha256_hashes}
+        cache = self._load_cache()
+
+        for chunk_start in range(0, len(sha256_hashes), _BATCH_CHUNK_SIZE):
+            chunk = sha256_hashes[chunk_start:chunk_start + _BATCH_CHUNK_SIZE]
+            chunk_lower = {h.lower() for h in chunk}
+
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    body = json.dumps([h.upper() for h in chunk]).encode("utf-8")
+                    req = Request(
+                        url,
+                        data=body,
+                        headers={**self._build_headers(), "Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=30, context=_get_ssl_context()) as resp:
+                        versions = json.loads(resp.read().decode("utf-8"))
+
+                    # 各バージョンを files[].hashes.SHA256 でリクエストのハッシュと照合
+                    for version_data in versions:
+                        info = self._extract_info(version_data)
+                        matched = False
+                        for f in version_data.get("files", []):
+                            file_sha256 = f.get("hashes", {}).get("SHA256", "").lower()
+                            if file_sha256 in chunk_lower:
+                                cache[file_sha256] = info
+                                results[file_sha256] = info
+                                matched = True
+                                break
+                        if not matched:
+                            # files にハッシュがない場合は versionId で照合を試みる
+                            logger.debug("CivitAI: could not match version %s to a requested hash",
+                                         version_data.get("id"))
+                    break  # チャンク成功
+
+                except HTTPError as e:
+                    if e.code in _RETRY_CODES and attempt < _MAX_RETRIES - 1:
+                        wait = 2 ** attempt
+                        logger.warning("CivitAI batch POST %s: retrying in %ss", e.code, wait)
+                        time.sleep(wait)
+                        continue
+                    logger.warning("CivitAI batch POST error: %s %s", e.code, e.reason)
+                    break
+                except (URLError, Exception) as e:
+                    if attempt < _MAX_RETRIES - 1:
+                        wait = 2 ** attempt
+                        logger.warning("CivitAI batch POST failed: %s — retrying in %ss", e, wait)
+                        time.sleep(wait)
+                        continue
+                    logger.warning("CivitAI batch POST failed: %s", e)
+                    break
+
+        self._save_cache()
+        return results
+
+    # ── 情報抽出 ──────────────────────────────────────────────
 
     @staticmethod
     def _extract_info(data):
@@ -139,23 +261,35 @@ class CivitaiService:
         images = data.get("images", [])
         files = data.get("files", [])
 
-        # Get primary file info
-        primary_file = None
-        for f in files:
-            if f.get("primary"):
-                primary_file = f
-                break
+        # プライマリファイルを特定
+        primary_file = next((f for f in files if f.get("primary")), None)
         if not primary_file and files:
             primary_file = files[0]
 
-        # Get image URLs (first 5)
-        image_urls = []
+        # 画像情報（URL・寸法・NSFWレベル）を最大5件取得
+        image_list = []
         for img in images[:5]:
-            url = img.get("url", "")
-            if url:
-                # Optimize for thumbnail
-                optimized = url.replace("/original=true", "/width=450,optimized=true")
-                image_urls.append(optimized)
+            img_url = img.get("url", "")
+            if not img_url:
+                continue
+            image_list.append({
+                "url": img_url,
+                "width": img.get("width"),
+                "height": img.get("height"),
+                "nsfwLevel": img.get("nsfwLevel", 0),
+            })
+
+        # プライマリファイルのメタ情報（精度・フォーマット）
+        file_meta = {}
+        if primary_file:
+            pm = primary_file.get("metadata", {})
+            file_meta = {
+                "fp": pm.get("fp"),
+                "size": pm.get("size"),
+                "format": pm.get("format"),
+            }
+
+        stats = data.get("stats", {})
 
         return {
             "versionId": data.get("id"),
@@ -166,17 +300,37 @@ class CivitaiService:
             "description": data.get("description") or model.get("description", ""),
             "tags": model.get("tags", []),
             "nsfw": model.get("nsfw", False),
+            "nsfwLevel": data.get("nsfwLevel", 0),
+            "air": data.get("air", ""),
             "creator": data.get("creator", {}).get("username", ""),
-            "images": image_urls,
+            # 後方互換のため URLリストを維持しつつ詳細情報も保存
+            "images": [img["url"] for img in image_list],
+            "imageDetails": image_list,
             "trainedWords": data.get("trainedWords", []),
             "baseModel": data.get("baseModel", ""),
             "fileSize": primary_file.get("sizeKB", 0) if primary_file else 0,
+            "fileMeta": file_meta,
             "downloadUrl": data.get("downloadUrl", ""),
-            "modelUrl": f"https://civitai.com/models/{model.get('id', '')}?modelVersionId={data.get('id', '')}",
+            "modelUrl": (
+                f"https://civitai.com/models/{model.get('id', '')}"
+                f"?modelVersionId={data.get('id', '')}"
+            ),
+            "stats": {
+                "downloadCount": stats.get("downloadCount", 0),
+                "thumbsUpCount": stats.get("thumbsUpCount", 0),
+                "thumbsDownCount": stats.get("thumbsDownCount", 0),
+            },
+            "updatedAt": data.get("updatedAt", ""),
+            "publishedAt": data.get("publishedAt", ""),
         }
+
+    # ── バッチフェッチ ────────────────────────────────────────
 
     def batch_fetch(self, model_files, progress_callback=None):
         """Batch fetch CivitAI info for multiple model files.
+
+        Phase 1: SHA256 計算（"hashing"）
+        Phase 2: POST で一括取得（"fetching"）— キャッシュ済みはスキップ
 
         Args:
             model_files: list of (model_name, file_path) tuples
@@ -184,50 +338,59 @@ class CivitaiService:
 
         Returns: dict of { model_name: { sha256, civitai_info_or_none } }
         """
-        import time
-
         results = {}
         total = len(model_files)
         cache = self._load_cache()
+
+        # Phase 1: ハッシュ計算
+        hashes_needed = []  # [(model_name, sha256_lower, original_index)]
 
         for i, (model_name, file_path) in enumerate(model_files):
             if progress_callback:
                 progress_callback(i, total, model_name, "hashing")
 
-            # Calculate hash
             sha256 = self.calculate_sha256(file_path)
             if not sha256:
                 results[model_name] = {"sha256": None, "civitai": None, "error": "hash_failed"}
-                continue
-
-            results[model_name] = {"sha256": sha256, "civitai": None}
-
-            # Check cache
-            if sha256 in cache:
-                results[model_name]["civitai"] = cache[sha256]
                 if progress_callback:
-                    progress_callback(i, total, model_name, "cached")
+                    progress_callback(i + 1, total, model_name, "not_found")
                 continue
 
-            # Fetch from API
+            sha256_lower = sha256.lower()
+            results[model_name] = {"sha256": sha256_lower, "civitai": None}
+
+            if sha256_lower in cache:
+                results[model_name]["civitai"] = cache[sha256_lower]
+                if progress_callback:
+                    progress_callback(i + 1, total, model_name, "cached")
+            else:
+                hashes_needed.append((model_name, sha256_lower, i))
+
+        # Phase 2: POST で一括取得（未キャッシュ分）
+        if hashes_needed:
             if progress_callback:
-                progress_callback(i, total, model_name, "fetching")
+                progress_callback(len(results), total, "", "fetching")
 
-            info = self.fetch_by_hash(sha256)
-            if info:
-                results[model_name]["civitai"] = info
+            # 同一ハッシュが複数モデルに対応する場合を考慮
+            sha256_to_entries: dict[str, list] = {}
+            for name, sha256_lower, idx in hashes_needed:
+                sha256_to_entries.setdefault(sha256_lower, []).append((name, idx))
 
-            if progress_callback:
-                status = "found" if info else "not_found"
-                progress_callback(i, total, model_name, status)
+            batch_results = self._batch_fetch_post(list(sha256_to_entries.keys()))
 
-            # Rate limit: small delay between API calls
-            time.sleep(0.5)
+            for sha256_lower, info in batch_results.items():
+                for name, idx in sha256_to_entries.get(sha256_lower, []):
+                    results[name]["civitai"] = info
+                    if progress_callback:
+                        status = "found" if info else "not_found"
+                        progress_callback(idx + 1, total, name, status)
 
         if progress_callback:
             progress_callback(total, total, "", "done")
 
         return results
+
+    # ── 画像ダウンロード ──────────────────────────────────────
 
     @staticmethod
     def download_image(url, save_path, timeout=15):
@@ -243,11 +406,13 @@ class CivitaiService:
             logger.warning("Failed to download preview from %s: %s", url, e)
             return False
 
+    # ── キャッシュ操作 ────────────────────────────────────────
+
     def clear_cache(self, sha256_hash=None):
         """Clear cache for a specific hash or all."""
         cache = self._load_cache()
         if sha256_hash:
-            cache.pop(sha256_hash, None)
+            cache.pop(sha256_hash.lower(), None)
         else:
             cache.clear()
         self._save_cache()
