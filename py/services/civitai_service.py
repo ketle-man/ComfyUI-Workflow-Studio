@@ -16,9 +16,11 @@ logger = logging.getLogger(__name__)
 def _make_ssl_context():
     """Return an SSL context with CA verification.
 
-    Tries certifi first (bundled CA store, available in most ComfyUI envs).
-    Falls back to an unverified context when certifi is absent or the system
-    store is broken (common with Windows portable Python builds).
+    1. certifi CA bundle (available in virtually all ComfyUI envs via torch→requests→certifi)
+    2. System default SSL context (OS certificate store)
+    Returns None if both fail — callers fall back to urlopen without context
+    (Python's own default, which also uses certifi when available).
+    SSL verification is never disabled to avoid MitM exposure.
     """
     try:
         import certifi
@@ -26,23 +28,19 @@ def _make_ssl_context():
     except Exception:
         pass
     try:
-        ctx = ssl.create_default_context()
-        return ctx
+        return ssl.create_default_context()
     except Exception:
         pass
-    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    logger.warning("CivitAI: SSL certificate verification disabled (no CA bundle found)")
-    return ctx
+    logger.warning("CivitAI: could not build SSL context; falling back to urllib default")
+    return None
 
 
-_SSL_CONTEXT = None
+_SSL_CONTEXT = _make_ssl_context  # lazy sentinel
 
 
 def _get_ssl_context():
     global _SSL_CONTEXT
-    if _SSL_CONTEXT is None:
+    if callable(_SSL_CONTEXT):
         _SSL_CONTEXT = _make_ssl_context()
     return _SSL_CONTEXT
 

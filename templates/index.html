@@ -267,6 +267,7 @@
                         <button class="wfm-gen-subtab-btn" data-subtab="model">Model</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="settings">Settings</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="feeder">Feeder</button>
+                        <button class="wfm-gen-subtab-btn" data-subtab="batch">Batch</button>
                     </div>
 
                     <!-- Tab: Input — left sub-col: Prompt(top)+Image(bottom), right sub-col: Raw JSON -->
@@ -313,6 +314,52 @@
                             <div class="wfm-gen-rawjson-col" id="wfm-gen-rawjson-col-settings"></div>
                         </div>
                     </div>
+                    <!-- Tab: Batch — 3-pane: file tree | group select | queue preview -->
+                    <div id="wfm-gen-subtab-batch" class="wfm-gen-subtab-content">
+                        <div class="wfm-batch-layout">
+                            <!-- Left pane: file-tree checkpoint selection -->
+                            <div class="wfm-batch-pane wfm-batch-left">
+                                <div class="wfm-batch-pane-header">Checkpoints</div>
+                                <div class="wfm-batch-toolbar">
+                                    <input type="text" id="wfm-ckpt-search" class="wfm-input" placeholder="Filter...">
+                                    <button type="button" id="wfm-ckpt-select-all" class="wfm-btn wfm-btn-sm">All</button>
+                                    <button type="button" id="wfm-ckpt-deselect-all" class="wfm-btn wfm-btn-sm">None</button>
+                                </div>
+                                <div id="wfm-ckpt-list" class="wfm-batch-list"></div>
+                            </div>
+
+                            <!-- Center pane: group-based selection with inner tabs -->
+                            <div class="wfm-batch-pane wfm-batch-center">
+                                <div class="wfm-batch-inner-tab-nav">
+                                    <button class="wfm-batch-inner-tab active" data-batch-inner="checkpoint">Checkpoint</button>
+                                    <button class="wfm-batch-inner-tab" data-batch-inner="lora">Lora</button>
+                                    <button class="wfm-batch-inner-tab" data-batch-inner="prompt">Prompt</button>
+                                    <button class="wfm-batch-inner-tab" data-batch-inner="workflow">Workflow</button>
+                                </div>
+                                <div id="wfm-batch-inner-checkpoint" class="wfm-batch-inner-content active">
+                                    <div class="wfm-batch-pane-header" style="border-top:none;">Groups</div>
+                                    <div id="wfm-batch-group-list" class="wfm-batch-group-list"></div>
+                                </div>
+                                <div id="wfm-batch-inner-lora" class="wfm-batch-inner-content">
+                                    <p class="wfm-placeholder" style="font-size:12px;margin:20px auto;">Coming soon</p>
+                                </div>
+                                <div id="wfm-batch-inner-prompt" class="wfm-batch-inner-content">
+                                    <p class="wfm-placeholder" style="font-size:12px;margin:20px auto;">Coming soon</p>
+                                </div>
+                                <div id="wfm-batch-inner-workflow" class="wfm-batch-inner-content">
+                                    <p class="wfm-placeholder" style="font-size:12px;margin:20px auto;">Coming soon</p>
+                                </div>
+                            </div>
+
+                            <!-- Right pane: batch queue preview -->
+                            <div class="wfm-batch-pane wfm-batch-right">
+                                <div class="wfm-batch-pane-header">Batch Queue</div>
+                                <div id="wfm-batch-preview-count" class="wfm-batch-count"></div>
+                                <div id="wfm-batch-preview-list" class="wfm-batch-preview-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Tab: Feeder — full-width: settings(left) + library(center) -->
                     <div id="wfm-gen-subtab-feeder" class="wfm-gen-subtab-content">
                         <div class="wfm-feeder-layout">
@@ -469,27 +516,7 @@
                             <label for="wfm-ckpt-batch-enabled" style="font-weight:600;font-size:13px;cursor:pointer;">Checkpoint Batch</label>
                         </div>
                         <div id="wfm-ckpt-batch-body" style="display:none;margin-top:8px;">
-                            <div style="margin-bottom:6px;">
-                                <div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:3px;">Checkpoints</div>
-                                <div class="wfm-ckpt-dropdown-wrap" id="wfm-ckpt-dropdown-wrap">
-                                    <button type="button" id="wfm-ckpt-dropdown-btn" class="wfm-ckpt-dropdown-trigger">
-                                        <span id="wfm-ckpt-dropdown-label">All checkpoints</span>
-                                        <span class="wfm-ckpt-dropdown-arrow">&#9660;</span>
-                                    </button>
-                                    <div id="wfm-ckpt-dropdown-panel" class="wfm-ckpt-dropdown-panel" style="display:none;">
-                                        <div style="padding:6px 8px 4px;">
-                                            <input type="text" id="wfm-ckpt-search" class="wfm-input" style="height:28px;padding:4px 8px;font-size:11px;" placeholder="Filter...">
-                                        </div>
-                                        <div style="display:flex;gap:4px;padding:0 8px 4px;">
-                                            <button type="button" id="wfm-ckpt-select-all" class="wfm-btn wfm-btn-sm" style="flex:1;font-size:10px;">All</button>
-                                            <button type="button" id="wfm-ckpt-deselect-all" class="wfm-btn wfm-btn-sm" style="flex:1;font-size:10px;">None</button>
-                                        </div>
-                                        <div id="wfm-ckpt-list" class="wfm-ckpt-dropdown-list"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="wfm-ckpt-batch-info" style="font-size:11px;color:var(--wfm-text-secondary);"></div>
-                            <div id="wfm-ckpt-batch-progress" style="margin-top:8px;display:none;">
+                            <div id="wfm-ckpt-batch-progress" style="display:none;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11px;">
                                     <span id="wfm-ckpt-batch-current-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75%;color:var(--wfm-text-primary);"></span>
                                     <span id="wfm-ckpt-batch-count" style="color:var(--wfm-text-secondary);white-space:nowrap;margin-left:8px;"></span>
@@ -822,7 +849,7 @@
                         <ul>
                             <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
                             <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported)</li>
-                            <li id="wfm-help-gen-3">4-tab layout — Input (Prompt + Image), Model, Settings, Feeder — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
+                            <li id="wfm-help-gen-3">5-tab layout — Input (Prompt + Image), Model, Settings, Feeder, Batch — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
                             <li id="wfm-help-gen-4">Input tab: Prompt (top) and Image drag-and-drop (bottom) in the left column</li>
                             <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter</li>
                             <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
@@ -830,7 +857,10 @@
                             <li id="wfm-help-gen-8">Seed control: random, fixed, increment, decrement — seed input and mode selector stacked vertically for readability</li>
                             <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
                             <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle</li>
-                            <li id="wfm-help-gen-11">Checkpoint Batch: select checkpoints by folder from the dropdown — check a folder to select all its files, or expand with ▶ to check individual files; use Filter to search; Pause/Resume suspends and continues between models; Stop aborts after the current generation</li>
+                            <li id="wfm-help-gen-11">Checkpoint Batch toggle (right panel): enable/disable batch mode — when enabled, Generate runs through all queued checkpoints sequentially with Pause/Resume and Stop controls</li>
+                            <li id="wfm-help-gen-12">Batch tab — 3-pane layout: Left pane (file tree) selects checkpoints by folder; use Filter to narrow the list, All/None buttons to select or clear all; initial state is all unchecked</li>
+                            <li id="wfm-help-gen-13">Batch tab — Center pane: group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint tab shows groups defined in the Models tab — check a group header to select all its members, or expand ▶ to check individual models; group membership always reflects the current Models tab state</li>
+                            <li id="wfm-help-gen-14">Batch tab — Right pane (Batch Queue): live preview of all checkpoints that will be processed, combining file-tree and group selections with duplicates removed; count shown at top</li>
                         </ul>
                     </div>
 
@@ -937,7 +967,7 @@
                             <li id="wfm-help-models-8">GenUI Model button: apply the selected model to the corresponding node in GenerateUI's current workflow (Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder)</li>
                             <li id="wfm-help-models-9">User-defined badges: assign free-label badges with custom colors shared with the Workflow tab</li>
                             <li id="wfm-help-models-10">Enable/Disable models: toggle visibility in ComfyUI by renaming file extension (.disabled suffix). Disable per model (⏸ button on each card) or per group (Enable All / Disable All in Group panel). Changes take effect after ComfyUI refresh.</li>
-                            <li id="wfm-help-models-11">Multi-select &amp; bulk operations: click Select to enter selection mode, check multiple models, then use the bulk action bar to add/remove from groups or permanently delete files (model file + preview images + sidecar files such as .json/.info).</li>
+                            <li id="wfm-help-models-11">Multi-select &amp; bulk operations: click Select to enter selection mode, then check multiple models; the bulk action bar provides: Deselect All — clear all selections without exiting select mode; ★ Favorite / ☆ Unfavorite — toggle favorites for all selected models; Add to Group / Remove from Group — assign or remove from an existing group; Create &amp; Add — type a new group name and add all selected; +Badge / −Badge — apply or remove a badge from all selected; Delete Files — permanently remove model files, preview images, and sidecar files (.json/.info)</li>
                         </ul>
                     </div>
 

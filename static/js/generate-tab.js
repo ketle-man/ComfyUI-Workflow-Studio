@@ -172,25 +172,75 @@ function _setPauseBtnState(paused) {
 }
 
 // mode: "all" = 全選択, "some" = 一部選択, "none" = 全解除
-const _ckptState = { mode: "all", selected: new Set() };
+const _ckptState = { mode: "none", selected: new Set() };
+
+// グループ選択状態（中央ペイン）
+// selectedGroups  : グループ全体が選択済み（グループ名のSet）
+// partialSelections: 部分選択 { groupName: Set<modelName> }
+// → モデル一覧は常に _batchGroupState.groups から解決するため
+//   グループのメンバーが変わっても自動的に最新状態を反映できる
+const _batchGroupState = {
+    groups: {},
+    selectedGroups: new Set(),
+    partialSelections: {},
+};
+
+// 中央ペインの選択から現在のグループメンバーを解決して返す
+function _getSelectedGroupModels() {
+    const result = new Set();
+    for (const [name, members] of Object.entries(_batchGroupState.groups)) {
+        if (_batchGroupState.selectedGroups.has(name)) {
+            members.forEach((m) => result.add(m));
+        } else {
+            const partial = _batchGroupState.partialSelections[name];
+            if (partial) partial.forEach((m) => { if (members.includes(m)) result.add(m); });
+        }
+    }
+    return result;
+}
+
+// グループの選択済みモデル数を返す（UIのカウント表示用）
+function _getGroupSelCount(name) {
+    const members = _batchGroupState.groups[name] || [];
+    if (_batchGroupState.selectedGroups.has(name)) return members.length;
+    const partial = _batchGroupState.partialSelections[name];
+    return partial ? members.filter((m) => partial.has(m)).length : 0;
+}
 
 function _getSelectedCheckpoints() {
     const all = comfyEditor.models.checkpoints || [];
-    if (_ckptState.mode === "all") return all;
-    if (_ckptState.mode === "none") return [];
-    return all.filter((m) => _ckptState.selected.has(m));
+    // 左ペイン（ファイルツリー）選択
+    let leftModels;
+    if (_ckptState.mode === "all") leftModels = all;
+    else if (_ckptState.mode === "none") leftModels = [];
+    else leftModels = all.filter((m) => _ckptState.selected.has(m));
+
+    // 中央ペイン（グループ）選択を統合（重複排除）
+    const seen = new Set(leftModels);
+    const result = [...leftModels];
+    for (const m of _getSelectedGroupModels()) {
+        if (!seen.has(m)) { seen.add(m); result.push(m); }
+    }
+    return result;
 }
 
-function _updateDropdownLabel() {
-    const labelEl = document.getElementById("wfm-ckpt-dropdown-label");
-    if (!labelEl) return;
-    const total = (comfyEditor.models.checkpoints || []).length;
-    if (_ckptState.mode === "all") {
-        labelEl.textContent = total > 0 ? `All (${total})` : "All checkpoints";
-    } else if (_ckptState.mode === "none") {
-        labelEl.textContent = `0 / ${total} selected`;
-    } else {
-        labelEl.textContent = `${_ckptState.selected.size} / ${total} selected`;
+function _renderBatchPreview() {
+    const countEl = document.getElementById("wfm-batch-preview-count");
+    const listEl = document.getElementById("wfm-batch-preview-list");
+    const list = _getSelectedCheckpoints();
+    const n = list.length;
+    if (countEl) countEl.textContent = `${n} checkpoint${n !== 1 ? "s" : ""} queued`;
+    if (listEl) {
+        if (n === 0) {
+            listEl.innerHTML = `<p class="wfm-placeholder" style="font-size:11px;padding:12px;">No checkpoints selected</p>`;
+            return;
+        }
+        listEl.innerHTML = list.map((m, i) => {
+            const name = m.replace(/\\/g, "/").split("/").pop();
+            const safe = m.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+            const safeName = name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+            return `<div class="wfm-batch-preview-item" title="${safe}">${i + 1}. ${safeName}</div>`;
+        }).join("");
     }
 }
 
@@ -323,8 +373,7 @@ function _rebuildCkptList() {
                 const s = _getFolderCheckState(models);
                 folderCb.checked = s === "checked";
                 folderCb.indeterminate = s === "indeterminate";
-                _updateDropdownLabel();
-                _updateBatchInfo();
+                _renderBatchPreview();
             });
 
             itemLabel.appendChild(fileCb);
@@ -337,8 +386,7 @@ function _rebuildCkptList() {
             _toggleFolderModels(models, folderCb.checked, all);
             folderCb.indeterminate = false;
             filesDiv.querySelectorAll("input[type=checkbox]").forEach((cb) => { cb.checked = folderCb.checked; });
-            _updateDropdownLabel();
-            _updateBatchInfo();
+            _renderBatchPreview();
         });
 
         // フォルダ名 / トグル矢印クリックで展開・折りたたみ
@@ -356,70 +404,194 @@ function _rebuildCkptList() {
     }
 }
 
-function _updateBatchInfo() {
-    const infoEl = document.getElementById("wfm-ckpt-batch-info");
-    if (!infoEl) return;
-    const n = _getSelectedCheckpoints().length;
-    infoEl.textContent = `${n} checkpoint${n !== 1 ? "s" : ""} will be processed`;
+// ============================================
+// Batch Tab
+// ============================================
+
+async function _loadBatchCheckpointGroups() {
+    try {
+        const res = await fetch("/api/wfm/models/groups?type=checkpoint");
+        if (res.ok) _batchGroupState.groups = await res.json();
+        else _batchGroupState.groups = {};
+    } catch { _batchGroupState.groups = {}; }
+
+    // 削除されたグループを選択状態からも除去
+    const currentNames = new Set(Object.keys(_batchGroupState.groups));
+    for (const name of _batchGroupState.selectedGroups) {
+        if (!currentNames.has(name)) _batchGroupState.selectedGroups.delete(name);
+    }
+    for (const name of Object.keys(_batchGroupState.partialSelections)) {
+        if (!currentNames.has(name)) delete _batchGroupState.partialSelections[name];
+    }
+
+    _renderBatchGroupList();
+    _renderBatchPreview();
+}
+
+function _renderBatchGroupList() {
+    const el = document.getElementById("wfm-batch-group-list");
+    if (!el) return;
+    const groups = _batchGroupState.groups;
+    const names = Object.keys(groups).sort();
+
+    if (names.length === 0) {
+        el.innerHTML = `<p class="wfm-placeholder" style="font-size:12px;padding:16px;">No groups defined.<br>Create groups in the Models tab.</p>`;
+        return;
+    }
+
+    el.innerHTML = "";
+    for (const name of names) {
+        const members = groups[name] || [];
+
+        const groupDiv = document.createElement("div");
+        groupDiv.className = "wfm-batch-group-item open";
+
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "wfm-batch-group-header";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const selCount = _getGroupSelCount(name);
+        cb.checked = members.length > 0 && selCount === members.length;
+        cb.indeterminate = selCount > 0 && selCount < members.length;
+
+        const toggle = document.createElement("span");
+        toggle.className = "wfm-ckpt-folder-toggle";
+        toggle.textContent = "▶";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "wfm-batch-group-name";
+        nameSpan.textContent = name;
+
+        const countSpan = document.createElement("span");
+        countSpan.className = "wfm-batch-group-count";
+        countSpan.textContent = `${selCount}/${members.length}`;
+
+        const memberDiv = document.createElement("div");
+        memberDiv.className = "wfm-batch-group-members";
+
+        for (const m of members) {
+            const label = document.createElement("label");
+            label.className = "wfm-ckpt-item wfm-ckpt-item--indented";
+
+            const fileCb = document.createElement("input");
+            fileCb.type = "checkbox";
+            fileCb.value = m;
+            // 選択状態: グループ全体選択 or 部分選択に含まれる
+            fileCb.checked = _batchGroupState.selectedGroups.has(name)
+                || !!(_batchGroupState.partialSelections[name]?.has(m));
+
+            const fileName = m.replace(/\\/g, "/").split("/").pop();
+            const fileSpan = document.createElement("span");
+            fileSpan.className = "wfm-ckpt-item-label";
+            fileSpan.textContent = fileName;
+            fileSpan.title = m;
+
+            fileCb.addEventListener("change", () => {
+                if (_batchGroupState.selectedGroups.has(name)) {
+                    // グループ全体選択中に1つ外す → 部分選択に移行
+                    _batchGroupState.selectedGroups.delete(name);
+                    const partial = new Set(members);
+                    partial.delete(m);
+                    if (partial.size > 0) _batchGroupState.partialSelections[name] = partial;
+                } else {
+                    if (!_batchGroupState.partialSelections[name]) {
+                        _batchGroupState.partialSelections[name] = new Set();
+                    }
+                    if (fileCb.checked) _batchGroupState.partialSelections[name].add(m);
+                    else _batchGroupState.partialSelections[name].delete(m);
+                    // 全員選択 → selectedGroups に昇格
+                    if (members.every((x) => _batchGroupState.partialSelections[name].has(x))) {
+                        _batchGroupState.selectedGroups.add(name);
+                        delete _batchGroupState.partialSelections[name];
+                    }
+                    // 空になった → partial削除
+                    if (_batchGroupState.partialSelections[name]?.size === 0) {
+                        delete _batchGroupState.partialSelections[name];
+                    }
+                }
+                const sc = _getGroupSelCount(name);
+                cb.checked = sc === members.length && members.length > 0;
+                cb.indeterminate = sc > 0 && sc < members.length;
+                countSpan.textContent = `${sc}/${members.length}`;
+                _renderBatchPreview();
+            });
+
+            label.appendChild(fileCb);
+            label.appendChild(fileSpan);
+            memberDiv.appendChild(label);
+        }
+
+        cb.addEventListener("change", () => {
+            if (cb.checked) {
+                _batchGroupState.selectedGroups.add(name);
+                delete _batchGroupState.partialSelections[name];
+            } else {
+                _batchGroupState.selectedGroups.delete(name);
+                delete _batchGroupState.partialSelections[name];
+            }
+            memberDiv.querySelectorAll("input[type=checkbox]").forEach((c) => { c.checked = cb.checked; });
+            countSpan.textContent = `${cb.checked ? members.length : 0}/${members.length}`;
+            _renderBatchPreview();
+        });
+
+        [toggle, nameSpan].forEach((el) => {
+            el.addEventListener("click", () => groupDiv.classList.toggle("open"));
+        });
+
+        headerDiv.appendChild(cb);
+        headerDiv.appendChild(toggle);
+        headerDiv.appendChild(nameSpan);
+        headerDiv.appendChild(countSpan);
+        groupDiv.appendChild(headerDiv);
+        groupDiv.appendChild(memberDiv);
+        el.appendChild(groupDiv);
+    }
+}
+
+function initBatchTab() {
+    // 内部タブ切り替え
+    document.querySelectorAll(".wfm-batch-inner-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".wfm-batch-inner-tab").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            const tabId = btn.dataset.batchInner;
+            document.querySelectorAll(".wfm-batch-inner-content").forEach((c) => c.classList.remove("active"));
+            document.getElementById(`wfm-batch-inner-${tabId}`)?.classList.add("active");
+        });
+    });
+
+    // 検索フィルター（左ペイン）
+    document.getElementById("wfm-ckpt-search")?.addEventListener("input", _rebuildCkptList);
+
+    // 全選択 / 全解除（左ペイン）
+    document.getElementById("wfm-ckpt-select-all")?.addEventListener("click", () => {
+        _ckptState.mode = "all";
+        _ckptState.selected.clear();
+        _rebuildCkptList();
+        _renderBatchPreview();
+    });
+    document.getElementById("wfm-ckpt-deselect-all")?.addEventListener("click", () => {
+        _ckptState.mode = "none";
+        _ckptState.selected.clear();
+        _rebuildCkptList();
+        _renderBatchPreview();
+    });
+
+    // Batch タブが表示されたときにグループを読み込む
+    document.querySelector('[data-subtab="batch"]')?.addEventListener("click", () => {
+        _rebuildCkptList();
+        _loadBatchCheckpointGroups();
+        _renderBatchPreview();
+    });
 }
 
 function initCheckpointBatch() {
     const checkbox = document.getElementById("wfm-ckpt-batch-enabled");
     const body = document.getElementById("wfm-ckpt-batch-body");
-    const wrap = document.getElementById("wfm-ckpt-dropdown-wrap");
-    const btn = document.getElementById("wfm-ckpt-dropdown-btn");
-    const panel = document.getElementById("wfm-ckpt-dropdown-panel");
 
     checkbox?.addEventListener("change", () => {
         if (body) body.style.display = checkbox.checked ? "block" : "none";
-        if (checkbox.checked) {
-            _updateDropdownLabel();
-            _updateBatchInfo();
-        }
-    });
-
-    // ドロップダウン開閉
-    btn?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const isOpen = panel.style.display !== "none";
-        if (isOpen) {
-            panel.style.display = "none";
-            wrap.classList.remove("open");
-        } else {
-            _rebuildCkptList();
-            panel.style.display = "block";
-            wrap.classList.add("open");
-            document.getElementById("wfm-ckpt-search")?.focus();
-        }
-    });
-
-    // 外側クリックで閉じる
-    document.addEventListener("click", (e) => {
-        if (panel && panel.style.display !== "none" && !wrap?.contains(e.target)) {
-            panel.style.display = "none";
-            wrap?.classList.remove("open");
-        }
-    });
-
-    // 検索フィルター
-    document.getElementById("wfm-ckpt-search")?.addEventListener("input", _rebuildCkptList);
-
-    // 全選択
-    document.getElementById("wfm-ckpt-select-all")?.addEventListener("click", () => {
-        _ckptState.mode = "all";
-        _ckptState.selected.clear();
-        _rebuildCkptList();
-        _updateDropdownLabel();
-        _updateBatchInfo();
-    });
-
-    // 全解除
-    document.getElementById("wfm-ckpt-deselect-all")?.addEventListener("click", () => {
-        _ckptState.mode = "none";
-        _ckptState.selected.clear();
-        _rebuildCkptList();
-        _updateDropdownLabel();
-        _updateBatchInfo();
     });
 
     // Pause / Resume
@@ -669,8 +841,7 @@ export async function initGenerateTab() {
             comfyEditor.renderAll(comfyUI.currentAnalysis, comfyUI.currentWorkflow);
         }
         showToast("Model lists refreshed", "success");
-        _updateDropdownLabel();
-        _updateBatchInfo();
+        _renderBatchPreview();
     });
 
     // Generate button
@@ -693,7 +864,7 @@ export async function initGenerateTab() {
     function moveRawJsonToTab(tabKey) {
         const widget = document.getElementById("wfm-gen-rawjson-widget");
         if (!widget) return;
-        if (tabKey === "feeder") {
+        if (tabKey === "feeder" || tabKey === "batch") {
             widget.style.display = "none";
             return;
         }
@@ -865,6 +1036,9 @@ export async function initGenerateTab() {
     // Checkpoint batch UI
     initCheckpointBatch();
 
+    // Batch tab
+    initBatchTab();
+
     // Feeder tab
     await initFeederTab();
 
@@ -873,8 +1047,7 @@ export async function initGenerateTab() {
     updateStatus(connected);
     if (connected) {
         await comfyEditor.loadModelLists();
-        _updateDropdownLabel();
-        _updateBatchInfo();
+        _renderBatchPreview();
     }
 
     // Auto-load default workflow (doesn't require ComfyUI connection)

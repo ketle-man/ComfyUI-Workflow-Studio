@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.17-green)
+![Version](https://img.shields.io/badge/version-0.3.18-green)
 
 ## Screenshots
 
@@ -47,14 +47,18 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Auto-import** — the captured workflow is automatically imported and appears in the Workflow tab
 
 ### GenerateUI Tab (v0.3.5)
-- **4-tab layout** — Input / Model / Settings / Feeder tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
+- **5-tab layout** — Input / Model / Settings / Feeder / Batch tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Input tab** — Prompt (top) and Image drag-and-drop (bottom) in the left column; Raw JSON (540px) in the right column
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
-- **Checkpoint Batch** — enable via checkbox in the right panel to sequentially generate with every checkpoint model; select checkpoints by folder from the dropdown (check a folder to select all its files, expand with ▶ for individual file selection, supports any subfolder depth); Filter input to search; All / None buttons for quick selection; **Pause/Resume** suspends processing between models; Stop aborts after the current generation; amber progress bar tracks per-model progress
+- **Checkpoint Batch** — enable via checkbox in the right panel to activate sequential batch generation; Pause/Resume suspends processing between models; Stop aborts after the current generation; amber progress bar tracks per-model progress
+- **Batch tab** (v0.3.18) — dedicated 3-pane layout for assembling the batch queue:
+  - **Left pane** — file-tree checkpoint selection; Filter input to search; All / None buttons; initial state is all unchecked
+  - **Center pane** — group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint tab shows groups from the Models tab — check a group to add all its members, expand ▶ to select individual models; group membership always reflects the latest Models tab state
+  - **Right pane (Batch Queue)** — live preview combining file-tree and group selections with duplicates removed; total count shown at top
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and more
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
@@ -147,7 +151,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Table view memo** — memo column displayed in table view for quick reference
 - **Preview images** — auto-detect `{model_stem}.preview.png` next to model files
 - **Enable / Disable models** — hide models from ComfyUI by renaming the file extension (`.disabled` suffix); toggle per card (⏸ button), per group (Enable All / Disable All), or filter by status (All / Enabled / Disabled)
-- **Multi-select & bulk operations** — enter selection mode to check multiple models; bulk action bar supports add/remove from groups and permanent file deletion (model file + preview images + sidecar files such as `.json` / `.info`)
+- **Multi-select & bulk operations** — enter selection mode to check multiple models; bulk action bar supports: **Deselect All** (clear all without exiting select mode), **★ Favorite / ☆ Unfavorite** (toggle favorites for all selected), **Add / Remove from Group**, **Create & Add** (new group), **+Badge / −Badge** (apply or remove a badge from all selected), and permanent **Delete Files** (model file + preview images + sidecar files such as `.json` / `.info`)
 
 ### AI TOOL Tab (v0.3.14)
 - **3-pane layout** — Translation (40%) | TOOLS (40%) | Settings (20%); all panes always visible simultaneously; no sub-tab switching required
@@ -270,6 +274,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.18
+- **Batch tab** — new 5th subtab in GenerateUI with a dedicated 3-pane layout for assembling checkpoint batch queues; left pane: file-tree checkpoint selection (filter, All/None, initially unchecked); center pane: group-based selection with inner tabs (Checkpoint / Lora / Prompt / Workflow — Lora/Prompt/Workflow coming soon); right pane: live Batch Queue preview combining both pane selections with duplicates removed
+- **Checkpoint selector moved** — the checkpoint dropdown is removed from the right panel; selection is now done exclusively in the Batch tab left and center panes; the right panel retains only the enable/disable toggle and progress display
+- **Group selection fix** — batch group selection now stores selected group names (not raw model names), so changes to group membership in the Models tab are always reflected in the queue without stale entries
+- **Models tab bulk operations expanded** — bulk action bar now includes: Deselect All (clear all selections without exiting select mode), ★ Favorite / ☆ Unfavorite, +Badge / −Badge (apply or remove a badge from all selected models); existing group and delete operations unchanged
 
 ### v0.3.17
 - **CivitAI SSL fix** — resolved `CERTIFICATE_VERIFY_FAILED` errors when fetching model info on Windows Portable Python environments; uses `certifi` CA bundle when available, falls back to system store, and disables verification only as a last resort with a warning log

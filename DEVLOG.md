@@ -1,5 +1,115 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-31: v0.3.18 — Batch タブ追加・Models 複数選択強化
+
+### 概要
+
+GenerateUI タブに **Batch** サブタブを追加。チェックポイントの一括生成キューを 3 ペインで組み立てられる専用 UI を実装。
+Models タブの複数選択バルクアクションバーにお気に入り・バッジ操作・Deselect All を追加。
+
+### 変更内容
+
+#### `templates/index.html`
+
+- **GenerateUI サブタブナビ** に `<button data-subtab="batch">Batch</button>` を追加（5 タブ目）
+- **`#wfm-gen-subtab-batch`** コンテンツを追加（3 ペインレイアウト）
+  - 左ペイン (`.wfm-batch-left`): `wfm-ckpt-search` 検索入力 + `wfm-ckpt-list` フォルダツリー + All/None ボタン
+  - 中央ペイン (`.wfm-batch-center`): 内部タブナビ（Checkpoint / Lora / Prompt / Workflow）+ Checkpoint タブにグループリスト `#wfm-batch-group-list`; Lora/Prompt/Workflow は "Coming soon" プレースホルダー
+  - 右ペイン (`.wfm-batch-right`): Batch Queue (`#wfm-batch-preview-count` + `#wfm-batch-preview-list`)
+- **Checkpoint Batch Panel** の `body` を簡略化
+  - 削除: `wfm-ckpt-dropdown-wrap`（フォルダツリー全体）・`wfm-ckpt-batch-info`
+  - 残す: 有効/無効チェックボックスとプログレス表示（`wfm-ckpt-batch-progress`）のみ
+- ヘルプ更新
+  - `wfm-help-gen-3`: 「4-tab」→「5-tab」、Batch タブを追記
+  - `wfm-help-gen-11`: Checkpoint Batch をパネルのトグル説明のみに簡略化
+  - `wfm-help-gen-12〜14`: Batch タブ 3 ペインの説明を新規追加
+  - `wfm-help-models-11`: バルクアクションの全ボタン（Deselect All / ★ / ☆ / グループ / +Badge / −Badge / Delete）を網羅した説明に更新
+
+#### `static/js/generate-tab.js`
+
+**状態管理の刷新**
+
+- `_batchGroupState` の `selectedModels: Set<modelName>` を廃止
+  - 旧: グループ選択時にメンバーをフラットな Set に追加 → グループのメンバー変更が反映されない
+  - 新: `selectedGroups: Set<groupName>` + `partialSelections: { groupName: Set<modelName> }` に変更
+- **`_getSelectedGroupModels()`** 追加 — `_batchGroupState.groups` から常に最新のメンバーを解決して返す; グループのメンバーが変わっても自動反映
+- **`_getGroupSelCount(name)`** 追加 — グループの選択済みモデル数を返す（ヘッダー CB のカウント表示用）
+- **`_getSelectedCheckpoints()`** 更新 — 左ペイン選択 + `_getSelectedGroupModels()` を統合（重複排除）
+
+**Batch タブ初期化**
+
+- **`_loadBatchCheckpointGroups()`** — `/api/wfm/models/groups?type=checkpoint` でグループを取得; 削除されたグループを `selectedGroups` / `partialSelections` からクリーンアップ; 完了後 `_renderBatchGroupList()` と `_renderBatchPreview()` を呼ぶ
+- **`_renderBatchGroupList()`** — グループリストを DOM 生成
+  - グループヘッダー CB: `selectedGroups` に昇格/降格ロジック付き
+  - 個別メンバー CB: グループ全体選択中に1つ外すと自動的に `partialSelections` に移行; 全員選択になると `selectedGroups` に昇格; 空になると `partialSelections` エントリ削除
+- **`initBatchTab()`** — 内部タブ切り替え・左ペイン検索 / All / None・Batch タブ表示時の `_loadBatchCheckpointGroups()` 呼び出しを登録
+- **`_renderBatchPreview()`** 追加 — Batch Queue 右ペインを更新（件数 + ファイル名リスト）
+
+**既存コード整理**
+
+- `_updateDropdownLabel()` / `_updateBatchInfo()` を削除 → `_renderBatchPreview()` に統一
+- `initCheckpointBatch()` からドロップダウン開閉ロジック（`wfm-ckpt-dropdown-*` 関連）を削除; Pause/Resume ハンドラのみ残す
+- `moveRawJsonToTab()`: `"feeder"` に加えて `"batch"` も Raw JSON 非表示対象に追加
+- 初期選択状態を `_ckptState = { mode: "none" }` に変更（デフォルト全チェックなし）
+
+#### `static/js/models-tab.js`
+
+**新規関数**
+
+- **`bulkSetFavorite(isFav)`** — 選択中モデルのお気に入りを一括設定（既に同状態のモデルはスキップ）
+- **`bulkApplyBadge(badgeLabel, add)`** — 選択中モデルに指定バッジを一括追加 / 削除（重複・不在はスキップ）
+
+**`renderBulkActionBar()` 更新**
+
+- `Deselect All` ボタンを件数表示直後に追加（`clearSelection()` 呼び出し）
+- `★ Favorite` / `☆ Unfavorite` ボタンを追加（グループ操作の前）
+- バッジセレクト (`wfm-bulk-badge-select`) + `+Badge` / `−Badge` ボタンを追加（バッジ未定義時は disabled）
+
+#### `static/js/i18n.js`
+
+EN / JA / ZH 全言語に以下を追加:
+- `modelBulkDeselectAll` — Deselect All / 選択解除 / 取消全选
+- `modelBulkFavAdd` / `modelBulkFavRemove` — ★ Favorite / ☆ Unfavorite
+- `modelBulkFavDone` / `modelBulkUnfavDone` — 完了トースト
+- `modelBulkBadgeApply` / `modelBulkBadgeRemove` — +Badge / −Badge ボタンラベル
+- `modelBulkBadgeApplyDone` / `modelBulkBadgeRemoveDone` — 完了トースト
+- `modelBulkNoBadge` — バッジ未選択プレースホルダー
+
+#### `static/css/main.css`
+
+`.wfm-batch-*` スタイル一式を追加（Feeder タブの直前）:
+- `.wfm-batch-layout` — flex 3 ペインレイアウト
+- `.wfm-batch-pane` / `.wfm-batch-left` / `.wfm-batch-center` / `.wfm-batch-right` — ペイン幅・ボーダー
+- `.wfm-batch-pane-header` / `.wfm-batch-toolbar` / `.wfm-batch-list` — 左ペイン構造
+- `.wfm-batch-inner-tab-nav` / `.wfm-batch-inner-tab` / `.wfm-batch-inner-content` — 中央ペイン内部タブ
+- `.wfm-batch-group-list` / `.wfm-batch-group-item` / `.wfm-batch-group-header` / `.wfm-batch-group-name` / `.wfm-batch-group-count` / `.wfm-batch-group-members` — グループリスト
+- `.wfm-batch-count` / `.wfm-batch-preview-list` / `.wfm-batch-preview-item` — 右ペイン（Batch Queue）
+
+#### `README.md`
+
+- バージョンバッジを `0.3.17` → `0.3.18` に更新
+- GenerateUI Tab: "4-tab" → "5-tab"、Checkpoint Batch の説明を簡略化、Batch タブの説明を追加
+- Models Tab: bulk operations の説明を全ボタン網羅に更新
+- Changelog に `v0.3.18` エントリを追加
+
+---
+
+## 2026-05-31: v0.3.17 patch — SSLコンテキスト セキュリティ強化
+
+### 概要
+
+v0.3.17 のSSL修正で `CERT_NONE`（SSL検証無効）フォールバックがあり、MitM攻撃への脆弱性が指摘された。セキュリティレビューを経て当該フォールバックを削除し、SSL検証が常に維持されるよう修正。
+
+### 変更内容
+
+#### `py/services/civitai_service.py`
+
+- **`_make_ssl_context()`** のフォールバックロジックを変更
+  - 変更前: 3段目フォールバックとして `ctx.verify_mode = ssl.CERT_NONE`（SSL検証無効）を設定していた
+  - 変更後: `CERT_NONE` を削除。certifi・システムSSLの両方が失敗した場合は `None` を返し、`urlopen(context=None)` でPythonデフォルトのSSL検証（`ssl.create_default_context()` 相当）にフォールバック。SSL検証が無効になるパスを完全に排除
+
+---
+
 ## 2026-05-30: v0.3.17 — SSL証明書エラー修正・Lora Manager対応
 
 ### 概要

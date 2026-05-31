@@ -272,20 +272,39 @@ function renderBulkActionBar() {
         ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
         : groupNames.map((g) => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
 
+    const palette = getBadgePalette();
+    const badgeLabels = Object.keys(palette).sort();
+    const noBadges = badgeLabels.length === 0;
+    const badgeOptions = noBadges
+        ? `<option value="">${t("modelBulkNoBadge")}</option>`
+        : badgeLabels.map((b) => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join("");
+
     bar.style.display = "flex";
     bar.innerHTML = `
         <span class="wfm-bulk-count">${count} ${t("modelSelected")}</span>
+        <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-deselect-all-btn">${t("modelBulkDeselectAll")}</button>
+        <span class="wfm-bulk-sep">|</span>
+        <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-fav-add-btn" title="${t("modelBulkFavAdd")}">${t("modelBulkFavAdd")}</button>
+        <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-fav-remove-btn" title="${t("modelBulkFavRemove")}">${t("modelBulkFavRemove")}</button>
+        <span class="wfm-bulk-sep">|</span>
         <select id="wfm-bulk-group-select" class="wfm-select" style="font-size:12px;">${groupOptions}</select>
         <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-bulk-add-btn"${noGroups ? " disabled" : ""}>${t("modelBulkAddGroup")}</button>
         <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-bulk-remove-btn"${noGroups ? " disabled" : ""}>${t("modelBulkRemoveGroup")}</button>
         <span class="wfm-bulk-sep">|</span>
         <input type="text" id="wfm-bulk-new-group-input" class="wfm-search-input" style="width:120px;font-size:12px;" placeholder="${t("modelsGroupName")}">
         <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-create-add-btn">${t("modelBulkCreateAdd")}</button>
+        <span class="wfm-bulk-sep">|</span>
+        <select id="wfm-bulk-badge-select" class="wfm-select" style="font-size:12px;">${badgeOptions}</select>
+        <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-bulk-badge-apply-btn"${noBadges ? " disabled" : ""}>${t("modelBulkBadgeApply")}</button>
+        <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-bulk-badge-remove-btn"${noBadges ? " disabled" : ""}>${t("modelBulkBadgeRemove")}</button>
+        <span class="wfm-bulk-sep">|</span>
         <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-clear-btn" title="Clear selection">&times;</button>
-        <span class="wfm-bulk-sep" style="margin-left:8px;"></span>
-        <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-bulk-delete-btn">${t("modelBulkDelete")}</button>
+        <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-bulk-delete-btn" style="margin-left:4px;">${t("modelBulkDelete")}</button>
     `;
 
+    document.getElementById("wfm-bulk-deselect-all-btn")?.addEventListener("click", clearSelection);
+    document.getElementById("wfm-bulk-fav-add-btn")?.addEventListener("click", () => bulkSetFavorite(true));
+    document.getElementById("wfm-bulk-fav-remove-btn")?.addEventListener("click", () => bulkSetFavorite(false));
     document.getElementById("wfm-bulk-add-btn")?.addEventListener("click", () => {
         const g = document.getElementById("wfm-bulk-group-select")?.value;
         if (g) bulkAddToGroup(g);
@@ -300,6 +319,14 @@ function renderBulkActionBar() {
         if (!name) return;
         if (state.modelGroups[name]) { showToast(t("modelsGroupExists"), "warning"); return; }
         bulkAddToGroup(name);
+    });
+    document.getElementById("wfm-bulk-badge-apply-btn")?.addEventListener("click", () => {
+        const label = document.getElementById("wfm-bulk-badge-select")?.value;
+        if (label) bulkApplyBadge(label, true);
+    });
+    document.getElementById("wfm-bulk-badge-remove-btn")?.addEventListener("click", () => {
+        const label = document.getElementById("wfm-bulk-badge-select")?.value;
+        if (label) bulkApplyBadge(label, false);
     });
     document.getElementById("wfm-bulk-clear-btn")?.addEventListener("click", clearSelection);
     document.getElementById("wfm-bulk-delete-btn")?.addEventListener("click", bulkDeleteModels);
@@ -326,6 +353,44 @@ async function bulkRemoveFromGroup(groupName) {
     showToast(`${removed} ${t("modelBulkRemoveDone")}`, "success");
     renderModelGrid();
     renderBulkActionBar();
+}
+
+async function bulkSetFavorite(isFav) {
+    const models = [...state.selectedModels];
+    let count = 0;
+    for (const mn of models) {
+        const meta = state.modelMetadata[mn] || {};
+        if (meta.favorite === isFav) continue;
+        await saveModelMetadata(mn, { favorite: isFav });
+        count++;
+    }
+    if (count > 0) {
+        showToast(`${count} ${isFav ? t("modelBulkFavDone") : t("modelBulkUnfavDone")}`, "success");
+        renderModelGrid();
+    }
+}
+
+async function bulkApplyBadge(badgeLabel, add) {
+    const models = [...state.selectedModels];
+    let count = 0;
+    for (const mn of models) {
+        const meta = state.modelMetadata[mn] || {};
+        const badges = [...(meta.badges || [])];
+        if (add) {
+            if (badges.includes(badgeLabel)) continue;
+            badges.push(badgeLabel);
+        } else {
+            const idx = badges.indexOf(badgeLabel);
+            if (idx === -1) continue;
+            badges.splice(idx, 1);
+        }
+        await saveModelMetadata(mn, { badges });
+        count++;
+    }
+    if (count > 0) {
+        showToast(`${count} ${add ? t("modelBulkBadgeApplyDone") : t("modelBulkBadgeRemoveDone")}`, "success");
+        renderModelGrid();
+    }
 }
 
 async function bulkDeleteModels() {
