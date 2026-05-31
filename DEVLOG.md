@@ -1,5 +1,57 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-31: v0.3.20 — CivitAI 詳細パネル強化（Type / Hash 表示・URL 修正・画像別タブ）
+
+### 概要
+
+Models タブのサイドパネル CivitAI タブを強化。Type・Base Model・Hash（BLAKE3/SHA256）の詳細行を追加し、
+サンプル画像をクリックで別タブ表示できるようにした。バッチ POST API の `model.id` 欠落による
+モデルページ URL の壊れを修正。CivitAI タブの 3 状態 UI と再描画タイミングも改善。
+
+### 変更内容
+
+#### `py/services/civitai_service.py`
+
+**`_extract_info()` — `fileHashes` フィールドを追加**
+- プライマリファイルの `hashes` オブジェクト（BLAKE3 / SHA256 / AutoV2 等）を `fileHashes` として保存
+- 新規取得・更新後はサイドパネルで各ハッシュ値を表示できる
+
+**`_extract_info()` — `modelId` フォールバックを追加**
+- バッチ POST API（`POST /model-versions/by-hash`）はレスポンスの `model` オブジェクト内に `id` を含まない場合がある
+- `model.get("id") or data.get("modelId")` でトップレベルの `modelId` をフォールバックとして使用
+- これにより `modelUrl` が `https://civitai.com/models?modelVersionId=XXXX`（モデル一覧ページ）になる問題を修正
+
+#### `static/js/models-tab.js`
+
+**`renderCivitaiInfo()` — 詳細行を追加**
+
+| 追加要素 | 内容 |
+|---|---|
+| Type | `info.type` を大文字バッジで表示（"CHECKPOINT"、"LORA" 等）|
+| Base Model | `info.baseModel` をラベル付き行で表示（旧サブタイトルから分離）|
+| Hash | BLAKE3 優先・SHA256 フォールバック。先頭 16 文字を表示、クリックでフルハッシュをクリップボードコピー |
+
+- ローカルメタデータの `sha256`（既存キャッシュでも利用可能）を SHA256 として自動補完
+- 既存キャッシュで `modelUrl` が壊れている場合も `info.modelId` + `info.versionId` から URL を再構築（更新不要）
+- サンプル画像を `<a target="_blank">` でラップ → クリックで原寸画像を別タブに表示
+- モデル名サブタイトル行から `baseModel` を除去（Detail 行に移動）
+
+**`renderSideCivitai()` — 3 状態 UI に変更**
+- `sha256` なし → 「CivitAIから取得」ボタン（未確認）
+- `sha256` あり・キャッシュなし → 「確認済みですが、CivitAIに見つかりませんでした。」＋「再確認する」ボタン
+- キャッシュあり → CivitAI 情報を表示
+
+**CivitAI タブ切り替え時の再描画**
+- サイドパネルのタブ切り替えハンドラで CivitAI タブをクリックした際に `renderSideCivitai` を呼び出すよう追加
+- バッチ取得後に状態が更新されていても、タブをクリックすれば必ず最新内容が表示される
+
+#### `static/js/i18n.js`
+
+新規文字列を追加（EN / JA / ZH）:
+`civitaiType` / `civitaiBaseModel` / `civitaiHashLabel` / `civitaiCopyHash` / `civitaiHashCopied` / `civitaiOpenImage`
+
+---
+
 ## 2026-05-31: v0.3.19 — CivitAI 連携強化（バッチ高速化・リトライ・APIキー・フィールド拡充）
 
 ### 概要

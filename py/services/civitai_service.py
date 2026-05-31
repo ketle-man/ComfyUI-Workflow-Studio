@@ -281,6 +281,7 @@ class CivitaiService:
 
         # プライマリファイルのメタ情報（精度・フォーマット）
         file_meta = {}
+        file_hashes = {}
         if primary_file:
             pm = primary_file.get("metadata", {})
             file_meta = {
@@ -288,12 +289,19 @@ class CivitaiService:
                 "size": pm.get("size"),
                 "format": pm.get("format"),
             }
+            # BLAKE3, SHA256, AutoV2 等のハッシュ
+            file_hashes = primary_file.get("hashes", {})
 
         stats = data.get("stats", {})
 
+        # バッチ POST API は model オブジェクト内に id を含まない場合がある
+        # トップレベルの modelId をフォールバックとして使用する
+        model_id = model.get("id") or data.get("modelId")
+        version_id = data.get("id", "")
+
         return {
-            "versionId": data.get("id"),
-            "modelId": model.get("id"),
+            "versionId": version_id,
+            "modelId": model_id,
             "modelName": model.get("name", ""),
             "versionName": data.get("name", ""),
             "type": model.get("type", ""),
@@ -310,10 +318,11 @@ class CivitaiService:
             "baseModel": data.get("baseModel", ""),
             "fileSize": primary_file.get("sizeKB", 0) if primary_file else 0,
             "fileMeta": file_meta,
+            "fileHashes": file_hashes,
             "downloadUrl": data.get("downloadUrl", ""),
             "modelUrl": (
-                f"https://civitai.com/models/{model.get('id', '')}"
-                f"?modelVersionId={data.get('id', '')}"
+                f"https://civitai.com/models/{model_id}?modelVersionId={version_id}"
+                if model_id else f"https://civitai.com/models?modelVersionId={version_id}"
             ),
             "stats": {
                 "downloadCount": stats.get("downloadCount", 0),

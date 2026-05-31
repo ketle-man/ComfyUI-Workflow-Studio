@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.19-green)
+![Version](https://img.shields.io/badge/version-0.3.20-green)
 
 ## Screenshots
 
@@ -144,7 +144,8 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
 - **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
 - **Side panel tabs** — Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
-- **CivitAI integration** — fetch model metadata by SHA256 hash; displays base model, trained words, tags, NSFW level, download/like stats, AIR identifier, and model page link; preview image is automatically downloaded and saved if none exists
+- **CivitAI integration** — fetch model metadata by SHA256 hash; side panel shows **Type** (badge), **Base Model**, **Hash** (BLAKE3/SHA256, click to copy), trained words, tags, and model page link; sample images are clickable and open full-size in a new tab; preview image is automatically downloaded and saved if none exists
+- **CivitAI panel states** — three distinct states: not yet checked (fetch button), checked but not found on CivitAI (re-check button with notice), and found (full info display); clicking the CivitAI tab always refreshes to the latest state
 - **Batch CivitAI fetch** — one-click batch fetch using `POST /model-versions/by-hash` (up to 100 models per request) with SSE progress streaming; previews are auto-saved for models without one
 - **Detail modal** — preview image, CivitAI info, thumbnail change via file upload
 - **GenUI Model button** — apply the selected model directly to the corresponding node in GenerateUI's current workflow (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder)
@@ -275,6 +276,14 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.20
+- **CivitAI panel — Type / Base Model / Hash display** — side panel CivitAI tab now shows a Type badge (e.g. CHECKPOINT, LORA), Base Model row, and Hash row (BLAKE3 preferred, SHA256 fallback from CivitAI API or local metadata); click the hash to copy the full value to clipboard
+- **CivitAI panel — images open in new tab** — sample images in the CivitAI tab are now wrapped in links; clicking an image opens the full-size version in a new browser tab
+- **CivitAI panel — 3-state UI** — the panel now distinguishes between "not yet checked" (blue fetch button), "checked but not found on CivitAI" (re-check button with a notice), and "found" (full info); no more ambiguity after running batch fetch
+- **CivitAI tab click refresh** — clicking the CivitAI tab in the side panel now re-renders its content, ensuring the latest fetch state is always shown without needing to reselect the model
+- **Bug fix: model page URL broken after batch fetch** — the batch `POST /model-versions/by-hash` endpoint can omit `model.id` inside the version object; `_extract_info` now falls back to the top-level `modelId` field so the model page link is always correct; existing cached entries with a broken URL are also fixed client-side from `modelId` + `versionId`
+- **CivitAI cache — `fileHashes` field added** — `_extract_info` now stores the primary file's full hash map (BLAKE3, SHA256, AutoV2, etc.) so the Hash row is populated for newly fetched or refreshed models
 
 ### v0.3.19
 - **CivitAI batch fetch — major speedup** — switched from one-by-one `GET` requests (0.5 s delay each) to `POST /model-versions/by-hash` batch endpoint; up to 100 hashes per request, reducing 100-model fetch from ~50 s to a few seconds

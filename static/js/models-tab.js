@@ -1496,6 +1496,21 @@ function renderSideCivitai(modelName) {
 
     if (cached) {
         renderCivitaiInfo(el, cached, modelName);
+    } else if (sha256) {
+        // SHA256 is known but model was not found on CivitAI
+        el.innerHTML = `
+            <div style="padding:0 4px;text-align:center;">
+                <p style="color:var(--wfm-text-secondary);font-size:13px;margin-bottom:12px;">
+                    ${t("civitaiNotFoundDesc")}
+                </p>
+                <button class="wfm-btn wfm-btn-sm" id="wfm-civitai-fetch-btn">
+                    ${t("civitaiRefetchBtn")}
+                </button>
+                <div id="wfm-civitai-status" style="margin-top:8px;font-size:12px;color:var(--wfm-text-secondary);"></div>
+            </div>`;
+        document.getElementById("wfm-civitai-fetch-btn")?.addEventListener("click", () => {
+            fetchCivitaiForModel(modelName, el);
+        });
     } else {
         el.innerHTML = `
             <div style="padding:0 4px;text-align:center;">
@@ -1569,8 +1584,9 @@ async function fetchCivitaiForModel(modelName, el) {
 }
 
 function renderCivitaiInfo(el, info, modelName) {
-    const imagesHtml = (info.images || []).map((url) =>
-        `<img src="${escapeHtml(url)}" style="width:100%;border-radius:4px;margin-bottom:6px;" loading="lazy" />`
+    // Images — wrapped in <a> to open full image in new tab
+    const imagesHtml = (info.images || []).slice(0, 3).map((url) =>
+        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${t("civitaiOpenImage")}"><img src="${escapeHtml(url)}" style="width:100%;border-radius:4px;margin-bottom:6px;cursor:pointer;display:block;" loading="lazy" /></a>`
     ).join("");
 
     const tagsHtml = (info.tags || []).map((tag) =>
@@ -1581,20 +1597,60 @@ function renderCivitaiInfo(el, info, modelName) {
         `<code style="font-size:11px;background:var(--wfm-bg-secondary);padding:1px 4px;border-radius:3px;cursor:pointer;" class="wfm-trained-word" title="${t("civitaiCopyWord")}">${escapeHtml(w)}</code>`
     ).join(" ");
 
+    // キャッシュに modelId なし / 旧形式の壊れた modelUrl を持つデータに対応
+    const modelUrl = (info.modelId && info.versionId)
+        ? `https://civitai.com/models/${info.modelId}?modelVersionId=${info.versionId}`
+        : (info.modelUrl || "#");
+
+    // Hash: BLAKE3 優先、なければ SHA256（fileHashes または ローカルメタデータから取得）
+    const fileHashes = info.fileHashes || {};
+    const blake3 = fileHashes.BLAKE3 || fileHashes.Blake3 || "";
+    const sha256 = fileHashes.SHA256 || (state.modelMetadata[modelName] || {}).sha256 || "";
+    const hashType = blake3 ? "BLAKE3" : (sha256 ? "SHA256" : "");
+    const hashFull = blake3 || sha256;
+
+    // Detail rows
+    const ROW = "display:flex;align-items:center;font-size:12px;margin-bottom:5px;";
+    const LABEL = "color:var(--wfm-text-secondary);min-width:80px;flex-shrink:0;";
+
+    const typeRow = info.type ? `
+        <div style="${ROW}">
+            <span style="${LABEL}">${t("civitaiType")}</span>
+            <span style="font-size:10px;font-weight:700;background:var(--wfm-bg-tertiary,rgba(255,255,255,0.1));padding:2px 7px;border-radius:3px;letter-spacing:0.6px;">${escapeHtml(info.type.toUpperCase())}</span>
+        </div>` : "";
+
+    const baseModelRow = info.baseModel ? `
+        <div style="${ROW}">
+            <span style="${LABEL}">${t("civitaiBaseModel")}</span>
+            <span>${escapeHtml(info.baseModel)}</span>
+        </div>` : "";
+
+    const hashRow = hashFull ? `
+        <div style="${ROW}">
+            <span style="${LABEL}">${t("civitaiHashLabel")}</span>
+            <code class="wfm-hash-value" data-hash="${escapeHtml(hashFull)}"
+                style="background:var(--wfm-bg-secondary);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:calc(100% - 84px);"
+                title="${t("civitaiCopyHash")}">${escapeHtml(hashType)}: ${escapeHtml(hashFull.substring(0, 16).toUpperCase())}…</code>
+        </div>` : "";
+
+    const detailSection = (typeRow || baseModelRow || hashRow)
+        ? `<div style="margin-bottom:10px;">${typeRow}${baseModelRow}${hashRow}</div>` : "";
+
     el.innerHTML = `
         <div style="padding:0 4px;">
             <div style="margin-bottom:10px;">
                 <div style="font-weight:700;font-size:14px;margin-bottom:2px;">
-                    <a href="${escapeHtml(info.modelUrl)}" target="_blank" style="color:var(--wfm-primary);text-decoration:none;">${escapeHtml(info.modelName)}</a>
+                    <a href="${escapeHtml(modelUrl)}" target="_blank" style="color:var(--wfm-primary);text-decoration:none;">${escapeHtml(info.modelName)}</a>
                 </div>
                 <div style="font-size:12px;color:var(--wfm-text-secondary);">
-                    ${escapeHtml(info.versionName)} · ${escapeHtml(info.baseModel)} · by ${escapeHtml(info.creator)}
+                    ${escapeHtml(info.versionName)}${info.creator ? ` · by ${escapeHtml(info.creator)}` : ""}
                 </div>
             </div>
+            ${detailSection}
             ${imagesHtml ? `<div style="margin-bottom:10px;">${imagesHtml}</div>` : ""}
             ${tagsHtml ? `<div style="margin-bottom:8px;">${tagsHtml}</div>` : ""}
             ${trainedWordsHtml ? `<div style="margin-bottom:10px;"><div style="font-weight:600;font-size:12px;margin-bottom:4px;">${t("civitaiTriggerWords")}</div>${trainedWordsHtml}</div>` : ""}
-            ${info.description ? `<div style="font-size:12px;color:var(--wfm-text-secondary);line-height:1.5;max-height:200px;overflow-y:auto;">${info.description}</div>` : ""}
+            ${info.description ? `<div style="font-size:12px;color:var(--wfm-text-secondary);line-height:1.5;max-height:120px;overflow-y:auto;">${info.description}</div>` : ""}
             <div style="margin-top:10px;">
                 <button class="wfm-btn wfm-btn-sm" id="wfm-civitai-refresh-btn">${t("civitaiRefresh")}</button>
             </div>
@@ -1609,9 +1665,17 @@ function renderCivitaiInfo(el, info, modelName) {
         });
     });
 
+    // Copy hash on click
+    el.querySelectorAll(".wfm-hash-value").forEach((hashEl) => {
+        hashEl.addEventListener("click", () => {
+            navigator.clipboard.writeText(hashEl.dataset.hash).then(() => {
+                showToast(t("civitaiHashCopied"), "success");
+            });
+        });
+    });
+
     // Refresh button
     document.getElementById("wfm-civitai-refresh-btn")?.addEventListener("click", () => {
-        // Clear cache for this model and re-fetch
         const meta = state.modelMetadata[modelName] || {};
         if (meta.sha256) delete state.civitaiCache[meta.sha256];
         delete meta.sha256;
@@ -1933,6 +1997,7 @@ export function initModelsTab() {
             const map = { info: "wfm-models-side-info", group: "wfm-models-side-group", civitai: "wfm-models-side-civitai" };
             const target = document.getElementById(map[tabId]);
             if (target) target.style.display = "block";
+            if (tabId === "civitai" && state.selectedModel) renderSideCivitai(state.selectedModel);
         });
     });
 
