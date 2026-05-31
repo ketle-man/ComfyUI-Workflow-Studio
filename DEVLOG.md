@@ -1,5 +1,66 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-05-31: v0.3.21 — CivitAI ホスト設定・Sample サブタブ・URL 修正・ヘルプ i18n 整備
+
+### 概要
+
+CivitAI 連携に 3 つの改善を追加。モデルリンクを開くサイトを civitai.com / civitai.red から選択できる
+ホスト設定を Settings タブに追加。CivitAI パネルを Info / Sample のサブタブに分割し、
+サンプル画像を専用タブに移動。`modelId` が null のキャッシュエントリの URL を
+`/model-versions/{versionId}` にフォールバックさせ、全 324 件の既存キャッシュも即時修正。
+ヘルプを Batch tab / Text Size / RAW JSON などの新項目を含めて更新し、JA/ZH 翻訳の英語混じりも解消。
+
+### 変更内容
+
+#### `py/services/civitai_service.py`
+
+**`_extract_info()` — `modelUrl` フォールバックを修正**
+- 旧: `modelId` が null のとき `https://civitai.com/models?modelVersionId={id}`（モデル一覧ページに飛ぶ壊れた URL）
+- 新: `https://civitai.com/model-versions/{versionId}` にフォールバック（モデルページへリダイレクト）
+
+#### `static/js/models-tab.js`
+
+**`renderCivitaiInfo()` — Info / Sample サブタブを追加**
+- CivitAI パネルを「情報」「サンプル (N)」の 2 サブタブに分割
+- Info タブ: モデル名リンク・Type/Base Model/Hash 詳細行・タグ・トリガーワード・説明・更新ボタン
+- Sample タブ: 全サンプル画像（件数をタブ名に表示）。画像は別タブで開く
+
+**`renderCivitaiInfo()` — URL 修正（クライアントサイド）**
+- `info.modelId` がある場合: `https://{host}/models/{modelId}?modelVersionId={versionId}`
+- `info.modelId` が null: `https://{host}/model-versions/{versionId}` にフォールバック
+- `{host}` は `localStorage.getItem("wfm_civitai_host")` から取得（デフォルト `civitai.com`）
+
+#### `static/js/settings-tab.js`
+
+**CivitAI セクションにホスト選択を追加**
+- CivitAI API Key アコーディオンの先頭に `wfm-select` ドロップダウンを追加
+- 選択肢: `civitai.com（SFW のみ）` / `civitai.red（制限なし）`
+- 変更で即座に `POST /api/wfm/settings` へ保存 + `localStorage.setItem("wfm_civitai_host", host)` を実行
+- 設定タブ読み込み時に `civitai_host` を localStorage へ同期（他タブが追加 fetch 不要で参照できる）
+
+#### `static/js/i18n.js`
+
+**新規文字列（EN / JA / ZH）**
+- `civitaiTabInfo` / `civitaiTabSample` / `civitaiNoImages`: サブタブ名・空メッセージ
+- `civitaiHostSetting` / `civitaiHostHint` / `civitaiHostCom` / `civitaiHostRed` / `civitaiHostSaved`: ホスト設定
+- `helpGen12` / `helpGen13` / `helpGen14`: Batch タブの 3 ペイン詳細
+- `helpSettings11` / `helpSettings12` / `helpSettings13`: Text Size・RAW JSON Colors・CivitAI ホスト
+
+**既存文字列を更新（JA / ZH）**
+- `helpGen3`: 「4タブ → 5タブ（Batch 追加）」
+- `helpGen11`: Batch トグルの説明に更新、Filter/Pause/Resume/Stop の英語混じりを解消
+
+#### `static/js/app.js`
+
+- `wfm-help-gen-12/13/14` → `helpGen12/13/14` のマッピングを追加
+- `wfm-help-settings-11/12/13` → `helpSettings11/12/13` のマッピングを追加
+
+#### `templates/index.html`
+
+- `wfm-help-settings-13`（CivitAI ホスト）を Settings カードに追加
+
+---
+
 ## 2026-05-31: v0.3.20 — CivitAI 詳細パネル強化（Type / Hash 表示・URL 修正・画像別タブ）
 
 ### 概要

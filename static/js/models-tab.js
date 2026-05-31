@@ -1584,25 +1584,15 @@ async function fetchCivitaiForModel(modelName, el) {
 }
 
 function renderCivitaiInfo(el, info, modelName) {
-    // Images — wrapped in <a> to open full image in new tab
-    const imagesHtml = (info.images || []).slice(0, 3).map((url) =>
-        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${t("civitaiOpenImage")}"><img src="${escapeHtml(url)}" style="width:100%;border-radius:4px;margin-bottom:6px;cursor:pointer;display:block;" loading="lazy" /></a>`
-    ).join("");
+    // URL: ユーザー設定ホスト（localStorage）を使用、modelId なし時は /model-versions/ にフォールバック
+    const civitaiHost = localStorage.getItem("wfm_civitai_host") || "civitai.com";
+    const modelUrl = info.modelId && info.versionId
+        ? `https://${civitaiHost}/models/${info.modelId}?modelVersionId=${info.versionId}`
+        : info.versionId
+            ? `https://${civitaiHost}/model-versions/${info.versionId}`
+            : (info.modelUrl || "#");
 
-    const tagsHtml = (info.tags || []).map((tag) =>
-        `<span class="wfm-badge wfm-badge-sm">${escapeHtml(tag)}</span>`
-    ).join(" ");
-
-    const trainedWordsHtml = (info.trainedWords || []).map((w) =>
-        `<code style="font-size:11px;background:var(--wfm-bg-secondary);padding:1px 4px;border-radius:3px;cursor:pointer;" class="wfm-trained-word" title="${t("civitaiCopyWord")}">${escapeHtml(w)}</code>`
-    ).join(" ");
-
-    // キャッシュに modelId なし / 旧形式の壊れた modelUrl を持つデータに対応
-    const modelUrl = (info.modelId && info.versionId)
-        ? `https://civitai.com/models/${info.modelId}?modelVersionId=${info.versionId}`
-        : (info.modelUrl || "#");
-
-    // Hash: BLAKE3 優先、なければ SHA256（fileHashes または ローカルメタデータから取得）
+    // Hash: BLAKE3 優先、なければ SHA256
     const fileHashes = info.fileHashes || {};
     const blake3 = fileHashes.BLAKE3 || fileHashes.Blake3 || "";
     const sha256 = fileHashes.SHA256 || (state.modelMetadata[modelName] || {}).sha256 || "";
@@ -1636,25 +1626,71 @@ function renderCivitaiInfo(el, info, modelName) {
     const detailSection = (typeRow || baseModelRow || hashRow)
         ? `<div style="margin-bottom:10px;">${typeRow}${baseModelRow}${hashRow}</div>` : "";
 
+    const tagsHtml = (info.tags || []).map((tag) =>
+        `<span class="wfm-badge wfm-badge-sm">${escapeHtml(tag)}</span>`
+    ).join(" ");
+
+    const trainedWordsHtml = (info.trainedWords || []).map((w) =>
+        `<code style="font-size:11px;background:var(--wfm-bg-secondary);padding:1px 4px;border-radius:3px;cursor:pointer;" class="wfm-trained-word" title="${t("civitaiCopyWord")}">${escapeHtml(w)}</code>`
+    ).join(" ");
+
+    // Sample images — all go to Sample pane
+    const images = info.images || [];
+    const sampleImagesHtml = images.map((url) =>
+        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${t("civitaiOpenImage")}"><img src="${escapeHtml(url)}" style="width:100%;border-radius:4px;margin-bottom:6px;cursor:pointer;display:block;" loading="lazy" /></a>`
+    ).join("");
+
     el.innerHTML = `
         <div style="padding:0 4px;">
-            <div style="margin-bottom:10px;">
-                <div style="font-weight:700;font-size:14px;margin-bottom:2px;">
-                    <a href="${escapeHtml(modelUrl)}" target="_blank" style="color:var(--wfm-primary);text-decoration:none;">${escapeHtml(info.modelName)}</a>
+            <div style="display:flex;border-bottom:1px solid var(--wfm-border);margin-bottom:10px;">
+                <button class="wfm-civitai-subtab-btn" data-pane="info"
+                    style="padding:4px 10px;font-size:12px;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--wfm-primary);color:var(--wfm-primary);font-weight:600;margin-bottom:-1px;">
+                    ${t("civitaiTabInfo")}
+                </button>
+                <button class="wfm-civitai-subtab-btn" data-pane="sample"
+                    style="padding:4px 10px;font-size:12px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--wfm-text-secondary);margin-bottom:-1px;">
+                    ${t("civitaiTabSample")}${images.length ? ` (${images.length})` : ""}
+                </button>
+            </div>
+
+            <div id="wfm-civitai-pane-info">
+                <div style="margin-bottom:10px;">
+                    <div style="font-weight:700;font-size:14px;margin-bottom:2px;">
+                        <a href="${escapeHtml(modelUrl)}" target="_blank" style="color:var(--wfm-primary);text-decoration:none;">${escapeHtml(info.modelName)}</a>
+                    </div>
+                    <div style="font-size:12px;color:var(--wfm-text-secondary);">
+                        ${escapeHtml(info.versionName)}${info.creator ? ` · by ${escapeHtml(info.creator)}` : ""}
+                    </div>
                 </div>
-                <div style="font-size:12px;color:var(--wfm-text-secondary);">
-                    ${escapeHtml(info.versionName)}${info.creator ? ` · by ${escapeHtml(info.creator)}` : ""}
+                ${detailSection}
+                ${tagsHtml ? `<div style="margin-bottom:8px;">${tagsHtml}</div>` : ""}
+                ${trainedWordsHtml ? `<div style="margin-bottom:10px;"><div style="font-weight:600;font-size:12px;margin-bottom:4px;">${t("civitaiTriggerWords")}</div>${trainedWordsHtml}</div>` : ""}
+                ${info.description ? `<div style="font-size:12px;color:var(--wfm-text-secondary);line-height:1.5;max-height:120px;overflow-y:auto;">${info.description}</div>` : ""}
+                <div style="margin-top:10px;">
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-civitai-refresh-btn">${t("civitaiRefresh")}</button>
                 </div>
             </div>
-            ${detailSection}
-            ${imagesHtml ? `<div style="margin-bottom:10px;">${imagesHtml}</div>` : ""}
-            ${tagsHtml ? `<div style="margin-bottom:8px;">${tagsHtml}</div>` : ""}
-            ${trainedWordsHtml ? `<div style="margin-bottom:10px;"><div style="font-weight:600;font-size:12px;margin-bottom:4px;">${t("civitaiTriggerWords")}</div>${trainedWordsHtml}</div>` : ""}
-            ${info.description ? `<div style="font-size:12px;color:var(--wfm-text-secondary);line-height:1.5;max-height:120px;overflow-y:auto;">${info.description}</div>` : ""}
-            <div style="margin-top:10px;">
-                <button class="wfm-btn wfm-btn-sm" id="wfm-civitai-refresh-btn">${t("civitaiRefresh")}</button>
+
+            <div id="wfm-civitai-pane-sample" style="display:none;">
+                ${sampleImagesHtml || `<p style="color:var(--wfm-text-secondary);font-size:13px;text-align:center;margin-top:20px;">${t("civitaiNoImages")}</p>`}
             </div>
         </div>`;
+
+    // Sub-tab switching
+    const subtabBtns = el.querySelectorAll(".wfm-civitai-subtab-btn");
+    subtabBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const pane = btn.dataset.pane;
+            subtabBtns.forEach((b) => {
+                const isActive = b === btn;
+                b.style.borderBottom = isActive ? "2px solid var(--wfm-primary)" : "2px solid transparent";
+                b.style.color = isActive ? "var(--wfm-primary)" : "var(--wfm-text-secondary)";
+                b.style.fontWeight = isActive ? "600" : "400";
+            });
+            el.querySelector("#wfm-civitai-pane-info").style.display = pane === "info" ? "" : "none";
+            el.querySelector("#wfm-civitai-pane-sample").style.display = pane === "sample" ? "" : "none";
+        });
+    });
 
     // Copy trigger word on click
     el.querySelectorAll(".wfm-trained-word").forEach((wordEl) => {

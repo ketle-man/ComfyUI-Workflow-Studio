@@ -393,6 +393,11 @@ export async function initSettingsTab() {
     const settings = loadLocalSettings();
     const serverSettings = await loadServerSettings();
 
+    // Sync civitai_host to localStorage so other tabs can read it without an extra fetch
+    if (serverSettings.civitai_host) {
+        localStorage.setItem("wfm_civitai_host", serverSettings.civitai_host);
+    }
+
     // Load current workflows dir info
     let workflowsDirInfo = { current: "", default: "" };
     try {
@@ -659,9 +664,19 @@ export async function initSettingsTab() {
             </div>
         </details>
 
-        <!-- CivitAI API Key -->
+        <!-- CivitAI Settings -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">${t("civitaiApiKeySetting")}</summary>
+            <div class="wfm-form-group">
+                <label style="display:flex;align-items:center;gap:4px;">
+                    ${t("civitaiHostSetting")}
+                    <span title="${t("civitaiHostHint")}" style="cursor:help;color:var(--wfm-text-secondary);font-size:13px;">ℹ</span>
+                </label>
+                <select class="wfm-select" id="wfm-settings-civitai-host" style="width:100%;">
+                    <option value="civitai.com" ${(serverSettings.civitai_host || "civitai.com") === "civitai.com" ? "selected" : ""}>${t("civitaiHostCom")}</option>
+                    <option value="civitai.red" ${serverSettings.civitai_host === "civitai.red" ? "selected" : ""}>${t("civitaiHostRed")}</option>
+                </select>
+            </div>
             <div class="wfm-form-group">
                 <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-bottom:8px;">
                     ${t("civitaiApiKeyHint")}
@@ -1086,6 +1101,19 @@ export async function initSettingsTab() {
             serverSettings.ollama_url = ollamaUrl;
             serverSettings.ollama_model = ollamaModel;
             showToast(t("ollamaSaved"), "success");
+        } catch (err) {
+            showToast(`${t("saveError")}: ${err.message}`, "error");
+        }
+    });
+
+    // CivitAI host select
+    document.getElementById("wfm-settings-civitai-host")?.addEventListener("change", async (e) => {
+        const host = e.target.value;
+        try {
+            await saveServerSettings({ civitai_host: host });
+            serverSettings.civitai_host = host;
+            localStorage.setItem("wfm_civitai_host", host);
+            showToast(t("civitaiHostSaved"), "success");
         } catch (err) {
             showToast(`${t("saveError")}: ${err.message}`, "error");
         }

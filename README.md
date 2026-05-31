@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.20-green)
+![Version](https://img.shields.io/badge/version-0.3.21-green)
 
 ## Screenshots
 
@@ -107,6 +107,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Gallery output directory** — configure which output folder the Gallery tab scans for images
 - **Eagle connection** — set Eagle API endpoint for auto-save
 - **Ollama connection** — configure Ollama server URL
+- **CivitAI Host** — choose which site opens when clicking a model link: `civitai.com` (SFW only) or `civitai.red` (unrestricted); saved to `settings.json` and synced to `localStorage` for the Models tab to use without extra fetches
 - **CivitAI API Key** — optional Bearer token for authenticated CivitAI access; stored in `settings.json` (excluded from data exports); environment variable `CIVITAI_API_KEY` takes priority if set
 - **Default workflow** — set a workflow to auto-load on startup
 - **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling); API keys are excluded from exports for security
@@ -144,7 +145,8 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
 - **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
 - **Side panel tabs** — Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
-- **CivitAI integration** — fetch model metadata by SHA256 hash; side panel shows **Type** (badge), **Base Model**, **Hash** (BLAKE3/SHA256, click to copy), trained words, tags, and model page link; sample images are clickable and open full-size in a new tab; preview image is automatically downloaded and saved if none exists
+- **CivitAI integration** — fetch model metadata by SHA256 hash; side panel shows **Type** (badge), **Base Model**, **Hash** (BLAKE3/SHA256, click to copy), trained words, tags, and model page link; model link opens in the site selected in Settings (civitai.com or civitai.red)
+- **CivitAI panel — Info / Sample sub-tabs** — Info tab shows model details (name, type, base model, hash, trigger words, tags, description); Sample tab shows all sample images (count shown in tab label); clicking any image opens the full-size version in a new tab
 - **CivitAI panel states** — three distinct states: not yet checked (fetch button), checked but not found on CivitAI (re-check button with notice), and found (full info display); clicking the CivitAI tab always refreshes to the latest state
 - **Batch CivitAI fetch** — one-click batch fetch using `POST /model-versions/by-hash` (up to 100 models per request) with SSE progress streaming; previews are auto-saved for models without one
 - **Detail modal** — preview image, CivitAI info, thumbnail change via file upload
@@ -276,6 +278,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.21
+- **CivitAI Host setting** — new dropdown in Settings tab (CivitAI section): choose `civitai.com` (SFW only) or `civitai.red` (unrestricted); selection is saved to `settings.json` and synced to `localStorage` so the Models tab uses it immediately without extra server calls
+- **CivitAI panel — Info / Sample sub-tabs** — the CivitAI side panel is split into two sub-tabs; Info tab contains model details and actions; Sample tab shows all sample images (count displayed in label); images open full-size in a new browser tab on click
+- **Bug fix: model page URL for existing cache** — `modelId: null` entries (the majority of the cache) previously generated broken links (`/models?modelVersionId=…`); both the Python service and the JS renderer now fall back to `/{host}/model-versions/{versionId}` which redirects correctly to the model page; all 324 existing cache entries are fixed immediately without re-fetching
+- **Help updated** — Batch tab entries (gen-12 / gen-13 / gen-14) and Settings entries (settings-11 Text Size / settings-12 RAW JSON Colors / settings-13 CivitAI Host) are now fully localized in EN / JA / ZH; `helpGen3` updated to reflect 5-tab layout; `helpGen11` rewritten to describe the Batch toggle; JA/ZH translations no longer contain untranslated English terms (Filter, Pause/Resume, Stop)
 
 ### v0.3.20
 - **CivitAI panel — Type / Base Model / Hash display** — side panel CivitAI tab now shows a Type badge (e.g. CHECKPOINT, LORA), Base Model row, and Hash row (BLAKE3 preferred, SHA256 fallback from CivitAI API or local metadata); click the hash to copy the full value to clipboard

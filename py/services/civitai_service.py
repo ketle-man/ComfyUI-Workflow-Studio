@@ -322,7 +322,10 @@ class CivitaiService:
             "downloadUrl": data.get("downloadUrl", ""),
             "modelUrl": (
                 f"https://civitai.com/models/{model_id}?modelVersionId={version_id}"
-                if model_id else f"https://civitai.com/models?modelVersionId={version_id}"
+                if model_id else (
+                    f"https://civitai.com/model-versions/{version_id}"
+                    if version_id else ""
+                )
             ),
             "stats": {
                 "downloadCount": stats.get("downloadCount", 0),
