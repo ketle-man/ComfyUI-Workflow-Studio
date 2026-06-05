@@ -21,6 +21,7 @@ let pmSearchText = "";
 let pmSelectedId = null;       // currently selected preset id
 let pmGroups = {};             // { groupName: [presetId, ...] }
 const PM_GROUPS_KEY = "wfm_prompt_preset_groups";
+const PROMPT_RESERVED_GROUPS = ["Batch"];
 
 // ============================================
 // Preset API helpers
@@ -118,11 +119,15 @@ async function loadAllPresets() {
         pmGroups = JSON.parse(localStorage.getItem(PM_GROUPS_KEY) || "{}");
     } catch { pmGroups = {}; }
 
-    // Clean stale entries from groups
+    // Clean stale entries from groups (preserve reserved groups even if empty)
     const validIds = new Set(promptPresets.map(p => p.id));
     for (const g of Object.keys(pmGroups)) {
         pmGroups[g] = (pmGroups[g] || []).filter(id => validIds.has(id));
-        if (pmGroups[g].length === 0) delete pmGroups[g];
+        if (pmGroups[g].length === 0 && !PROMPT_RESERVED_GROUPS.includes(g)) delete pmGroups[g];
+    }
+    // Ensure reserved groups always exist
+    for (const g of PROMPT_RESERVED_GROUPS) {
+        if (!pmGroups[g]) pmGroups[g] = [];
     }
     saveGroups();
 
@@ -213,6 +218,25 @@ function matchesSearch(p) {
            (p.tags || []).some(t => t.toLowerCase().includes(s));
 }
 
+function isInBatchPreset(id) {
+    return (pmGroups["Batch"] || []).includes(id);
+}
+
+function toggleBatchPreset(id) {
+    const batch = pmGroups["Batch"] || [];
+    const idx = batch.indexOf(id);
+    if (idx >= 0) { batch.splice(idx, 1); } else { batch.push(id); }
+    pmGroups["Batch"] = batch;
+    saveGroups();
+}
+
+function clearBatchPresets() {
+    pmGroups["Batch"] = [];
+    saveGroups();
+    renderPresetManager();
+    showToast(t("promptBatchClear"), "success");
+}
+
 function createPmItem(preset) {
     const el = document.createElement("div");
     el.className = "wfm-pm-item" + (pmSelectedId === preset.id ? " active" : "");
@@ -225,12 +249,15 @@ function createPmItem(preset) {
         ? `<span style="font-size:9px;color:var(--wfm-primary);margin-left:4px;">[${esc(preset.category)}]</span>`
         : "";
 
+    const inBatch = isInBatchPreset(preset.id);
+
     el.innerHTML = `
         <div class="wfm-pm-item-body">
             <div class="wfm-pm-item-name">${preset.favorite ? '<span style="color:#ffd700;">&#9733;</span> ' : ""}${esc(preset.name)}${catBadge}</div>
             <div class="wfm-pm-item-sub">${esc(previewText)}</div>
         </div>
         <div class="wfm-pm-item-actions">
+            <button class="wfm-pm-action-btn pm-batch-btn${inBatch ? " batch-active" : ""}" title="Batch">B</button>
             <button class="wfm-pm-action-btn pm-fav-btn${preset.favorite ? " fav-active" : ""}" title="Favorite">&#9733;</button>
             <button class="wfm-pm-action-btn pm-del-btn" title="Delete" style="color:var(--wfm-danger);">&#10005;</button>
         </div>
@@ -240,6 +267,13 @@ function createPmItem(preset) {
     el.addEventListener("click", (e) => {
         if (e.target.closest(".wfm-pm-item-actions")) return;
         selectPresetInEditor(preset);
+    });
+
+    // Batch toggle
+    el.querySelector(".pm-batch-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleBatchPreset(preset.id);
+        renderPresetManager();
     });
 
     // Favorite toggle
@@ -977,18 +1011,14 @@ export function initPromptTab() {
             });
             if (created) {
                 promptPresets.push(created);
-                pmSelectedId = created.id;
                 showToast(t("presetSaved"), "success");
             }
         }
 
+        pmSelectedId = null;
         renderPresetSelect();
         renderPresetManager();
-
-        // Re-select
-        if (pmSelectedId && presetSelect) {
-            presetSelect.value = pmSelectedId;
-        }
+        if (presetSelect) presetSelect.value = "";
     });
 
     // Apply preset to GenerateUI
@@ -1059,6 +1089,10 @@ export function initPromptTab() {
             showToast("Select a group first", "error");
             return;
         }
+        if (PROMPT_RESERVED_GROUPS.includes(groupName)) {
+            showToast(t("modelsGroupReserved"), "warning");
+            return;
+        }
         if (!confirm(`Delete group "${groupName}"?`)) return;
         delete pmGroups[groupName];
         saveGroups();
@@ -1079,6 +1113,10 @@ export function initPromptTab() {
     document.getElementById("wfm-pm-search-input")?.addEventListener("input", (e) => {
         pmSearchText = e.target.value.trim();
         renderPresetManager();
+    });
+
+    document.getElementById("wfm-pm-batch-clear-btn")?.addEventListener("click", () => {
+        clearBatchPresets();
     });
 
     // ── Center column tab switching ──────────────────────────

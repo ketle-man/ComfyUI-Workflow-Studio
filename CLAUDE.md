@@ -185,3 +185,18 @@ os.environ["HF_HOME"] = "D:\\hf_cache"
 5. `INPUT_TYPES` 変更時は `widgets_values` も同時更新
 6. 削除した依存への参照が残っていないか grep で確認
 7. ComfyUI完全再起動 → ワークフロー読み込み → エンドツーエンド実行確認
+
+---
+
+## リリース手順
+
+コミット・プッシュ・GitHub リリース（`gh release create`）を行う際は、**必ず以下の順序**で実施する。
+
+1. `pyproject.toml` の `version` を新バージョン番号に更新してステージングに含める
+2. `README.md` のバージョンバッジを更新（`![Version](https://img.shields.io/badge/version-X.Y.Z-green)`）
+3. `README.md` の Changelog に新バージョンのエントリを追加
+4. `DEVLOG.md` の先頭に変更詳細エントリを追加
+5. 上記すべてを同一コミットにまとめてプッシュ
+6. `gh release create vX.Y.Z` でリリースを作成
+
+`pyproject.toml` のバージョン変更が GitHub Actions のトリガー（`paths: pyproject.toml`）になっており、ComfyUI Registry への自動公開もここで行われる。バージョン更新を忘れると Registry に反映されない。

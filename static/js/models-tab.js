@@ -8,6 +8,10 @@ import { t } from "./i18n.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 
+// ── Constants ─────────────────────────────────────────────
+const RESERVED_GROUPS = ["Batch"];
+const BATCH_MODEL_TYPES = ["checkpoint", "lora"];
+
 // ── State ─────────────────────────────────────────────────
 
 const state = {
@@ -35,7 +39,8 @@ const state = {
     groupFilter: "",
     statusFilter: "all",  // "all" | "enabled" | "disabled"
     showFavoritesOnly: false,
-    viewMode: localStorage.getItem("wfm_models_view") || "thumb",
+    showBatchOnly: false,
+    viewMode: localStorage.getItem("wfm_models_view") === "table" ? "table" : "thumb",
     activeModelType: "checkpoint",
     selectedModel: null,
     loaded: {},
@@ -554,6 +559,11 @@ function filterModels() {
         });
     }
 
+    if (state.showBatchOnly) {
+        const batchMembers = state.modelGroups["Batch"] || [];
+        models = models.filter((m) => batchMembers.includes(m));
+    }
+
     if (state.tagFilter) {
         models = models.filter((m) => {
             const meta = state.modelMetadata[m];
@@ -740,17 +750,8 @@ function renderGroupFilter() {
     const select = document.getElementById("wfm-models-group-filter");
     if (!select) return;
 
-    // Collect groups across all types with type labels
-    const options = [];
-    const typeOrder = Object.keys(TYPE_LABELS);
-    typeOrder.forEach((type) => {
-        const groups = state.allModelGroups[type];
-        if (!groups) return;
-        const names = Object.keys(groups).sort();
-        names.forEach((g) => {
-            options.push({ type, name: g });
-        });
-    });
+    const groups = state.allModelGroups[state.activeModelType] || {};
+    const names = Object.keys(groups).sort();
 
     const currentValue = state.groupFilter
         ? `${state.activeModelType}::${state.groupFilter}`
@@ -758,11 +759,10 @@ function renderGroupFilter() {
 
     select.innerHTML =
         `<option value="">${t("modelsAllGroups")}</option>` +
-        options.map(({ type, name }) => {
-            const typeLabel = TYPE_LABELS[type] || type;
-            const value = `${type}::${name}`;
+        names.map((name) => {
+            const value = `${state.activeModelType}::${name}`;
             const isActive = value === currentValue;
-            return `<option value="${escapeHtml(value)}"${isActive ? " selected" : ""}>[${typeLabel}] ${escapeHtml(name)}</option>`;
+            return `<option value="${escapeHtml(value)}"${isActive ? " selected" : ""}>${escapeHtml(name)}</option>`;
         }).join("");
 }
 
@@ -829,8 +829,6 @@ function renderModelGrid() {
 
     if (state.viewMode === "table") {
         renderTableView(grid, filtered);
-    } else if (state.viewMode === "card") {
-        renderCardView(grid, filtered);
     } else {
         renderThumbView(grid, filtered);
     }
@@ -848,6 +846,8 @@ function renderThumbView(grid, models) {
         const tagsHtml = (meta.tags || []).map((tag) => `<span class="wfm-badge wfm-badge-sm">${escapeHtml(tag)}</span>`).join("");
         const favStar = meta.favorite ? "\u2605" : "\u2606";
         const favClass = meta.favorite ? "wfm-fav-btn active" : "wfm-fav-btn";
+        const inBatch = isInBatch(modelName);
+        const batchClass = inBatch ? "wfm-batch-btn active" : "wfm-batch-btn";
 
         const card = document.createElement("div");
         card.className = "wfm-card";
@@ -865,6 +865,7 @@ function renderThumbView(grid, models) {
                 <div class="wfm-card-title" title="${escapeHtml(modelName)}">${escapeHtml(getStem(name))}</div>
                 <div class="wfm-card-meta">${userBadges} ${tagsHtml}</div>
             </div>
+            <button class="${batchClass}" title="${t("modelsBatch")}">B</button>
             <button class="${favClass}" title="${t("modelsFavorite")}">${favStar}</button>
             <button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${disabled ? t("modelEnable") : t("modelDisable")}">${disabled ? "▶" : "⏸"}</button>`;
 
@@ -873,6 +874,10 @@ function renderThumbView(grid, models) {
         const placeholder = card.querySelector(".wfm-card-thumb-placeholder");
         loadPreviewImage(img, placeholder, modelName);
 
+        card.querySelector(".wfm-batch-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleBatch(modelName);
+        });
         card.querySelector(".wfm-fav-btn").addEventListener("click", (e) => {
             e.stopPropagation();
             toggleFavorite(modelName);
@@ -888,7 +893,7 @@ function renderThumbView(grid, models) {
             checkEl.className = "wfm-select-check" + (isChecked ? " checked" : "");
             card.appendChild(checkEl);
             card.addEventListener("click", (e) => {
-                if (e.target.closest(".wfm-fav-btn, .wfm-toggle-btn")) return;
+                if (e.target.closest(".wfm-batch-btn, .wfm-fav-btn, .wfm-toggle-btn")) return;
                 toggleModelSelection(modelName);
             });
         } else {
@@ -899,61 +904,6 @@ function renderThumbView(grid, models) {
     });
 }
 
-// ── Card View (no thumbnail, compact) ─────────────────────
-
-function renderCardView(grid, models) {
-    grid.innerHTML = "";
-    models.forEach((modelName) => {
-        const meta = state.modelMetadata[modelName] || {};
-        const { dir, name } = parseModelPath(modelName);
-        const ext = getExtension(name);
-        const disabled = isModelDisabled(modelName);
-        const userBadges = modelBadgesHtml(modelName);
-        const tagsHtml = (meta.tags || []).map((tag) => `<span class="wfm-badge wfm-badge-sm">${escapeHtml(tag)}</span>`).join("");
-        const favStar = meta.favorite ? "\u2605" : "\u2606";
-        const favClass = meta.favorite ? "wfm-fav-btn active" : "wfm-fav-btn";
-
-        const card = document.createElement("div");
-        card.className = "wfm-card wfm-model-card";
-        if (disabled) card.classList.add("wfm-model-disabled");
-        if (state.selectedModel === modelName) card.classList.add("wfm-card-selected");
-        card.dataset.modelName = modelName;
-
-        card.innerHTML = `
-            <div class="wfm-card-body">
-                <div class="wfm-card-title" title="${escapeHtml(modelName)}">${escapeHtml(name)}${disabled ? ` <span class="wfm-badge wfm-badge-disabled">${t("modelDisabled")}</span>` : ""}</div>
-                <div class="wfm-card-meta">
-                    ${userBadges} ${tagsHtml}
-                </div>
-            </div>
-            <button class="${favClass}" title="${t("modelsFavorite")}">${favStar}</button>
-            <button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${disabled ? t("modelEnable") : t("modelDisable")}">${disabled ? "▶" : "⏸"}</button>`;
-
-        card.querySelector(".wfm-fav-btn").addEventListener("click", (e) => {
-            e.stopPropagation();
-            toggleFavorite(modelName);
-        });
-        card.querySelector(".wfm-toggle-btn").addEventListener("click", (e) => {
-            e.stopPropagation();
-            toggleModelEnable(modelName);
-        });
-        if (state.selectMode) {
-            const isChecked = state.selectedModels.has(modelName);
-            card.classList.toggle("wfm-card-checked", isChecked);
-            const checkEl = document.createElement("div");
-            checkEl.className = "wfm-select-check" + (isChecked ? " checked" : "");
-            card.appendChild(checkEl);
-            card.addEventListener("click", (e) => {
-                if (e.target.closest(".wfm-fav-btn, .wfm-toggle-btn")) return;
-                toggleModelSelection(modelName);
-            });
-        } else {
-            card.addEventListener("click", () => showSidePanel(modelName));
-            card.addEventListener("dblclick", (e) => { e.stopPropagation(); openDetailModal(modelName); });
-        }
-        grid.appendChild(card);
-    });
-}
 
 // ── Table View ────────────────────────────────────────────
 
@@ -966,6 +916,7 @@ function renderTableView(grid, models) {
             const disabled = isModelDisabled(modelName);
             const isChecked = state.selectMode && state.selectedModels.has(modelName);
             const favIcon = meta.favorite ? "&#9733;" : "&#9734;";
+            const batchIcon = isInBatch(modelName) ? `<button class="wfm-batch-btn active" title="${t("modelsBatch")}">B</button>` : `<button class="wfm-batch-btn" title="${t("modelsBatch")}">B</button>`;
             const tagsStr = (meta.tags || []).join(", ");
             const memo = meta.memo || "";
             const toggleLabel = disabled ? t("modelEnable") : t("modelDisable");
@@ -983,6 +934,7 @@ function renderTableView(grid, models) {
                 <td>${escapeHtml(tagsStr)}</td>
                 <td class="wfm-table-td-memo" title="${escapeHtml(memo)}">${escapeHtml(memo)}</td>
                 <td class="wfm-table-td-toggle"><button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${toggleLabel}">${toggleIcon}</button></td>
+                <td class="wfm-table-td-batch">${batchIcon}</td>
             </tr>`;
         })
         .join("");
@@ -998,6 +950,7 @@ function renderTableView(grid, models) {
         <th>${t("modelsTags")}</th>
         <th>${t("modelsMemo")}</th>
         <th style="width:50px;"></th>
+        <th style="width:30px;">B</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 
     grid.querySelectorAll(".wfm-models-table-row").forEach((row) => {
@@ -1007,7 +960,7 @@ function renderTableView(grid, models) {
 
         if (state.selectMode) {
             row.addEventListener("click", (e) => {
-                if (e.target.closest(".wfm-models-table-fav, .wfm-toggle-btn")) return;
+                if (e.target.closest(".wfm-models-table-fav, .wfm-toggle-btn, .wfm-batch-btn")) return;
                 toggleModelSelection(mn);
             });
         } else {
@@ -1022,7 +975,43 @@ function renderTableView(grid, models) {
             e.stopPropagation();
             toggleModelEnable(mn);
         });
+        row.querySelector(".wfm-batch-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleBatch(mn);
+        });
     });
+}
+
+// ── Batch group helpers ───────────────────────────────────
+
+function isInBatch(modelName) {
+    return (state.modelGroups["Batch"] || []).includes(modelName);
+}
+
+async function toggleBatch(modelName) {
+    const batch = state.modelGroups["Batch"] || [];
+    const idx = batch.indexOf(modelName);
+    if (idx >= 0) {
+        batch.splice(idx, 1);
+    } else {
+        batch.push(modelName);
+    }
+    state.modelGroups["Batch"] = batch;
+    state.allModelGroups[state.activeModelType] = state.modelGroups;
+    await saveModelGroups(state.modelGroups);
+    renderModelGrid();
+}
+
+async function clearBatchGroup() {
+    state.modelGroups["Batch"] = [];
+    state.allModelGroups[state.activeModelType] = state.modelGroups;
+    await saveModelGroups(state.modelGroups);
+    if (state.showBatchOnly) {
+        state.showBatchOnly = false;
+        document.getElementById("wfm-models-batch-filter-btn")?.classList.remove("active");
+    }
+    renderModelGrid();
+    showToast(t("modelsBatchClear"), "success");
 }
 
 // ── Favorite toggle ───────────────────────────────────────
@@ -1439,6 +1428,10 @@ function renderSideGroup(modelName) {
         const sel = document.getElementById("wfm-models-group-manage-select");
         const oldName = sel?.value;
         if (!oldName) return;
+        if (RESERVED_GROUPS.includes(oldName)) {
+            showToast(t("modelsGroupReserved"), "warning");
+            return;
+        }
         const newName = prompt(t("modelsRenamePrompt"), oldName);
         if (!newName || newName === oldName) return;
         if (state.modelGroups[newName]) {
@@ -1458,6 +1451,10 @@ function renderSideGroup(modelName) {
         const sel = document.getElementById("wfm-models-group-manage-select");
         const g = sel?.value;
         if (!g) return;
+        if (RESERVED_GROUPS.includes(g)) {
+            showToast(t("modelsGroupReserved"), "warning");
+            return;
+        }
         if (!confirm(t("modelsDeleteGroupConfirm").replace("{name}", g))) return;
         delete state.modelGroups[g];
         saveModelGroups(state.modelGroups).then(() => {
@@ -1728,6 +1725,10 @@ async function loadModelsForCurrentType() {
     if (state.loaded[type] && state.modelsByType[type].length > 0) {
         // Reload groups for this type (groups are per-type)
         state.modelGroups = await fetchModelGroups();
+        if (BATCH_MODEL_TYPES.includes(type) && !state.modelGroups["Batch"]) {
+            state.modelGroups["Batch"] = [];
+            await saveModelGroups(state.modelGroups);
+        }
         state.allModelGroups[type] = state.modelGroups;
         renderTagFilter();
         renderDirFilter();
@@ -1747,6 +1748,10 @@ async function loadModelsForCurrentType() {
         ]);
         const disabledSet = new Set(Array.isArray(disabledList) ? disabledList : []);
         state.disabledModels[type] = disabledSet;
+        if (BATCH_MODEL_TYPES.includes(type) && !groups["Batch"]) {
+            groups["Batch"] = [];
+            await saveModelGroups(groups);
+        }
         state.modelGroups = groups;
         state.allModelGroups[type] = groups;
 
@@ -1987,6 +1992,19 @@ export function initModelsTab() {
             renderModelGrid();
         });
     }
+
+    // Batch filter
+    document.getElementById("wfm-models-batch-filter-btn")?.addEventListener("click", () => {
+        state.showBatchOnly = !state.showBatchOnly;
+        document.getElementById("wfm-models-batch-filter-btn").classList.toggle("active", state.showBatchOnly);
+        state.currentPage = 0;
+        renderModelGrid();
+    });
+
+    // Batch clear
+    document.getElementById("wfm-models-batch-clear-btn")?.addEventListener("click", () => {
+        clearBatchGroup();
+    });
 
     // View mode (thumb / card / table)
     document.querySelectorAll("[data-models-view]").forEach((btn) => {

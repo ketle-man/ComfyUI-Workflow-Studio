@@ -12,6 +12,11 @@ import { highlightJSON } from "./json-highlight.js";
 import { openBadgeEditModal } from "./models-tab.js";
 
 // ============================================
+// Constants
+// ============================================
+const WF_RESERVED_GROUPS = ["Batch"];
+
+// ============================================
 // State
 // ============================================
 
@@ -19,10 +24,11 @@ const state = {
     workflows: [],
     activeBadge: "ALL",
     searchText: "",
-    viewMode: localStorage.getItem("wfm_default_view") || "thumb", // thumb | card | table
+    viewMode: localStorage.getItem("wfm_default_view") === "table" ? "table" : "thumb",
     selectedWf: null,
     groupFilter: "", // empty = all groups
     currentPage: 0,
+    showBatchOnly: false,
 };
 
 
@@ -92,6 +98,11 @@ const groups = {
         } catch {
             this._data = {};
         }
+        let needsSave = false;
+        for (const g of WF_RESERVED_GROUPS) {
+            if (!this._data[g]) { this._data[g] = []; needsSave = true; }
+        }
+        if (needsSave) this.save();
         return this._data;
     },
     save() {
@@ -117,11 +128,14 @@ const groups = {
     },
 
     deleteGroup(name) {
+        if (WF_RESERVED_GROUPS.includes(name)) return false;
         delete this.data[name];
         this.save();
+        return true;
     },
 
     renameGroup(oldName, newName) {
+        if (WF_RESERVED_GROUPS.includes(oldName)) return false;
         if (!newName || this.data[newName] || !this.data[oldName]) return false;
         this.data[newName] = this.data[oldName];
         delete this.data[oldName];
@@ -153,6 +167,32 @@ const groups = {
         this.save();
     },
 };
+
+// ============================================
+// Batch helpers
+// ============================================
+
+function isInBatch(filename) {
+    return (groups.data["Batch"] || []).includes(filename);
+}
+
+function toggleBatch(filename) {
+    const batch = groups.data["Batch"] || [];
+    const idx = batch.indexOf(filename);
+    if (idx >= 0) { batch.splice(idx, 1); } else { batch.push(filename); }
+    groups.data["Batch"] = batch;
+    groups.save();
+    renderGrid();
+}
+
+function clearBatch() {
+    groups.data["Batch"] = [];
+    groups.save();
+    state.showBatchOnly = false;
+    renderModelFilters();
+    renderGrid();
+    showToast(t("wfBatchClear"), "success");
+}
 
 // ============================================
 // API
@@ -250,6 +290,7 @@ function renderModelFilters() {
     container.innerHTML = `
         <button class="wfm-filter-btn ${state.activeBadge === "ALL" ? "active" : ""}" data-filter="ALL">ALL</button>
         <button class="wfm-filter-btn ${state.activeBadge === "FAVORITE" ? "active" : ""}" data-filter="FAVORITE">&#9733;</button>
+        <button class="wfm-filter-btn wfm-wf-batch-filter-btn${state.showBatchOnly ? " active" : ""}">B</button>
         ${badges.map((b) => {
             const color = palette[b] || "";
             const style = color ? ` style="background:${color};color:#fff;"` : "";
@@ -259,6 +300,13 @@ function renderModelFilters() {
 
     container.querySelectorAll(".wfm-filter-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
+            if (btn.classList.contains("wfm-wf-batch-filter-btn")) {
+                state.showBatchOnly = !state.showBatchOnly;
+                state.currentPage = 0;
+                renderModelFilters();
+                renderGrid();
+                return;
+            }
             state.activeBadge = btn.dataset.filter;
             state.currentPage = 0;
             renderModelFilters();
@@ -276,6 +324,11 @@ function filterWorkflows() {
         } else if (state.activeBadge !== "ALL") {
             if (!(wf.metadata?.badges || []).includes(state.activeBadge))
                 return false;
+        }
+
+        // Batch filter
+        if (state.showBatchOnly) {
+            if (!(groups.data["Batch"] || []).includes(wf.filename)) return false;
         }
 
         // Group filter
@@ -333,30 +386,24 @@ function renderGrid() {
         card.dataset.filename = wf.filename;
         const hasThumb = !!wf.thumbnail;
         const badges = wfBadgesHtml(wf);
-        const tags = (wf.metadata.tags || []).map((t) => `<span class="wfm-tag">#${t}</span>`).join("");
         const favStar = wf.metadata.favorite ? "\u2605" : "\u2606";
         const favClass = wf.metadata.favorite ? "wfm-fav-btn active" : "wfm-fav-btn";
 
-        if (state.viewMode === "thumb") {
-            card.innerHTML = `
-                <div class="wfm-card-thumb">${hasThumb ? `<img src="${wf.thumbnail}" loading="lazy" />` : `<span class="wfm-card-thumb-placeholder">${t("noImage")}</span>`}</div>
+        card.innerHTML = `
+                <div class="wfm-card-thumb">
+                    ${hasThumb ? `<img src="${wf.thumbnail}" loading="lazy" />` : `<span class="wfm-card-thumb-placeholder">${t("noImage")}</span>`}
+                    <button class="wfm-batch-btn${isInBatch(wf.filename) ? ' active' : ''}" title="Batch">B</button>
+                </div>
                 <div class="wfm-card-body">
                     <div class="wfm-card-title" title="${wf.filename}">${wf.filename.replace(/\.json$/, "")}</div>
                     <div class="wfm-card-meta">${badges}</div>
                 </div>
                 <button class="${favClass}" title="${t("favorite")}">${favStar}</button>`;
-        } else {
-            // Card view: no thumbnail, more meta info
-            const io = `P:${wf.analysis.inputs?.prompts || 0} I:${wf.analysis.inputs?.images || 0} → ${wf.analysis.outputs?.images || 0}`;
-            card.innerHTML = `
-                <div class="wfm-card-body">
-                    <div class="wfm-card-title" title="${wf.filename}">${wf.filename.replace(/\.json$/, "")}</div>
-                    <div class="wfm-card-meta">${badges}</div>
-                    <div class="wfm-card-io">${io}</div>
-                    <div class="wfm-card-tags">${tags}</div>
-                </div>
-                <button class="${favClass}" title="${t("favorite")}">${favStar}</button>`;
-        }
+
+        card.querySelector(".wfm-batch-btn")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleBatch(wf.filename);
+        });
 
         card.querySelector(".wfm-fav-btn")?.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -390,6 +437,7 @@ function renderTableView(grid, filtered) {
         <th style="width:60px;">${t("tags")}</th>
         <th class="wfm-table-th-memo">${t("memo")}</th>
         <th class="wfm-table-th-summary">${t("summary")}</th>
+        <th style="width:30px;"></th>
     </tr></thead>`;
     const tbody = document.createElement("tbody");
 
@@ -414,7 +462,13 @@ function renderTableView(grid, filtered) {
             <td class="wfm-table-td-io">${io}</td>
             <td>${tags}</td>
             <td class="wfm-table-td-memo" title="${(wf.metadata.memo || "").replace(/"/g, "&quot;")}">${wf.metadata.memo || ""}</td>
-            <td class="wfm-table-td-summary" title="${(wf.metadata.summary || "").replace(/"/g, "&quot;")}">${wf.metadata.summary || ""}</td>`;
+            <td class="wfm-table-td-summary" title="${(wf.metadata.summary || "").replace(/"/g, "&quot;")}">${wf.metadata.summary || ""}</td>
+            <td class="wfm-table-td-batch"><button class="wfm-batch-btn${isInBatch(wf.filename) ? ' active' : ''}" title="Batch">B</button></td>`;
+
+        tr.querySelector(".wfm-batch-btn")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleBatch(wf.filename);
+        });
 
         tr.querySelector(".wfm-fav-btn")?.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -656,6 +710,10 @@ function renderSideGroup(wf) {
     el.querySelector("#wfm-grp-rename-btn")?.addEventListener("click", () => {
         const oldName = el.querySelector("#wfm-grp-manage-sel")?.value;
         if (!oldName) return;
+        if (WF_RESERVED_GROUPS.includes(oldName)) {
+            showToast(t("modelsGroupReserved"), "warning");
+            return;
+        }
         const newName = prompt(`Rename group "${oldName}" to:`, oldName);
         if (!newName || newName === oldName) return;
         if (!groups.renameGroup(oldName, newName)) {
@@ -672,6 +730,10 @@ function renderSideGroup(wf) {
     el.querySelector("#wfm-grp-delete-btn")?.addEventListener("click", () => {
         const name = el.querySelector("#wfm-grp-manage-sel")?.value;
         if (!name) return;
+        if (WF_RESERVED_GROUPS.includes(name)) {
+            showToast(t("modelsGroupReserved"), "warning");
+            return;
+        }
         if (!confirm(`Delete group "${name}"?`)) return;
         groups.deleteGroup(name);
         if (state.groupFilter === name) {
@@ -1269,6 +1331,11 @@ export function initWorkflowTab() {
     // Toolbar: ⚙ Badge button
     document.getElementById("wfm-badge-btn")?.addEventListener("click", () => {
         openBadgeEditModal(() => renderGrid());
+    });
+
+    // Toolbar: BC (batch clear) button
+    document.getElementById("wfm-wf-batch-clear-btn")?.addEventListener("click", () => {
+        clearBatch();
     });
 
     // Initial load

@@ -1,5 +1,351 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-05: v0.3.22 — カードビュー廃止 + Batch タイプ切り替え UI + 4タイプバッチ生成
+
+### 概要
+
+WorkflowタブとModelsタブのカードビューを廃止（サムネイル／テーブルの2択に統一）。
+生成UIタブのBatch機能を4タイプ（Checkpoint/Lora/Prompt/Workflow）のいずれかを有効化する
+ラジオ選択型に拡張し、バッチ実行ループも全タイプ対応。
+
+**カードビュー廃止（Workflow・Models タブ）**
+- ビュー切り替えボタンから Card（&#9776;）を削除（Thumb・Table の2択）
+- `viewMode` の初期値に `"card"` が保存されている場合は `"thumb"` にフォールバック
+- Nodes タブのカードビューは変更なし
+
+**Batch タイプ切り替え（BATCH QUEUE ヘッダー）**
+- 各列ヘッダー右端にチェックボックスを追加（Checkpoint / Lora / Prompt / Workflow）
+- ラジオ動作：1つを選択すると他3つは自動解除（`_activeBatchType` 変数で管理）
+- バッチ有効時に Generate ボタンを押すと対応タイプのバッチ実行
+
+**Batch ステータスパネル（旧 Checkpoint Batch）**
+- "Checkpoint Batch" チェックボックス＋ラベルを廃止
+- 「Batch」+ アクティブタイプ名の常時表示に変更（実行中は青色ハイライト）
+- 進捗バー・Pause ボタンはバッチ実行中のみ表示
+
+**バッチ生成 4タイプ対応**
+- 汎用ループ `_runBatchLoop(items, applyFn, labelFn)` を実装
+- `_runBatchGenerate()` が `_activeBatchType` に応じてディスパッチ：
+  - Checkpoint: `checkpoint_nodes` の `ckpt_name` を差し替え
+  - Lora: `lora_nodes` の `lora_name` を差し替え
+  - Prompt: `prompt_nodes` の positive に `text`、negative に `negText` を適用（`textKey` 経由）
+  - Workflow: 各ファイルをロード → 生成 → 完了後に元ワークフローを復元
+
+**バグ修正**
+- Prompt バッチ: `_getSelectedPromptGroupItems()` がすでにプリセットオブジェクト配列を返すにもかかわらず、ID として再解決しようとして `list` が空になるバグを修正
+
+### 変更内容
+
+#### `templates/index.html`
+
+- Workflow タブ・Models タブのビュー切り替えから Card ボタンを削除
+- BATCH QUEUE 各列ヘッダー: テキストを `<span>` でラップ + `<input class="wfm-batch-type-cb" data-batch-type="...">` を追加
+- Checkpoint Batch パネル: チェックボックス削除 → `wfm-batch-type-label` スパン（アクティブタイプ名表示）に置換。`wfm-ckpt-batch-body` の `display:none` 初期非表示を廃止
+
+#### `static/js/workflow-tab.js`
+
+- `viewMode` 初期値: `localStorage` の値が `"table"` 以外なら `"thumb"` にフォールバック
+- `renderGrid()`: `thumb`/`card` の分岐を削除。常にサムネイルビューを描画
+- `tags` 変数宣言を削除（カードビューでしか使用していなかったため）
+
+#### `static/js/models-tab.js`
+
+- `viewMode` 初期値: 同上フォールバック
+- `renderModelGrid()`: `else if (viewMode === "card")` 分岐を削除。`thumb`/`table` の2択に
+- `renderCardView()` 関数を削除（62行）
+
+#### `static/js/generate-tab.js`
+
+- `_activeBatchType` 変数追加（`null | "checkpoint" | "lora" | "prompt" | "workflow"`）
+- `_updateBatchTypeLabel(running)`: バッチステータスパネルのタイプ名ラベルを更新
+- `initCheckpointBatch()`: 旧チェックボックスハンドラを削除 → `.wfm-batch-type-cb` のラジオ動作ハンドラに置換
+- `_runBatchLoop(items, applyFn, labelFn)`: 汎用バッチループ実装（進捗表示・一時停止・中断対応）
+- `_runBatchGenerate()`: Checkpoint単体から4タイプディスパッチャに書き換え
+- `handleGenerate()`: `wfm-ckpt-batch-enabled` チェック → `_activeBatchType !== null` に変更
+
+#### `static/css/main.css`
+
+- Workflow/Models カードビュー関連スタイルを削除（計約86行）：
+  - `.wfm-view-card` 系全ルール / `.wfm-card-io` / `.wfm-model-card` / `.wfm-view-card .wfm-toggle-btn` 等
+- `.wfm-batch-queue-col-header`: `display: flex; justify-content: space-between` 追加
+- `.wfm-batch-type-cb`: チェックボックス用スタイル追加（12px、accent-color 指定）
+
+---
+
+## 2026-06-05: (未リリース) — 生成UIタブ Batch 4タイプ対応（Lora/Prompt/Workflow グループ選択 + BATCH QUEUE 4列化）
+
+### 概要
+
+生成UIタブの Batch ペインを Checkpoint 単体から Lora・Prompt・Workflow を含む4タイプ対応に拡張。
+グループチェックペイン（中央ペイン）の Lora・Prompt・Workflow タブに実際のグループリストを実装し、
+BATCH QUEUE（右ペイン）を4列横並びレイアウトに変更。
+
+**グループチェックペイン（中央）**
+- Lora タブ: `/api/wfm/models/groups?type=lora` からグループ取得。ファイル名（末尾）を表示
+- Prompt タブ: `/api/wfm/prompts` でプリセット取得 + `localStorage[wfm_prompt_preset_groups]` でグループ取得。ID を `name` フィールドで解決して表示
+- Workflow タブ: `localStorage[wfm_groups]` からグループ取得。`.json` 除去したファイル名を表示
+- 各タブクリック時に対応するグループを再ロード。Batchサブタブ表示時は全タイプを一括ロード
+
+**BATCH QUEUE（右ペイン）**
+- Checkpoint / Lora / Prompt / Workflow の4列横並び表示
+- 各列ヘッダー・件数・アイテムリストを独立表示
+- 右ペイン幅を `flex: 1.2; min-width: 320px` に拡大
+
+**バグ修正**
+- ワークフロー カードビュー の B ボタンを左端から右下（★の下）に移動
+- Prompt グループ選択ペインで UUID がそのまま表示されていた問題を修正（`title` → `name` フィールド）
+
+### 変更内容
+
+#### `templates/index.html`
+
+- Lora/Prompt/Workflow タブ: "Coming soon" プレースホルダー → グループリストコンテナ（`wfm-batch-lora-group-list` / `wfm-batch-prompt-group-list` / `wfm-batch-wf-group-list`）に置換
+- BATCH QUEUE 右ペイン: 単一リスト → `wfm-batch-queue-grid` 内に4列（各 `wfm-batch-queue-col`）
+
+#### `static/js/generate-tab.js`
+
+**`_batchGroupState` 拡張**
+- Lora: `loraGroups` / `loraSelectedGroups` / `loraPartialSelections`
+- Prompt: `promptGroups` / `promptPresets` / `promptSelectedGroups` / `promptPartialSelections`
+- Workflow: `wfGroups` / `wfSelectedGroups` / `wfPartialSelections`
+
+**新規汎用関数**
+- `_getItemsFromGroupState(groupsData, selectedGroups, partialSelections)` — グループ状態からメンバーSet取得
+- `_getGroupSelCountFrom(name, ...)` — 汎用選択数カウント
+- `_renderAnyGroupList(listEl, groupsData, ...)` — Checkpoint と同じグループリストUIを任意タイプで再利用
+
+**新規選択取得関数**
+- `_getSelectedLoraGroupItems()` / `_getSelectedPromptGroupItems()` / `_getSelectedWfGroupItems()`
+
+**新規ロード/レンダー関数**
+- `_loadBatchLoraGroups()` / `_renderBatchLoraGroupList()`
+- `_loadPromptGroupsForBatch()` / `_renderBatchPromptGroupList()`
+- `_loadWorkflowGroupsForBatch()` / `_renderBatchWfGroupList()`
+
+**`_renderBatchPreview()` リファクタリング**
+- `_renderQueueColumn(countId, listId, items, displayFn, singular, plural)` を抽出
+- 4タイプ（Checkpoint/Lora/Prompt/Workflow）を各列に独立レンダリング
+
+**`initBatchTab()` 更新**
+- 内部タブクリック時に対応する load 関数を呼び出し
+- Batch サブタブ表示時に全タイプを一括ロード
+
+**バグ修正**
+- Prompt グループ表示: `presetsMap.get(id)?.title` → `presetsMap.get(id)?.name`（APIフィールド名修正）
+
+#### `static/js/workflow-tab.js`
+
+- カードビュー HTML: B ボタンと★ボタンを `wfm-card-actions` ラッパーで包み縦並び（★上・B下）に変更
+
+#### `static/css/main.css`
+
+- `.wfm-batch-right`: 固定210px → `flex: 1.2; min-width: 320px`
+- `.wfm-batch-queue-grid` / `.wfm-batch-queue-col` / `.wfm-batch-queue-col-header`: 4列横並びレイアウト用スタイル追加
+- `.wfm-view-card .wfm-card`: `align-items: stretch` に変更
+- `.wfm-view-card .wfm-card-actions`: `flex-direction: column; justify-content: space-between` で縦並び配置
+
+---
+
+## 2026-06-05: (未リリース) — Prompt・Workflow Batchグループ登録UI
+
+### 概要
+
+Prompt タブと Workflow タブに Batch グループへの登録・解除 UI を追加。
+モデルタブと同じ操作感で統一されており、B ボタンで登録/解除、B フィルターで絞り込み、BC ボタンで一括解除が可能。
+
+**Prompt タブ**
+- 各プリセットアイテムの★ボタン左隣に B ボタンを追加（黄色=登録済み）
+- 検索ボックス右端に BC ボタンを追加（`wfm-pm-search` 行を flex 化）
+
+**Workflow タブ**
+- サムネイルビュー：`wfm-card-thumb` 左上に B ボタン（絶対配置）
+- カードビュー：カード左下に B ボタン（絶対配置）
+- テーブルビュー：右端に B 列追加
+- フィルター行の★ボタン右隣に B フィルタリングボタンを追加
+- View Settings ボタン右隣に BC ボタンを追加
+
+### 変更内容
+
+#### `static/js/prompt-tab.js`
+
+**新規関数**
+- `isInBatchPreset(id)` — `pmGroups["Batch"]` に id が含まれるか判定
+- `toggleBatchPreset(id)` — バッチへの登録/解除トグル → `saveGroups()` で LocalStorage 保存
+- `clearBatchPresets()` — `pmGroups["Batch"] = []` で一括解除
+
+**`createPmItem()`**
+- `inBatch` 変数を追加し `.pm-batch-btn` クラスに `batch-active` を付与
+- ★ボタンの左に `<button class="wfm-pm-action-btn pm-batch-btn">B</button>` を追加
+- `.pm-batch-btn` クリックで `toggleBatchPreset()` を呼び出し
+
+**`initPromptTab()`**
+- `wfm-pm-batch-clear-btn` クリック → `clearBatchPresets()` 呼び出し
+
+#### `static/js/workflow-tab.js`
+
+**新規 state フィールド**
+- `state.showBatchOnly: false`
+
+**新規関数**
+- `isInBatch(filename)` / `toggleBatch(filename)` / `clearBatch()` — groups.data["Batch"] を操作
+
+**`filterWorkflows()`**
+- `state.showBatchOnly` が true のとき Batch グループメンバーのみに絞り込む処理を追加
+
+**`renderModelFilters()`**
+- ★フィルターボタンの右に B フィルタリングボタン（`.wfm-wf-batch-filter-btn`）を追加
+- クリックで `state.showBatchOnly` トグル
+
+**`renderGrid()` — thumbビュー**
+- `wfm-card-thumb` 内に `<button class="wfm-batch-btn">B</button>` を追加（左上絶対配置）
+
+**`renderGrid()` — cardビュー**
+- favBtnの前に `<button class="wfm-batch-btn">B</button>` を追加（左下絶対配置）
+
+**`renderTableView()`**
+- thead 右端に空の th を追加（width:30px）
+- 各行右端に `<td class="wfm-table-td-batch">B ボタン</td>` を追加
+
+**`initWorkflowTab()`**
+- `wfm-wf-batch-clear-btn` クリック → `clearBatch()` 呼び出し
+
+#### `templates/index.html`
+
+- Prompt タブ: `wfm-pm-search` 内にBC ボタン（`wfm-pm-batch-clear-btn`）を追加、入力ボックスに `flex:1` 追加
+- Workflow タブ: View Settings ボタン（`wfm-badge-settings-btn`）の右に BC ボタン（`wfm-wf-batch-clear-btn`）を追加
+
+#### `static/css/main.css`
+
+- `.wfm-pm-search { display: flex; gap: 4px; align-items: center; }` — BC ボタン配置用
+- `.wfm-pm-action-btn.batch-active { color: #f0c040; }` — Prompt タブ Bボタン active 時
+- `.wfm-card-thumb { position: relative; }` — ワークフローthumbビューの Bボタン絶対配置基準
+- `#wfm-workflow-grid.wfm-view-card .wfm-batch-btn { position: absolute; bottom: 6px; left: 6px; }` — ワークフローcardビュー専用（モデルタブと区別）
+
+#### `static/js/i18n.js`
+
+- `promptBatchClear` / `wfBatchClear` を英語・日本語・中国語で追加
+
+---
+
+## 2026-06-04: (未リリース) — モデルBatchグループ登録UI（サムネイル/カード/テーブル・フィルター・一括解除）
+
+### 概要
+
+Models タブ（Checkpoint / Lora）の Batch グループへの登録・解除 UI を全ビューに追加。
+お気に入り（★）と同じ操作感で、1クリックで登録/解除できる「B」ボタンをサムネイル・カード・テーブルの各ビューに配置。
+フィルターボタン（B）でバッチ登録済みモデルのみ絞り込み表示、BC ボタンで一括解除が可能。
+
+### 変更内容
+
+#### `templates/index.html`
+
+- ★フィルターボタンの右隣に **B** フィルターボタン（`wfm-models-batch-filter-btn`）を追加
+- Select ボタンの右隣に **BC** ボタン（`wfm-models-batch-clear-btn`）を追加
+
+#### `static/css/main.css`
+
+- `.wfm-batch-btn` スタイルを追加
+  - 通常時: グレー (`var(--wfm-text-secondary)`)・opacity 0.5
+  - `.active` 時: 黄色 (`#f0c040`)・opacity 1
+  - サムネイルビュー: `position: absolute; top: 6px; left: 6px;`（プレビュー左上）
+  - カードビュー: `position: static; flex-shrink: 0;`（★ボタンの左隣）
+  - テーブルビュー: `position: static`
+- `.wfm-table-td-batch` セル幅スタイルを追加
+
+#### `static/js/models-tab.js`
+
+**新規 state フィールド**
+- `state.showBatchOnly: false` — Bフィルターの有効状態
+
+**新規ヘルパー関数**
+- `isInBatch(modelName)` — `state.modelGroups["Batch"]` に含まれるか判定
+- `toggleBatch(modelName)` — バッチへの登録/解除トグル → `saveModelGroups()` でサーバー保存
+- `clearBatchGroup()` — `state.modelGroups["Batch"] = []` で一括解除、Bフィルターも解除
+
+**フィルター処理**
+- `state.showBatchOnly` が true のとき `modelGroups["Batch"]` メンバーのみに絞り込む処理を追加（`showFavoritesOnly` の直後）
+
+**renderThumbView**
+- `batchClass` 変数を追加（active で黄色クラス付与）
+- プレビュー画像エリア左上に `<button class="wfm-batch-btn">B</button>` を追加
+- `.wfm-batch-btn` クリックで `toggleBatch()` を呼び出し
+- selectMode のクリックガードに `.wfm-batch-btn` を追加
+
+**renderCardView**
+- 同様に `batchClass` を追加し ★ボタンの左に `<button class="wfm-batch-btn">B</button>` を追加
+- イベントハンドラ・selectMode ガードを同様に追加
+
+**renderTableView**
+- 各行に `<td class="wfm-table-td-batch">B ボタン</td>` を右端に追加
+- thead に `<th style="width:30px;">B</th>` を追加
+- `.wfm-batch-btn` クリックイベントを各行にバインド
+- selectMode のクリックガードに `.wfm-batch-btn` を追加
+
+**イベントハンドラ**
+- `wfm-models-batch-filter-btn` クリック → `state.showBatchOnly` トグル・`renderModelGrid()` 呼び出し
+- `wfm-models-batch-clear-btn` クリック → `clearBatchGroup()` 呼び出し
+
+#### `static/js/i18n.js`
+
+- `modelsBatch` / `modelsBatchClear` を英語・日本語・中国語で追加
+
+---
+
+## 2026-06-04: (未リリース) — Batch予約グループ・Presets Save後リセット・グループフィルター種別絞り込み
+
+### 概要
+
+Workflow / Prompt / Models（Checkpoint・Lora）に「Batch」予約グループを追加。
+予約グループはシステム側で自動作成され、ユーザーによる削除・リネームをブロックする。
+合わせて Prompt タブの Presets で Save 後に選択が `--New Preset--` へリセットされるよう修正し、
+Models タブのグループフィルタードロップダウンが現在選択中のモデル種別のグループのみ表示するよう改善。
+
+### 変更内容
+
+#### `static/js/models-tab.js`
+
+**Batch 予約グループの自動作成（Checkpoint / Lora）**
+- `RESERVED_GROUPS = ["Batch"]` / `BATCH_MODEL_TYPES = ["checkpoint", "lora"]` 定数を追加
+- `loadModelsForCurrentType()` のキャッシュヒット時・フル読み込み時の両パスで、対象タイプに "Batch" グループが存在しなければ API 経由で自動作成
+
+**削除・リネームのブロック**
+- グループ削除ボタン・リネームボタンのイベントハンドラで `RESERVED_GROUPS` チェックを追加
+- 予約グループを操作しようとした場合 `modelsGroupReserved` トーストを表示して処理を中断
+
+**グループフィルター種別絞り込み**
+- `renderGroupFilter()` を改修: 全タイプ横断表示から `state.activeModelType` のグループのみ表示するよう変更
+- `[タイプラベル] グループ名` 形式を廃止し、グループ名のみを表示
+
+#### `static/js/prompt-tab.js`
+
+**Batch 予約グループの自動確保**
+- `PROMPT_RESERVED_GROUPS = ["Batch"]` 定数を追加
+- `loadAllPresets()` のクリーニング処理で予約グループを空でも削除しないよう修正
+- クリーニング後に予約グループが存在しなければ `pmGroups["Batch"] = []` で確保し `saveGroups()` へ反映
+
+**削除ブロック**
+- グループ削除ボタンのイベントハンドラで `PROMPT_RESERVED_GROUPS` チェックを追加
+
+**Save 後の Preset 選択リセット**
+- Preset 保存（新規作成・更新どちらも）成功後に `pmSelectedId = null` / `presetSelect.value = ""` で `--New Preset--` へ戻す
+- 旧: 新規作成後は保存した Preset が選択されたまま → 誤って上書きするリスクがあった
+
+#### `static/js/workflow-tab.js`
+
+**Batch 予約グループの自動作成**
+- `WF_RESERVED_GROUPS = ["Batch"]` 定数を追加
+- `groups.load()` に予約グループ確保ロジックを追加（存在しなければ LocalStorage へ即時保存）
+
+**削除・リネームのブロック**
+- `groups.deleteGroup()` / `groups.renameGroup()` に `WF_RESERVED_GROUPS` チェックを追加（`false` 返却で中断）
+- 削除・リネームボタンのイベントハンドラにもフロントエンド側チェックを追加してトースト表示
+
+#### `static/js/i18n.js`
+
+- `modelsGroupReserved` を英語・日本語・中国語で追加（「予約済みグループは削除・リネーム不可」のメッセージ）
+
+---
+
 ## 2026-05-31: v0.3.21 — CivitAI ホスト設定・Sample サブタブ・URL 修正・ヘルプ i18n 整備
 
 ### 概要

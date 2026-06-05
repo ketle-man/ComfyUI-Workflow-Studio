@@ -50,7 +50,6 @@
                     <button id="wfm-list-open-comfyui-btn" class="wfm-btn wfm-btn-sm" disabled title="Select a card first">Open in ComfyUI</button>
                     <div class="wfm-view-btns">
                         <button class="wfm-view-btn active" data-view="thumb" title="Thumbnail">&#8862;</button>
-                        <button class="wfm-view-btn" data-view="card" title="Card">&#9776;</button>
                         <button class="wfm-view-btn" data-view="table" title="Table">&#8801;</button>
                     </div>
                     <button id="wfm-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
@@ -63,6 +62,7 @@
                         <button id="wfm-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="View settings">&#9881;</button>
                         <div id="wfm-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
                     </div>
+                    <button id="wfm-wf-batch-clear-btn" class="wfm-btn wfm-btn-sm" title="Clear all batch workflows">BC</button>
                 </div>
             </div>
             <div class="wfm-workflow-area">
@@ -190,6 +190,7 @@
                 <!-- Row 2: Search / filter toolbar -->
                 <div id="wfm-models-toolbar" class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;">
                     <button class="wfm-filter-btn" id="wfm-models-fav-btn" title="Favorites">&#9733;</button>
+                    <button class="wfm-filter-btn" id="wfm-models-batch-filter-btn" title="Batch">B</button>
                     <input type="text" id="wfm-models-search" class="wfm-search-input" placeholder="Search models...">
                     <select id="wfm-models-tag-filter" class="wfm-select wfm-toolbar-select"><option value="">All Tags</option></select>
                     <select id="wfm-models-dir-filter" class="wfm-select wfm-toolbar-select"><option value="">All Folders</option></select>
@@ -201,7 +202,6 @@
                     </select>
                     <div class="wfm-view-btns">
                         <button class="wfm-view-btn active" data-models-view="thumb" title="Thumbnail">&#8862;</button>
-                        <button class="wfm-view-btn" data-models-view="card" title="Card">&#9776;</button>
                         <button class="wfm-view-btn" data-models-view="table" title="Table">&#8801;</button>
                     </div>
                     <span id="wfm-models-count" class="wfm-nodes-count"></span>
@@ -210,6 +210,7 @@
                     <span id="wfm-models-civitai-progress" style="font-size:12px;color:var(--wfm-text-secondary);"></span>
                     <button id="wfm-models-badge-settings-btn" class="wfm-btn wfm-btn-sm" title="Badge settings">&#9881; Badge</button>
                     <button id="wfm-models-select-btn" class="wfm-btn wfm-btn-sm" title="Multi-select models">Select</button>
+                    <button id="wfm-models-batch-clear-btn" class="wfm-btn wfm-btn-sm" title="Clear all batch entries">BC</button>
                 </div>
                 <!-- Bulk action bar (shown in select mode) -->
                 <div id="wfm-models-bulk-bar" class="wfm-bulk-bar" style="display:none;"></div>
@@ -341,21 +342,56 @@
                                     <div id="wfm-batch-group-list" class="wfm-batch-group-list"></div>
                                 </div>
                                 <div id="wfm-batch-inner-lora" class="wfm-batch-inner-content">
-                                    <p class="wfm-placeholder" style="font-size:12px;margin:20px auto;">Coming soon</p>
+                                    <div class="wfm-batch-pane-header" style="border-top:none;">Groups</div>
+                                    <div id="wfm-batch-lora-group-list" class="wfm-batch-group-list"></div>
                                 </div>
                                 <div id="wfm-batch-inner-prompt" class="wfm-batch-inner-content">
-                                    <p class="wfm-placeholder" style="font-size:12px;margin:20px auto;">Coming soon</p>
+                                    <div class="wfm-batch-pane-header" style="border-top:none;">Groups</div>
+                                    <div id="wfm-batch-prompt-group-list" class="wfm-batch-group-list"></div>
                                 </div>
                                 <div id="wfm-batch-inner-workflow" class="wfm-batch-inner-content">
-                                    <p class="wfm-placeholder" style="font-size:12px;margin:20px auto;">Coming soon</p>
+                                    <div class="wfm-batch-pane-header" style="border-top:none;">Groups</div>
+                                    <div id="wfm-batch-wf-group-list" class="wfm-batch-group-list"></div>
                                 </div>
                             </div>
 
-                            <!-- Right pane: batch queue preview -->
+                            <!-- Right pane: batch queue preview (4 columns) -->
                             <div class="wfm-batch-pane wfm-batch-right">
                                 <div class="wfm-batch-pane-header">Batch Queue</div>
-                                <div id="wfm-batch-preview-count" class="wfm-batch-count"></div>
-                                <div id="wfm-batch-preview-list" class="wfm-batch-preview-list"></div>
+                                <div class="wfm-batch-queue-grid">
+                                    <div class="wfm-batch-queue-col">
+                                        <div class="wfm-batch-queue-col-header">
+                                            <span>Checkpoint</span>
+                                            <input type="checkbox" class="wfm-batch-type-cb" data-batch-type="checkpoint" title="Checkpoint batch を有効にする">
+                                        </div>
+                                        <div id="wfm-batch-preview-count" class="wfm-batch-count"></div>
+                                        <div id="wfm-batch-preview-list" class="wfm-batch-preview-list"></div>
+                                    </div>
+                                    <div class="wfm-batch-queue-col">
+                                        <div class="wfm-batch-queue-col-header">
+                                            <span>Lora</span>
+                                            <input type="checkbox" class="wfm-batch-type-cb" data-batch-type="lora" title="Lora batch を有効にする">
+                                        </div>
+                                        <div id="wfm-batch-lora-count" class="wfm-batch-count"></div>
+                                        <div id="wfm-batch-lora-list" class="wfm-batch-preview-list"></div>
+                                    </div>
+                                    <div class="wfm-batch-queue-col">
+                                        <div class="wfm-batch-queue-col-header">
+                                            <span>Prompt</span>
+                                            <input type="checkbox" class="wfm-batch-type-cb" data-batch-type="prompt" title="Prompt batch を有効にする">
+                                        </div>
+                                        <div id="wfm-batch-prompt-count" class="wfm-batch-count"></div>
+                                        <div id="wfm-batch-prompt-list" class="wfm-batch-preview-list"></div>
+                                    </div>
+                                    <div class="wfm-batch-queue-col">
+                                        <div class="wfm-batch-queue-col-header">
+                                            <span>Workflow</span>
+                                            <input type="checkbox" class="wfm-batch-type-cb" data-batch-type="workflow" title="Workflow batch を有効にする">
+                                        </div>
+                                        <div id="wfm-batch-wf-count" class="wfm-batch-count"></div>
+                                        <div id="wfm-batch-wf-list" class="wfm-batch-preview-list"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -509,14 +545,14 @@
                         </div>
                     </div>
 
-                    <!-- Checkpoint Batch Panel -->
+                    <!-- Batch Status Panel -->
                     <div class="wfm-gen-panel" id="wfm-ckpt-batch-panel">
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <input type="checkbox" id="wfm-ckpt-batch-enabled" style="width:14px;height:14px;cursor:pointer;accent-color:var(--wfm-primary);">
-                            <label for="wfm-ckpt-batch-enabled" style="font-weight:600;font-size:13px;cursor:pointer;">Checkpoint Batch</label>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                            <span style="font-weight:600;font-size:13px;">Batch</span>
+                            <span id="wfm-batch-type-label" style="font-size:11px;color:var(--wfm-text-secondary);">—</span>
                         </div>
-                        <div id="wfm-ckpt-batch-body" style="display:none;margin-top:8px;">
-                            <div id="wfm-ckpt-batch-progress" style="display:none;">
+                        <div id="wfm-ckpt-batch-body">
+                            <div id="wfm-ckpt-batch-progress" style="display:none;margin-top:6px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11px;">
                                     <span id="wfm-ckpt-batch-current-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75%;color:var(--wfm-text-primary);"></span>
                                     <span id="wfm-ckpt-batch-count" style="color:var(--wfm-text-secondary);white-space:nowrap;margin-left:8px;"></span>
@@ -659,7 +695,8 @@
                                 <button class="wfm-pm-tab" data-pmtab="groups">Groups</button>
                             </div>
                             <div class="wfm-pm-search">
-                                <input type="text" id="wfm-pm-search-input" class="wfm-input" placeholder="Search presets...">
+                                <input type="text" id="wfm-pm-search-input" class="wfm-input" placeholder="Search presets..." style="flex:1;min-width:0;">
+                                <button id="wfm-pm-batch-clear-btn" class="wfm-btn wfm-btn-sm" title="Clear all batch presets" style="flex-shrink:0;">BC</button>
                             </div>
                             <div id="wfm-pm-list" class="wfm-pm-list"></div>
                         </div>

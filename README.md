@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.21-green)
+![Version](https://img.shields.io/badge/version-0.3.22-green)
 
 ## Screenshots
 
@@ -30,7 +30,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 ## Features
 
 ### Workflow Tab
-- **Thumbnail / Card / Table views** — switch between view modes to browse your workflow library
+- **Thumbnail / Table views** — switch between view modes to browse your workflow library
 - **Thumbnail side panel** — preview workflow canvas snapshots in the side panel
 - **Badge filtering** — filter by user-defined badges (free labels you assign to each workflow)
 - **Search** — full-text search across workflow names and metadata
@@ -38,7 +38,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Badge management** — add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)
 - **AI summary** — generate workflow descriptions using Ollama
 - **Import / Export** — import workflows from files or clipboard, open in ComfyUI directly
-- **Default view setting** — persist your preferred view mode (Thumbnail / Card / Table)
+- **Default view setting** — persist your preferred view mode (Thumbnail / Table)
 
 ### Canvas Snapshot (v0.1.2)
 - **One-click capture** — click the camera button in ComfyUI's top bar to snapshot the current workflow canvas
@@ -54,11 +54,11 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
-- **Checkpoint Batch** — enable via checkbox in the right panel to activate sequential batch generation; Pause/Resume suspends processing between models; Stop aborts after the current generation; amber progress bar tracks per-model progress
+- **Batch type selector** — check one of the column header checkboxes in the Batch Queue pane (Checkpoint / Lora / Prompt / Workflow) to activate that batch type; only one type can be active at a time; the Batch panel below Generate shows the active type, progress, and Pause/Resume/Stop controls
 - **Batch tab** (v0.3.18) — dedicated 3-pane layout for assembling the batch queue:
   - **Left pane** — file-tree checkpoint selection; Filter input to search; All / None buttons; initial state is all unchecked
-  - **Center pane** — group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint tab shows groups from the Models tab — check a group to add all its members, expand ▶ to select individual models; group membership always reflects the latest Models tab state
-  - **Right pane (Batch Queue)** — live preview combining file-tree and group selections with duplicates removed; total count shown at top
+  - **Center pane** — group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint/Lora groups come from the Models tab, Prompt groups from the Prompt tab, Workflow groups from the Workflow tab — check a group to add all its members, expand ▶ to select individually
+  - **Right pane (Batch Queue)** — shows items queued for each batch type; column headers (Checkpoint / Lora / Prompt / Workflow) each have a checkbox — check one to activate that batch type (radio behavior: only one at a time); count shown at top
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and more
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
@@ -141,7 +141,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 
 ### Models Tab (v0.2.3)
 - **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding) with sub-tab switching
-- **Thumbnail / Card / Table views** — switch between view modes with pagination (24 items per page)
+- **Thumbnail / Table views** — switch between view modes with pagination (24 items per page)
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
 - **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
 - **Side panel tabs** — Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
@@ -278,6 +278,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.22
+- **Card view removed** — Workflow tab and Models tab no longer offer Card view; Thumbnail and Table remain; if `"card"` was previously stored in localStorage it falls back to Thumbnail automatically
+- **Batch type selector** — replaced the Checkpoint Batch toggle with per-type checkboxes on the Batch Queue column headers (Checkpoint / Lora / Prompt / Workflow); radio behavior ensures only one type is active at a time; the Batch panel below Generate repurposed as a status display showing the active type, amber progress bar, and Pause/Resume / Stop controls
+- **4-type batch generation** — `_runBatchGenerate()` dispatches to Checkpoint (file-tree + group selection), Lora (group selection), Prompt (preset group items applied to positive/negative nodes), and Workflow (group selection, restores original workflow after batch); all types use the same generic `_runBatchLoop()` with pause/abort support
+- **Help updated** — EN / JA / ZH strings updated for `helpWf1`, `helpModels2`, `helpGen11`, `helpGen13`, `helpGen14`
 
 ### v0.3.21
 - **CivitAI Host setting** — new dropdown in Settings tab (CivitAI section): choose `civitai.com` (SFW only) or `civitai.red` (unrestricted); selection is saved to `settings.json` and synced to `localStorage` so the Models tab uses it immediately without extra server calls

@@ -153,10 +153,11 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
 }
 
 // ============================================
-// Checkpoint Batch
+// Batch (multi-type: Checkpoint / Lora / Prompt / Workflow)
 // ============================================
 
 const _ckptBatch = { aborted: false, paused: false, _resumeResolve: null };
+let _activeBatchType = null; // "checkpoint" | "lora" | "prompt" | "workflow" | null
 
 async function _waitIfPaused() {
     if (!_ckptBatch.paused) return;
@@ -171,40 +172,91 @@ function _setPauseBtnState(paused) {
     btn.style.color = paused ? "#fff" : "";
 }
 
+function _updateBatchTypeLabel(running = false) {
+    const el = document.getElementById("wfm-batch-type-label");
+    if (!el) return;
+    const labels = { checkpoint: "Checkpoint", lora: "Lora", prompt: "Prompt", workflow: "Workflow" };
+    if (_activeBatchType) {
+        el.textContent = labels[_activeBatchType];
+        el.style.color = running ? "var(--wfm-primary)" : "";
+    } else {
+        el.textContent = "—";
+        el.style.color = "";
+    }
+}
+
 // mode: "all" = 全選択, "some" = 一部選択, "none" = 全解除
 const _ckptState = { mode: "none", selected: new Set() };
 
 // グループ選択状態（中央ペイン）
 // selectedGroups  : グループ全体が選択済み（グループ名のSet）
-// partialSelections: 部分選択 { groupName: Set<modelName> }
-// → モデル一覧は常に _batchGroupState.groups から解決するため
-//   グループのメンバーが変わっても自動的に最新状態を反映できる
+// partialSelections: 部分選択 { groupName: Set<memberValue> }
 const _batchGroupState = {
+    // Checkpoint
     groups: {},
     selectedGroups: new Set(),
     partialSelections: {},
+    // Lora
+    loraGroups: {},
+    loraSelectedGroups: new Set(),
+    loraPartialSelections: {},
+    // Prompt (グループ値はpresetId、表示はtitleで解決)
+    promptGroups: {},
+    promptPresets: [],
+    promptSelectedGroups: new Set(),
+    promptPartialSelections: {},
+    // Workflow
+    wfGroups: {},
+    wfSelectedGroups: new Set(),
+    wfPartialSelections: {},
 };
 
-// 中央ペインの選択から現在のグループメンバーを解決して返す
-function _getSelectedGroupModels() {
+// 汎用: groupsData/selectedGroups/partialSelectionsからメンバーSetを返す
+function _getItemsFromGroupState(groupsData, selectedGroups, partialSelections) {
     const result = new Set();
-    for (const [name, members] of Object.entries(_batchGroupState.groups)) {
-        if (_batchGroupState.selectedGroups.has(name)) {
+    for (const [name, members] of Object.entries(groupsData)) {
+        if (selectedGroups.has(name)) {
             members.forEach((m) => result.add(m));
         } else {
-            const partial = _batchGroupState.partialSelections[name];
+            const partial = partialSelections[name];
             if (partial) partial.forEach((m) => { if (members.includes(m)) result.add(m); });
         }
     }
     return result;
 }
 
-// グループの選択済みモデル数を返す（UIのカウント表示用）
-function _getGroupSelCount(name) {
-    const members = _batchGroupState.groups[name] || [];
-    if (_batchGroupState.selectedGroups.has(name)) return members.length;
-    const partial = _batchGroupState.partialSelections[name];
+// 中央ペインCheckpointグループの選択モデルSet
+function _getSelectedGroupModels() {
+    return _getItemsFromGroupState(_batchGroupState.groups, _batchGroupState.selectedGroups, _batchGroupState.partialSelections);
+}
+
+// Loraグループの選択アイテムSet
+function _getSelectedLoraGroupItems() {
+    return _getItemsFromGroupState(_batchGroupState.loraGroups, _batchGroupState.loraSelectedGroups, _batchGroupState.loraPartialSelections);
+}
+
+// Promptグループの選択プリセット配列 (idではなくpresetオブジェクト)
+function _getSelectedPromptGroupItems() {
+    const ids = _getItemsFromGroupState(_batchGroupState.promptGroups, _batchGroupState.promptSelectedGroups, _batchGroupState.promptPartialSelections);
+    return [...ids].map((id) => _batchGroupState.promptPresets.find((p) => p.id === id)).filter(Boolean);
+}
+
+// Workflowグループの選択ファイル名Set
+function _getSelectedWfGroupItems() {
+    return _getItemsFromGroupState(_batchGroupState.wfGroups, _batchGroupState.wfSelectedGroups, _batchGroupState.wfPartialSelections);
+}
+
+// グループの選択済みメンバー数（汎用）
+function _getGroupSelCountFrom(name, groupsData, selectedGroups, partialSelections) {
+    const members = groupsData[name] || [];
+    if (selectedGroups.has(name)) return members.length;
+    const partial = partialSelections[name];
     return partial ? members.filter((m) => partial.has(m)).length : 0;
+}
+
+// グループの選択済みモデル数を返す（Checkpoint用 UIカウント表示）
+function _getGroupSelCount(name) {
+    return _getGroupSelCountFrom(name, _batchGroupState.groups, _batchGroupState.selectedGroups, _batchGroupState.partialSelections);
 }
 
 function _getSelectedCheckpoints() {
@@ -224,24 +276,57 @@ function _getSelectedCheckpoints() {
     return result;
 }
 
-function _renderBatchPreview() {
-    const countEl = document.getElementById("wfm-batch-preview-count");
-    const listEl = document.getElementById("wfm-batch-preview-list");
-    const list = _getSelectedCheckpoints();
-    const n = list.length;
-    if (countEl) countEl.textContent = `${n} checkpoint${n !== 1 ? "s" : ""} queued`;
-    if (listEl) {
-        if (n === 0) {
-            listEl.innerHTML = `<p class="wfm-placeholder" style="font-size:11px;padding:12px;">No checkpoints selected</p>`;
-            return;
-        }
-        listEl.innerHTML = list.map((m, i) => {
-            const name = m.replace(/\\/g, "/").split("/").pop();
-            const safe = m.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-            const safeName = name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-            return `<div class="wfm-batch-preview-item" title="${safe}">${i + 1}. ${safeName}</div>`;
-        }).join("");
+function _renderQueueColumn(countId, listId, items, displayFn, singular, plural) {
+    const countEl = document.getElementById(countId);
+    const listEl = document.getElementById(listId);
+    const n = items.length;
+    if (countEl) countEl.textContent = `${n} ${n !== 1 ? plural : singular}`;
+    if (!listEl) return;
+    if (n === 0) {
+        listEl.innerHTML = `<p class="wfm-placeholder" style="font-size:11px;padding:8px 10px;">None selected</p>`;
+        return;
     }
+    listEl.innerHTML = items.map((item, i) => {
+        const label = displayFn(item);
+        const tip = typeof item === "string" ? item.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;") : "";
+        const safeLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+        return `<div class="wfm-batch-preview-item" title="${tip}">${i + 1}. ${safeLabel}</div>`;
+    }).join("");
+}
+
+function _renderBatchPreview() {
+    // Checkpoint
+    const ckptList = _getSelectedCheckpoints();
+    _renderQueueColumn(
+        "wfm-batch-preview-count", "wfm-batch-preview-list",
+        ckptList,
+        (m) => m.replace(/\\/g, "/").split("/").pop(),
+        "checkpoint", "checkpoints"
+    );
+    // Lora
+    const loraList = [..._getSelectedLoraGroupItems()];
+    _renderQueueColumn(
+        "wfm-batch-lora-count", "wfm-batch-lora-list",
+        loraList,
+        (m) => m.replace(/\\/g, "/").split("/").pop(),
+        "lora", "loras"
+    );
+    // Prompt
+    const promptList = _getSelectedPromptGroupItems();
+    _renderQueueColumn(
+        "wfm-batch-prompt-count", "wfm-batch-prompt-list",
+        promptList,
+        (p) => p.name || p.id,
+        "prompt", "prompts"
+    );
+    // Workflow
+    const wfList = [..._getSelectedWfGroupItems()];
+    _renderQueueColumn(
+        "wfm-batch-wf-count", "wfm-batch-wf-list",
+        wfList,
+        (f) => f.replace(/\.json$/i, "").replace(/\\/g, "/").split("/").pop(),
+        "workflow", "workflows"
+    );
 }
 
 // モデルパスリストをフォルダ → [modelPath, ...] のMapに変換
@@ -549,8 +634,227 @@ function _renderBatchGroupList() {
     }
 }
 
+// ============================================
+// 汎用グループリストレンダリング
+// displayFn: (memberValue) => 表示文字列
+// ============================================
+function _renderAnyGroupList(listEl, groupsData, selectedGroups, partialSelections, displayFn, onPreviewChange) {
+    if (!listEl) return;
+    const names = Object.keys(groupsData).sort();
+    if (names.length === 0) {
+        listEl.innerHTML = `<p class="wfm-placeholder" style="font-size:12px;padding:16px;">No groups defined.</p>`;
+        return;
+    }
+    listEl.innerHTML = "";
+    for (const name of names) {
+        const members = groupsData[name] || [];
+        const groupDiv = document.createElement("div");
+        groupDiv.className = "wfm-batch-group-item open";
+
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "wfm-batch-group-header";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        const getSelCount = () => _getGroupSelCountFrom(name, groupsData, selectedGroups, partialSelections);
+        let selCount = getSelCount();
+        cb.checked = members.length > 0 && selCount === members.length;
+        cb.indeterminate = selCount > 0 && selCount < members.length;
+
+        const toggle = document.createElement("span");
+        toggle.className = "wfm-ckpt-folder-toggle";
+        toggle.textContent = "▶";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "wfm-batch-group-name";
+        nameSpan.textContent = name;
+
+        const countSpan = document.createElement("span");
+        countSpan.className = "wfm-batch-group-count";
+        countSpan.textContent = `${selCount}/${members.length}`;
+
+        const memberDiv = document.createElement("div");
+        memberDiv.className = "wfm-batch-group-members";
+
+        for (const m of members) {
+            const label = document.createElement("label");
+            label.className = "wfm-ckpt-item wfm-ckpt-item--indented";
+
+            const fileCb = document.createElement("input");
+            fileCb.type = "checkbox";
+            fileCb.value = m;
+            fileCb.checked = selectedGroups.has(name) || !!(partialSelections[name]?.has(m));
+
+            const fileSpan = document.createElement("span");
+            fileSpan.className = "wfm-ckpt-item-label";
+            fileSpan.textContent = displayFn(m);
+            fileSpan.title = m;
+
+            fileCb.addEventListener("change", () => {
+                if (selectedGroups.has(name)) {
+                    selectedGroups.delete(name);
+                    const partial = new Set(members);
+                    partial.delete(m);
+                    if (partial.size > 0) partialSelections[name] = partial;
+                } else {
+                    if (!partialSelections[name]) partialSelections[name] = new Set();
+                    if (fileCb.checked) partialSelections[name].add(m);
+                    else partialSelections[name].delete(m);
+                    if (members.every((x) => partialSelections[name].has(x))) {
+                        selectedGroups.add(name);
+                        delete partialSelections[name];
+                    }
+                    if (partialSelections[name]?.size === 0) delete partialSelections[name];
+                }
+                const sc = getSelCount();
+                cb.checked = sc === members.length && members.length > 0;
+                cb.indeterminate = sc > 0 && sc < members.length;
+                countSpan.textContent = `${sc}/${members.length}`;
+                onPreviewChange();
+            });
+
+            label.appendChild(fileCb);
+            label.appendChild(fileSpan);
+            memberDiv.appendChild(label);
+        }
+
+        cb.addEventListener("change", () => {
+            if (cb.checked) {
+                selectedGroups.add(name);
+                delete partialSelections[name];
+            } else {
+                selectedGroups.delete(name);
+                delete partialSelections[name];
+            }
+            memberDiv.querySelectorAll("input[type=checkbox]").forEach((c) => { c.checked = cb.checked; });
+            countSpan.textContent = `${cb.checked ? members.length : 0}/${members.length}`;
+            onPreviewChange();
+        });
+
+        [toggle, nameSpan].forEach((el) => {
+            el.addEventListener("click", () => groupDiv.classList.toggle("open"));
+        });
+
+        headerDiv.appendChild(cb);
+        headerDiv.appendChild(toggle);
+        headerDiv.appendChild(nameSpan);
+        headerDiv.appendChild(countSpan);
+        groupDiv.appendChild(headerDiv);
+        groupDiv.appendChild(memberDiv);
+        listEl.appendChild(groupDiv);
+    }
+}
+
+// ============================================
+// Lora グループ
+// ============================================
+async function _loadBatchLoraGroups() {
+    try {
+        const res = await fetch("/api/wfm/models/groups?type=lora");
+        if (res.ok) _batchGroupState.loraGroups = await res.json();
+        else _batchGroupState.loraGroups = {};
+    } catch { _batchGroupState.loraGroups = {}; }
+
+    const currentNames = new Set(Object.keys(_batchGroupState.loraGroups));
+    for (const name of _batchGroupState.loraSelectedGroups) {
+        if (!currentNames.has(name)) _batchGroupState.loraSelectedGroups.delete(name);
+    }
+    for (const name of Object.keys(_batchGroupState.loraPartialSelections)) {
+        if (!currentNames.has(name)) delete _batchGroupState.loraPartialSelections[name];
+    }
+
+    _renderBatchLoraGroupList();
+    _renderBatchPreview();
+}
+
+function _renderBatchLoraGroupList() {
+    const el = document.getElementById("wfm-batch-lora-group-list");
+    _renderAnyGroupList(
+        el,
+        _batchGroupState.loraGroups,
+        _batchGroupState.loraSelectedGroups,
+        _batchGroupState.loraPartialSelections,
+        (m) => m.replace(/\\/g, "/").split("/").pop(),
+        _renderBatchPreview
+    );
+}
+
+// ============================================
+// Prompt グループ
+// ============================================
+async function _loadPromptGroupsForBatch() {
+    try {
+        const res = await fetch("/api/wfm/prompts");
+        _batchGroupState.promptPresets = res.ok ? await res.json() : [];
+    } catch { _batchGroupState.promptPresets = []; }
+    try {
+        _batchGroupState.promptGroups = JSON.parse(localStorage.getItem("wfm_prompt_preset_groups") || "{}");
+    } catch { _batchGroupState.promptGroups = {}; }
+
+    const validIds = new Set(_batchGroupState.promptPresets.map((p) => p.id));
+    for (const g of Object.keys(_batchGroupState.promptGroups)) {
+        _batchGroupState.promptGroups[g] = (_batchGroupState.promptGroups[g] || []).filter((id) => validIds.has(id));
+    }
+
+    const currentNames = new Set(Object.keys(_batchGroupState.promptGroups));
+    for (const name of _batchGroupState.promptSelectedGroups) {
+        if (!currentNames.has(name)) _batchGroupState.promptSelectedGroups.delete(name);
+    }
+    for (const name of Object.keys(_batchGroupState.promptPartialSelections)) {
+        if (!currentNames.has(name)) delete _batchGroupState.promptPartialSelections[name];
+    }
+
+    _renderBatchPromptGroupList();
+    _renderBatchPreview();
+}
+
+function _renderBatchPromptGroupList() {
+    const el = document.getElementById("wfm-batch-prompt-group-list");
+    const presetsMap = new Map(_batchGroupState.promptPresets.map((p) => [p.id, p]));
+    _renderAnyGroupList(
+        el,
+        _batchGroupState.promptGroups,
+        _batchGroupState.promptSelectedGroups,
+        _batchGroupState.promptPartialSelections,
+        (id) => presetsMap.get(id)?.name || id,
+        _renderBatchPreview
+    );
+}
+
+// ============================================
+// Workflow グループ
+// ============================================
+function _loadWorkflowGroupsForBatch() {
+    try {
+        _batchGroupState.wfGroups = JSON.parse(localStorage.getItem("wfm_groups") || "{}");
+    } catch { _batchGroupState.wfGroups = {}; }
+
+    const currentNames = new Set(Object.keys(_batchGroupState.wfGroups));
+    for (const name of _batchGroupState.wfSelectedGroups) {
+        if (!currentNames.has(name)) _batchGroupState.wfSelectedGroups.delete(name);
+    }
+    for (const name of Object.keys(_batchGroupState.wfPartialSelections)) {
+        if (!currentNames.has(name)) delete _batchGroupState.wfPartialSelections[name];
+    }
+
+    _renderBatchWfGroupList();
+    _renderBatchPreview();
+}
+
+function _renderBatchWfGroupList() {
+    const el = document.getElementById("wfm-batch-wf-group-list");
+    _renderAnyGroupList(
+        el,
+        _batchGroupState.wfGroups,
+        _batchGroupState.wfSelectedGroups,
+        _batchGroupState.wfPartialSelections,
+        (f) => f.replace(/\.json$/i, "").replace(/\\/g, "/").split("/").pop(),
+        _renderBatchPreview
+    );
+}
+
 function initBatchTab() {
-    // 内部タブ切り替え
+    // 内部タブ切り替え（タブ表示時に対応するグループを読み込む）
     document.querySelectorAll(".wfm-batch-inner-tab").forEach((btn) => {
         btn.addEventListener("click", () => {
             document.querySelectorAll(".wfm-batch-inner-tab").forEach((b) => b.classList.remove("active"));
@@ -558,6 +862,10 @@ function initBatchTab() {
             const tabId = btn.dataset.batchInner;
             document.querySelectorAll(".wfm-batch-inner-content").forEach((c) => c.classList.remove("active"));
             document.getElementById(`wfm-batch-inner-${tabId}`)?.classList.add("active");
+            if (tabId === "checkpoint") _loadBatchCheckpointGroups();
+            else if (tabId === "lora") _loadBatchLoraGroups();
+            else if (tabId === "prompt") _loadPromptGroupsForBatch();
+            else if (tabId === "workflow") _loadWorkflowGroupsForBatch();
         });
     });
 
@@ -578,20 +886,31 @@ function initBatchTab() {
         _renderBatchPreview();
     });
 
-    // Batch タブが表示されたときにグループを読み込む
+    // Batch タブが表示されたときに全グループを読み込む
     document.querySelector('[data-subtab="batch"]')?.addEventListener("click", () => {
         _rebuildCkptList();
         _loadBatchCheckpointGroups();
+        _loadBatchLoraGroups();
+        _loadPromptGroupsForBatch();
+        _loadWorkflowGroupsForBatch();
         _renderBatchPreview();
     });
 }
 
 function initCheckpointBatch() {
-    const checkbox = document.getElementById("wfm-ckpt-batch-enabled");
-    const body = document.getElementById("wfm-ckpt-batch-body");
-
-    checkbox?.addEventListener("change", () => {
-        if (body) body.style.display = checkbox.checked ? "block" : "none";
+    // Batch type checkboxes — radio behavior (only one at a time)
+    document.querySelectorAll(".wfm-batch-type-cb").forEach((cb) => {
+        cb.addEventListener("change", () => {
+            if (cb.checked) {
+                _activeBatchType = cb.dataset.batchType;
+                document.querySelectorAll(".wfm-batch-type-cb").forEach((other) => {
+                    if (other !== cb) other.checked = false;
+                });
+            } else {
+                _activeBatchType = null;
+            }
+            _updateBatchTypeLabel();
+        });
     });
 
     // Pause / Resume
@@ -688,39 +1007,26 @@ async function _coreGenerate(silent = false) {
 // Batch generation loop
 // ============================================
 
-async function _runBatchGenerate() {
-    const ckptNodes = comfyUI.currentAnalysis?.checkpoint_nodes || [];
-    if (ckptNodes.length === 0) {
-        showToast("No checkpoint node found in workflow", "error");
-        return;
-    }
-
-    const list = _getSelectedCheckpoints();
-
-    if (list.length === 0) {
-        showToast("No checkpoints selected", "error");
-        return;
-    }
-
-    const batchProgress = document.getElementById("wfm-ckpt-batch-progress");
+// 汎用バッチループ: items を順に applyFn(item) → _coreGenerate() で処理する
+async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x)) {
+    const batchProgress   = document.getElementById("wfm-ckpt-batch-progress");
     const batchCurrentName = document.getElementById("wfm-ckpt-batch-current-name");
-    const batchCount = document.getElementById("wfm-ckpt-batch-count");
-    const batchBar = document.getElementById("wfm-ckpt-batch-bar");
-    const progressText = document.getElementById("wfm-gen-progress-text");
+    const batchCount      = document.getElementById("wfm-ckpt-batch-count");
+    const batchBar        = document.getElementById("wfm-ckpt-batch-bar");
+    const progressText    = document.getElementById("wfm-gen-progress-text");
+    const pauseBtn        = document.getElementById("wfm-ckpt-batch-pause-btn");
 
     if (batchProgress) batchProgress.style.display = "block";
-    const pauseBtn = document.getElementById("wfm-ckpt-batch-pause-btn");
     if (pauseBtn) { pauseBtn.style.display = "block"; pauseBtn.disabled = false; }
     _setPauseBtnState(false);
+    _updateBatchTypeLabel(true);
 
-    let completed = 0;
-    let failed = 0;
+    let completed = 0, failed = 0;
 
     try {
-        for (let i = 0; i < list.length; i++) {
+        for (let i = 0; i < items.length; i++) {
             if (_ckptBatch.aborted) break;
 
-            // 一時停止中は次のモデルへ進む前に待機
             if (_ckptBatch.paused) {
                 if (batchCurrentName) batchCurrentName.textContent = "Paused...";
                 if (progressText) progressText.textContent = "Paused";
@@ -728,25 +1034,21 @@ async function _runBatchGenerate() {
             await _waitIfPaused();
             if (_ckptBatch.aborted) break;
 
-            const model = list[i];
-            if (batchCurrentName) batchCurrentName.textContent = model;
-            if (batchCount) batchCount.textContent = `${i + 1} / ${list.length}`;
-            if (batchBar) batchBar.style.width = `${((i / list.length) * 100).toFixed(1)}%`;
-            if (progressText) progressText.textContent = `[${i + 1}/${list.length}] Loading...`;
-
-            for (const node of ckptNodes) {
-                if (comfyUI.currentWorkflow?.[node.id]) {
-                    comfyUI.currentWorkflow[node.id].inputs.ckpt_name = model;
-                }
-            }
+            const item = items[i];
+            const label = labelFn(item);
+            if (batchCurrentName) batchCurrentName.textContent = label;
+            if (batchCount) batchCount.textContent = `${i + 1} / ${items.length}`;
+            if (batchBar) batchBar.style.width = `${((i / items.length) * 100).toFixed(1)}%`;
+            if (progressText) progressText.textContent = `[${i + 1}/${items.length}] Loading...`;
 
             try {
+                await applyFn(item);
                 await _coreGenerate(true);
                 completed++;
             } catch (err) {
                 if (_ckptBatch.aborted) break;
                 failed++;
-                showToast(`[${i + 1}/${list.length}] Failed: ${err.message}`, "error");
+                showToast(`[${i + 1}/${items.length}] Failed: ${err.message}`, "error");
             }
         }
     } finally {
@@ -757,6 +1059,7 @@ async function _runBatchGenerate() {
             _ckptBatch._resumeResolve = null;
         }
         _setPauseBtnState(false);
+        _updateBatchTypeLabel(false);
     }
 
     if (batchBar) batchBar.style.width = "100%";
@@ -766,9 +1069,81 @@ async function _runBatchGenerate() {
         showToast(`Batch stopped — ${completed} completed, ${failed} failed`, "info");
     } else {
         showToast(
-            `Batch complete: ${completed}/${list.length}${failed > 0 ? ` (${failed} failed)` : ""}`,
+            `Batch complete: ${completed}/${items.length}${failed > 0 ? ` (${failed} failed)` : ""}`,
             failed > 0 ? "error" : "success"
         );
+    }
+}
+
+// アクティブなバッチタイプに応じてバッチを実行するディスパッチャ
+async function _runBatchGenerate() {
+    switch (_activeBatchType) {
+        case "checkpoint": {
+            const ckptNodes = comfyUI.currentAnalysis?.checkpoint_nodes || [];
+            if (ckptNodes.length === 0) { showToast("No checkpoint node found in workflow", "error"); return; }
+            const list = _getSelectedCheckpoints();
+            if (list.length === 0) { showToast("No checkpoints selected", "error"); return; }
+            await _runBatchLoop(list, (model) => {
+                for (const node of ckptNodes) {
+                    if (comfyUI.currentWorkflow?.[node.id])
+                        comfyUI.currentWorkflow[node.id].inputs.ckpt_name = model;
+                }
+            });
+            break;
+        }
+        case "lora": {
+            const loraNodes = comfyUI.currentAnalysis?.lora_nodes || [];
+            if (loraNodes.length === 0) { showToast("No LoRA node found in workflow", "error"); return; }
+            const list = [..._getSelectedLoraGroupItems()];
+            if (list.length === 0) { showToast("No LoRAs selected", "error"); return; }
+            await _runBatchLoop(list, (loraName) => {
+                for (const node of loraNodes) {
+                    if (comfyUI.currentWorkflow?.[node.id])
+                        comfyUI.currentWorkflow[node.id].inputs.lora_name = loraName;
+                }
+            }, (name) => name.replace(/\.[^.]+$/, ""));
+            break;
+        }
+        case "prompt": {
+            const positiveNodes = (comfyUI.currentAnalysis?.prompt_nodes || []).filter((n) => n.role === "positive");
+            const negativeNodes = (comfyUI.currentAnalysis?.prompt_nodes || []).filter((n) => n.role === "negative");
+            if (positiveNodes.length === 0 && negativeNodes.length === 0) {
+                showToast("No prompt node found in workflow", "error"); return;
+            }
+            // _getSelectedPromptGroupItems() はすでにプリセットオブジェクトの配列を返す
+            const list = _getSelectedPromptGroupItems();
+            if (list.length === 0) { showToast("No prompts selected", "error"); return; }
+            await _runBatchLoop(list, (preset) => {
+                for (const node of positiveNodes) {
+                    if (comfyUI.currentWorkflow?.[node.id])
+                        comfyUI.currentWorkflow[node.id].inputs[node.textKey || "text"] = preset.text || "";
+                }
+                for (const node of negativeNodes) {
+                    if (comfyUI.currentWorkflow?.[node.id])
+                        comfyUI.currentWorkflow[node.id].inputs[node.textKey || "text"] = preset.negText || "";
+                }
+            }, (preset) => preset.name || preset.id);
+            break;
+        }
+        case "workflow": {
+            const list = [..._getSelectedWfGroupItems()];
+            if (list.length === 0) { showToast("No workflows selected", "error"); return; }
+            const savedWorkflow = comfyUI.currentWorkflow ? JSON.stringify(comfyUI.currentWorkflow) : null;
+            const savedFilename = document.getElementById("wfm-gen-workflow-name")?.textContent || "";
+            try {
+                await _runBatchLoop(list, async (filename) => {
+                    const resp = await fetch(`/api/wfm/workflows/${encodeURIComponent(filename)}`);
+                    if (!resp.ok) throw new Error(`Failed to load: ${filename}`);
+                    const data = await resp.json();
+                    await loadWorkflowIntoEditor(data, filename);
+                }, (filename) => filename.replace(/\.json$/, ""));
+            } finally {
+                if (savedWorkflow) {
+                    try { await loadWorkflowIntoEditor(JSON.parse(savedWorkflow), savedFilename); } catch {}
+                }
+            }
+            break;
+        }
     }
 }
 
@@ -794,7 +1169,7 @@ async function handleGenerate() {
     _ckptBatch.paused = false;
     _ckptBatch._resumeResolve = null;
 
-    const batchEnabled = document.getElementById("wfm-ckpt-batch-enabled")?.checked;
+    const batchEnabled = _activeBatchType !== null;
 
     try {
         if (batchEnabled) {
