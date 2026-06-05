@@ -1132,7 +1132,7 @@ async function _runBatchGenerate() {
             const savedFilename = document.getElementById("wfm-gen-workflow-name")?.textContent || "";
             try {
                 await _runBatchLoop(list, async (filename) => {
-                    const resp = await fetch(`/api/wfm/workflows/${encodeURIComponent(filename)}`);
+                    const resp = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(filename)}`);
                     if (!resp.ok) throw new Error(`Failed to load: ${filename}`);
                     const data = await resp.json();
                     await loadWorkflowIntoEditor(data, filename);

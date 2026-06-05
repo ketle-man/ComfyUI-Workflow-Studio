@@ -1,5 +1,23 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-05: v0.3.23 — バグ修正2件
+
+### バグ修正
+
+**ワークフローバッチ 404 エラー修正（`generate-tab.js`）**
+- `_runBatchGenerate()` の workflow ケースで、ワークフローファイル取得 URL が
+  `/api/wfm/workflows/{filename}`（存在しないルート）になっていた
+- 正しいエンドポイント `/api/wfm/workflows/raw?filename={filename}` に修正
+
+**ワークフローリネーム二重送信バグ修正（`workflow-tab.js`）**
+- モーダルを開くたびに `titleInput.addEventListener("blur", commitRename)` が累積していた
+- 2回目以降のリネーム時に blur が複数発火し、同一ファイルへのリネームリクエストが
+  2本送られて 1本目成功後に 2本目が 409 または 404 になっていた
+- `titleInput._commitRename` で前回のリスナー参照を保持し、
+  再オープン時に `removeEventListener` で除去してから登録するよう修正
+
+---
+
 ## 2026-06-05: v0.3.22 — カードビュー廃止 + Batch タイプ切り替え UI + 4タイプバッチ生成
 
 ### 概要

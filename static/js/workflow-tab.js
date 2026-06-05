@@ -946,6 +946,8 @@ function openDetailModal(wf) {
                 showToast(t("renameError") + ": " + err.message, "error");
             }
         };
+        if (titleInput._commitRename) titleInput.removeEventListener("blur", titleInput._commitRename);
+        titleInput._commitRename = commitRename;
         titleInput.addEventListener("blur", commitRename);
         titleInput.addEventListener("keydown", (e) => {
             if (e.key === "Enter") { e.preventDefault(); titleInput.blur(); }

@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.22-green)
+![Version](https://img.shields.io/badge/version-0.3.23-green)
 
 ## Screenshots
 
@@ -278,6 +278,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.23
+- **Bug fix: workflow batch 404** — `_runBatchGenerate()` workflow case was fetching `/api/wfm/workflows/{filename}` (non-existent route); corrected to `/api/wfm/workflows/raw?filename={filename}`
+- **Bug fix: rename double-submit** — `addEventListener("blur", commitRename)` was accumulating on the persistent `#wfm-modal-title-input` element each time the modal opened; subsequent renames fired the handler twice, sending two rename requests back-to-back (first succeeds, second returns 409 or 404); fixed by storing the listener reference on `titleInput._commitRename` and calling `removeEventListener` before re-registering
 
 ### v0.3.22
 - **Card view removed** — Workflow tab and Models tab no longer offer Card view; Thumbnail and Table remain; if `"card"` was previously stored in localStorage it falls back to Thumbnail automatically
