@@ -43,9 +43,11 @@ const state = {
     wfLoaded: false,
     // Prompts sub-tabs
     promptSubTab: "prompt-all",    // "prompt-all" | "prompt-favorites" | "prompt-categories"
+    promptSubTab2: null,           // "prompt-groups" | null
     promptList: [],                // full prompt array from API
     promptFavorites: [],           // favorite === true
     promptCategories: [],          // unique category strings
+    promptGroups: {},              // { groupName: [promptId, ...] } from localStorage
     promptLoaded: false,
     // Models sub-tabs
     modelSubTab: "model-all",      // "model-all" | "model-favorites" | "model-groups"
@@ -143,6 +145,15 @@ const loadPromptData = async () => {
         if (c) catSet.add(c);
     }
     state.promptCategories = [...catSet].sort();
+
+    try {
+        state.promptGroups = JSON.parse(localStorage.getItem("wfm_prompt_preset_groups") || "{}");
+    } catch { state.promptGroups = {}; }
+    const validIds = new Set(prompts.map(p => p.id));
+    for (const g of Object.keys(state.promptGroups)) {
+        state.promptGroups[g] = (state.promptGroups[g] || []).filter(id => validIds.has(id));
+    }
+
     state.promptLoaded = true;
 };
 
@@ -478,9 +489,21 @@ const placeLoraMgrNode = (loras, pos) => {
     node.pos = pos || centerPos;
     graph.add(node);
     if (node.widgets) {
-        const loraList = loras.map(l => ({ name: l.name, strength: l.strength_model ?? 1.0, clipStrength: l.strength_clip ?? l.strength_model ?? 1.0, active: true }));
+        const loraList = loras.map(l => ({ name: l.name, strength: l.strength_model ?? l.strength ?? 1.0, clipStrength: l.strength_clip ?? l.strength_model ?? l.strength ?? 1.0, active: true }));
         const w = node.widgets.find(ww => Array.isArray(ww.value) || ww.name === "loras");
         if (w) { w.value = loraList; if (w.callback) w.callback(loraList); }
+        const textW = node.widgets.find(ww => ww.name === "text");
+        if (textW) {
+            textW.value = loraList
+                .filter(l => l.active !== false)
+                .map(l => {
+                    const s = parseFloat(l.strength) || 1.0;
+                    const c = parseFloat(l.clipStrength) || s;
+                    return s === c ? `<lora:${l.name}:${s}>` : `<lora:${l.name}:${s}:${c}>`;
+                })
+                .join(" ");
+            if (textW.callback) textW.callback(textW.value);
+        }
     }
     app.canvas.setDirty(true, true);
     showToast(`Placed: Lora Loader (${loras.length} loras)`, "success");
@@ -892,8 +915,11 @@ const rebuildSubTabs = () => {
             { key: "prompt-favorites", label: "\u2605 Favorites" },
             { key: "prompt-categories", label: "\ud83d\udcc1 Categories" },
         ];
+        const row2Tabs = [
+            { key: "prompt-groups", label: "\ud83d\udcc1 Groups" },
+        ];
 
-        const activeKey = state.promptSubTab;
+        const activeKey = state.promptSubTab2 || state.promptSubTab;
 
         for (const t of row1Tabs) {
             const btn = document.createElement("button");
@@ -902,13 +928,26 @@ const rebuildSubTabs = () => {
             btn.textContent = t.label;
             btn.addEventListener("click", () => {
                 state.promptSubTab = t.key;
+                state.promptSubTab2 = null;
                 updateAllActive();
                 btn.classList.add("active");
                 renderContent();
             });
             row1.appendChild(btn);
         }
-        // No row2 tabs for prompts
+        for (const t of row2Tabs) {
+            const btn = document.createElement("button");
+            btn.className = "wfm-nlp-tab wfm-nlp-sub-tab" + (activeKey === t.key ? " active" : "");
+            btn.dataset.subtab = t.key;
+            btn.textContent = t.label;
+            btn.addEventListener("click", () => {
+                state.promptSubTab2 = t.key;
+                updateAllActive();
+                btn.classList.add("active");
+                renderContent();
+            });
+            row2.appendChild(btn);
+        }
     } else if (state.topTab === "workflows") {
         const row1Tabs = [
             { key: "wf-all", label: "All" },
@@ -1040,10 +1079,12 @@ const renderContent = () => {
             content.innerHTML = `<div class="wfm-nlp-empty">Loading...</div>`;
             return;
         }
-        switch (state.promptSubTab) {
+        const promptKey = state.promptSubTab2 || state.promptSubTab;
+        switch (promptKey) {
             case "prompt-all": renderPromptAll(content); break;
             case "prompt-favorites": renderPromptFavorites(content); break;
             case "prompt-categories": renderPromptCategories(content); break;
+            case "prompt-groups": renderPromptGroups(content); break;
         }
     } else if (state.topTab === "workflows") {
         if (!state.wfLoaded) {
@@ -1529,6 +1570,32 @@ const renderModelGroups = async (container) => {
             const item = createModelItem(name, type);
             listEl.appendChild(item);
         }
+
+        if (modelType === "lora" && filtered.length >= 1) {
+            const sep = document.createElement("div");
+            sep.className = "wfm-nlp-info-section-title";
+            sep.style.marginTop = "6px";
+            listEl.appendChild(sep);
+
+            const multiItem = document.createElement("div");
+            multiItem.className = "wfm-nlp-item wfm-nlp-model-item";
+            multiItem.draggable = true;
+            multiItem.title = `Drag to canvas to place Lora Loader (LoraManager) with all ${filtered.length} loras`;
+            multiItem.innerHTML = `<div class="wfm-nlp-item-row"><div class="wfm-nlp-item-body"><div class="wfm-nlp-item-label">All ${filtered.length} LoRAs</div><div class="wfm-nlp-item-sub">→ Lora Loader (LoraManager)</div></div></div>`;
+            const buildLoraList = () => filtered.map(n => {
+                const stem = n.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+                return { name: stem, strength: 1.0, clipStrength: 1.0, active: true };
+            });
+            multiItem.addEventListener("dragstart", (e) => {
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData("application/x-wfm-lora-multi", JSON.stringify({ loras: buildLoraList() }));
+                multiItem.classList.add("dragging");
+            });
+            multiItem.addEventListener("dragend", () => multiItem.classList.remove("dragging"));
+            multiItem.addEventListener("dblclick", (e) => { e.stopPropagation(); placeLoraMgrNode(buildLoraList()); });
+            listEl.appendChild(multiItem);
+        }
+
         section.appendChild(listEl);
         container.appendChild(section);
     }
@@ -1719,6 +1786,55 @@ const renderPromptCategories = (container) => {
 
     if (container.children.length === 0) {
         container.innerHTML = `<div class="wfm-nlp-empty">No matches</div>`;
+    }
+};
+
+const renderPromptGroups = (container) => {
+    container.innerHTML = "";
+    const groupNames = Object.keys(state.promptGroups).sort();
+
+    if (groupNames.length === 0) {
+        container.innerHTML = `<div class="wfm-nlp-empty">
+            No groups.<br><small>Create groups in Workflow Studio</small>
+        </div>`;
+        return;
+    }
+
+    const promptMap = new Map(state.promptList.map(p => [p.id, p]));
+    let hasAny = false;
+
+    for (const groupName of groupNames) {
+        const ids = state.promptGroups[groupName] || [];
+        const prompts = ids.map(id => promptMap.get(id)).filter(Boolean);
+        const filtered = prompts.filter(matchesPromptSearch);
+        if (state.searchText && filtered.length === 0) continue;
+
+        hasAny = true;
+        const section = document.createElement("div");
+        section.className = "wfm-nlp-group-section";
+
+        const header = document.createElement("div");
+        header.className = "wfm-nlp-group-header collapsed";
+        header.innerHTML = `<span>${esc(groupName)}</span> <span class="wfm-nlp-badge">${filtered.length}</span>`;
+        header.addEventListener("click", () => {
+            const list = section.querySelector(".wfm-nlp-group-list");
+            list.style.display = list.style.display === "none" ? "block" : "none";
+            header.classList.toggle("collapsed");
+        });
+        section.appendChild(header);
+
+        const list = document.createElement("div");
+        list.className = "wfm-nlp-group-list";
+        list.style.display = "none";
+        for (const p of filtered) {
+            list.appendChild(createDraggablePromptItem(p));
+        }
+        section.appendChild(list);
+        container.appendChild(section);
+    }
+
+    if (!hasAny) {
+        container.innerHTML = `<div class="wfm-nlp-empty">No matches.</div>`;
     }
 };
 
@@ -2217,7 +2333,9 @@ function _extractLoRAs(wf) {
     function add(name, sm, sc) {
         if (!name || typeof name !== "string" || name === "None" || seen.has(name)) return;
         seen.add(name);
-        results.push({ name, strength_model: typeof sm === "number" ? sm : 1.0, strength_clip: typeof sc === "number" ? sc : 1.0 });
+        const smNum = parseFloat(sm);
+        const scNum = parseFloat(sc);
+        results.push({ name, strength_model: isNaN(smNum) ? 1.0 : smNum, strength_clip: isNaN(scNum) ? 1.0 : scNum });
     }
     if (Array.isArray(wf.nodes)) {
         for (const n of _collectAllNodes(wf)) {
@@ -2233,6 +2351,11 @@ function _extractLoRAs(wf) {
             const ct = n.class_type ?? "";
             if (ct === "LoraLoader") add(n.inputs?.lora_name, n.inputs?.strength_model, n.inputs?.strength_clip);
             else if (ct === "LoraLoaderModelOnly") add(n.inputs?.lora_name, n.inputs?.strength, 1.0);
+            else if (ct === "Lora Loader (LoraManager)") {
+                const lorasData = n.inputs?.loras;
+                const list = lorasData?.__value__ ?? (Array.isArray(lorasData) ? lorasData : null);
+                if (list) for (const l of list) { if (l?.active !== false) add(l?.name, l?.strength ?? 1.0, l?.clipStrength ?? l?.strength ?? 1.0); }
+            }
         }
     }
     return results;

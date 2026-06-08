@@ -1,5 +1,39 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-08: v0.3.32 — Lora Loader (LoraManager) LoRA検出対応・ライブラリ機能拡張
+
+### 変更内容
+
+#### Lora Loader (LoraManager) LoRA検出対応（`web/comfyui/node_sets_menu.js`, `static/js/metadata-tab.js`）
+- `_extractLoRAs` / `extractLoRAs` の `add` 関数を `parseFloat` ベースに変更。LoraManager ノードは `strength` / `clipStrength` を文字列 (`"0.20"`) で保存するため `typeof === "number"` では `1.0` にフォールバックしていたバグを修正
+- APIフォーマット（`class_type` ベース）の `else` 節に `Lora Loader (LoraManager)` を追加。`inputs.loras.__value__` からLoRAリストを取得（`Array.isArray(inputs.loras)` をフォールバックとして併用）
+- Iタブ（ライブラリ）・Metadataタブの両方に同様の修正を適用
+
+#### `placeLoraMgrNode` textウィジェット同期（`web/comfyui/node_sets_menu.js`）
+- LoraManagerノード配置時に `loras` ウィジェット（配列）だけでなく `text` ウィジェット（LoRA構文）も明示的に更新するよう修正
+- strength = clipStrength の場合 `<lora:name:s>`、異なる場合 `<lora:name:s:c>` の形式で構文を生成
+- `l.strength` フォールバックを追加し、GroupsのloraList形式（`strength` キー直接）にも対応
+
+#### Mタブ Groupsの LoRAグループ → LoraManagerドロップ対応（`web/comfyui/node_sets_menu.js`）
+- `renderModelGroups` でLoRAタイプのグループリスト末尾に「All N LoRAs → Lora Loader (LoraManager)」アイテムを追加
+- ドラッグで `application/x-wfm-lora-multi` データ送出 → キャンバスに Lora Loader (LoraManager) ノードを全LoRAセット済みで配置
+- ダブルクリックでも即時配置（`placeLoraMgrNode`）
+- モデルファイル名から stem（拡張子・パス除去）に変換して LoraManager 名前形式に合わせる
+
+#### Pタブ Groupsサブタブ追加（`web/comfyui/node_sets_menu.js`）
+- `state` に `promptSubTab2` と `promptGroups` を追加
+- `loadPromptData` で `localStorage["wfm_prompt_preset_groups"]` からグループを読み込み、存在しないIDをクリーンアップ
+- Pタブのrow2に「📁 Groups」サブタブを追加（Wタブ・Nタブと同様の2段構成）
+- `renderPromptGroups` 関数を実装：グループ名セクション展開・検索フィルター対応・`createDraggablePromptItem` でドラッグ動作を継承
+- Batchで作成したPromptグループが同じlocalStorageを参照するためそのままライブラリから利用可能
+
+#### ヘルプ更新（`static/js/i18n.js`）
+- `helpSidepanel11`（EN/JA/ZH）：PタブGroups追加・MタブLoRAグループ→LoraManagerドロップを追記
+- `helpSidepanel13`（EN/JA/ZH）：Lora Loader (LoraManager) ノードタイプ対応を追記
+- `helpSidepanel15`（EN/JA/ZH）：LoRA検出ノードタイプ一覧・APIフォーマット対応・LoRA構文自動入力を追記
+
+---
+
 ## 2026-06-08: v0.3.31 — LoRAペイン Single/Stack タブ分割・GenUI Model LoRA対応強化
 
 ### 変更内容

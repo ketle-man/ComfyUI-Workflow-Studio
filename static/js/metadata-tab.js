@@ -154,7 +154,9 @@ function extractLoRAs(wf) {
     function add(name, sm, sc) {
         if (!name || typeof name !== "string" || name === "None" || seen.has(name)) return;
         seen.add(name);
-        results.push({ name, strength_model: typeof sm === "number" ? sm : 1.0, strength_clip: typeof sc === "number" ? sc : 1.0 });
+        const smNum = parseFloat(sm);
+        const scNum = parseFloat(sc);
+        results.push({ name, strength_model: isNaN(smNum) ? 1.0 : smNum, strength_clip: isNaN(scNum) ? 1.0 : scNum });
     }
     if (Array.isArray(wf.nodes)) {
         for (const n of collectAllNodes(wf)) {
@@ -170,6 +172,11 @@ function extractLoRAs(wf) {
             const ct = n.class_type ?? "";
             if (ct === "LoraLoader") add(n.inputs?.lora_name, n.inputs?.strength_model, n.inputs?.strength_clip);
             else if (ct === "LoraLoaderModelOnly") add(n.inputs?.lora_name, n.inputs?.strength, 1.0);
+            else if (ct === "Lora Loader (LoraManager)") {
+                const lorasData = n.inputs?.loras;
+                const list = lorasData?.__value__ ?? (Array.isArray(lorasData) ? lorasData : null);
+                if (list) for (const l of list) { if (l?.active !== false) add(l?.name, l?.strength ?? 1.0, l?.clipStrength ?? l?.strength ?? 1.0); }
+            }
         }
     }
     return results;
