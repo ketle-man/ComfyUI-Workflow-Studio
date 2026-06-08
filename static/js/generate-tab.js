@@ -1475,6 +1475,13 @@ export async function initGenerateTab() {
         });
     });
 
+    // Stack refresh button in LoRA column header
+    document.getElementById("wfm-lora-stack-refresh")?.addEventListener("click", () => {
+        if (comfyUI.currentAnalysis) {
+            comfyEditor.renderLoraPane(comfyUI.currentAnalysis, "wfm-gen-lora-fields");
+        }
+    });
+
     // Input inner tab (Prompt / Image)
     document.querySelectorAll(".wfm-input-inner-tab").forEach((btn) => {
         btn.addEventListener("click", () => {

@@ -53,9 +53,23 @@ function _applyLoraToNode(nodeId, loraPath, strModel, strClip, isLoraManager) {
     }
 }
 
-function _refreshLoraPaneDynamic(stackModels) {
+function _refreshLoraPaneDynamic(stackModels, metadata, civitaiCache) {
     const syntaxEl = document.getElementById("wfm-lora-stack-syntax");
     if (syntaxEl) syntaxEl.textContent = _buildLoraSyntax(stackModels) || "—";
+
+    const triggersEl = document.getElementById("wfm-lora-stack-triggers");
+    if (triggersEl && metadata && civitaiCache) {
+        const activeWords = [];
+        stackModels.forEach((m) => {
+            if (_stackActive[m] === false) return;
+            const sha = (metadata[m] || {}).sha256;
+            const civInfo = sha && civitaiCache[sha];
+            if (civInfo?.trainedWords?.length) activeWords.push(...civInfo.trainedWords);
+        });
+        triggersEl.innerHTML = activeWords.length
+            ? activeWords.map((w) => `<span class="wfm-lora-trigger-word">${w}</span>`).join(" ")
+            : `<span style="color:var(--wfm-text-secondary);font-size:12px;">—</span>`;
+    }
 }
 
 function _syncStackToggleAll(stackModels) {
@@ -304,8 +318,8 @@ export const comfyEditor = {
                 }
             }
         });
-        const triggerHtml = allTriggerWords.length
-            ? allTriggerWords.map((w) => `<span class="wfm-lora-trigger-word">${w}</span>`).join(" ")
+        const triggerHtml = activeTriggerWords.length
+            ? activeTriggerWords.map((w) => `<span class="wfm-lora-trigger-word">${w}</span>`).join(" ")
             : `<span style="color:var(--wfm-text-secondary);font-size:12px;">—</span>`;
 
         const loraSyntax = _buildLoraSyntax(stackModels);
@@ -419,7 +433,7 @@ export const comfyEditor = {
                     m: parseFloat(inputM.value) || 1.0,
                     c: parseFloat(inputC.value) || 1.0,
                 };
-                _refreshLoraPaneDynamic(stackModels);
+                _refreshLoraPaneDynamic(stackModels, metadata, civitaiCache);
             };
             inputM?.addEventListener("input", onStrChange);
             inputC?.addEventListener("input", onStrChange);
@@ -431,7 +445,7 @@ export const comfyEditor = {
                 if (inputM) inputM.disabled = !on;
                 if (inputC) inputC.disabled = !on;
                 _syncStackToggleAll(stackModels);
-                _refreshLoraPaneDynamic(stackModels);
+                _refreshLoraPaneDynamic(stackModels, metadata, civitaiCache);
             });
         });
 
@@ -451,7 +465,7 @@ export const comfyEditor = {
                     if (inC) inC.disabled = !on;
                     row.classList.toggle("wfm-lora-stack-model-row--off", !on);
                 });
-                _refreshLoraPaneDynamic(stackModels);
+                _refreshLoraPaneDynamic(stackModels, metadata, civitaiCache);
             });
         }
 
@@ -472,7 +486,7 @@ export const comfyEditor = {
                     const inp = row.querySelector(`.wfm-lora-stack-str-${key}`);
                     if (inp) inp.value = str[key];
                 });
-                _refreshLoraPaneDynamic(stackModels);
+                _refreshLoraPaneDynamic(stackModels, metadata, civitaiCache);
             };
             document.getElementById("wfm-stack-adj-m-inc")?.addEventListener("click", () => adjApply("m", 1));
             document.getElementById("wfm-stack-adj-m-dec")?.addEventListener("click", () => adjApply("m", -1));

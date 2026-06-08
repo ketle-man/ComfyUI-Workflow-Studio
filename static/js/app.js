@@ -383,6 +383,7 @@ function applyI18nToHtml() {
         "wfm-help-trouble-title": "helpTroubleTitle",
         "wfm-help-trouble-1": "helpTrouble1", "wfm-help-trouble-2": "helpTrouble2",
         "wfm-help-trouble-3": "helpTrouble3", "wfm-help-trouble-4": "helpTrouble4",
+        "wfm-help-trouble-5": "helpTrouble5",
         "wfm-help-support-title": "helpSupportTitle",
         "wfm-help-support-desc": "helpSupportDesc",
         "wfm-help-github-desc": "helpGithubDesc",

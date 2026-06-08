@@ -305,7 +305,10 @@
                                 </div>
                             </div>
                             <div class="wfm-gen-lora-col">
-                                <div class="wfm-gen-lora-col-header">LoRA</div>
+                                <div class="wfm-gen-lora-col-header">
+                                    <span>LoRA</span>
+                                    <button class="wfm-btn wfm-btn-xs wfm-lora-refresh-btn" id="wfm-lora-stack-refresh" title="Refresh Stack group">🔄</button>
+                                </div>
                                 <div id="wfm-gen-lora-fields" class="wfm-gen-lora-col-body">
                                     <p class="wfm-placeholder">Load a workflow to edit LoRA</p>
                                 </div>
@@ -1154,6 +1157,7 @@
                                 <li id="wfm-help-trouble-2">Cannot connect to Ollama: Use connection test button, check if Ollama is running and models are downloaded</li>
                                 <li id="wfm-help-trouble-3">Workflows not showing: Click refresh button, check if loadable in ComfyUI, try restarting browser/ComfyUI</li>
                                 <li id="wfm-help-trouble-4">Image generation fails: Check if specified models exist in ComfyUI, verify connection, try restarting</li>
+                                <li id="wfm-help-trouble-5">LoRA Stack fails with "No such file or directory" error: The LoRA may not be recognized by comfyui-lora-manager (known issue). Try a different LoRA or check if the file appears in Lora Manager's own UI</li>
                             </ul>
                         </div>
                     </div>

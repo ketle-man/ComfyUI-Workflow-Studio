@@ -604,7 +604,20 @@ body {
     letter-spacing: 0.06em;
     border-bottom: 1px solid var(--wfm-border);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
 }
+
+.wfm-lora-refresh-btn {
+    margin-left: auto;
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px 5px;
+    opacity: 0.7;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.wfm-lora-refresh-btn:hover { opacity: 1; }
 
 .wfm-gen-lora-col-body {
     flex: 1;

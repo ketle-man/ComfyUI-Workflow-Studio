@@ -1,5 +1,22 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-08: v0.3.30 — LoRAスタック トリガーワードバグ修正・ヘルプ更新
+
+### 変更内容
+
+#### LoRAスタック TRIGGER WORDS 表示バグ修正（`static/js/comfyui-editor.js`）
+- **問題**: スタックで1つのモデルを無効にしてもTRIGGER WORDSに無効モデルのトリガーワードが残っていた
+- **原因1**: 初期表示の `triggerHtml` が `allTriggerWords`（全モデル分）を使っていた → `activeTriggerWords` に修正
+- **原因2**: チェックボックス切り替え・toggle-all・強度調整時に呼ばれる `_refreshLoraPaneDynamic` がLORA SYNTAXのみ更新してTRIGGER WORDSを更新していなかった
+- **修正**: `_refreshLoraPaneDynamic(stackModels, metadata, civitaiCache)` でTRIGGER WORDSも再計算・再描画するよう拡張（アクティブモデルのみ表示）
+
+#### ヘルプ トラブルシューティング追加（`templates/index.html`, `static/js/i18n.js`, `static/js/app.js`）
+- LoRAスタック実行時に「No such file or directory」エラーが出る場合のトラブルシューティングを追記
+- 原因: comfyui-lora-managerが該当LoRAを認識していない（既知の問題）
+- 対処: 別のLoRAで試す、またはLora Manager自体のUIでファイルが表示されるか確認
+
+---
+
 ## 2026-06-08: v0.3.29 — LoRAセクション統合・ヘルプタブサイドバー・UI細部改善
 
 ### 変更内容
