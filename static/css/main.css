@@ -625,6 +625,44 @@ body {
     padding: 0;
 }
 
+/* ── LoRA pane tabs ─────────────────────────────────────── */
+.wfm-lora-tab-header {
+    display: flex;
+    border-bottom: 1px solid var(--wfm-border);
+    gap: 0;
+    padding: 0 8px;
+    flex-shrink: 0;
+}
+
+.wfm-lora-tab-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--wfm-text-secondary);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    margin-bottom: -1px;
+    text-transform: none;
+    letter-spacing: 0;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.wfm-lora-tab-btn:hover { color: var(--wfm-text); }
+
+.wfm-lora-tab-btn.active {
+    color: var(--wfm-accent);
+    border-bottom-color: var(--wfm-accent);
+}
+
+.wfm-lora-tab-content {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 /* ── LoRA pane sections ──────────────────────────────────── */
 .wfm-lora-unified {
     padding: 10px 12px;

@@ -1,5 +1,32 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-08: v0.3.31 — LoRAペイン Single/Stack タブ分割・GenUI Model LoRA対応強化
+
+### 変更内容
+
+#### LoRAペイン Single/Stack タブ分割（`static/js/comfyui-editor.js`, `static/css/main.css`）
+- `renderLoraPane` を全面書き換え。Single / Stack の2タブ構成に変更
+- **Single タブ**: フィルター・モデルドロップダウン・強度（M/C）・ターゲットノード選択・Apply・P・LORA SYNTAX表示・TRIGGER WORDS表示
+  - モデル選択・強度変更時にLORA SYNTAX が自動更新
+  - Apply: ワークフローノードへの適用 + LORA SYNTAX/TRIGGER WORDS を Positive プロンプトへ差分更新
+  - P: Positive プロンプトをワークフローに反映
+- **Stack タブ**: ターゲットノード選択・Apply・P・Toggle-all・グローバル強度調整（+/−）・LORA SYNTAX・TRIGGER WORDS・モデルリスト
+  - 検索フィルターとモデルドロップダウンを削除（Stack専用UIに整理）
+- `_refreshLoraSingleDynamic(metadata, civitaiCache)` 関数を追加（Single タブの動的更新）
+- `comfyEditor.switchLoraSingleTab()` メソッドを追加（外部からSingleタブへ切り替え）
+- `comfyEditor.disableAllStack()` メソッドを追加（外部からStack全無効化）
+
+#### GenUI Model LoRA対応強化（`static/js/models-tab.js`）
+- `Lora Loader (LoraManager)` ノード対応: `lora_name` 検索ではなく `currentAnalysis.lora_nodes` を参照し `is_lora_manager` で書き込み形式を分岐
+- LoRA適用時: Singleタブへ切り替え・Stack全無効化・`wfm-lora-single-syntax`/`wfm-lora-single-triggers` を更新
+- Positive promptへの直接書き込みを廃止（Apply/Pボタンで明示的に反映する設計に統一）
+
+#### ヘルプ更新（`static/js/i18n.js`）
+- `helpGen5`: LoRA に「(Single/Stack タブ)」の説明を追加（EN/JA/ZH）
+- `helpModels8`: GenUI Model LoRA 動作の詳細を追記（EN/JA/ZH）
+
+---
+
 ## 2026-06-08: v0.3.30 — LoRAスタック トリガーワードバグ修正・ヘルプ更新
 
 ### 変更内容

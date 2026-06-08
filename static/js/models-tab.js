@@ -92,25 +92,81 @@ function applyToGenUI(modelName, modelType) {
         return;
     }
 
-    const { key, inputKey } = mapping;
+    let selectEl = null;
 
-    // Find the first matching node in the current workflow
-    const nodeId = Object.keys(comfyUI.currentWorkflow).find((id) => {
-        const node = comfyUI.currentWorkflow[id];
-        return node.inputs && inputKey in node.inputs;
-    });
+    if (modelType === "lora") {
+        // Use lora_nodes from analysis to correctly handle Lora Loader (LoraManager)
+        const loraNodes = comfyUI.currentAnalysis?.lora_nodes || [];
+        let nodeId = null;
+        let isLoraManager = false;
 
-    if (!nodeId) {
-        showToast(t("modelsGenUINoNode", TYPE_LABELS[modelType] || modelType), "warning");
-        return;
+        if (loraNodes.length > 0) {
+            const targetNode = loraNodes[0];
+            nodeId = targetNode.id;
+            isLoraManager = !!targetNode.is_lora_manager;
+        } else {
+            // Fallback: find a standard LoraLoader node by lora_name input
+            nodeId = Object.keys(comfyUI.currentWorkflow).find((id) => {
+                const node = comfyUI.currentWorkflow[id];
+                return node.inputs && "lora_name" in node.inputs;
+            });
+        }
+
+        if (!nodeId || !comfyUI.currentWorkflow[nodeId]) {
+            showToast(t("modelsGenUINoNode", TYPE_LABELS[modelType] || modelType), "warning");
+            return;
+        }
+
+        const stem = modelName.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+
+        if (isLoraManager) {
+            comfyUI.currentWorkflow[nodeId].inputs.loras = {
+                __value__: [{ name: stem, strength: 1.0, active: true, expanded: false, clipStrength: 1.0, locked: false }],
+            };
+            comfyUI.currentWorkflow[nodeId].inputs.text = `<lora:${stem}:1:1>`;
+        } else {
+            comfyUI.currentWorkflow[nodeId].inputs.lora_name = modelName;
+        }
+
+        // Disable all Stack models and switch to Single tab
+        comfyEditor.disableAllStack("wfm-gen-lora-fields");
+        comfyEditor.switchLoraSingleTab();
+
+        // Update Single tab LORA SYNTAX and TRIGGER WORDS displays
+        const loraSyntax = `<lora:${stem}:1:1>`;
+        const sha = (state.modelMetadata[modelName] || {}).sha256;
+        const civInfo = sha && state.civitaiCache[sha];
+        const triggerWords = civInfo?.trainedWords || [];
+
+        const singleSyntaxEl = document.getElementById("wfm-lora-single-syntax");
+        if (singleSyntaxEl) singleSyntaxEl.textContent = loraSyntax;
+
+        const singleTriggersEl = document.getElementById("wfm-lora-single-triggers");
+        if (singleTriggersEl) {
+            singleTriggersEl.innerHTML = triggerWords.length
+                ? triggerWords.map(w => `<span class="wfm-lora-trigger-word">${w}</span>`).join(" ")
+                : `<span style="color:var(--wfm-text-secondary);font-size:12px;">—</span>`;
+        }
+
+        selectEl = document.getElementById("wfm-lora-select");
+    } else {
+        const { key, inputKey } = mapping;
+
+        const nodeId = Object.keys(comfyUI.currentWorkflow).find((id) => {
+            const node = comfyUI.currentWorkflow[id];
+            return node.inputs && inputKey in node.inputs;
+        });
+
+        if (!nodeId) {
+            showToast(t("modelsGenUINoNode", TYPE_LABELS[modelType] || modelType), "warning");
+            return;
+        }
+
+        comfyUI.currentWorkflow[nodeId].inputs[inputKey] = modelName;
+        selectEl = document.getElementById(`wfm-model-${key}`);
     }
 
-    comfyUI.currentWorkflow[nodeId].inputs[inputKey] = modelName;
-
-    // Sync GenUI select element if visible
-    const selectEl = document.getElementById(`wfm-model-${key}`);
     if (selectEl) {
-        // Add option if not present (subdir paths may not be in list)
         if (![...selectEl.options].some(o => o.value === modelName)) {
             const opt = document.createElement("option");
             opt.value = modelName;
@@ -120,7 +176,6 @@ function applyToGenUI(modelName, modelType) {
         selectEl.value = modelName;
     }
 
-    // Sync raw JSON display
     const rawTextarea = document.getElementById("wfm-gen-raw-json");
     if (rawTextarea) {
         rawTextarea.value = JSON.stringify(comfyUI.currentWorkflow, null, 2);

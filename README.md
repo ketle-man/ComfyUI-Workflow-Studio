@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.30-green)
+![Version](https://img.shields.io/badge/version-0.3.31-green)
 
 ## Screenshots
 
@@ -279,6 +279,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.31
+- **LoRA pane — Single/Stack tabs** — LoRA pane split into two tabs: Single (filter, model dropdown, M/C strength, target node, Apply, P, LORA SYNTAX, TRIGGER WORDS) and Stack (target node, Apply, P, Toggle-all, global strength adjuster, LORA SYNTAX, TRIGGER WORDS, model list); each tab has independent strength settings
+- **GenUI Model — LoRA improvements** — now correctly handles `Lora Loader (LoraManager)` nodes (previously failed to find the node); on apply: switches to Single tab, disables all Stack models, and updates LORA SYNTAX / TRIGGER WORDS in the Single tab panel
 
 ### v0.3.30
 - **LoRA Stack trigger words fix** — inactive stack models no longer show their trigger words in the Trigger words display; both initial render and per-model toggle/toggle-all now filter to active models only
