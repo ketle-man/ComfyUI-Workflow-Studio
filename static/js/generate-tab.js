@@ -140,6 +140,7 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
     const nameEl = document.getElementById("wfm-gen-wf-name");
     if (nameEl) {
         nameEl.textContent = filename || "Loaded Workflow";
+        nameEl.dataset.filename = filename || "";
     }
 
     // Enable generate button
@@ -157,7 +158,7 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
 // ============================================
 
 const _ckptBatch = { aborted: false, paused: false, _resumeResolve: null };
-let _activeBatchType = null; // "checkpoint" | "lora" | "prompt" | "workflow" | null
+let _activeBatchType = null; // "checkpoint" | "lora" | "prompt" | "workflow" | "sampler" | "scheduler" | null
 
 async function _waitIfPaused() {
     if (!_ckptBatch.paused) return;
@@ -175,7 +176,7 @@ function _setPauseBtnState(paused) {
 function _updateBatchTypeLabel(running = false) {
     const el = document.getElementById("wfm-batch-type-label");
     if (!el) return;
-    const labels = { checkpoint: "Checkpoint", lora: "Lora", prompt: "Prompt", workflow: "Workflow" };
+    const labels = { checkpoint: "Checkpoint", lora: "Lora", prompt: "Prompt", workflow: "Workflow", sampler: "Sampler", scheduler: "Scheduler" };
     if (_activeBatchType) {
         el.textContent = labels[_activeBatchType];
         el.style.color = running ? "var(--wfm-primary)" : "";
@@ -210,6 +211,10 @@ const _batchGroupState = {
     wfSelectedGroups: new Set(),
     wfPartialSelections: {},
 };
+
+// Sampler / Scheduler 選択状態
+const _samplerSelected = new Set();
+const _schedulerSelected = new Set();
 
 // 汎用: groupsData/selectedGroups/partialSelectionsからメンバーSetを返す
 function _getItemsFromGroupState(groupsData, selectedGroups, partialSelections) {
@@ -326,6 +331,20 @@ function _renderBatchPreview() {
         wfList,
         (f) => f.replace(/\.json$/i, "").replace(/\\/g, "/").split("/").pop(),
         "workflow", "workflows"
+    );
+    // Sampler
+    _renderQueueColumn(
+        "wfm-batch-sampler-count", "wfm-batch-sampler-list",
+        [..._samplerSelected].sort(),
+        (s) => s,
+        "sampler", "samplers"
+    );
+    // Scheduler
+    _renderQueueColumn(
+        "wfm-batch-scheduler-count", "wfm-batch-scheduler-list",
+        [..._schedulerSelected].sort(),
+        (s) => s,
+        "scheduler", "schedulers"
     );
 }
 
@@ -853,8 +872,122 @@ function _renderBatchWfGroupList() {
     );
 }
 
+// ============================================
+// Sampler / Scheduler リスト
+// ============================================
+function _buildSimpleGroupList(listEl, items, selectedSet, emptyMsg) {
+    if (!listEl) return;
+    if (items.length === 0) {
+        listEl.innerHTML = `<div style="padding:8px 10px;font-size:11px;color:var(--wfm-text-secondary);">${emptyMsg}</div>`;
+        return;
+    }
+    listEl.innerHTML = "";
+
+    const group = document.createElement("div");
+    group.className = "wfm-ckpt-folder-group open";
+
+    const header = document.createElement("div");
+    header.className = "wfm-ckpt-folder-header";
+
+    const folderCb = document.createElement("input");
+    folderCb.type = "checkbox";
+    const selCount = () => items.filter((x) => selectedSet.has(x)).length;
+    const updateFolderCb = () => {
+        const n = selCount();
+        folderCb.checked = items.length > 0 && n === items.length;
+        folderCb.indeterminate = n > 0 && n < items.length;
+    };
+    updateFolderCb();
+
+    const toggle = document.createElement("span");
+    toggle.className = "wfm-ckpt-folder-toggle";
+    toggle.textContent = "▶";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "wfm-ckpt-folder-name";
+    nameSpan.textContent = "(root)";
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "wfm-ckpt-folder-count";
+    countSpan.textContent = items.length;
+
+    const filesDiv = document.createElement("div");
+    filesDiv.className = "wfm-ckpt-folder-files";
+
+    for (const s of items) {
+        const label = document.createElement("label");
+        label.className = "wfm-ckpt-item wfm-ckpt-item--indented";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = s;
+        cb.checked = selectedSet.has(s);
+        cb.addEventListener("change", () => {
+            if (cb.checked) selectedSet.add(s);
+            else selectedSet.delete(s);
+            updateFolderCb();
+            _renderBatchPreview();
+        });
+        const span = document.createElement("span");
+        span.className = "wfm-ckpt-item-label";
+        span.textContent = s;
+        label.appendChild(cb);
+        label.appendChild(span);
+        filesDiv.appendChild(label);
+    }
+
+    folderCb.addEventListener("change", () => {
+        folderCb.indeterminate = false;
+        items.forEach((s) => { if (folderCb.checked) selectedSet.add(s); else selectedSet.delete(s); });
+        filesDiv.querySelectorAll("input[type=checkbox]").forEach((c) => { c.checked = folderCb.checked; });
+        _renderBatchPreview();
+    });
+
+    [toggle, nameSpan].forEach((el) => {
+        el.addEventListener("click", () => group.classList.toggle("open"));
+    });
+
+    header.appendChild(folderCb);
+    header.appendChild(toggle);
+    header.appendChild(nameSpan);
+    header.appendChild(countSpan);
+    group.appendChild(header);
+    group.appendChild(filesDiv);
+    listEl.appendChild(group);
+}
+
+function _rebuildSamplerList() {
+    _buildSimpleGroupList(
+        document.getElementById("wfm-sampler-list"),
+        comfyEditor.models.samplers || [],
+        _samplerSelected,
+        "No samplers (connect to ComfyUI first)"
+    );
+}
+
+function _rebuildSchedulerList() {
+    _buildSimpleGroupList(
+        document.getElementById("wfm-scheduler-list"),
+        comfyEditor.models.schedulers || [],
+        _schedulerSelected,
+        "No schedulers (connect to ComfyUI first)"
+    );
+}
+
 function initBatchTab() {
-    // 内部タブ切り替え（タブ表示時に対応するグループを読み込む）
+    // 左ペイン タブ切り替え
+    document.querySelectorAll(".wfm-batch-left-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".wfm-batch-left-tab").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            const tabId = btn.dataset.leftTab;
+            document.querySelectorAll(".wfm-batch-left-content").forEach((c) => c.classList.remove("active"));
+            document.getElementById(`wfm-batch-left-${tabId}`)?.classList.add("active");
+            if (tabId === "sampler") _rebuildSamplerList();
+            else if (tabId === "scheduler") _rebuildSchedulerList();
+        });
+    });
+
+    // 中央ペイン 内部タブ切り替え
     document.querySelectorAll(".wfm-batch-inner-tab").forEach((btn) => {
         btn.addEventListener("click", () => {
             document.querySelectorAll(".wfm-batch-inner-tab").forEach((b) => b.classList.remove("active"));
@@ -869,10 +1002,10 @@ function initBatchTab() {
         });
     });
 
-    // 検索フィルター（左ペイン）
+    // 検索フィルター（左ペイン Checkpoint）
     document.getElementById("wfm-ckpt-search")?.addEventListener("input", _rebuildCkptList);
 
-    // 全選択 / 全解除（左ペイン）
+    // 全選択 / 全解除（左ペイン Checkpoint）
     document.getElementById("wfm-ckpt-select-all")?.addEventListener("click", () => {
         _ckptState.mode = "all";
         _ckptState.selected.clear();
@@ -883,6 +1016,30 @@ function initBatchTab() {
         _ckptState.mode = "none";
         _ckptState.selected.clear();
         _rebuildCkptList();
+        _renderBatchPreview();
+    });
+
+    // 全選択 / 全解除（左ペイン Sampler）
+    document.getElementById("wfm-sampler-select-all")?.addEventListener("click", () => {
+        (comfyEditor.models.samplers || []).forEach((s) => _samplerSelected.add(s));
+        _rebuildSamplerList();
+        _renderBatchPreview();
+    });
+    document.getElementById("wfm-sampler-deselect-all")?.addEventListener("click", () => {
+        _samplerSelected.clear();
+        _rebuildSamplerList();
+        _renderBatchPreview();
+    });
+
+    // 全選択 / 全解除（左ペイン Scheduler）
+    document.getElementById("wfm-scheduler-select-all")?.addEventListener("click", () => {
+        (comfyEditor.models.schedulers || []).forEach((s) => _schedulerSelected.add(s));
+        _rebuildSchedulerList();
+        _renderBatchPreview();
+    });
+    document.getElementById("wfm-scheduler-deselect-all")?.addEventListener("click", () => {
+        _schedulerSelected.clear();
+        _rebuildSchedulerList();
         _renderBatchPreview();
     });
 
@@ -1098,8 +1255,16 @@ async function _runBatchGenerate() {
             if (list.length === 0) { showToast("No LoRAs selected", "error"); return; }
             await _runBatchLoop(list, (loraName) => {
                 for (const node of loraNodes) {
-                    if (comfyUI.currentWorkflow?.[node.id])
+                    if (!comfyUI.currentWorkflow?.[node.id]) continue;
+                    if (node.is_lora_manager) {
+                        const stem = loraName.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+                        comfyUI.currentWorkflow[node.id].inputs.loras = {
+                            __value__: [{ name: stem, strength: 1.0, active: true, expanded: false, clipStrength: 1.0, locked: false }],
+                        };
+                        comfyUI.currentWorkflow[node.id].inputs.text = `<lora:${stem}:1:1>`;
+                    } else {
                         comfyUI.currentWorkflow[node.id].inputs.lora_name = loraName;
+                    }
                 }
             }, (name) => name.replace(/\.[^.]+$/, ""));
             break;
@@ -1142,6 +1307,32 @@ async function _runBatchGenerate() {
                     try { await loadWorkflowIntoEditor(JSON.parse(savedWorkflow), savedFilename); } catch {}
                 }
             }
+            break;
+        }
+        case "sampler": {
+            const samplerNodes = comfyUI.currentAnalysis?.sampler_nodes || [];
+            if (samplerNodes.length === 0) { showToast("No KSampler node found in workflow", "error"); return; }
+            const list = [..._samplerSelected].sort();
+            if (list.length === 0) { showToast("No samplers selected", "error"); return; }
+            await _runBatchLoop(list, (samplerName) => {
+                for (const node of samplerNodes) {
+                    if (comfyUI.currentWorkflow?.[node.id])
+                        comfyUI.currentWorkflow[node.id].inputs.sampler_name = samplerName;
+                }
+            });
+            break;
+        }
+        case "scheduler": {
+            const samplerNodes = comfyUI.currentAnalysis?.sampler_nodes || [];
+            if (samplerNodes.length === 0) { showToast("No KSampler node found in workflow", "error"); return; }
+            const list = [..._schedulerSelected].sort();
+            if (list.length === 0) { showToast("No schedulers selected", "error"); return; }
+            await _runBatchLoop(list, (schedulerName) => {
+                for (const node of samplerNodes) {
+                    if (comfyUI.currentWorkflow?.[node.id])
+                        comfyUI.currentWorkflow[node.id].inputs.scheduler = schedulerName;
+                }
+            });
             break;
         }
     }
@@ -1216,7 +1407,25 @@ export async function initGenerateTab() {
             comfyEditor.renderAll(comfyUI.currentAnalysis, comfyUI.currentWorkflow);
         }
         showToast("Model lists refreshed", "success");
+        _rebuildSamplerList();
+        _rebuildSchedulerList();
         _renderBatchPreview();
+    });
+
+    document.getElementById("wfm-gen-reset-workflow-btn")?.addEventListener("click", async () => {
+        const filename = document.getElementById("wfm-gen-wf-name")?.dataset?.filename;
+        if (!filename || !filename.endsWith(".json")) {
+            showToast("No file-based workflow loaded", "warning");
+            return;
+        }
+        try {
+            const resp = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(filename)}`);
+            if (!resp.ok) throw new Error(resp.status);
+            const data = await resp.json();
+            await loadWorkflowIntoEditor(data, filename);
+        } catch (err) {
+            showToast("Reset failed: " + err.message, "error");
+        }
     });
 
     // Generate button
@@ -1259,6 +1468,21 @@ export async function initGenerateTab() {
             document.querySelectorAll(".wfm-gen-subtab-content").forEach((c) => c.classList.remove("active"));
             document.getElementById(`wfm-gen-subtab-${target}`)?.classList.add("active");
             moveRawJsonToTab(target);
+            // Re-render LoRA pane when switching to model tab so Stack group changes are reflected
+            if (target === "model" && comfyUI.currentAnalysis) {
+                comfyEditor.renderLoraPane(comfyUI.currentAnalysis, "wfm-gen-lora-fields");
+            }
+        });
+    });
+
+    // Input inner tab (Prompt / Image)
+    document.querySelectorAll(".wfm-input-inner-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const target = btn.dataset.inputTab;
+            document.querySelectorAll(".wfm-input-inner-tab").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            document.querySelectorAll(".wfm-input-inner-panel").forEach((p) => p.style.display = "none");
+            document.getElementById(`wfm-input-panel-${target}`)?.style.setProperty("display", "");
         });
     });
 

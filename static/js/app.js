@@ -328,6 +328,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-8": "helpGen8", "wfm-help-gen-9": "helpGen9", "wfm-help-gen-10": "helpGen10",
         "wfm-help-gen-11": "helpGen11", "wfm-help-gen-12": "helpGen12",
         "wfm-help-gen-13": "helpGen13", "wfm-help-gen-14": "helpGen14",
+        "wfm-help-gen-15": "helpGen15",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-1": "helpFeeder1", "wfm-help-feeder-2": "helpFeeder2",
@@ -450,10 +451,23 @@ try {
     applyJsonColors(_s.jsonColors);
 } catch {}
 
+function initHelpTab() {
+    document.querySelectorAll(".wfm-help-nav-item").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const page = btn.dataset.helpPage;
+            document.querySelectorAll(".wfm-help-nav-item").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            document.querySelectorAll(".wfm-help-page").forEach((p) => p.classList.remove("active"));
+            document.getElementById(`wfm-help-page-${page}`)?.classList.add("active");
+        });
+    });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     applyI18nToHtml();
     initTabs();
     initModal();
+    initHelpTab();
     initSettingsTab(); // Settings first (applies saved URL)
     initWorkflowTab();
     initNodesTab();

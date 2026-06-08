@@ -219,7 +219,7 @@ class ModelsService:
 
             for ext in _PREVIEW_EXTENSIONS:
                 preview = parent / (stem + ext)
-                if preview.is_file():
+                if preview.is_file() and preview.stat().st_size >= 100:
                     logger.debug("Preview found: %s", preview)
                     return preview
 

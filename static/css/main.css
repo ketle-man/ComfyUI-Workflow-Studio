@@ -581,6 +581,250 @@ body {
     padding: 12px 14px;
 }
 
+/* Narrow variant for Model tab left pane */
+.wfm-gen-params-col--narrow {
+    flex: 1;
+}
+
+/* Center pane: LoRA-only (Model tab) */
+.wfm-gen-lora-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--wfm-border);
+}
+
+.wfm-gen-lora-col-header {
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-gen-lora-col-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+/* ── LoRA pane sections ──────────────────────────────────── */
+.wfm-lora-unified {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.wfm-lora-strength-combined {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    padding: 2px 0;
+}
+
+.wfm-lora-strength-single {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+    padding-right: 10px;
+    margin-right: 10px;
+    border-right: 1px solid var(--wfm-border);
+}
+
+.wfm-lora-strength-single input {
+    width: 60px !important;
+}
+
+.wfm-lora-stack-header {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.wfm-lora-p-btn {
+    background: rgba(74, 158, 255, 0.12) !important;
+    border-color: rgba(74, 158, 255, 0.35) !important;
+    color: var(--wfm-primary) !important;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.wfm-lora-stack-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--wfm-text-secondary);
+    white-space: nowrap;
+    padding-right: 2px;
+}
+
+.wfm-lora-stack-info-block {
+    background: var(--wfm-bg-secondary);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius-sm);
+    padding: 8px 10px;
+}
+
+.wfm-lora-stack-info-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.wfm-lora-stack-syntax {
+    font-size: 11px;
+    font-family: monospace;
+    color: var(--wfm-text);
+    word-break: break-all;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.wfm-lora-stack-triggers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.wfm-lora-trigger-word {
+    font-size: 11px;
+    background: rgba(74, 158, 255, 0.12);
+    color: var(--wfm-primary);
+    border: 1px solid rgba(74, 158, 255, 0.25);
+    border-radius: 3px;
+    padding: 1px 6px;
+}
+
+.wfm-lora-stack-models {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.wfm-lora-stack-models-header {
+    display: grid;
+    grid-template-columns: 16px 1fr 64px 64px;
+    gap: 4px;
+    padding: 0 0 4px;
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    border-bottom: 1px solid var(--wfm-border);
+    margin-bottom: 4px;
+    text-align: right;
+}
+
+.wfm-lora-stack-models-header span:nth-child(2) {
+    text-align: left;
+}
+
+.wfm-lora-stack-model-row {
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 6px;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--wfm-border);
+}
+
+.wfm-lora-stack-model-row:last-child {
+    border-bottom: none;
+}
+
+.wfm-lora-stack-model-row--off .wfm-lora-stack-model-name {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.wfm-lora-stack-model-row--off .wfm-lora-stack-strengths input {
+    opacity: 0.35;
+}
+
+.wfm-lora-stack-model-name {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wfm-lora-stack-strengths {
+    display: flex;
+    gap: 4px;
+}
+
+.wfm-lora-stack-strengths input[type="number"] {
+    padding: 4px 4px !important;
+    text-align: center;
+}
+
+.wfm-lora-stack-strengths input[type="number"]::-webkit-outer-spin-button,
+.wfm-lora-stack-strengths input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.wfm-lora-stack-strengths input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Global strength adjustment row */
+.wfm-lora-stack-global-adj {
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 6px;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--wfm-border);
+    margin-bottom: 4px;
+}
+
+.wfm-lora-stack-global-adj-label {
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    font-weight: 600;
+}
+
+.wfm-lora-stack-global-adj-groups {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.wfm-lora-stack-global-adj-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.wfm-lora-stack-global-adj-group > span {
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    white-space: nowrap;
+}
+
+.wfm-lora-stack-adj-step {
+    width: 50px !important;
+    padding: 2px 4px !important;
+    text-align: center;
+}
+
+.wfm-btn-xs {
+    padding: 1px 6px;
+    font-size: 13px;
+    line-height: 1.4;
+    min-width: 22px;
+}
+
 /* Stacked sections inside params col (Input: Prompt on top, Image below) */
 .wfm-gen-params-section {
     flex: 1;
@@ -591,6 +835,44 @@ body {
 
 .wfm-gen-params-section--top-border {
     border-top: 1px solid var(--wfm-border);
+}
+
+/* Input tab inner tabs (Prompt / Image) */
+.wfm-input-inner-tabnav {
+    display: flex;
+    gap: 2px;
+    padding: 6px 14px 0;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-input-inner-tab {
+    padding: 4px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.wfm-input-inner-tab:hover {
+    color: var(--wfm-text);
+}
+
+.wfm-input-inner-tab.active {
+    color: var(--wfm-primary);
+    border-bottom-color: var(--wfm-primary);
+}
+
+.wfm-input-inner-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    min-height: 0;
 }
 
 /* Right sub-column: Raw JSON */
@@ -1077,6 +1359,41 @@ body {
 
 .wfm-table-row .wfm-batch-btn,
 .wfm-models-table-row .wfm-batch-btn {
+    position: static;
+    opacity: 0.7;
+}
+
+/* ============================================
+   Stack Button (Lora multi-apply)
+   ============================================ */
+
+.wfm-stack-btn {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    background: none;
+    border: none;
+    color: var(--wfm-text-secondary);
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s;
+    padding: 0 2px;
+}
+
+.wfm-stack-btn:hover {
+    opacity: 1;
+}
+
+.wfm-stack-btn.active {
+    color: #60d0a0;
+    opacity: 1;
+}
+
+.wfm-table-row .wfm-stack-btn,
+.wfm-models-table-row .wfm-stack-btn {
     position: static;
     opacity: 0.7;
 }
@@ -2616,25 +2933,76 @@ body {
    Help & Support Tab
    ============================================ */
 
-.wfm-help-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 24px 20px;
-    overflow-y: auto;
+/* Help Tab — sidebar layout */
+.wfm-help-layout {
+    display: flex;
     height: 100%;
+    overflow: hidden;
 }
 
-.wfm-help-section {
-    margin-bottom: 32px;
+.wfm-help-sidebar {
+    width: 170px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--wfm-border);
+    overflow: hidden;
 }
 
-.wfm-help-section-title {
-    font-size: 18px;
-    font-weight: 700;
+.wfm-help-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.wfm-help-nav-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 14px;
+    font-size: 12px;
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wfm-help-nav-item:hover {
     color: var(--wfm-text);
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--wfm-primary);
+    background: var(--wfm-hover);
+}
+
+.wfm-help-nav-item.active {
+    color: var(--wfm-primary);
+    background: var(--wfm-hover);
+    border-left-color: var(--wfm-primary);
+    font-weight: 600;
+}
+
+.wfm-help-sidebar-support {
+    border-top: 1px solid var(--wfm-border);
+    padding: 6px 0;
+}
+
+.wfm-help-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    min-width: 0;
+}
+
+.wfm-help-page {
+    display: none;
+    max-width: 760px;
+}
+
+.wfm-help-page.active {
+    display: block;
 }
 
 .wfm-help-card {
@@ -3823,6 +4191,11 @@ body {
     width: 30px;
 }
 
+.wfm-table-td-stack {
+    text-align: center;
+    width: 30px;
+}
+
 /* Disabled badge in card title */
 .wfm-badge-disabled {
     background: rgba(255, 107, 107, 0.2);
@@ -3909,7 +4282,36 @@ body {
 .wfm-batch-pane:last-child { border-right: none; }
 .wfm-batch-left  { width: 240px; flex-shrink: 0; }
 .wfm-batch-center { flex: 1; }
-.wfm-batch-right { flex: 1.2; min-width: 320px; flex-shrink: 0; }
+.wfm-batch-right { flex: 1.5; min-width: 380px; flex-shrink: 0; }
+.wfm-batch-left-tab-nav {
+    display: flex;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+.wfm-batch-left-tab {
+    flex: 1;
+    padding: 5px 4px;
+    font-size: 10px;
+    background: transparent;
+    border: none;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.wfm-batch-left-tab:hover { color: var(--wfm-text-primary); background: var(--wfm-surface); }
+.wfm-batch-left-tab.active { color: var(--wfm-primary); border-bottom-color: var(--wfm-primary); }
+.wfm-batch-left-content {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+.wfm-batch-left-content.active { display: flex; }
 .wfm-batch-pane-header {
     font-size: 11px;
     font-weight: 600;

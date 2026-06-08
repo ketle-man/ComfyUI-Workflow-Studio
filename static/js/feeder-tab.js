@@ -135,6 +135,10 @@ async function _startRun() {
             const msg = JSON.parse(ev.data);
             if (msg.type === "image_loop_node_sync" && String(msg.data?.node_id) === String(nodeId)) {
                 _lastSync = msg.data;
+                if (msg.data.thumbnail_path) {
+                    const p = msg.data.thumbnail_path;
+                    _showPreview(p, p.split("/").pop());
+                }
             }
         } catch {}
     };
@@ -507,4 +511,5 @@ export async function initFeederTab() {
     document.getElementById("wfm-feeder-stop-btn")?.addEventListener("click", _stopRun);
 
     await Promise.all([_loadTree(), _loadPresets()]);
+    _selectDir("");
 }

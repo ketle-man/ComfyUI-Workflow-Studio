@@ -344,7 +344,7 @@ async def handle_get_preview(request: web.Request) -> web.Response:
         return web.FileResponse(
             preview_path,
             headers={"Content-Type": content_type or "image/png",
-                     "Cache-Control": "public, max-age=3600"},
+                     "Cache-Control": "no-cache"},
         )
     except Exception as e:
         logger.error("Error serving model preview: %s", e)
@@ -383,7 +383,7 @@ async def handle_change_preview(request: web.Request) -> web.Response:
         if image_data is None:
             return web.json_response({"error": "file required"}, status=400)
 
-        # Resolve model file path
+        # Resolve model file path (also check .disabled variants)
         from ..services.models_service import _get_model_dirs
         dirs = _get_model_dirs(model_type)
         model_path = None
@@ -391,6 +391,11 @@ async def handle_change_preview(request: web.Request) -> web.Response:
             candidate = d / model_name
             if candidate.is_file():
                 model_path = candidate
+                break
+            # disabled モデルも対象にする
+            disabled_candidate = d / (model_name + ".disabled")
+            if disabled_candidate.is_file():
+                model_path = disabled_candidate
                 break
 
         if not model_path:

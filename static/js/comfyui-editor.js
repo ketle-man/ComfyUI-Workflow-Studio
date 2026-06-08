@@ -5,6 +5,68 @@
 import { comfyUI } from "./comfyui-client.js";
 import { syncJsonHighlight } from "./json-highlight.js";
 
+// ── LoRA pane stack state ─────────────────────────────────
+// { modelFullPath: { m: number, c: number } }
+let _stackStrengths = {};
+// { modelFullPath: boolean } — true = active (default)
+let _stackActive = {};
+
+function _loraBasename(fullPath) {
+    const name = (fullPath || "").replace(/\\/g, "/").split("/").pop() || fullPath;
+    return name.replace(/\.[^.]+$/, "");
+}
+
+function _buildLoraSyntax(stackModels) {
+    return stackModels
+        .filter((m) => _stackActive[m] !== false)
+        .map((m) => {
+            const stem = _loraBasename(m);
+            const str = (_stackStrengths[m]?.m ?? 1.0).toFixed(2).replace(/\.?0+$/, "") || "1";
+            return `<lora:${stem}:${str}>`;
+        })
+        .join(", ");
+}
+
+function _buildLoraManagerSyntax(stackModels) {
+    return stackModels
+        .filter((m) => _stackActive[m] !== false)
+        .map((m) => {
+            const stem = _loraBasename(m);
+            const strM = (_stackStrengths[m]?.m ?? 1.0).toFixed(2).replace(/\.?0+$/, "") || "1";
+            const strC = (_stackStrengths[m]?.c ?? 1.0).toFixed(2).replace(/\.?0+$/, "") || "1";
+            return `<lora:${stem}:${strM}:${strC}>`;
+        })
+        .join(" ");
+}
+
+function _applyLoraToNode(nodeId, loraPath, strModel, strClip, isLoraManager) {
+    if (isLoraManager) {
+        const stem = _loraBasename(loraPath);
+        comfyUI.currentWorkflow[nodeId].inputs.loras = {
+            __value__: [{ name: stem, strength: strModel, active: true, expanded: false, clipStrength: strClip, locked: false }],
+        };
+        comfyUI.currentWorkflow[nodeId].inputs.text = `<lora:${stem}:${strModel}:${strClip}>`;
+    } else {
+        comfyUI.currentWorkflow[nodeId].inputs.lora_name = loraPath;
+        comfyUI.currentWorkflow[nodeId].inputs.strength_model = strModel;
+        comfyUI.currentWorkflow[nodeId].inputs.strength_clip = strClip;
+    }
+}
+
+function _refreshLoraPaneDynamic(stackModels) {
+    const syntaxEl = document.getElementById("wfm-lora-stack-syntax");
+    if (syntaxEl) syntaxEl.textContent = _buildLoraSyntax(stackModels) || "—";
+}
+
+function _syncStackToggleAll(stackModels) {
+    const cb = document.getElementById("wfm-lora-stack-toggle-all");
+    if (!cb) return;
+    const allOn = stackModels.every((m) => _stackActive[m] !== false);
+    const allOff = stackModels.every((m) => _stackActive[m] === false);
+    cb.checked = allOn;
+    cb.indeterminate = !allOn && !allOff;
+}
+
 /** Sync comfyUI.currentWorkflow to Raw JSON textarea + highlight */
 function _syncRawJson() {
     const rawTextarea = document.getElementById("wfm-gen-raw-json");
@@ -60,6 +122,7 @@ export const comfyEditor = {
         this.renderPromptTab(analysis, "wfm-gen-prompt-fields");
         this.renderImageTab(analysis, "wfm-gen-image-fields");
         this.renderModelTab(analysis, "wfm-gen-model-fields");
+        this.renderLoraPane(analysis, "wfm-gen-lora-fields"); // async, fires independently
         this.renderSettingsTab(analysis, "wfm-gen-settings-fields");
         _syncRawJson();
     },
@@ -82,7 +145,7 @@ export const comfyEditor = {
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-apply">Apply</button>
                 </div>
-                <textarea class="wfm-textarea" id="wfm-prompt-pos-text" rows="4">${positiveNodes[0]?.text || ""}</textarea>
+                <textarea class="wfm-textarea" id="wfm-prompt-pos-text" rows="8">${positiveNodes[0]?.text || ""}</textarea>
             </div>
             <div class="wfm-form-group">
                 <label>Negative Prompt</label>
@@ -93,7 +156,7 @@ export const comfyEditor = {
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-neg-apply">Apply</button>
                 </div>
-                <textarea class="wfm-textarea" id="wfm-prompt-neg-text" rows="3">${negativeNodes[0]?.text || ""}</textarea>
+                <textarea class="wfm-textarea" id="wfm-prompt-neg-text" rows="6">${negativeNodes[0]?.text || ""}</textarea>
             </div>
         `;
 
@@ -127,7 +190,6 @@ export const comfyEditor = {
         const sections = [
             { label: "Checkpoint", key: "checkpoints", nodes: analysis.checkpoint_nodes, inputKey: "ckpt_name" },
             { label: "VAE", key: "vaes", nodes: analysis.vae_nodes, inputKey: "vae_name" },
-            { label: "LoRA", key: "loras", nodes: analysis.lora_nodes, inputKey: "lora_name" },
             { label: "Diffusion Model", key: "diffusionModels", nodes: analysis.diffusion_model_nodes, inputKey: "unet_name" },
             { label: "Text Encoder", key: "textEncoders", nodes: analysis.text_encoder_nodes, inputKey: "clip_name1" },
             { label: "ControlNet", key: "controlNets", nodes: analysis.controlnet_nodes, inputKey: "control_net_name" },
@@ -152,13 +214,6 @@ export const comfyEditor = {
                         <select class="wfm-select" id="wfm-model-${s.key}-target" style="flex:1;">${targetOpts}</select>
                         <button class="wfm-btn wfm-btn-sm wfm-model-apply" data-key="${s.key}" data-input="${s.inputKey}">Apply</button>
                     </div>
-                    ${s.key === "loras" ? `
-                    <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
-                        <label style="font-size:12px;">Strength M:</label>
-                        <input type="number" class="wfm-input" id="wfm-lora-str-model" value="1.0" step="0.1" min="0" max="2" style="width:70px;">
-                        <label style="font-size:12px;">C:</label>
-                        <input type="number" class="wfm-input" id="wfm-lora-str-clip" value="1.0" step="0.1" min="0" max="2" style="width:70px;">
-                    </div>` : ""}
                 </div>
             `;
             })
@@ -192,17 +247,357 @@ export const comfyEditor = {
                 const nodeId = targetSelect.value;
                 if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
                     comfyUI.currentWorkflow[nodeId].inputs[inputKey] = value;
-                    // Apply LoRA strengths
-                    if (key === "loras") {
-                        const strModel = parseFloat(document.getElementById("wfm-lora-str-model")?.value) || 1.0;
-                        const strClip = parseFloat(document.getElementById("wfm-lora-str-clip")?.value) || 1.0;
-                        comfyUI.currentWorkflow[nodeId].inputs.strength_model = strModel;
-                        comfyUI.currentWorkflow[nodeId].inputs.strength_clip = strClip;
-                    }
                     _syncRawJson();
                 }
             });
         });
+    },
+
+    async renderLoraPane(analysis, containerId) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+
+        const loraNodes = analysis.lora_nodes || [];
+        const loras = this.models.loras || [];
+        // Stack target defaults to first LoraManager node if present
+        const defaultStackTarget = (loraNodes.find((n) => n.is_lora_manager) || loraNodes[0])?.id;
+        const targetOpts = loraNodes
+            .map((n) => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`)
+            .join("");
+        const stackTargetOpts = loraNodes
+            .map((n) => `<option value="${n.id}" ${String(n.id) === String(defaultStackTarget) ? "selected" : ""}>ID:${n.id} (${n.title})</option>`)
+            .join("");
+        const currentVal = loraNodes[0]?.lora_name || "";
+
+        // Fetch Stack group, metadata, CivitAI cache in parallel
+        let stackModels = [];
+        let metadata = {};
+        let civitaiCache = {};
+        try {
+            const [grpRes, metaRes, civRes] = await Promise.all([
+                fetch("/api/wfm/models/groups?type=lora"),
+                fetch("/api/wfm/models/metadata"),
+                fetch("/api/wfm/models/civitai/cache"),
+            ]);
+            const groups = grpRes.ok ? await grpRes.json() : {};
+            stackModels = groups["Stack"] || [];
+            metadata = metaRes.ok ? await metaRes.json() : {};
+            civitaiCache = civRes.ok ? await civRes.json() : {};
+        } catch { /* ignore */ }
+
+        // Initialize strength / active state for new models
+        stackModels.forEach((m) => {
+            if (!_stackStrengths[m]) _stackStrengths[m] = { m: 1.0, c: 1.0 };
+            if (_stackActive[m] === undefined) _stackActive[m] = true;
+        });
+
+        // Build trigger words from CivitAI data
+        const allTriggerWords = [];
+        const activeTriggerWords = [];
+        stackModels.forEach((m) => {
+            const sha = (metadata[m] || {}).sha256;
+            const civInfo = sha && civitaiCache[sha];
+            if (civInfo?.trainedWords?.length) {
+                allTriggerWords.push(...civInfo.trainedWords);
+                if (_stackActive[m] !== false) {
+                    activeTriggerWords.push(...civInfo.trainedWords);
+                }
+            }
+        });
+        const triggerHtml = allTriggerWords.length
+            ? allTriggerWords.map((w) => `<span class="wfm-lora-trigger-word">${w}</span>`).join(" ")
+            : `<span style="color:var(--wfm-text-secondary);font-size:12px;">—</span>`;
+
+        const loraSyntax = _buildLoraSyntax(stackModels);
+
+        const allActive = stackModels.every((m) => _stackActive[m] !== false);
+        const anyActive = stackModels.some((m) => _stackActive[m] !== false);
+
+        const stackModelRows = stackModels.map((m) => {
+            const stem = _loraBasename(m);
+            const str = _stackStrengths[m] || { m: 1.0, c: 1.0 };
+            const active = _stackActive[m] !== false;
+            return `
+            <div class="wfm-lora-stack-model-row${active ? "" : " wfm-lora-stack-model-row--off"}" data-model="${m.replace(/"/g, "&quot;")}">
+                <input type="checkbox" class="wfm-lora-stack-active-cb" ${active ? "checked" : ""} title="Enable/Disable">
+                <span class="wfm-lora-stack-model-name" title="${m}">${stem}</span>
+                <div class="wfm-lora-stack-strengths">
+                    <input type="number" class="wfm-input wfm-lora-stack-str-m" value="${str.m}" step="0.05" min="0" max="2" style="width:64px;" ${active ? "" : "disabled"}>
+                    <input type="number" class="wfm-input wfm-lora-stack-str-c" value="${str.c}" step="0.05" min="0" max="2" style="width:64px;" ${active ? "" : "disabled"}>
+                </div>
+            </div>`;
+        }).join("");
+
+        el.innerHTML = `
+            <div class="wfm-lora-unified">
+                <input type="text" class="wfm-input" id="wfm-lora-filter" placeholder="Filter...">
+                <select class="wfm-select" id="wfm-lora-select">
+                    ${loras.map((m) => `<option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>`).join("")}
+                </select>
+                <div class="wfm-lora-stack-header">
+                    <select class="wfm-select" id="wfm-lora-stack-target" style="flex:1;min-width:0;">${stackTargetOpts}</select>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-lora-stack-apply" title="Apply to node and sync LoRA syntax + trigger words to Positive prompt">Apply</button>
+                    <button class="wfm-btn wfm-btn-sm wfm-lora-p-btn" id="wfm-lora-pos-apply" title="Apply Positive prompt to workflow">P</button>
+                </div>
+                <div class="wfm-lora-strength-combined">
+                    <span class="wfm-lora-stack-label" style="margin-right:4px;flex-shrink:0;">Stack</span>
+                    <input type="checkbox" id="wfm-lora-stack-toggle-all" ${allActive ? "checked" : ""} title="Toggle all stack models" style="flex-shrink:0;margin-right:8px;">
+                    <div class="wfm-lora-strength-single">
+                        <span>M</span>
+                        <input type="number" class="wfm-input" id="wfm-lora-str-model" value="1.0" step="0.05" min="0" max="2">
+                        <span>C</span>
+                        <input type="number" class="wfm-input" id="wfm-lora-str-clip" value="1.0" step="0.05" min="0" max="2">
+                    </div>
+                    ${stackModels.length > 0 ? `
+                    <div class="wfm-lora-stack-global-adj-groups">
+                        <div class="wfm-lora-stack-global-adj-group">
+                            <span>Str M</span>
+                            <button class="wfm-btn wfm-btn-xs" id="wfm-stack-adj-m-dec">−</button>
+                            <input type="number" id="wfm-stack-adj-step-m" class="wfm-input wfm-lora-stack-adj-step" value="0.05" step="0.05" min="0.01" max="2.0">
+                            <button class="wfm-btn wfm-btn-xs" id="wfm-stack-adj-m-inc">+</button>
+                        </div>
+                        <div class="wfm-lora-stack-global-adj-group">
+                            <span>C</span>
+                            <button class="wfm-btn wfm-btn-xs" id="wfm-stack-adj-c-dec">−</button>
+                            <input type="number" id="wfm-stack-adj-step-c" class="wfm-input wfm-lora-stack-adj-step" value="0.05" step="0.05" min="0.01" max="2.0">
+                            <button class="wfm-btn wfm-btn-xs" id="wfm-stack-adj-c-inc">+</button>
+                        </div>
+                    </div>
+                    ` : ""}
+                </div>
+                <div class="wfm-lora-stack-info-block">
+                    <div class="wfm-lora-stack-info-label">Lora syntax</div>
+                    <div id="wfm-lora-stack-syntax" class="wfm-lora-stack-syntax">${loraSyntax || "—"}</div>
+                </div>
+                <div class="wfm-lora-stack-info-block">
+                    <div class="wfm-lora-stack-info-label">Trigger words</div>
+                    <div id="wfm-lora-stack-triggers" class="wfm-lora-stack-triggers">${triggerHtml}</div>
+                </div>
+                <div class="wfm-lora-stack-models">
+                    ${stackModelRows || `<p class="wfm-placeholder">No models in Stack group</p>`}
+                </div>
+            </div>
+        `;
+
+        // Fix: <lora:...> syntax injected via innerHTML is parsed as HTML tags — overwrite with textContent
+        const _synEl = document.getElementById("wfm-lora-stack-syntax");
+        if (_synEl) _synEl.textContent = loraSyntax || "—";
+
+        // ── Filter ──────────────────────────────────────────
+        document.getElementById("wfm-lora-filter")?.addEventListener("input", (e) => {
+            const filter = e.target.value.toLowerCase();
+            const select = document.getElementById("wfm-lora-select");
+            if (!select) return;
+            select.innerHTML = loras
+                .filter((m) => m.toLowerCase().includes(filter))
+                .map((m) => `<option value="${m}">${m}</option>`)
+                .join("");
+        });
+
+        // ── P button: apply Positive prompt to workflow ───────
+        document.getElementById("wfm-lora-pos-apply")?.addEventListener("click", () => {
+            const nodeId = document.getElementById("wfm-prompt-pos-target")?.value;
+            const text = document.getElementById("wfm-prompt-pos-text")?.value;
+            if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
+                const promptNode = comfyUI.currentAnalysis?.prompt_nodes?.find(n => n.id === nodeId);
+                const textKey = promptNode?.textKey || "text";
+                comfyUI.currentWorkflow[nodeId].inputs[textKey] = text;
+                _syncRawJson();
+            }
+        });
+
+        // ── Stack strength inputs + per-model toggle ─────────
+        el.querySelectorAll(".wfm-lora-stack-model-row").forEach((row) => {
+            const modelName = row.dataset.model;
+            const inputM = row.querySelector(".wfm-lora-stack-str-m");
+            const inputC = row.querySelector(".wfm-lora-stack-str-c");
+            const cbActive = row.querySelector(".wfm-lora-stack-active-cb");
+            const nameSpan = row.querySelector(".wfm-lora-stack-model-name");
+
+            const onStrChange = () => {
+                _stackStrengths[modelName] = {
+                    m: parseFloat(inputM.value) || 1.0,
+                    c: parseFloat(inputC.value) || 1.0,
+                };
+                _refreshLoraPaneDynamic(stackModels);
+            };
+            inputM?.addEventListener("input", onStrChange);
+            inputC?.addEventListener("input", onStrChange);
+
+            cbActive?.addEventListener("change", () => {
+                const on = cbActive.checked;
+                _stackActive[modelName] = on;
+                row.classList.toggle("wfm-lora-stack-model-row--off", !on);
+                if (inputM) inputM.disabled = !on;
+                if (inputC) inputC.disabled = !on;
+                _syncStackToggleAll(stackModels);
+                _refreshLoraPaneDynamic(stackModels);
+            });
+        });
+
+        // ── Toggle-all checkbox ───────────────────────────────
+        const toggleAllCb = document.getElementById("wfm-lora-stack-toggle-all");
+        if (toggleAllCb) {
+            toggleAllCb.indeterminate = !allActive && anyActive;
+            toggleAllCb.addEventListener("change", () => {
+                const on = toggleAllCb.checked;
+                stackModels.forEach((m) => { _stackActive[m] = on; });
+                el.querySelectorAll(".wfm-lora-stack-model-row").forEach((row) => {
+                    const cb = row.querySelector(".wfm-lora-stack-active-cb");
+                    const inM = row.querySelector(".wfm-lora-stack-str-m");
+                    const inC = row.querySelector(".wfm-lora-stack-str-c");
+                    if (cb) cb.checked = on;
+                    if (inM) inM.disabled = !on;
+                    if (inC) inC.disabled = !on;
+                    row.classList.toggle("wfm-lora-stack-model-row--off", !on);
+                });
+                _refreshLoraPaneDynamic(stackModels);
+            });
+        }
+
+        // ── Global strength adjustment ─────────────────────
+        if (stackModels.length > 0) {
+            const adjApply = (key, sign) => {
+                const stepEl = document.getElementById(`wfm-stack-adj-step-${key}`);
+                const delta = sign * (parseFloat(stepEl?.value) || 0.05);
+                stackModels.forEach((m) => {
+                    const str = _stackStrengths[m] || { m: 1.0, c: 1.0 };
+                    str[key] = Math.max(0, Math.round((str[key] + delta) * 1000) / 1000);
+                    _stackStrengths[m] = str;
+                });
+                el.querySelectorAll(".wfm-lora-stack-model-row").forEach((row) => {
+                    const model = row.dataset.model;
+                    const str = _stackStrengths[model];
+                    if (!str) return;
+                    const inp = row.querySelector(`.wfm-lora-stack-str-${key}`);
+                    if (inp) inp.value = str[key];
+                });
+                _refreshLoraPaneDynamic(stackModels);
+            };
+            document.getElementById("wfm-stack-adj-m-inc")?.addEventListener("click", () => adjApply("m", 1));
+            document.getElementById("wfm-stack-adj-m-dec")?.addEventListener("click", () => adjApply("m", -1));
+            document.getElementById("wfm-stack-adj-c-inc")?.addEventListener("click", () => adjApply("c", 1));
+            document.getElementById("wfm-stack-adj-c-dec")?.addEventListener("click", () => adjApply("c", -1));
+        }
+
+        // ── Apply button (unified: stack or single fallback) ──
+        document.getElementById("wfm-lora-stack-apply")?.addEventListener("click", () => {
+            // Step 1: apply to node
+            const targetSelect = document.getElementById("wfm-lora-stack-target");
+            const nodeId = targetSelect?.value;
+            if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
+                const node = loraNodes.find((n) => String(n.id) === String(nodeId));
+                if (stackModels.length > 0) {
+                    if (node?.is_lora_manager) {
+                        // LoraManager: apply all stack models; respect active/inactive state
+                        const loraValue = stackModels.map((m) => {
+                            const stem = _loraBasename(m);
+                            const str = _stackStrengths[m] || { m: 1.0, c: 1.0 };
+                            const active = _stackActive[m] !== false;
+                            return { name: stem, strength: str.m, active, expanded: false, clipStrength: str.c, locked: false };
+                        });
+                        comfyUI.currentWorkflow[nodeId].inputs.loras = { __value__: loraValue };
+                        comfyUI.currentWorkflow[nodeId].inputs.text = _buildLoraManagerSyntax(stackModels);
+                    } else {
+                        // Standard LoraLoader: apply first model of stack
+                        const first = stackModels[0];
+                        if (first) {
+                            comfyUI.currentWorkflow[nodeId].inputs.lora_name = first;
+                            comfyUI.currentWorkflow[nodeId].inputs.strength_model = _stackStrengths[first]?.m ?? 1.0;
+                            comfyUI.currentWorkflow[nodeId].inputs.strength_clip = _stackStrengths[first]?.c ?? 1.0;
+                        }
+                    }
+                } else {
+                    // No stack — apply selected single LoRA
+                    const select = document.getElementById("wfm-lora-select");
+                    if (select?.value) {
+                        const strModel = parseFloat(document.getElementById("wfm-lora-str-model")?.value) || 1.0;
+                        const strClip = parseFloat(document.getElementById("wfm-lora-str-clip")?.value) || 1.0;
+                        _applyLoraToNode(nodeId, select.value, strModel, strClip, node?.is_lora_manager);
+                    }
+                }
+                _syncRawJson();
+            }
+
+            // Step 2: sync LoRA syntax + trigger words to Positive prompt
+            const posTextarea = document.getElementById("wfm-prompt-pos-text");
+            if (!posTextarea) return;
+
+            let effectiveModels, effectiveSyntax, effectiveTriggerWords, allTriggers;
+            if (stackModels.length > 0) {
+                effectiveModels = stackModels;
+                effectiveSyntax = _buildLoraSyntax(stackModels);
+                effectiveTriggerWords = activeTriggerWords;
+                allTriggers = [];
+                stackModels.forEach((m) => {
+                    const sha = (metadata[m] || {}).sha256;
+                    const civInfo = sha && civitaiCache[sha];
+                    if (civInfo?.trainedWords?.length) allTriggers.push(...civInfo.trainedWords);
+                });
+            } else {
+                const singleModel = document.getElementById("wfm-lora-select")?.value;
+                effectiveModels = singleModel ? [singleModel] : [];
+                if (singleModel) {
+                    const stem = _loraBasename(singleModel);
+                    const strM = parseFloat(document.getElementById("wfm-lora-str-model")?.value) || 1.0;
+                    const strC = parseFloat(document.getElementById("wfm-lora-str-clip")?.value) || 1.0;
+                    effectiveSyntax = `<lora:${stem}:${strM}:${strC}>`;
+                    const sha = (metadata[singleModel] || {}).sha256;
+                    const civInfo = sha && civitaiCache[sha];
+                    effectiveTriggerWords = civInfo?.trainedWords || [];
+                    allTriggers = effectiveTriggerWords;
+                } else {
+                    effectiveSyntax = "";
+                    effectiveTriggerWords = [];
+                    allTriggers = [];
+                }
+            }
+
+            let cleaned = posTextarea.value;
+            for (const m of effectiveModels) {
+                const stem = _loraBasename(m).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                cleaned = cleaned.replace(new RegExp(`,?\\s*<lora:${stem}:[^>]*>`, "gi"), "");
+            }
+            if (allTriggers.length > 0) {
+                const wordSet = new Set(allTriggers.map(w => w.trim().toLowerCase()));
+                cleaned = cleaned.split(",").map(p => p.trim()).filter(p => p && !wordSet.has(p.toLowerCase())).join(", ");
+            }
+            cleaned = cleaned.replace(/,\s*$/, "").trim();
+
+            if (effectiveSyntax) {
+                const append = effectiveTriggerWords.length > 0
+                    ? `${effectiveSyntax}, ${effectiveTriggerWords.join(", ")}`
+                    : effectiveSyntax;
+                posTextarea.value = cleaned ? `${cleaned}, ${append}` : append;
+            } else {
+                posTextarea.value = cleaned;
+            }
+
+            const posTarget = document.getElementById("wfm-prompt-pos-target");
+            const posNodeId = posTarget?.value;
+            if (posNodeId && comfyUI.currentWorkflow?.[posNodeId]) {
+                const promptNode = comfyUI.currentAnalysis?.prompt_nodes?.find(n => n.id === posNodeId);
+                const textKey = promptNode?.textKey || "text";
+                comfyUI.currentWorkflow[posNodeId].inputs[textKey] = posTextarea.value;
+                _syncRawJson();
+            }
+        });
+
+        // ── Auto-apply Stack to LoraManager on load ──────────
+        if (defaultStackTarget && stackModels.length > 0 && comfyUI.currentWorkflow?.[defaultStackTarget]) {
+            const targetNode = loraNodes.find((n) => String(n.id) === String(defaultStackTarget));
+            if (targetNode?.is_lora_manager) {
+                const loraValue = stackModels.map((m) => {
+                    const stem = _loraBasename(m);
+                    const str = _stackStrengths[m] || { m: 1.0, c: 1.0 };
+                    const active = _stackActive[m] !== false;
+                    return { name: stem, strength: str.m, active, expanded: false, clipStrength: str.c, locked: false };
+                });
+                comfyUI.currentWorkflow[defaultStackTarget].inputs.loras = { __value__: loraValue };
+                comfyUI.currentWorkflow[defaultStackTarget].inputs.text = _buildLoraManagerSyntax(stackModels);
+                _syncRawJson();
+            }
+        }
     },
 
     renderSettingsTab(analysis, containerId) {

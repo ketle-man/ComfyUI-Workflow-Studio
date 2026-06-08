@@ -591,6 +591,23 @@ export const comfyWorkflow = {
                 });
             }
 
+            // ImageMetadataPromptLoader — checkpoint + positive/negative prompts in one node
+            if (ct === "ImageMetadataPromptLoader") {
+                result.checkpoint_nodes.push({ id, type: ct, title, ckpt_name: inputs.ckpt_name });
+                if (typeof inputs.positive_text === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [positive]`, role: "positive",
+                        text: inputs.positive_text, textKey: "positive_text",
+                    });
+                }
+                if (typeof inputs.negative_text === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [negative]`, role: "negative",
+                        text: inputs.negative_text, textKey: "negative_text",
+                    });
+                }
+            }
+
             // --- Prompt nodes ---
 
             if (ct === "CLIPTextEncode") {
@@ -614,6 +631,17 @@ export const comfyWorkflow = {
                         id, type: ct, title, role: getRole(),
                         text: typeof textG === "string" ? textG : (typeof textL === "string" ? textL : ""),
                         textKey: typeof textG === "string" ? "text_g" : "text_l",
+                    });
+                }
+            }
+
+            // CLIPTextEncodeEditPlus — text_edit is the locally editable override; text1 is always a link
+            if (ct === "CLIPTextEncodeEditPlus") {
+                const textVal = inputs.text_edit;
+                if (typeof textVal === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title, role: getRole(),
+                        text: textVal, textKey: "text_edit",
                     });
                 }
             }
@@ -691,6 +719,26 @@ export const comfyWorkflow = {
                             lora_name: v,
                             strength_model: inputs[k.replace("lora_", "strength_")] ?? 1,
                             strength_clip: inputs[k.replace("lora_", "strength_clip_")] ?? 1,
+                        });
+                    }
+                }
+            }
+
+            // Lora Loader (LoraManager) — loras stored in inputs.loras.__value__
+            if (ct === "Lora Loader (LoraManager)") {
+                result.lora_nodes.push({ id, type: ct, title, is_lora_manager: true });
+            }
+
+            // ImageMetadataLoRALoader — up to 3 LoRA slots; skip "None" entries
+            if (ct === "ImageMetadataLoRALoader") {
+                for (let i = 1; i <= 3; i++) {
+                    const loraName = inputs[`lora_${i}`];
+                    if (typeof loraName === "string" && loraName !== "None") {
+                        result.lora_nodes.push({
+                            id, type: ct, title,
+                            lora_name: loraName,
+                            strength_model: inputs[`strength_model_${i}`] ?? 1.0,
+                            strength_clip: inputs[`strength_clip_${i}`] ?? 1.0,
                         });
                     }
                 }
@@ -781,6 +829,10 @@ function _getWidgetMapping(nodeType) {
         CheckpointLoaderSimple: ["ckpt_name"],
         KSampler: ["seed", "steps", "cfg", "sampler_name", "scheduler", "denoise"],
         CLIPTextEncode: ["text"],
+        CLIPTextEncodeEditPlus: ["text_edit", "mode"],
+        ImageMetadataCheckpointLoader: ["ckpt_name", "vae_name", "_metadata_json"],
+        ImageMetadataPromptLoader: ["ckpt_name", "vae_name", "positive_text", "negative_text", "_metadata_json"],
+        ImageMetadataLoRALoader: ["lora_1", "strength_model_1", "strength_clip_1", "lora_2", "strength_model_2", "strength_clip_2", "lora_3", "strength_model_3", "strength_clip_3"],
         EmptyLatentImage: ["width", "height", "batch_size"],
         LoraLoader: ["lora_name", "strength_model", "strength_clip"],
         VAELoader: ["vae_name"],

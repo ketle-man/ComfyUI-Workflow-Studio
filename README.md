@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.23-green)
+![Version](https://img.shields.io/badge/version-0.3.29-green)
 
 ## Screenshots
 
@@ -144,7 +144,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Thumbnail / Table views** — switch between view modes with pagination (24 items per page)
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
 - **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
-- **Side panel tabs** — Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
+- **Side panel tabs** — opens to CivitAI tab by default when a model is selected; Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
 - **CivitAI integration** — fetch model metadata by SHA256 hash; side panel shows **Type** (badge), **Base Model**, **Hash** (BLAKE3/SHA256, click to copy), trained words, tags, and model page link; model link opens in the site selected in Settings (civitai.com or civitai.red)
 - **CivitAI panel — Info / Sample sub-tabs** — Info tab shows model details (name, type, base model, hash, trigger words, tags, description); Sample tab shows all sample images (count shown in tab label); clicking any image opens the full-size version in a new tab
 - **CivitAI panel states** — three distinct states: not yet checked (fetch button), checked but not found on CivitAI (re-check button with notice), and found (full info display); clicking the CivitAI tab always refreshes to the latest state
@@ -188,9 +188,10 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **⚙ Theme settings** — customize panel background, sub-header background, text, border, and secondary text colors; saved to localStorage and applied on every open
 
 ### Help & Support Tab (v0.1.3)
+- **Sidebar navigation** — 2-column layout: left sidebar (14 topics) + right content pane; click any topic to switch the displayed content
+- **Support** — fixed at the bottom of the sidebar; shows GitHub and Ko-fi links in the right pane
 - **Feature list** — overview of all features organized by tab
-- **Tips** — quick tips for drag & drop import, favorites, and default workflow
-- **Support links** — GitHub repository and Ko-fi donation page
+- **Keyboard Shortcuts** and **Troubleshooting** sections included
 
 ---
 
@@ -278,6 +279,24 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.29
+- **LoRA section unified** — single LoRA and Stack sections merged into one pane; Apply button handles both cases (stack models present → apply all active + prompt sync; no stack → apply selected single LoRA + prompt sync); Ctrl+Apply removed, now plain Apply by default
+- **LoRA prompt sync** — Apply inserts `<lora:stem:M:C>` syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by diff (removes stale tokens, re-adds active ones); works for both single LoRA and Stack
+- **P button** — placed to the right of Apply; immediately writes the current Positive prompt textarea to the target workflow node without switching tabs
+- **LoRA UI layout fixes** — "Stack" label moved from ID row to Strength row left of the toggle-all checkbox; ID dropdown expanded to `flex:1` (no max-width cap); M/C input width 54 px → 60 px to prevent value truncation
+- **Models tab — CivitAI default** — side panel opens to the CivitAI tab by default when a model is selected
+- **Help tab — sidebar navigation** — redesigned as 2-column layout: left sidebar (14 topics + Support fixed at bottom) + right content pane; content switches on click
+- **Input tab — Prompt/Image tabs + taller textboxes** — Prompt and Image split into inner tabs; Positive prompt rows 4 → 8, Negative prompt rows 3 → 6
+- **Reset Workflow button** — added to the GenerateUI toolbar; re-reads the loaded workflow file from disk and reloads the editor
+- **LoRA Stack trigger words** — CivitAI trigger words for active stack models appended to Positive prompt on Apply; diff-updated on re-apply
+- **Feeder subtab UI** — (root) folder selected automatically on tab open; PREVIEW pane moved to the far right of the layout; preview auto-updates to the current processing image during a RUN
+- **Batch tab — Sampler / Scheduler** — left pane gains Sampler and Scheduler tabs (lists fetched from ComfyUI); Batch Queue gains two new columns; batch runs each value through KSampler sequentially
+- **Lora Loader (LoraManager) support** — workflow analysis, single Apply, Stack Apply, and Batch all write `inputs.loras.__value__` array + `inputs.text` syntax for LoraManager nodes
+- **Stack enable/disable** — per-model checkbox and Toggle All checkbox; disabled models excluded from syntax/prompt; LoraManager apply preserves them as `active: false`
+- **Global strength adjuster** — `[−][step][+]` controls for Model and CLIP strength applied to all stack models at once
+- **model-and-prompt-from-metadata node support** — `CLIPTextEncodeEditPlus`, `ImageMetadataCheckpointLoader`, `ImageMetadataPromptLoader`, `ImageMetadataLoRALoader` added to workflow analysis
+- **Models thumbnail bug fixes** — preview endpoint now sends `Cache-Control: no-cache`; files under 100 bytes skipped; `.disabled` model files included in preview change lookup
 
 ### v0.3.23
 - **Bug fix: workflow batch 404** — `_runBatchGenerate()` workflow case was fetching `/api/wfm/workflows/{filename}` (non-existent route); corrected to `/api/wfm/workflows/raw?filename={filename}`
@@ -584,6 +603,6 @@ MIT License
 
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) by comfyanonymous
 - [ComfyUI-Custom-Scripts](https://github.com/pythongosssss/ComfyUI-Custom-Scripts) by pythongosssss — Canvas snapshot and PNG workflow embedding implementation reference
-- [ComfyUI-Lora-Manager](https://github.com/willchil/ComfyUI-Lora-Manager) — Plugin architecture and UI pattern reference
+- [ComfyUI-Lora-Manager](https://github.com/willmiao/ComfyUI-Lora-Manager) — Plugin architecture and UI pattern reference
 - [Ollama](https://ollama.com/) for local LLM inference
 - [Eagle](https://eagle.cool/) for image management

@@ -1,5 +1,349 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-08: v0.3.29 — LoRAセクション統合・ヘルプタブサイドバー・UI細部改善
+
+### 変更内容
+
+#### LoRAセクション統合（`static/js/comfyui-editor.js`, `static/css/main.css`）
+- 単体LoRAセクションとStackセクションを1つの統合レイアウトに統合（重複を削除）
+  - 表示順: Filter → Model select → ID行（ID select / Apply / P） → Strength行（Stack label / ☑ / M / C / Str M adjuster / C adjuster） → Lora syntax → Trigger words → Stack model一覧
+- **Apply ボタン統合**: 単体・スタック共通の1ボタンに
+  - スタックモデルあり → 全アクティブモデルをノードに適用 + プロンプト同期
+  - スタックモデルなし → 選択中の単体LoRAをM/C強度でノードに適用 + プロンプト同期
+- **単体モードのプロンプト同期対応**: スタックなし時も `<lora:stem:M:C>` syntax とCivitAIトリガーワードをPositiveプロンプトへ追記・差分更新
+- **Ctrl+Apply → 通常Apply に変更**: 以前のCtrl限定操作を通常クリックに変更（デフォルト動作）
+- **P ボタン追加**: Apply右隣に配置。InputタブのPositiveプロンプト内容をワークフローへ即時反映（プロンプトタブに切り替える手間を省略）
+- **IDドロップダウン幅調整**: `flex:1` で利用可能な幅いっぱいに広げ、max-width制限を撤廃
+- **"Stack"ラベルの位置変更**: ID行から削除し、Strength行左端（チェックボックス横）に移動
+- **Stack toggle-all チェックボックスの移動**: ヘッダー行からStrength行左端に移動
+  - 個別モデル行のチェックボックス列と視覚的に揃い、全体ON/OFFの役割が明確に
+- **M/C入力幅修正**: 54px → 60px に拡大（スピナーボタン分の余裕を確保し数値が切れる問題を修正）
+- **Str M / C ラベルの位置変更**: 別ヘッダー行から All 調整行（Strength行）に統合
+- **All調整行をグリッドレイアウトに変更**: 個別モデル行と同じ `grid-template-columns` で右揃えに
+
+#### Modelsタブ — モデル選択時のデフォルトタブ変更（`static/js/models-tab.js`）
+- サイドパネルのデフォルト表示タブを「Info」から「CivitAI」に変更
+- モデル選択のたびにCivitAI情報が即座に表示される
+
+#### ヘルプタブ — 左サイドバー化（`templates/index.html`, `static/js/app.js`, `static/css/main.css`）
+- 1カラムスクロールから「左サイドバー（170px） + 右コンテンツペイン」の2カラムレイアウトに変更
+- サイドバーに14項目のナビゲーションボタンを配置、選択中項目をハイライト（左ボーダー + プライマリカラー）
+- Supportを最下部に固定表示（`border-top` セパレーター付き）
+- 各項目クリックで右ペインのコンテンツを切り替え（`.wfm-help-page.active` の付け替え）
+- `initHelpTab()` を `app.js` の `DOMContentLoaded` に追加
+
+#### ヘルプコンテンツ更新（`templates/index.html`）
+- **GenerateUI Tab (gen-2)**: Reset Workflowボタンの説明を追加
+- **GenerateUI Tab (gen-4)**: InputタブのPrompt/Imageタブ化・テキストボックス高さ2倍の説明に更新
+- **GenerateUI Tab (gen-5)**: LoRA Stack ApplyによるLoRA Syntax + Trigger Words同期の説明を追加
+- **Feeder subtab (feeder-4)**: (root)フォルダ自動選択の説明を追加
+- **Feeder subtab (feeder-6)**: PREVIEWペインが右端固定・RUN中に現在画像表示の説明に更新
+- **Models Tab (models-4)**: CivitAIタブがデフォルト表示になった旨を追記
+
+---
+
+## 2026-06-08: 生成UIタブ 複数改善 — LoRA Stackトリガーワード連携・Reset Workflowボタン・Inputタブタブ化
+
+### 変更内容
+
+#### LoRA Stack Ctrl+Apply — トリガーワード追加 + 再適用時の差分更新（`static/js/comfyui-editor.js`）
+- Ctrl+Apply 時に LORA SYNTAX に続いてアクティブモデルのトリガーワードをプロンプトへ追加
+  - 追加形式：`既存プロンプト, <lora:...>, triggerA, triggerB`
+- `activeTriggerWords`（アクティブのみ）と `allTriggerWords`（UI表示用・全モデル）を分離
+  - 非アクティブモデルの lora syntax は除外済みだったが、トリガーワードも同様に除外
+- 再 Ctrl+Apply 時はプロンプトを差分更新（全スタック分を除去 → アクティブ分を再追加）
+  - `<lora:stem:...>` トークンを stem 単位で正規表現除去
+  - 全スタックモデルのトリガーワードをカンマ分割で除去してから再追加
+
+#### Reset Workflow ボタン（`templates/index.html`, `static/js/generate-tab.js`）
+- 上部ツールバーの「Refresh Models」右隣に「Reset Workflow」ボタンを追加
+- 現在読み込まれているファイル（`.json`）を `/api/wfm/workflows/raw` から再取得して再ロード
+- `loadWorkflowIntoEditor` でファイル名を `data-filename` 属性に保存し Reset 時に参照
+- ファイルベースでない場合（Raw JSON貼り付け等）は警告トーストを表示
+
+#### Inputタブ — Prompt/Image タブ化 + テキストボックス高さ2倍
+**タブ化**（`templates/index.html`, `static/js/generate-tab.js`, `static/css/main.css`）
+- Prompt と Image を上下スタックから「Prompt | Image」の内部タブ構成に変更
+- `.wfm-input-inner-tabnav` / `.wfm-input-inner-tab` / `.wfm-input-inner-panel` を新規追加
+- アクティブタブにはアンダーライン強調スタイルを適用
+
+**テキストボックス高さ2倍**（`static/js/comfyui-editor.js`）
+- Positive Prompt: `rows="4"` → `rows="8"`
+- Negative Prompt: `rows="3"` → `rows="6"`
+
+---
+
+## 2026-06-08: Feederタブ UI改善 — (root)自動選択・PREVIEWペイン右移動・RUN中プレビュー反映
+
+### 変更内容
+
+#### (root)フォルダの自動選択（`static/js/feeder-tab.js`）
+- `initFeederTab()` 末尾に `_selectDir("")` を追加
+- タブを開いた初期状態で (root) がハイライトされ、画像一覧が即座に表示される
+
+#### PREVIEWペインをレイアウト最右に移動（`templates/index.html`）
+- `wfm-feeder-preview-pane` を `wfm-feeder-library-body`（内側 flex row）から
+  `wfm-feeder-layout`（外側 flex row）の直接子に移動
+- IMAGES グリッドが横幅を最大限確保できるようになった
+- レイアウト構造：`Settings (220px) | Library (flex:1) | Preview (160px)`
+
+#### RUN中のプレビュー自動更新（`static/js/feeder-tab.js`）
+- `_startRun()` 内の `_syncHandler` で `thumbnail_path` 受信時に `_showPreview()` を呼び出し
+- ノード実行完了のたびに処理中の画像サムネイル・ファイル名・解像度がPREVIEWペインに反映される
+
+---
+
+## 2026-06-07: v0.3.28 — Batchタブ Sampler/Scheduler対応 + Modelsサムネイルバグ修正
+
+### 概要
+
+GenerateUI の Batch タブにサンプラー・スケジューラーのバッチ処理を追加。
+また Models タブでサムネイル変更後に画像が更新されなかった問題を修正した。
+
+### 変更内容
+
+#### Modelsタブ サムネイル変更バグ修正
+
+**原因1: ブラウザキャッシュ**（`py/routes/models_routes.py`）
+- `handle_get_preview` の `Cache-Control` を `public, max-age=3600` → `no-cache` に変更
+- モーダルを閉じて再度開いた際、ブラウザが1時間キャッシュした古い画像を返し続けていた
+
+**原因2: 破損ファイルの検出なし**（`py/services/models_service.py`）
+- `find_preview_image` でファイルサイズが 100バイト未満のファイルをスキップするよう変更
+- 0バイトや極小の破損プレビューファイルが返されてカードが黒く表示される問題を解消
+
+**原因3: disabledモデルの非対応**（`py/routes/models_routes.py`）
+- `handle_change_preview` でモデルファイルを検索する際、`.disabled` 拡張子付きファイルも候補に追加
+- 無効化済みモデルのサムネイル変更が「Model file not found」エラーになっていた
+
+#### GenerateUI Batchタブ Sampler/Scheduler対応
+
+**左ペインのタブ化**（`templates/index.html`, `static/js/generate-tab.js`, `static/css/main.css`）
+- 左ペインを Checkpoints / Sampler / Scheduler の3タブ構成に変更
+- Sampler・Scheduler タブには KSampler ノードから取得したリストをチェックボックスで表示
+- 各リストは Checkpoint と同様の `(root)` グループ行（全選択チェックボックス + 折りたたみ）で構成
+- All/None ツールバーボタンも各タブに配置
+
+**BATCH QUEUE 拡張**（`templates/index.html`）
+- Sampler 列・Scheduler 列を追加し合計6列（Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler）
+- `.wfm-batch-right` の最小幅を 320px → 380px に拡張
+
+**バッチ処理ロジック追加**（`static/js/generate-tab.js`）
+- `_batchGroupState` に `_samplerSelected`・`_schedulerSelected`（Set）を追加
+- `_buildSimpleGroupList()` 共通関数を新規追加（Sampler・Scheduler リストの (root) グループ描画）
+- `_renderBatchPreview()` に Sampler・Scheduler 列を追加
+- `_runBatchGenerate()` に `case "sampler"` / `case "scheduler"` を追加
+  - ワークフロー内の全 `sampler_nodes` の `sampler_name` / `scheduler` を差し替えて順次生成
+- モデルリフレッシュ時に Sampler・Scheduler リストも再描画
+
+#### ヘルプ更新（3言語）
+
+- `helpGen11`〜`helpGen14` を Sampler/Scheduler 対応後の内容に更新（英/日/中）
+- `helpGen15` を新規追加（Sampler/Scheduler バッチの操作説明）
+- `helpModels6` を更新（サムネイル変更の詳細：即時反映・破損ファイル自動スキップ）
+- `app.js` に `wfm-help-gen-15` のマッピングを追加
+
+---
+
+## 2026-06-07: v0.3.27 — model-and-prompt-from-metadata カスタムノード対応 + README修正
+
+### 概要
+
+`model-and-prompt-from-metadata` カスタムノードパックの全ノードをワークフロー解析に対応。
+また README の LoraManager リポジトリリンクの誤記を修正した。
+
+### 変更内容
+
+#### ワークフロー解析対応（`comfyui-workflow.js`）
+
+| ノード表示名 | クラス名 | 検出区分 |
+|---|---|---|
+| CLIP Text Encode edit+ | `CLIPTextEncodeEditPlus` | prompt_nodes |
+| Model from Metadata | `ImageMetadataCheckpointLoader` | 既存 `CheckpointLoader` 判定で検出済み |
+| Model-Prompt from Metadata | `ImageMetadataPromptLoader` | checkpoint_nodes + prompt_nodes（両方） |
+| LoRA from Metadata | `ImageMetadataLoRALoader` | lora_nodes（3スロット） |
+
+**`CLIPTextEncodeEditPlus`**
+- `text1` は `forceInput`（常にリンク接続）のため直接読み取り不可
+- ローカル上書きテキスト `text_edit` を編集ターゲット（`textKey: "text_edit"`）として prompt_nodes に登録
+
+**`ImageMetadataPromptLoader`**
+- 単一ノードが checkpoint + positive/negative プロンプトを兼ねる構造
+- `checkpoint_nodes` に `ckpt_name` で登録
+- `positive_text` を role `"positive"`、`negative_text` を role `"negative"` として prompt_nodes に登録
+- ロールはハードコード（sampler → CONDITIONING のスロット番号で両方参照される可能性があるため `getRole()` に依存しない）
+
+**`ImageMetadataLoRALoader`**
+- `lora_1`〜`lora_3` を順にチェックし、`"None"` 以外のスロットを lora_nodes に登録
+- 各スロットの `strength_model_N` / `strength_clip_N` も合わせて取得
+
+**`_getWidgetMapping` 静的フォールバック追加**
+- `object_info` 取得失敗時の UI→API 変換用マッピングに上記4ノードを追加
+
+#### README 修正（`README.md`）
+
+- LoraManager リポジトリ URL の誤記を修正
+  - 誤: `https://github.com/willchil/ComfyUI-Lora-Manager`
+  - 正: `https://github.com/willmiao/ComfyUI-Lora-Manager`
+
+---
+
+## 2026-06-07: v0.3.26 — Stack LORA SYNTAX 表示修正 + 全体強度調整 UI
+
+### 概要
+
+Stack ペインの LORA SYNTAX が空表示になるバグを修正し、全モデルの強度を一括増減できる調整ボックスを追加した。
+
+### 変更内容
+
+#### LORA SYNTAX 空表示バグ修正（`comfyui-editor.js`）
+
+- **原因**: `<lora:name:str>` 構文を `el.innerHTML` テンプレートリテラルに埋め込んでいたため、
+  ブラウザが `<lora:...>` を未知の HTML タグとして解析し、本文が消えていた。
+  `, ` 区切り文字のみが残って表示される症状だった。
+- **修正**: `el.innerHTML` 代入直後に `getElementById("wfm-lora-stack-syntax").textContent` で
+  テキストとして上書きするよう変更。`_refreshLoraPaneDynamic` は既に `textContent` を使用しており問題なし。
+
+#### 全体強度調整ボックス追加（`comfyui-editor.js`, `main.css`）
+
+- Stack モデル一覧ヘッダーの直下に `All` 調整行を追加
+- `M`・`C` それぞれに `[−][step][+]` コントロールを配置
+  - `+` / `−` ボタン: step 入力欄の値（デフォルト 0.05）を全モデルの強度に加減算
+  - step 入力欄は直接編集可能（min: 0.01、max: 2.0）
+  - 有効・無効状態に関わらず全モデルの強度値を更新（無効モデルの保持値も変更）
+- 調整後は各行の入力欄と LORA SYNTAX 表示を自動更新
+- `.wfm-lora-stack-global-adj` / `.wfm-lora-stack-global-adj-group` / `.wfm-lora-stack-adj-step` / `.wfm-btn-xs` CSS を追加
+
+#### 強度入力欄の表示切れ修正（`main.css`, `comfyui-editor.js`）
+
+- **原因**: `.wfm-input` の `padding: 8px 12px` が大きすぎ、56px 幅にスピナーと合わせて
+  数値が収まらず右端が切れていた。
+- CSS グリッド列幅を `56px → 64px` に拡大（ヘッダー・入力欄とも）
+- `.wfm-lora-stack-strengths input[type="number"]` に `padding: 4px 4px; text-align: center` を適用
+- WebKit / Firefox スピナーボタンを非表示化
+  （グローバル調整の `+/−` ボタンで代替できるため、個別スピナーは不要と判断）
+
+---
+
+## 2026-06-07: v0.3.25 — Lora Loader (LoraManager) 対応 + Stack 有効無効切り替え
+
+### 概要
+
+生成UI の Lora ペインを `Lora Loader (LoraManager)` ノードに対応。
+ワークフロー解析・単体適用・Stack 適用・バッチ生成の全経路で LoraManager 専用フォーマット
+（`inputs.loras.__value__` 配列 + `inputs.text` 構文）への書き込みに対応した。
+また Stack の各モデルと Stack 全体の有効 / 無効を切り替えるチェックボックス UI を追加。
+Model サブタブを開くたびに LoRA ペインを再描画することで、
+Models タブでの Stack グループ更新が即座に反映されるようにした。
+
+### 変更内容
+
+#### 生成UI Model タブ — 左右ペイン等幅化（`main.css`）
+
+- `wfm-gen-params-col--narrow` を `flex: none; width: 220px;` から `flex: 1;` に変更
+- 左ペイン（Checkpoint / VAE 等）と中央ペイン（LoRA）が均等幅になった
+
+#### `Lora Loader (LoraManager)` ノード対応
+
+**ワークフロー解析 (`comfyui-workflow.js`)**
+- `analyzeWorkflow()` に `Lora Loader (LoraManager)` 検出ブロックを追加
+- `lora_nodes` に `{ id, type, title, is_lora_manager: true }` として登録
+
+**ヘルパー関数追加 (`comfyui-editor.js`)**
+- `_buildLoraManagerSyntax(stackModels)` — `<lora:name:strM:strC>` 形式（スペース区切り）
+- `_applyLoraToNode(nodeId, loraPath, strModel, strClip, isLoraManager)` — ノード種別に応じた書き込み
+  - LoraManager: `inputs.loras.__value__` + `inputs.text` を更新
+  - 標準 LoraLoader: `inputs.lora_name` / `strength_model` / `strength_clip` を更新
+
+**単体 Apply (`comfyui-editor.js`)**
+- Apply ボタンが `is_lora_manager` フラグを確認し、LoraManager 形式で書き込み
+
+**Stack Apply (`comfyui-editor.js`)**
+- LoraManager ターゲット: Stack の全モデルを `__value__` 配列に一括適用
+  - 無効モデルは `active: false` で配列に保持（データを削除しない）
+- 標準 LoraLoader ターゲット: 従来通り先頭モデルのみ適用
+
+**バッチ生成 (`generate-tab.js`)**
+- "lora" バッチケースで `is_lora_manager` を確認
+- LoraManager ノードには `inputs.loras.__value__` + `inputs.text` を書き込み
+- 標準 LoraLoader ノードは従来通り `inputs.lora_name` を書き込み
+
+#### Stack 有効 / 無効切り替え UI (`comfyui-editor.js`, `main.css`)
+
+- モジュールレベルに `_stackActive` 状態（`{ modelPath: boolean }`）を追加
+- `_syncStackToggleAll(stackModels)` — Toggle All チェックボックスの checked / indeterminate 状態を同期
+- `_buildLoraSyntax` / `_buildLoraManagerSyntax` — 無効モデルをフィルタリングして構文を生成
+- **Toggle All チェックボックス** — Stack ヘッダー左端に追加（全ON / 全OFF / 中間状態に対応）
+- **モデルごとのチェックボックス** — 各 Stack モデル行の左端に追加
+  - 無効時: モデル名に取り消し線 + 透過（opacity 0.4）、入力欄も透過 + `disabled`
+  - Stack Apply 時: 無効モデルを `active: false` で `__value__` に保持（LoraManager がスキップ）
+- CSS グリッド更新:
+  - `.wfm-lora-stack-models-header`: `1fr 56px 56px` → `16px 1fr 56px 56px`
+  - `.wfm-lora-stack-model-row`: `1fr auto` → `16px 1fr auto`
+  - `.wfm-lora-stack-model-row--off` スタイルを追加
+
+#### Stack の自動適用 (`comfyui-editor.js`, `generate-tab.js`)
+
+- `stackTargetOpts` を新設: Stack ターゲットのドロップダウンが LoraManager ノードを優先的に selected
+- `renderLoraPane` 末尾で自動適用: LoraManager がターゲットかつ Stack にモデルがある場合、
+  ワークフロー読み込み時に自動で `inputs.loras` / `inputs.text` を更新
+- Model サブタブをクリックするたびに `renderLoraPane` を再実行
+  → Models タブで Stack グループを更新した後、すぐに GenerateUI に反映
+
+---
+
+## 2026-06-06: v0.3.24 — Lora Stack 登録機能 + 生成UI Model タブ 3ペイン化
+
+### 概要
+
+Models タブに Lora 専用の Stack グループ登録機能を追加。
+生成UI の Model タブを 3ペイン（モデル選択 / Lora 専用 / RAW JSON）に分割し、
+Lora ペインに単体適用セクションと Stack セクション（構文自動生成・トリガーワード表示・強度設定）を実装。
+
+### 変更内容
+
+#### Models タブ — Batch B ボタンの Lora/Checkpoint 限定表示（`models-tab.js`）
+
+- サムネイルビュー・テーブルビューともに、`showBatchBtn` フラグを導入し
+  Checkpoint・Lora 以外のモデルタイプでは B ボタン／B 列を非表示に変更
+- イベントリスナーを `?.addEventListener` でヌルセーフ化
+
+#### Models タブ — Stack グループ登録機能（`models-tab.js`, `index.html`, `main.css`）
+
+- `RESERVED_GROUPS` に `"Stack"` を追加（削除不可）
+- `STACK_MODEL_TYPES = ["lora"]` 定数を追加
+- Lora タイプ読み込み時に `Stack` グループを自動初期化（2箇所）
+- `isInStack` / `toggleStack` / `clearStackGroup` 関数を追加
+- **サムネイルビュー**: Lora のみ左下に `S` オーバーレイボタン追加（active 時は緑色 `#60d0a0`）
+- **テーブルビュー**: B 列の右に S 列を追加（ヘッダー含む）
+- **SC ボタン**: ツールバーの BC ボタン右隣に Stack Clear ボタンを追加
+- セレクトモード時の click 除外対象に `.wfm-stack-btn` を追加
+
+#### 生成UI Model タブ — 3ペイン化（`index.html`, `main.css`, `comfyui-editor.js`）
+
+- Model タブの `wfm-gen-tab-cols` を 3列構成に変更
+  - 左ペイン: `wfm-gen-params-col--narrow`（`width: 220px` 固定）— Checkpoint / VAE 等
+  - 中央ペイン: `wfm-gen-lora-col`（`flex: 1`）— Lora 専用
+  - 右ペイン: RAW JSON（変更なし）
+- `renderModelTab` から LoRA セクションを削除
+- `renderAll` に `renderLoraPane` 呼び出しを追加
+
+#### 生成UI Lora ペイン（`comfyui-editor.js`, `main.css`）
+
+**単体セクション（上部）**
+- フィルター入力 / モデルセレクト / ノード ID + Apply ボタン / Strength M・C
+
+**Stack セクション（下部）**
+- Stack ラベル + ノード ID セレクト + Apply ボタン
+  - 通常クリック: 選択ノードに Stack 先頭 Lora を適用
+  - **Ctrl+クリック**: Input タブ Positive プロンプト末尾に Lora 構文をカンマ区切りで追加し、ワークフローにも反映
+- **Lora 構文表示**: `<lora:stem:strength>` 形式を自動生成（Strength 変更でリアルタイム更新）
+- **トリガーワード表示**: Stack 登録モデルの CivitAI `trainedWords` を一括表示
+- **モデルリスト**: Stack 登録 Lora を行単位で表示、各行に Strength M / C 入力
+- モジュールレベルの `_stackStrengths`（強度状態）、`_loraBasename`、`_buildLoraSyntax`、`_refreshLoraPaneDynamic` を追加
+
+---
+
 ## 2026-06-05: v0.3.23 — バグ修正2件
 
 ### バグ修正

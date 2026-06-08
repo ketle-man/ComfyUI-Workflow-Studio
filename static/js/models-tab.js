@@ -9,8 +9,9 @@ import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 
 // ── Constants ─────────────────────────────────────────────
-const RESERVED_GROUPS = ["Batch"];
+const RESERVED_GROUPS = ["Batch", "Stack"];
 const BATCH_MODEL_TYPES = ["checkpoint", "lora"];
+const STACK_MODEL_TYPES = ["lora"];
 
 // ── State ─────────────────────────────────────────────────
 
@@ -846,8 +847,12 @@ function renderThumbView(grid, models) {
         const tagsHtml = (meta.tags || []).map((tag) => `<span class="wfm-badge wfm-badge-sm">${escapeHtml(tag)}</span>`).join("");
         const favStar = meta.favorite ? "\u2605" : "\u2606";
         const favClass = meta.favorite ? "wfm-fav-btn active" : "wfm-fav-btn";
-        const inBatch = isInBatch(modelName);
+        const showBatchBtn = ["checkpoint", "lora"].includes(state.activeModelType);
+        const showStackBtn = state.activeModelType === "lora";
+        const inBatch = showBatchBtn && isInBatch(modelName);
+        const inStack = showStackBtn && isInStack(modelName);
         const batchClass = inBatch ? "wfm-batch-btn active" : "wfm-batch-btn";
+        const stackClass = inStack ? "wfm-stack-btn active" : "wfm-stack-btn";
 
         const card = document.createElement("div");
         card.className = "wfm-card";
@@ -865,7 +870,8 @@ function renderThumbView(grid, models) {
                 <div class="wfm-card-title" title="${escapeHtml(modelName)}">${escapeHtml(getStem(name))}</div>
                 <div class="wfm-card-meta">${userBadges} ${tagsHtml}</div>
             </div>
-            <button class="${batchClass}" title="${t("modelsBatch")}">B</button>
+            ${showBatchBtn ? `<button class="${batchClass}" title="${t("modelsBatch")}">B</button>` : ""}
+            ${showStackBtn ? `<button class="${stackClass}" title="Stack (Lora multi-apply)">S</button>` : ""}
             <button class="${favClass}" title="${t("modelsFavorite")}">${favStar}</button>
             <button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${disabled ? t("modelEnable") : t("modelDisable")}">${disabled ? "▶" : "⏸"}</button>`;
 
@@ -874,9 +880,13 @@ function renderThumbView(grid, models) {
         const placeholder = card.querySelector(".wfm-card-thumb-placeholder");
         loadPreviewImage(img, placeholder, modelName);
 
-        card.querySelector(".wfm-batch-btn").addEventListener("click", (e) => {
+        card.querySelector(".wfm-batch-btn")?.addEventListener("click", (e) => {
             e.stopPropagation();
             toggleBatch(modelName);
+        });
+        card.querySelector(".wfm-stack-btn")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleStack(modelName);
         });
         card.querySelector(".wfm-fav-btn").addEventListener("click", (e) => {
             e.stopPropagation();
@@ -893,7 +903,7 @@ function renderThumbView(grid, models) {
             checkEl.className = "wfm-select-check" + (isChecked ? " checked" : "");
             card.appendChild(checkEl);
             card.addEventListener("click", (e) => {
-                if (e.target.closest(".wfm-batch-btn, .wfm-fav-btn, .wfm-toggle-btn")) return;
+                if (e.target.closest(".wfm-batch-btn, .wfm-stack-btn, .wfm-fav-btn, .wfm-toggle-btn")) return;
                 toggleModelSelection(modelName);
             });
         } else {
@@ -908,6 +918,8 @@ function renderThumbView(grid, models) {
 // ── Table View ────────────────────────────────────────────
 
 function renderTableView(grid, models) {
+    const showBatchBtn = ["checkpoint", "lora"].includes(state.activeModelType);
+    const showStackBtn = state.activeModelType === "lora";
     const rows = models
         .map((modelName) => {
             const meta = state.modelMetadata[modelName] || {};
@@ -916,7 +928,8 @@ function renderTableView(grid, models) {
             const disabled = isModelDisabled(modelName);
             const isChecked = state.selectMode && state.selectedModels.has(modelName);
             const favIcon = meta.favorite ? "&#9733;" : "&#9734;";
-            const batchIcon = isInBatch(modelName) ? `<button class="wfm-batch-btn active" title="${t("modelsBatch")}">B</button>` : `<button class="wfm-batch-btn" title="${t("modelsBatch")}">B</button>`;
+            const batchIcon = !showBatchBtn ? "" : isInBatch(modelName) ? `<button class="wfm-batch-btn active" title="${t("modelsBatch")}">B</button>` : `<button class="wfm-batch-btn" title="${t("modelsBatch")}">B</button>`;
+            const stackIcon = isInStack(modelName) ? `<button class="wfm-stack-btn active" title="Stack (Lora multi-apply)">S</button>` : `<button class="wfm-stack-btn" title="Stack (Lora multi-apply)">S</button>`;
             const tagsStr = (meta.tags || []).join(", ");
             const memo = meta.memo || "";
             const toggleLabel = disabled ? t("modelEnable") : t("modelDisable");
@@ -934,7 +947,8 @@ function renderTableView(grid, models) {
                 <td>${escapeHtml(tagsStr)}</td>
                 <td class="wfm-table-td-memo" title="${escapeHtml(memo)}">${escapeHtml(memo)}</td>
                 <td class="wfm-table-td-toggle"><button class="wfm-toggle-btn${disabled ? " wfm-toggle-disabled" : ""}" title="${toggleLabel}">${toggleIcon}</button></td>
-                <td class="wfm-table-td-batch">${batchIcon}</td>
+                ${showBatchBtn ? `<td class="wfm-table-td-batch">${batchIcon}</td>` : ""}
+                ${showStackBtn ? `<td class="wfm-table-td-stack">${stackIcon}</td>` : ""}
             </tr>`;
         })
         .join("");
@@ -950,7 +964,8 @@ function renderTableView(grid, models) {
         <th>${t("modelsTags")}</th>
         <th>${t("modelsMemo")}</th>
         <th style="width:50px;"></th>
-        <th style="width:30px;">B</th>
+        ${showBatchBtn ? `<th style="width:30px;">B</th>` : ""}
+        ${showStackBtn ? `<th style="width:30px;">S</th>` : ""}
     </tr></thead><tbody>${rows}</tbody></table>`;
 
     grid.querySelectorAll(".wfm-models-table-row").forEach((row) => {
@@ -960,7 +975,7 @@ function renderTableView(grid, models) {
 
         if (state.selectMode) {
             row.addEventListener("click", (e) => {
-                if (e.target.closest(".wfm-models-table-fav, .wfm-toggle-btn, .wfm-batch-btn")) return;
+                if (e.target.closest(".wfm-models-table-fav, .wfm-toggle-btn, .wfm-batch-btn, .wfm-stack-btn")) return;
                 toggleModelSelection(mn);
             });
         } else {
@@ -975,9 +990,13 @@ function renderTableView(grid, models) {
             e.stopPropagation();
             toggleModelEnable(mn);
         });
-        row.querySelector(".wfm-batch-btn").addEventListener("click", (e) => {
+        row.querySelector(".wfm-batch-btn")?.addEventListener("click", (e) => {
             e.stopPropagation();
             toggleBatch(mn);
+        });
+        row.querySelector(".wfm-stack-btn")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleStack(mn);
         });
     });
 }
@@ -1012,6 +1031,32 @@ async function clearBatchGroup() {
     }
     renderModelGrid();
     showToast(t("modelsBatchClear"), "success");
+}
+
+function isInStack(modelName) {
+    return (state.modelGroups["Stack"] || []).includes(modelName);
+}
+
+async function toggleStack(modelName) {
+    const stack = state.modelGroups["Stack"] || [];
+    const idx = stack.indexOf(modelName);
+    if (idx >= 0) {
+        stack.splice(idx, 1);
+    } else {
+        stack.push(modelName);
+    }
+    state.modelGroups["Stack"] = stack;
+    state.allModelGroups[state.activeModelType] = state.modelGroups;
+    await saveModelGroups(state.modelGroups);
+    renderModelGrid();
+}
+
+async function clearStackGroup() {
+    state.modelGroups["Stack"] = [];
+    state.allModelGroups[state.activeModelType] = state.modelGroups;
+    await saveModelGroups(state.modelGroups);
+    renderModelGrid();
+    showToast("Stack cleared", "success");
 }
 
 // ── Favorite toggle ───────────────────────────────────────
@@ -1187,12 +1232,12 @@ function showSidePanel(modelName) {
     const { name } = parseModelPath(modelName);
     document.getElementById("wfm-models-panel-title").textContent = name;
 
-    // Reset to Info tab
+    // Reset to CivitAI tab
     document.querySelectorAll(".wfm-models-side-tab-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelector('.wfm-models-side-tab-btn[data-side-tab="info"]')?.classList.add("active");
+    document.querySelector('.wfm-models-side-tab-btn[data-side-tab="civitai"]')?.classList.add("active");
     document.querySelectorAll(".wfm-models-side-content").forEach((c) => (c.style.display = "none"));
-    const infoEl = document.getElementById("wfm-models-side-info");
-    if (infoEl) infoEl.style.display = "block";
+    const civitaiEl = document.getElementById("wfm-models-side-civitai");
+    if (civitaiEl) civitaiEl.style.display = "block";
 
     renderSideInfo(modelName);
     renderSideGroup(modelName);
@@ -1729,6 +1774,10 @@ async function loadModelsForCurrentType() {
             state.modelGroups["Batch"] = [];
             await saveModelGroups(state.modelGroups);
         }
+        if (STACK_MODEL_TYPES.includes(type) && !state.modelGroups["Stack"]) {
+            state.modelGroups["Stack"] = [];
+            await saveModelGroups(state.modelGroups);
+        }
         state.allModelGroups[type] = state.modelGroups;
         renderTagFilter();
         renderDirFilter();
@@ -1750,6 +1799,10 @@ async function loadModelsForCurrentType() {
         state.disabledModels[type] = disabledSet;
         if (BATCH_MODEL_TYPES.includes(type) && !groups["Batch"]) {
             groups["Batch"] = [];
+            await saveModelGroups(groups);
+        }
+        if (STACK_MODEL_TYPES.includes(type) && !groups["Stack"]) {
+            groups["Stack"] = [];
             await saveModelGroups(groups);
         }
         state.modelGroups = groups;
@@ -2004,6 +2057,11 @@ export function initModelsTab() {
     // Batch clear
     document.getElementById("wfm-models-batch-clear-btn")?.addEventListener("click", () => {
         clearBatchGroup();
+    });
+
+    // Stack clear
+    document.getElementById("wfm-models-stack-clear-btn")?.addEventListener("click", () => {
+        clearStackGroup();
     });
 
     // View mode (thumb / card / table)
