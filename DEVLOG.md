@@ -1,5 +1,35 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-09: v0.3.33 — LoRAペイン・ワークフロー解析バグ修正
+
+### 変更内容
+
+#### LoRAペイン：ワークフロー読み込み時のLoraManager上書き防止（`static/js/comfyui-editor.js`）
+- `renderLoraPane` 末尾にあった「Auto-apply Stack to LoraManager on load」ブロックを削除
+- ワークフロー読み込み時にModelタブのStackグループ内容が `inputs.loras` / `inputs.text` を上書きし、RAW JSONが変わるバグを修正
+- Apply ボタン押下時のみStackがLoraManagerに書き込まれる正しい動作に
+
+#### LoRAペイン：🔄ボタン押下でSingleタブに戻るバグ修正（`static/js/comfyui-editor.js`）
+- `renderLoraPane` 呼び出し前に現在のアクティブタブを `_prevActiveTab` に保存
+- `el.innerHTML` 再構築後にタブ状態（activeクラス・display）を復元する処理を追加
+- 🔄ボタン・モデルタブ切り替えによる再レンダリング後もStackタブに留まるよう修正
+
+#### ModelsタブCheckpointへのStackグループ非表示（`static/js/models-tab.js`）
+- `loadModelsForCurrentType` のグループロード後、`STACK_MODEL_TYPES`（lora のみ）に含まれないタイプでは `state.modelGroups["Stack"]` をメモリ上から削除
+- Checkpointなどのタイプでグループフィルターおよびサイドパネルのグループ管理にStackが表示されなくなった
+
+#### CLIPTextEncodeEditPlus ウィジェット値マッピング修正（`static/js/comfyui-workflow.js`）
+- `convertUiToApi` でUIスロット入力にリンクが接続されている場合（`linkedSlotNames`）、`widgets_values` のインデックスを進めないよう変更
+- 従来は `object_info` の STRING 型オプション入力（`text1` 等）がウィジェット名リストに含まれ、リンクあり判定でインデックスがズレていた
+- `widgets_values: ["girl", "+af", ""]` で `text_edit="girl"` / `mode="+af"` が正しくマッピングされるよう修正
+
+#### Stack Apply時のTrigger Words処理修正（`static/js/comfyui-editor.js`）
+- Applyクリックハンドラー内でトリガーワードをレンダリング時のスナップショット変数から取得していたため、チェックボックス変更が反映されないバグを修正
+- `currentAllTriggers` / `currentActiveTriggers` を Apply 時点で `_stackActive` + `metadata` + `civitaiCache` から動的に再計算するよう変更
+- 修正前の不具合：1回目ApplyはLORA SYNTAXのみ（TRIGGER WORDSなし）、2回目で追加される / モデル無効でApply後もTRIGGER WORDSが残る
+
+---
+
 ## 2026-06-08: v0.3.32 — Lora Loader (LoraManager) LoRA検出対応・ライブラリ機能拡張
 
 ### 変更内容

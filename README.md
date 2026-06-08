@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.32-green)
+![Version](https://img.shields.io/badge/version-0.3.33-green)
 
 ## Screenshots
 
@@ -279,6 +279,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.33
+- **LoRA pane — workflow load no longer overwrites LoraManager** — removed the auto-apply block that replaced `inputs.loras` / `inputs.text` with Stack group contents on every workflow load; Stack is now applied only when the Apply button is pressed
+- **LoRA pane — 🔄 button no longer resets to Single tab** — active tab state is saved before `innerHTML` rebuild and restored afterwards; staying on Stack tab after refresh
+- **Models tab — Stack group hidden for non-LoRA types** — when switching to Checkpoint or other non-LoRA types, the Stack group is now excluded from the group filter dropdown and side-panel group management (LoRA-only concept)
+- **CLIPTextEncodeEditPlus widget mapping fix** — `convertUiToApi` no longer advances `wIdx` for UI slot inputs that have an actual link, preventing index misalignment when `object_info` lists optional STRING inputs (e.g. `text1`) before widget inputs (e.g. `text_edit`); fixes `+af` appearing as the positive prompt instead of the edit text
+- **Stack Apply — trigger words now applied correctly on first press** — trigger words (`currentAllTriggers` / `currentActiveTriggers`) are now recomputed at click time from the latest `_stackActive` + `metadata` + `civitaiCache`; previously used a stale snapshot captured at render time, causing trigger words to be missing on the first Apply and to linger after disabling a model
 
 ### v0.3.32
 - **Lora Loader (LoraManager) LoRA detection** — I tab and Metadata tab now correctly detect LoRAs from `Lora Loader (LoraManager)` nodes in API format (`inputs.loras.__value__`); `strength`/`clipStrength` stored as strings (e.g. `"0.20"`) are now parsed correctly

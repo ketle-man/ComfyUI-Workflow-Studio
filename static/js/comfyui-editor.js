@@ -359,6 +359,8 @@ export const comfyEditor = {
             </div>`;
         }).join("");
 
+        const _prevActiveTab = el.querySelector(".wfm-lora-tab-btn.active")?.dataset?.tab || "single";
+
         el.innerHTML = `
             <div class="wfm-lora-tab-header">
                 <button class="wfm-lora-tab-btn active" data-tab="single">Single</button>
@@ -447,6 +449,14 @@ export const comfyEditor = {
                 document.getElementById("wfm-lora-panel-stack").style.display = tab === "stack" ? "" : "none";
             });
         });
+
+        // Restore previously active tab after re-render
+        if (_prevActiveTab === "stack") {
+            el.querySelector('[data-tab="single"]')?.classList.remove("active");
+            el.querySelector('[data-tab="stack"]')?.classList.add("active");
+            document.getElementById("wfm-lora-panel-single").style.display = "none";
+            document.getElementById("wfm-lora-panel-stack").style.display = "";
+        }
 
         // ── Single: filter ───────────────────────────────────
         document.getElementById("wfm-lora-filter")?.addEventListener("input", (e) => {
@@ -614,19 +624,31 @@ export const comfyEditor = {
             if (!posTextarea) return;
             const effectiveSyntax = _buildLoraSyntax(stackModels);
 
+            // Recompute trigger words at apply-time using the current _stackActive state
+            const currentAllTriggers = [];
+            const currentActiveTriggers = [];
+            stackModels.forEach((m) => {
+                const sha = (metadata[m] || {}).sha256;
+                const civInfo = sha && civitaiCache[sha];
+                if (civInfo?.trainedWords?.length) {
+                    currentAllTriggers.push(...civInfo.trainedWords);
+                    if (_stackActive[m] !== false) currentActiveTriggers.push(...civInfo.trainedWords);
+                }
+            });
+
             let cleaned = posTextarea.value;
             for (const m of stackModels) {
                 const stem = _loraBasename(m).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
                 cleaned = cleaned.replace(new RegExp(`,?\\s*<lora:${stem}:[^>]*>`, "gi"), "");
             }
-            if (allStackTriggers.length > 0) {
-                const wordSet = new Set(allStackTriggers.map(w => w.trim().toLowerCase()));
+            if (currentAllTriggers.length > 0) {
+                const wordSet = new Set(currentAllTriggers.map(w => w.trim().toLowerCase()));
                 cleaned = cleaned.split(",").map(p => p.trim()).filter(p => p && !wordSet.has(p.toLowerCase())).join(", ");
             }
             cleaned = cleaned.replace(/,\s*$/, "").trim();
             if (effectiveSyntax) {
-                const append = activeTriggerWords.length > 0
-                    ? `${effectiveSyntax}, ${activeTriggerWords.join(", ")}`
+                const append = currentActiveTriggers.length > 0
+                    ? `${effectiveSyntax}, ${currentActiveTriggers.join(", ")}`
                     : effectiveSyntax;
                 posTextarea.value = cleaned ? `${cleaned}, ${append}` : append;
             } else {
@@ -651,22 +673,6 @@ export const comfyEditor = {
                 _syncRawJson();
             }
         });
-
-        // ── Auto-apply Stack to LoraManager on load ──────────
-        if (defaultStackTarget && stackModels.length > 0 && comfyUI.currentWorkflow?.[defaultStackTarget]) {
-            const targetNode = loraNodes.find((n) => String(n.id) === String(defaultStackTarget));
-            if (targetNode?.is_lora_manager) {
-                const loraValue = stackModels.map((m) => {
-                    const stem = _loraBasename(m);
-                    const str = _stackStrengths[m] || { m: 1.0, c: 1.0 };
-                    const active = _stackActive[m] !== false;
-                    return { name: stem, strength: str.m, active, expanded: false, clipStrength: str.c, locked: false };
-                });
-                comfyUI.currentWorkflow[defaultStackTarget].inputs.loras = { __value__: loraValue };
-                comfyUI.currentWorkflow[defaultStackTarget].inputs.text = _buildLoraManagerSyntax(stackModels);
-                _syncRawJson();
-            }
-        }
 
         // Initial single tab display
         _refreshLoraSingleDynamic(metadata, civitaiCache);

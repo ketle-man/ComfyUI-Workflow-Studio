@@ -295,10 +295,15 @@ export const comfyWorkflow = {
             const nodeLinks = linkMap[node.id] || {};
             const inputDefs = node.inputs || [];
             const linkedInputNames = new Set();
+            // UI slot inputs with an actual link don't have a widget value entry in
+            // widgets_values (modern ComfyUI format). Track these separately so the
+            // widget-mapping loop won't advance wIdx for them.
+            const linkedSlotNames = new Set();
             inputDefs.forEach((inp, idx) => {
                 if (nodeLinks[idx]) {
                     inputs[inp.name] = nodeLinks[idx];
                     linkedInputNames.add(inp.name);
+                    linkedSlotNames.add(inp.name);
                 }
             });
 
@@ -336,13 +341,15 @@ export const comfyWorkflow = {
                         const expectedType = widgetTypes[nIdx];
                         // Skip if this input is already linked
                         if (linkedInputNames.has(name)) {
-                            // Still consume widget value(s) since widgets_values
-                            // includes entries for linked inputs too
-                            wIdx++;
-                            // Also skip control_after_generate if present
-                            if (wIdx < widgets.length && _isExtraWidgetValue(widgets[wIdx], expectedType)) {
+                            if (!linkedSlotNames.has(name)) {
+                                // Not a UI slot input — old-style linked input that still
+                                // occupies a slot in widgets_values; consume it.
                                 wIdx++;
+                                if (wIdx < widgets.length && _isExtraWidgetValue(widgets[wIdx], expectedType)) {
+                                    wIdx++;
+                                }
                             }
+                            // UI slot inputs with a real link have no widget value entry — don't advance wIdx.
                             continue;
                         }
                         // Check if current widget value matches expected type

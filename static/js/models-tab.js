@@ -1833,6 +1833,7 @@ async function loadModelsForCurrentType() {
             state.modelGroups["Stack"] = [];
             await saveModelGroups(state.modelGroups);
         }
+        if (!STACK_MODEL_TYPES.includes(type)) delete state.modelGroups["Stack"];
         state.allModelGroups[type] = state.modelGroups;
         renderTagFilter();
         renderDirFilter();
@@ -1860,6 +1861,7 @@ async function loadModelsForCurrentType() {
             groups["Stack"] = [];
             await saveModelGroups(groups);
         }
+        if (!STACK_MODEL_TYPES.includes(type)) delete groups["Stack"];
         state.modelGroups = groups;
         state.allModelGroups[type] = groups;
 
