@@ -550,6 +550,15 @@ function renderSection(sectionEl, listEl, items, buildFn) {
     for (const item of items) listEl.appendChild(buildFn(item));
 }
 
+// ── External API ──────────────────────────────────────────────
+let _externalHandleFile = null;
+
+export async function loadFileIntoMetadataTab(file) {
+    document.querySelector('.wfm-tab[data-tab="metadata"]')?.click();
+    await new Promise(r => setTimeout(r, 0));
+    if (_externalHandleFile) await _externalHandleFile(file);
+}
+
 // ── Tab initialization ────────────────────────────────────────
 export function initMetadataTab() {
     const dropZone = document.getElementById("wfm-meta-drop");
@@ -742,6 +751,8 @@ export function initMetadataTab() {
         if (!text) return;
         if (setTextareaValue("wfm-preset-neg", text)) flashBtn(this);
     });
+
+    _externalHandleFile = handleFile;
 
     // Drag & Drop
     dropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add("drag-over"); });

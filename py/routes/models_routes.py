@@ -31,6 +31,8 @@ def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/models/toggle", handle_toggle_model)
     app.router.add_post("/api/wfm/models/group-toggle", handle_toggle_group)
     app.router.add_post("/api/wfm/models/delete", handle_delete_models)
+    app.router.add_get("/api/wfm/models/subdirs", handle_get_subdirs)
+    app.router.add_post("/api/wfm/models/move", handle_move_models)
 
 
 # ── Model Metadata ─────────────────────────────────────────
@@ -570,4 +572,47 @@ async def handle_delete_models(request: web.Request) -> web.Response:
         return web.json_response({"status": "ok", "ok": ok_list, "errors": error_list})
     except Exception as e:
         logger.error("Error in delete_models: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+_VALID_MODEL_TYPES = frozenset(
+    ["checkpoint", "lora", "vae", "controlnet", "unet", "textencoder", "hypernetwork", "embedding"]
+)
+
+
+async def handle_get_subdirs(request: web.Request) -> web.Response:
+    """GET /api/wfm/models/subdirs?type=checkpoint
+    Returns list of root-level subdirectory names for the given model type.
+    """
+    try:
+        model_type = request.rel_url.query.get("type", "")
+        if model_type not in _VALID_MODEL_TYPES:
+            return web.json_response({"error": "Invalid model type"}, status=400)
+        result = await asyncio.to_thread(_service.get_subdirs, model_type)
+        return web.json_response(result)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_move_models(request: web.Request) -> web.Response:
+    """POST /api/wfm/models/move
+
+    Body: { "model_type": "checkpoint", "model_names": [...], "dest": "sdxl" }
+    dest: "" = root, or a root-level subfolder name (no path separators, no "..").
+    """
+    try:
+        body = await request.json()
+        model_type = body.get("model_type", "")
+        model_names = body.get("model_names", [])
+        dest_subdir = body.get("dest", "")
+        if model_type not in _VALID_MODEL_TYPES:
+            return web.json_response({"error": "Invalid model type"}, status=400)
+        if not isinstance(model_names, list) or not model_names:
+            return web.json_response({"error": "model_names must be a non-empty list"}, status=400)
+        if not isinstance(dest_subdir, str):
+            return web.json_response({"error": "dest must be a string"}, status=400)
+        result = await asyncio.to_thread(_service.move_models, model_type, model_names, dest_subdir)
+        return web.json_response(result)
+    except Exception as e:
+        logger.error("Error in move_models: %s", e)
         return web.json_response({"error": str(e)}, status=500)

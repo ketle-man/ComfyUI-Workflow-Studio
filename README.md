@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.33-green)
+![Version](https://img.shields.io/badge/version-0.3.34-green)
 
 ## Screenshots
 
@@ -141,7 +141,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 
 ### Models Tab (v0.2.3)
 - **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding) with sub-tab switching
-- **Thumbnail / Table views** — switch between view modes with pagination (24 items per page)
+- **Thumbnail / Table views** — switch between view modes with pagination (24 items per page); Table view includes **Type** and **Base Model** columns sourced from cached CivitAI data, displayed between the Subdirectory and Extension columns
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
 - **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
 - **Side panel tabs** — opens to CivitAI tab by default when a model is selected; Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
@@ -149,13 +149,16 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **CivitAI panel — Info / Sample sub-tabs** — Info tab shows model details (name, type, base model, hash, trigger words, tags, description); Sample tab shows all sample images (count shown in tab label); clicking any image opens the full-size version in a new tab
 - **CivitAI panel states** — three distinct states: not yet checked (fetch button), checked but not found on CivitAI (re-check button with notice), and found (full info display); clicking the CivitAI tab always refreshes to the latest state
 - **Batch CivitAI fetch** — one-click batch fetch using `POST /model-versions/by-hash` (up to 100 models per request) with SSE progress streaming; previews are auto-saved for models without one
-- **Detail modal** — preview image, CivitAI info, thumbnail change via file upload
+- **Detail modal** — preview image, CivitAI info, thumbnail change via file upload; **Delete** button permanently removes the model file and all associated sidecar files (preview images, `.json`, `.civitai.info`, `.metadata.json`, `.cm-info.json`)
 - **GenUI Model button** — apply the selected model directly to the corresponding node in GenerateUI's current workflow (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder)
-- **Group management** — create, rename, delete groups and assign/remove models; groups are scoped per model type (checkpoint groups only appear in the Checkpoint tab)
+- **Group management** — create, rename, delete groups and assign/remove models; groups are scoped per model type (checkpoint groups only appear in the Checkpoint tab); Checkpoint and LoRA tabs include **B (Batch)** and **S (Stack)** quick-assign buttons per card/row for one-click group membership toggle without grid re-render
 - **Table view memo** — memo column displayed in table view for quick reference
 - **Preview images** — auto-detect `{model_stem}.preview.png` next to model files
 - **Enable / Disable models** — hide models from ComfyUI by renaming the file extension (`.disabled` suffix); toggle per card (⏸ button), per group (Enable All / Disable All), or filter by status (All / Enabled / Disabled)
-- **Multi-select & bulk operations** — enter selection mode to check multiple models; bulk action bar supports: **Deselect All** (clear all without exiting select mode), **★ Favorite / ☆ Unfavorite** (toggle favorites for all selected), **Add / Remove from Group**, **Create & Add** (new group), **+Badge / −Badge** (apply or remove a badge from all selected), and permanent **Delete Files** (model file + preview images + sidecar files such as `.json` / `.info`)
+- **Multi-select & bulk operations** — click the green **Select** button to enter selection mode and check multiple models; the bulk action bar is organized in three rows:
+  - **Group row** — select an existing group and **Add** / **Remove**, or type a new name and **Create & Add**
+  - **Badge row** — select a badge and **+Badge** / **−Badge** to apply or remove from all selected
+  - **File row** — select a destination subfolder (or type a new folder name and create it) then **Move** to relocate the model file with all sidecar files; **Delete Files** (right end) permanently removes selected models and all associated files
 
 ### AI TOOL Tab (v0.3.14)
 - **3-pane layout** — Translation (40%) | TOOLS (40%) | Settings (20%); all panes always visible simultaneously; no sub-tab switching required

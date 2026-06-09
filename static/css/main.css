@@ -4102,6 +4102,14 @@ body {
     width: 30px;
 }
 
+.wfm-table-th-filename,
+.wfm-table-td-filename {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .wfm-table-th-subdir,
 .wfm-table-td-subdir {
     width: 80px;
@@ -4109,6 +4117,26 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.wfm-table-th-civtype,
+.wfm-table-td-civtype {
+    width: 70px;
+    max-width: 70px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
+}
+
+.wfm-table-th-basemodel,
+.wfm-table-td-basemodel {
+    width: 110px;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
 }
 
 .wfm-table-th-ext,
@@ -4297,12 +4325,44 @@ body {
 }
 .wfm-bulk-bar {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
     padding: 6px 12px;
     background: rgba(108, 142, 245, 0.12);
     border-bottom: 1px solid rgba(108, 142, 245, 0.3);
+}
+.wfm-bulk-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex-wrap: wrap;
+}
+.wfm-bulk-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.wfm-bulk-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.wfm-bulk-row-label {
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+    width: 44px;
+    flex-shrink: 0;
+    text-align: right;
+}
+.wfm-bulk-select {
+    width: 330px !important;
+    max-width: 330px !important;
+    font-size: 12px !important;
+    padding: 2px 4px !important;
+}
+.wfm-bulk-input {
+    width: 110px !important;
+    font-size: 12px;
 }
 .wfm-bulk-count {
     font-size: 13px;
@@ -4314,6 +4374,21 @@ body {
     height: 18px;
     background: rgba(255, 255, 255, 0.15);
     margin: 0 4px;
+    flex-shrink: 0;
+}
+.wfm-btn-success {
+    background: #22c55e;
+    color: #fff;
+    border-color: #16a34a;
+}
+.wfm-btn-success:hover {
+    background: #16a34a;
+    border-color: #15803d;
+}
+.wfm-btn-success.active {
+    background: #16a34a;
+    border-color: #15803d;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4);
 }
 
 /* ── Batch Tab ──────────────────────────────────────────────────── */

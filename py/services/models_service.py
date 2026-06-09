@@ -2,6 +2,7 @@
 
 import json
 import logging
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,7 +18,7 @@ _PREVIEW_EXTENSIONS = [".preview.png", ".preview.jpg", ".preview.jpeg", ".previe
 _SIDECAR_EXTENSIONS = [
     ".preview.png", ".preview.jpg", ".preview.jpeg", ".preview.webp",
     ".png", ".jpg", ".jpeg", ".webp",
-    ".json", ".civitai.info", ".info",
+    ".metadata.json", ".cm-info.json", ".json", ".civitai.info", ".info",
 ]
 
 _DISABLED_SUFFIX = ".disabled"
@@ -274,3 +275,126 @@ class ModelsService:
             self._save_metadata(data)
 
         return {"deleted": deleted}
+
+    def get_subdirs(self, model_type):
+        """Return sorted list of root-level subdirectory names for a model type."""
+        dirs = _get_model_dirs(model_type)
+        subdirs = set()
+        for d in dirs:
+            if not d.is_dir():
+                continue
+            for item in d.iterdir():
+                if item.is_dir():
+                    subdirs.add(item.name)
+        return sorted(subdirs)
+
+    def move_models(self, model_type, model_names, dest_subdir):
+        """Move model files + sidecar files to dest_subdir (root-level subfolder name).
+
+        dest_subdir: "" = model root, "sdxl" = <root>/sdxl/
+        Creates the destination directory if it does not exist.
+        Updates metadata keys to reflect new paths.
+        Returns {"moved": [{"from": ..., "to": ...}], "errors": [...]}
+        """
+        # Validate dest_subdir: must be a plain folder name (no separators, no "..", not absolute)
+        if dest_subdir:
+            if ".." in dest_subdir:
+                return {"moved": [], "errors": [{"model": "*", "error": "Invalid destination: '..' not allowed"}]}
+            if "/" in dest_subdir or "\\" in dest_subdir:
+                return {"moved": [], "errors": [{"model": "*", "error": "Invalid destination: must be a single folder name"}]}
+            if Path(dest_subdir).is_absolute():
+                return {"moved": [], "errors": [{"model": "*", "error": "Invalid destination: absolute paths not allowed"}]}
+
+        moved = []
+        errors = []
+        model_dirs = _get_model_dirs(model_type)
+
+        meta_data = self._load_metadata()
+        meta_changed = False
+
+        for model_name in model_names:
+            if ".." in model_name:
+                errors.append({"model": model_name, "error": "Invalid model name"})
+                continue
+
+            path, _is_enabled = self.find_model_file(model_type, model_name)
+            if path is None:
+                errors.append({"model": model_name, "error": f"Model not found: {model_name}"})
+                continue
+
+            try:
+                # Determine which root dir this model lives in
+                root_dir = None
+                for d in model_dirs:
+                    try:
+                        path.relative_to(d)
+                        root_dir = d
+                        break
+                    except ValueError:
+                        pass
+                if root_dir is None:
+                    errors.append({"model": model_name, "error": "Cannot determine root directory"})
+                    continue
+
+                # Destination directory — verify it stays within root_dir after resolution
+                dest_dir = root_dir / dest_subdir if dest_subdir else root_dir
+                try:
+                    dest_dir.resolve().relative_to(root_dir.resolve())
+                except ValueError:
+                    errors.append({"model": model_name, "error": "Destination is outside model root"})
+                    continue
+                dest_dir.mkdir(parents=True, exist_ok=True)
+
+                # Original filename without .disabled suffix
+                orig_name = path.name
+                if orig_name.endswith(_DISABLED_SUFFIX):
+                    orig_name = orig_name[: -len(_DISABLED_SUFFIX)]
+                stem = Path(orig_name).stem
+
+                new_path = dest_dir / path.name
+                if new_path.resolve() == path.resolve():
+                    errors.append({"model": model_name, "error": "Already in destination"})
+                    continue
+
+                # Refuse to overwrite an existing file
+                if new_path.exists():
+                    errors.append({"model": model_name, "error": f"Destination already exists: {path.name}"})
+                    continue
+
+                # Move the model file
+                shutil.move(str(path), str(new_path))
+                logger.info("Moved model: %s → %s", path, new_path)
+
+                # Move all sidecar files (skip if destination already exists)
+                for ext in _SIDECAR_EXTENSIONS:
+                    sidecar = path.parent / (stem + ext)
+                    if sidecar.is_file():
+                        sidecar_dest = dest_dir / (stem + ext)
+                        if sidecar_dest.exists():
+                            logger.warning("Sidecar destination exists, skipping: %s", sidecar_dest)
+                            continue
+                        try:
+                            shutil.move(str(sidecar), str(sidecar_dest))
+                        except Exception as se:
+                            logger.warning("Could not move sidecar %s: %s", sidecar, se)
+
+                # Compute new logical model name (relative to root, forward slashes)
+                new_rel = str(new_path.relative_to(root_dir)).replace("\\", "/")
+                if new_rel.endswith(_DISABLED_SUFFIX):
+                    new_rel = new_rel[: -len(_DISABLED_SUFFIX)]
+
+                # Update metadata key
+                if model_name in meta_data:
+                    meta_data[new_rel] = meta_data.pop(model_name)
+                    meta_changed = True
+
+                moved.append({"from": model_name, "to": new_rel})
+
+            except Exception as e:
+                logger.error("Error moving model %s: %s", model_name, e)
+                errors.append({"model": model_name, "error": str(e)})
+
+        if meta_changed:
+            self._save_metadata(meta_data)
+
+        return {"moved": moved, "errors": errors}

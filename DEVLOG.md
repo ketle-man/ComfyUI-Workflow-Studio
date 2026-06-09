@@ -1,5 +1,57 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-09: v0.3.34 — Modelsタブ テーブルビュー強化・バルク操作改善
+
+### 変更内容
+
+#### テーブルビュー: Type / Base Model 列追加（`static/js/models-tab.js`, `static/css/main.css`）
+- `renderTableView` にて Subdirectory と Extension 列の間に **Type** / **Base Model** 列を追加
+- データは `state.civitaiCache[sha256]` から取得（追加API呼び出しなし）
+- `.wfm-table-th-civtype` / `.wfm-table-td-civtype`（70px）、`.wfm-table-th-basemodel` / `.wfm-table-td-basemodel`（110px）を追加
+- `.wfm-table-th-filename` / `.wfm-table-td-filename` の `max-width` を 160px に制限し、overflow ellipsis 適用
+
+#### モーダル: Delete ボタン追加（`static/js/models-tab.js`）
+- 詳細モーダルにモデル削除ボタンを設置
+- `POST /api/wfm/models/delete` を呼び出してモデルファイル本体および全サイドカーファイル（`.preview.png`、`.json`、`.civitai.info`、`.metadata.json`、`.cm-info.json` など）を削除
+- 削除後にローカルステート（`modelsByType`、`modelMetadata`、`disabledModels`、`selectedModels`）を差分更新して `renderModelGrid()` を呼び出す
+
+#### バルクアクションバー: ファイル移動機能追加（`static/js/models-tab.js`, `static/css/main.css`）
+- `fetchSubdirs()` 関数追加：`GET /api/wfm/models/subdirs?type=` でルート直下のサブフォルダ一覧を取得し `state.subdirs` にキャッシュ
+- `bulkMoveModels(destSubdir)` 関数追加：`POST /api/wfm/models/move` で選択モデルをサブフォルダへ移動（サイドカーファイルも同時移動）。ローカルステートのキー（`modelsByType`、`modelMetadata`、`disabledModels`）を移動後の相対パスに更新
+- 移動後に `fetchSubdirs()` → `renderDirFilter()` → `renderModelGrid()` → `renderBulkActionBar()` を連続実行
+
+#### バルクアクションバー: UI再構成（`static/js/models-tab.js`, `static/css/main.css`）
+- バーを **ヘッダー行**（件数表示・Deselect All・Favorite 操作）＋**3行グリッド**（Group / Badge / File）に再構成
+- **Group 行**：グループ選択ドロップダウン・Add / Remove ボタン・新規グループ名入力・Create & Add
+- **Badge 行**：バッジ選択ドロップダウン・+Badge / −Badge ボタン
+- **File 行**：移動先フォルダ選択ドロップダウン・Move ボタン・新規フォルダ名入力・Create & Move・Delete Files（行右端）
+- Select ボタンを緑色（`.wfm-btn-success`）に変更（`templates/index.html`）
+- X（Clear Selection）ボタンを削除。Deselect All のみを使用
+- 各ドロップダウン幅を 110px → 330px に拡大
+
+#### バックエンド: subdirs / move エンドポイント追加（`py/services/models_service.py`, `py/routes/models_routes.py`）
+- `ModelsService.get_subdirs(model_type)` — ルート直下のディレクトリ名一覧を返す
+- `ModelsService.move_models(model_type, model_names, dest_subdir)` — モデルと全サイドカーを `shutil.move` で移動。パストラバーサル防止（`..` チェック・セパレーター禁止・絶対パス禁止・`resolve().relative_to()` containment検証）・上書き防止を実装
+- `GET /api/wfm/models/subdirs`、`POST /api/wfm/models/move` ルートを登録。`_VALID_MODEL_TYPES` frozenset でモデルタイプをホワイトリスト検証
+- `_SIDECAR_EXTENSIONS` に `.metadata.json`、`.cm-info.json` を追加（delete / move 両操作に反映）
+
+#### B/S ボタン: 行移動バグ修正（`static/js/models-tab.js`）
+- `toggleBatch` / `toggleStack` から `renderModelGrid()` 呼び出しを削除
+- テーブルビュー・カードビュー両方の B / S ボタンハンドラーを `async` に変更し、`await` 後にボタンの `active` クラスのみを差分更新（`classList.toggle`）
+- `state.showBatchOnly` フィルター有効時（バッチから外すと行が消えるべき場合）のみ `renderModelGrid()` を呼び出す
+
+#### ギャラリー → Metadata タブ連携（`static/js/gallery-tab.js`, `static/js/metadata-tab.js`）
+- `metadata-tab.js` に `loadFileIntoMetadataTab(file)` をエクスポート：Metadata タブへ切り替えてファイルを読み込む外部 API
+- `gallery-tab.js` に `openImageInMetadataTab(img)` を追加：画像を fetch してバイナリを Metadata タブに渡す
+- ギャラリー画像カード（サムネイル・テーブル両ビュー）で **Alt+クリック** すると Metadata タブで開く
+- 詳細パネルに **Metadata ボタン** を追加（`index.html` の `wfm-gallery-open-metadata-btn`）：選択中の画像を Metadata タブで開く
+- 詳細タブ切り替えロジックを修正（`data-detail-tab` を持つボタンのみ active/display を切り替え、Metadata ボタンを除外）
+
+#### ヘルプ更新（`templates/index.html`）
+- Models Tab ヘルプ（`wfm-help-models-2`、`-6`、`-7`、`-11`）を今回の変更に合わせて更新
+
+---
+
 ## 2026-06-09: v0.3.33 — LoRAペイン・ワークフロー解析バグ修正
 
 ### 変更内容

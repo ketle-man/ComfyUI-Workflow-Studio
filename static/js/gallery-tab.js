@@ -5,6 +5,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
+import { loadFileIntoMetadataTab } from "./metadata-tab.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -63,6 +64,18 @@ function formatBytes(bytes) {
 
 function formatDate(mtime) {
     return new Date(mtime * 1000).toLocaleString();
+}
+
+async function openImageInMetadataTab(img) {
+    try {
+        const res = await fetch(API.serveImage(img.path));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const file = new File([blob], img.filename, { type: blob.type || "image/png" });
+        await loadFileIntoMetadataTab(file);
+    } catch (e) {
+        showToast(`Metadata error: ${e.message}`, "error");
+    }
 }
 
 // ── フォルダツリー ────────────────────────────────────────────
@@ -302,8 +315,13 @@ function createThumbCard(img) {
     });
     card.appendChild(favBtn);
 
-    // クリック: 詳細表示 / Ctrl+クリック: 複数選択
+    // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Alt+クリック: Metadataタブで開く
     card.addEventListener("click", (e) => {
+        if (e.altKey) {
+            e.preventDefault();
+            openImageInMetadataTab(img);
+            return;
+        }
         if (e.ctrlKey || e.metaKey) {
             // 複数選択トグル
             if (state.selectedImages.has(img.path)) {
@@ -394,8 +412,13 @@ function createTable(images) {
         tr.appendChild(tdDate);
         tr.appendChild(tdTags);
 
-        // クリック: 詳細表示 / Ctrl+クリック: 複数選択
+        // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Alt+クリック: Metadataタブで開く
         tr.addEventListener("click", (e) => {
+            if (e.altKey) {
+                e.preventDefault();
+                openImageInMetadataTab(img);
+                return;
+            }
             if (e.ctrlKey || e.metaKey) {
                 if (state.selectedImages.has(img.path)) {
                     state.selectedImages.delete(img.path);
@@ -1263,10 +1286,23 @@ function bindEvents() {
         performDeleteImages([state.selectedImage.path]);
     });
 
-    // 詳細タブ切り替え
-    document.querySelectorAll(".wfm-gallery-detail-tab-btn").forEach(btn => {
+    // MetadataタブボタンをJSONに改名（テンプレートとの二重保証）
+    const metaTabBtn = document.querySelector('.wfm-gallery-detail-tab-btn[data-detail-tab="meta"]');
+    if (metaTabBtn) metaTabBtn.textContent = "JSON";
+
+    // Metadataボタン: 選択画像をMetadataタブで開く
+    document.getElementById("wfm-gallery-open-metadata-btn")?.addEventListener("click", () => {
+        if (!state.selectedImage) {
+            showToast("Please select an image first", "error");
+            return;
+        }
+        openImageInMetadataTab(state.selectedImage);
+    });
+
+    // 詳細タブ切り替え（Metadataボタンはタブではないので除外）
+    document.querySelectorAll(".wfm-gallery-detail-tab-btn[data-detail-tab]").forEach(btn => {
         btn.addEventListener("click", () => {
-            document.querySelectorAll(".wfm-gallery-detail-tab-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".wfm-gallery-detail-tab-btn[data-detail-tab]").forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
             const tabId = btn.dataset.detailTab;
             document.querySelectorAll(".wfm-gallery-detail-tab-content").forEach(c => c.style.display = "none");
