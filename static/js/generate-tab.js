@@ -2,7 +2,7 @@
  * GenerateUI Tab - Workflow execution with parameter editing
  */
 
-import { showToast } from "./app.js";
+import { showToast, openModal, closeModal } from "./app.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
 import { comfyEditor } from "./comfyui-editor.js";
@@ -101,6 +101,84 @@ function updateStatus(connected) {
         label.textContent = "Disconnected";
         label.className = "wfm-gen-status disconnected";
     }
+}
+
+// ============================================
+// Workflow Save
+// ============================================
+
+async function saveCurrentWorkflow() {
+    if (!comfyUI.currentWorkflow) {
+        showToast("No workflow loaded", "warning");
+        return;
+    }
+
+    const currentFilename = document.getElementById("wfm-gen-wf-name")?.dataset?.filename || "";
+    const defaultStem = currentFilename.replace(/\.json$/, "") || "workflow";
+
+    const html = `
+        <div style="display:flex;flex-direction:column;gap:14px;min-width:300px;">
+            <div>
+                <label style="font-size:12px;color:var(--wfm-text-secondary);display:block;margin-bottom:4px;">Filename</label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="text" id="wfm-save-wf-name" class="wfm-input" value="${defaultStem}" style="flex:1;" placeholder="workflow name">
+                    <span style="color:var(--wfm-text-secondary);font-size:13px;">.json</span>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="wfm-btn wfm-btn-sm" id="wfm-save-wf-cancel-btn">Cancel</button>
+                <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-save-wf-confirm-btn">Save</button>
+            </div>
+        </div>`;
+
+    openModal("Save Workflow", html);
+
+    setTimeout(() => {
+        const input = document.getElementById("wfm-save-wf-name");
+        if (input) { input.focus(); input.select(); }
+    }, 50);
+
+    document.getElementById("wfm-save-wf-cancel-btn")?.addEventListener("click", () => closeModal());
+
+    const doSave = async () => {
+        const input = document.getElementById("wfm-save-wf-name");
+        const stem = input?.value?.trim();
+        if (!stem) {
+            showToast("Please enter a filename", "warning");
+            return;
+        }
+        const filename = stem.endsWith(".json") ? stem : `${stem}.json`;
+        try {
+            const blob = new Blob(
+                [JSON.stringify(comfyUI.currentWorkflow, null, 2)],
+                { type: "application/json" }
+            );
+            const file = new File([blob], filename, { type: "application/json" });
+            const fd = new FormData();
+            fd.append("files", file);
+            const res = await fetch("/api/wfm/workflows/import", { method: "POST", body: fd });
+            const data = await res.json();
+            const ng = (data.results || []).filter(r => r.status === "error");
+            if (ng.length) {
+                showToast(`Save failed: ${ng[0].message || "unknown error"}`, "error");
+                return;
+            }
+            closeModal();
+            const nameEl = document.getElementById("wfm-gen-wf-name");
+            if (nameEl) {
+                nameEl.textContent = filename;
+                nameEl.dataset.filename = filename;
+            }
+            showToast(`Saved: ${filename}`, "success");
+        } catch (err) {
+            showToast(`Save error: ${err.message}`, "error");
+        }
+    };
+
+    document.getElementById("wfm-save-wf-confirm-btn")?.addEventListener("click", doSave);
+    document.getElementById("wfm-save-wf-name")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doSave();
+    });
 }
 
 // ============================================
@@ -1411,6 +1489,9 @@ export async function initGenerateTab() {
         _rebuildSchedulerList();
         _renderBatchPreview();
     });
+
+    // Save workflow button
+    document.getElementById("wfm-gen-save-btn")?.addEventListener("click", () => saveCurrentWorkflow());
 
     document.getElementById("wfm-gen-reset-workflow-btn")?.addEventListener("click", async () => {
         const filename = document.getElementById("wfm-gen-wf-name")?.dataset?.filename;

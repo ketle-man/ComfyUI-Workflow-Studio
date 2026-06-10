@@ -1,5 +1,42 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-10: v0.3.35 — テーブルソート・Load GenUI・ワークフロー保存
+
+### 変更内容
+
+#### Modelsタブ テーブルビュー: 列ヘッダークリックでソート（`static/js/models-tab.js`, `static/css/main.css`）
+- `state` に `sortColumn`（null または列キー）と `sortDir`（`"asc"` / `"desc"`）を追加
+- `sortModels(models)` 関数を追加：ソート列に応じて ★・ファイル名・サブディレクトリ・Type・Base Model・拡張子・Tags・Memo・E/D の各キーで昇降順ソートを実行
+- `filterModels()` の末尾で `sortModels()` を呼び出し、フィルタ後の全ビューに適用
+- `thSortHtml(label, col, extraClass, extraStyle)` ヘルパーを追加：アクティブ列はアクセントカラー（`--wfm-accent`）に変色し ▲/▼ 矢印を表示
+- `renderTableView` のヘッダーをすべて `thSortHtml` ベースに変更。クリックで asc → desc → 解除のサイクル
+- Enable/Disable 列の空ヘッダーを **E/D** に変更
+- `.wfm-table-th-sortable` CSS を追加（`cursor: pointer`、`-webkit-user-select: none`、`white-space: nowrap`、ホバー時アクセントカラー）
+
+#### ギャラリータブ: Load GenUI ボタン追加（`templates/index.html`, `static/js/gallery-tab.js`, `static/css/gallery-tab.css`）
+- 詳細パネルのタブナビに **Load GenUI**（青）ボタン（`wfm-gallery-load-genui-btn`）を Metadata ボタンの右隣に追加
+- `gallery-tab.js` に `loadWorkflowIntoEditor` を `generate-tab.js` からインポート
+- クリック時の動作：画像未選択 → warning トースト / ワークフロー未埋め込み → warning トースト / 非対応フォーマット → `loadWorkflowIntoEditor` 内でトースト表示 / 成功時 → GenerateUI タブへ自動切り替え
+- **Metadata** ボタンに `wfm-gallery-action-btn-green` クラスを追加し緑色背景に変更
+- `gallery-tab.css` に `.wfm-gallery-action-btn-green`（緑）・`.wfm-gallery-action-btn-primary`（`--wfm-primary` 青）スタイルを追加：`padding`・`border-radius`・`align-self: center`・`margin` を共通指定
+
+#### GenerateUIタブ: Save ボタン追加（`templates/index.html`, `static/js/generate-tab.js`）
+- `wfm-gen-subtab-nav` の右端（`margin-left:auto`）に **Save** ボタン（`wfm-gen-save-btn`、`wfm-btn-primary`）を設置
+- `generate-tab.js` のインポートに `openModal`・`closeModal` を追加
+- `saveCurrentWorkflow()` 関数を追加：
+  - ワークフロー未ロード時は warning トースト
+  - モーダルでファイル名を入力（デフォルト: 現在のワークフロー名）。Enter キーでも確定可能
+  - `comfyUI.currentWorkflow` を JSON シリアライズして `File` オブジェクトを生成、`POST /api/wfm/workflows/import` で Workflow タブに保存
+  - 保存成功後 `wfm-gen-wf-name` の表示・`dataset.filename` を新ファイル名に更新
+  - エラー時はトーストでメッセージ表示
+
+#### ヘルプ更新（`templates/index.html`）
+- GenerateUI Tab（`wfm-help-gen-2`）：Save ボタンの説明を追加
+- Gallery Tab（`wfm-help-gallery-8/10`）：「Metadata tab」→「JSON tab」に表記修正；`wfm-help-gallery-12/13` として Metadata（緑）・Load GenUI（青）ボタンの説明を新規追加
+- Models Tab（`wfm-help-models-2`）：テーブルヘッダークリックソートと E/D 列の説明を追記
+
+---
+
 ## 2026-06-09: v0.3.34 — Modelsタブ テーブルビュー強化・バルク操作改善
 
 ### 変更内容

@@ -271,6 +271,7 @@
                         <button class="wfm-gen-subtab-btn" data-subtab="settings">Settings</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="feeder">Feeder</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="batch">Batch</button>
+                        <button id="wfm-gen-save-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" style="margin-left:auto;" title="Save current workflow to Workflow tab">Save</button>
                     </div>
 
                     <!-- Tab: Input — left sub-col: Prompt/Image (tabbed), right sub-col: Raw JSON -->
@@ -960,7 +961,7 @@
                             <h3>GenerateUI Tab</h3>
                             <ul>
                                 <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
-                                <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported); Reset Workflow button re-reads the current workflow file from disk and reloads the editor</li>
+                                <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported); Reset Workflow button re-reads the current workflow file from disk and reloads the editor; <b>Save</b> button (right end of the tab bar) saves the current workflow — including any edits made in the editor — as a new .json file to the Workflow tab; a filename dialog appears with the current workflow name as the default</li>
                                 <li id="wfm-help-gen-3">5-tab layout — Input (Prompt + Image), Model, Settings, Feeder, Batch — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
                                 <li id="wfm-help-gen-4">Input tab: inner tabs — Prompt (positive/negative textboxes with doubled height) and Image (drag-and-drop upload); switch between tabs with the tab bar at the top of the left column</li>
                                 <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones</li>
@@ -1073,10 +1074,12 @@
                                 <li id="wfm-help-gallery-5">Folder tree: click to load images, expand with ▶; "+ New" creates a subfolder inside the selected folder, "Del" deletes it with all contents</li>
                                 <li id="wfm-help-gallery-6">Multi-select with Ctrl+click — bulk operations: Add to Group, Favorite All, Unfavorite All, Move To..., Delete</li>
                                 <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, date, tags (add/remove), memo; "Move To..." moves the image to another folder, "Delete" removes it permanently</li>
-                                <li id="wfm-help-gallery-8">Detail panel — Metadata tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; one-click clipboard copy</li>
+                                <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; one-click clipboard copy</li>
                                 <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image</li>
-                                <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the Metadata tab</li>
+                                <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the JSON tab</li>
                                 <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF; workflow extraction reads ComfyUI prompt and workflow keys embedded in PNG metadata</li>
+                                <li id="wfm-help-gallery-12"><b>Metadata</b> button (green, in the detail panel tab bar): opens the selected image in the Metadata tab for full embedded-data inspection; Alt+click on any image thumbnail has the same effect</li>
+                                <li id="wfm-help-gallery-13"><b>Load GenUI</b> button (blue, in the detail panel tab bar): loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab and switches to it; shows a warning toast if no workflow is embedded or the format is not supported</li>
                             </ul>
                         </div>
                     </div>
@@ -1086,7 +1089,7 @@
                             <h3>Models Tab</h3>
                             <ul>
                                 <li id="wfm-help-models-1">Browse installed models: Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding with sub-tab switching</li>
-                                <li id="wfm-help-models-2">Thumbnail, Card, and Table view modes with pagination; Table view shows Type and Base Model columns sourced from CivitAI data alongside filename, subdirectory, and extension</li>
+                                <li id="wfm-help-models-2">Thumbnail, Card, and Table view modes with pagination; Table view shows Type and Base Model columns sourced from CivitAI data alongside filename, subdirectory, and extension; <b>column headers are clickable to sort</b> — click once for ascending (▲), again for descending (▼), a third time to clear the sort; the <b>E/D</b> column sorts by enable/disable status</li>
                                 <li id="wfm-help-models-3">Search, tag filter, group filter, favorites filter, and status filter (All / Enabled only / Disabled only)</li>
                                 <li id="wfm-help-models-4">Side panel: opens to CivitAI tab by default when a model is selected; Info (file path, tags, memo), Groups management, CivitAI integration</li>
                                 <li id="wfm-help-models-5">CivitAI integration: fetch model info by SHA256 hash, batch fetch per model type</li>
@@ -1096,6 +1099,7 @@
                                 <li id="wfm-help-models-9">User-defined badges: assign free-label badges with custom colors shared with the Workflow tab</li>
                                 <li id="wfm-help-models-10">Enable/Disable models: toggle visibility in ComfyUI by renaming file extension (.disabled suffix). Disable per model (⏸ button on each card) or per group (Enable All / Disable All in Group panel). Changes take effect after ComfyUI refresh.</li>
                                 <li id="wfm-help-models-11">Multi-select &amp; bulk operations: click Select (green) to enter selection mode, then check multiple models; the bulk action bar is organized into three rows — <b>Group row:</b> select an existing group and Add/Remove, or type a new name and Create &amp; Add; <b>Badge row:</b> select a badge and +Badge / −Badge to apply or remove; <b>File row:</b> select a destination subfolder (or type a new folder name) and Move to relocate model files with all sidecar files (.preview.png, .json, .civitai.info, etc.), Delete Files to permanently remove selected models; header row provides Deselect All and ★/☆ Favorite toggles</li>
+                                <li id="wfm-help-models-12">After moving or deleting models, ComfyUI may fail to load them because it caches the old file paths. Perform a Hard Reset from the ComfyUI menu (Queue → Hard Reset) or restart ComfyUI to refresh the model cache.</li>
                             </ul>
                         </div>
                     </div>
@@ -1158,6 +1162,7 @@
                                 <li id="wfm-help-trouble-3">Workflows not showing: Click refresh button, check if loadable in ComfyUI, try restarting browser/ComfyUI</li>
                                 <li id="wfm-help-trouble-4">Image generation fails: Check if specified models exist in ComfyUI, verify connection, try restarting</li>
                                 <li id="wfm-help-trouble-5">LoRA Stack fails with "No such file or directory" error: The LoRA may not be recognized by comfyui-lora-manager (known issue). Try a different LoRA or check if the file appears in Lora Manager's own UI</li>
+                                <li id="wfm-help-trouble-6">Model loading error after moving or deleting models: ComfyUI caches file paths and may still reference old locations. Perform a Hard Reset from the ComfyUI menu (Queue → Hard Reset) or restart ComfyUI to clear the cache.</li>
                             </ul>
                         </div>
                     </div>
@@ -1268,7 +1273,8 @@
                         <button class="wfm-gallery-detail-tab-btn active" data-detail-tab="info">Info</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="meta">JSON</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="group">Groups</button>
-                        <button id="wfm-gallery-open-metadata-btn" class="wfm-gallery-detail-tab-btn" title="Open in Metadata tab (or Alt+click image)">Metadata</button>
+                        <button id="wfm-gallery-open-metadata-btn" class="wfm-gallery-detail-tab-btn wfm-gallery-action-btn-green" title="Open in Metadata tab (or Alt+click image)">Metadata</button>
+                        <button id="wfm-gallery-load-genui-btn" class="wfm-gallery-detail-tab-btn wfm-gallery-action-btn-primary" title="Load workflow into GenerateUI">Load GenUI</button>
                     </div>
                     <!-- Info タブ -->
                     <div id="wfm-gallery-detail-info" class="wfm-gallery-detail-tab-content active">

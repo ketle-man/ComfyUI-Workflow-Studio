@@ -602,6 +602,41 @@
     background: rgba(255,255,255,0.2);
 }
 
+/* ── 詳細パネル アクションボタン (タブナビ内) ────────────────── */
+
+.wfm-gallery-action-btn-green,
+.wfm-gallery-action-btn-primary {
+    padding: 4px 10px !important;
+    border-radius: 4px !important;
+    border-style: solid !important;
+    border-width: 1px !important;
+    cursor: pointer !important;
+    font-size: 12px !important;
+    white-space: nowrap;
+    align-self: center;
+    margin: 2px 3px;
+}
+
+.wfm-gallery-action-btn-green {
+    background: var(--wfm-success, #22c55e) !important;
+    color: #fff !important;
+    border-color: var(--wfm-success, #22c55e) !important;
+}
+.wfm-gallery-action-btn-green:hover {
+    background: #16a34a !important;
+    border-color: #16a34a !important;
+}
+
+.wfm-gallery-action-btn-primary {
+    background: var(--wfm-primary) !important;
+    color: #fff !important;
+    border-color: var(--wfm-primary) !important;
+}
+.wfm-gallery-action-btn-primary:hover {
+    background: var(--wfm-primary-hover) !important;
+    border-color: var(--wfm-primary-hover) !important;
+}
+
 /* ── ファイル操作ボタン (詳細パネル) ─────────────────────────── */
 
 .wfm-gallery-file-actions {

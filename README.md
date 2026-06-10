@@ -5,7 +5,7 @@ A comprehensive workflow management and generation UI plugin for [ComfyUI](https
 Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.34-green)
+![Version](https://img.shields.io/badge/version-0.3.35-green)
 
 ## Screenshots
 
@@ -48,6 +48,7 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 
 ### GenerateUI Tab (v0.3.5)
 - **5-tab layout** — Input / Model / Settings / Feeder / Batch tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
+- **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API
 - **Input tab** — Prompt (top) and Image drag-and-drop (bottom) in the left column; Raw JSON (540px) in the right column
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
@@ -127,6 +128,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Favorites** — star images inline without reopening the detail panel
 - **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel
 - **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab
+- **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
 - **Performance** — folder-level mtime cache (30s TTL) for fast incremental refresh; tree expansion state preserved across folder operations
@@ -141,7 +143,8 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 
 ### Models Tab (v0.2.3)
 - **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding) with sub-tab switching
-- **Thumbnail / Table views** — switch between view modes with pagination (24 items per page); Table view includes **Type** and **Base Model** columns sourced from cached CivitAI data, displayed between the Subdirectory and Extension columns
+- **Thumbnail / Table views** — switch between view modes with pagination (24 items per page); Table view includes **Type** and **Base Model** columns sourced from cached CivitAI data, displayed between the Subdirectory and Extension columns; Enable/Disable column labeled **E/D**
+- **Table column sort** — click any column header to sort ascending (▲), click again for descending (▼), click a third time to clear; active column highlighted in accent color
 - **Search & Filter** — full-text search, filter by tags, groups, and favorites
 - **User-defined badges** — assign free-label badges to models; badge colors shared with the Workflow tab palette
 - **Side panel tabs** — opens to CivitAI tab by default when a model is selected; Info (file path display with click-to-copy, tags, memo), Groups management, CivitAI integration
@@ -282,6 +285,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.35
+- **Models tab — Table column sort** — click any column header to sort ascending (▲), click again for descending (▼), click a third time to clear; active column name highlighted in accent color; Enable/Disable column header now labeled **E/D**
+- **Gallery tab — Load GenUI button** — new button to the right of the Metadata button in the detail panel; loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; warning toast shown if no workflow is embedded or the format is unsupported; Metadata button restyled green, Load GenUI uses primary accent color
+- **GenerateUI tab — Save button** — new button at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API; workflow name label updates to the saved filename on success
 
 ### v0.3.33
 - **LoRA pane — workflow load no longer overwrites LoraManager** — removed the auto-apply block that replaced `inputs.loras` / `inputs.text` with Stack group contents on every workflow load; Stack is now applied only when the Apply button is pressed

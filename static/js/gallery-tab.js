@@ -6,6 +6,7 @@
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { loadFileIntoMetadataTab } from "./metadata-tab.js";
+import { loadWorkflowIntoEditor } from "./generate-tab.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -1297,6 +1298,22 @@ function bindEvents() {
             return;
         }
         openImageInMetadataTab(state.selectedImage);
+    });
+
+    // Load in GenerateUI ボタン: 埋め込みワークフローをGenerateUIタブに読み込む
+    document.getElementById("wfm-gallery-load-genui-btn")?.addEventListener("click", async () => {
+        if (!state.selectedImage) {
+            showToast("Please select an image first", "error");
+            return;
+        }
+        if (!state.embeddedWorkflow) {
+            showToast("No ComfyUI workflow embedded in this image.", "warning");
+            return;
+        }
+        const loaded = await loadWorkflowIntoEditor(state.embeddedWorkflow, state.selectedImage.filename);
+        if (loaded !== false) {
+            document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
+        }
     });
 
     // 詳細タブ切り替え（Metadataボタンはタブではないので除外）

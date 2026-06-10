@@ -4254,6 +4254,17 @@ body {
 }
 
 
+/* Table sort header */
+.wfm-table-th-sortable {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    white-space: nowrap;
+}
+.wfm-table-th-sortable:hover {
+    color: var(--wfm-accent, #6366f1);
+}
+
 /* Table view toggle cell */
 .wfm-table-td-toggle {
     text-align: center;

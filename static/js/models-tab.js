@@ -47,6 +47,8 @@ const state = {
     selectedModel: null,
     loaded: {},
     currentPage: 0,
+    sortColumn: null,  // "fav" | "filename" | "subdir" | "civtype" | "basemodel" | "ext" | "tags" | "memo" | "enabled"
+    sortDir: "asc",    // "asc" | "desc"
 };
 
 
@@ -737,7 +739,53 @@ function filterModels() {
         });
     }
 
-    return models;
+    return sortModels(models);
+}
+
+function sortModels(models) {
+    if (!state.sortColumn) return models;
+    return [...models].sort((a, b) => {
+        const metaA = state.modelMetadata[a] || {};
+        const metaB = state.modelMetadata[b] || {};
+        let va, vb;
+        switch (state.sortColumn) {
+            case "fav":
+                va = metaA.favorite ? 1 : 0; vb = metaB.favorite ? 1 : 0; break;
+            case "filename": {
+                const pa = parseModelPath(a); const pb = parseModelPath(b);
+                va = pa.name.toLowerCase(); vb = pb.name.toLowerCase(); break;
+            }
+            case "subdir": {
+                const pa = parseModelPath(a); const pb = parseModelPath(b);
+                va = pa.dir.toLowerCase(); vb = pb.dir.toLowerCase(); break;
+            }
+            case "civtype": {
+                const civA = metaA.sha256 && state.civitaiCache[metaA.sha256];
+                const civB = metaB.sha256 && state.civitaiCache[metaB.sha256];
+                va = (civA?.type || "").toLowerCase(); vb = (civB?.type || "").toLowerCase(); break;
+            }
+            case "basemodel": {
+                const civA = metaA.sha256 && state.civitaiCache[metaA.sha256];
+                const civB = metaB.sha256 && state.civitaiCache[metaB.sha256];
+                va = (civA?.baseModel || "").toLowerCase(); vb = (civB?.baseModel || "").toLowerCase(); break;
+            }
+            case "ext": {
+                const pa = parseModelPath(a); const pb = parseModelPath(b);
+                va = getExtension(pa.name).toLowerCase(); vb = getExtension(pb.name).toLowerCase(); break;
+            }
+            case "tags":
+                va = (metaA.tags || []).join(", ").toLowerCase();
+                vb = (metaB.tags || []).join(", ").toLowerCase(); break;
+            case "memo":
+                va = (metaA.memo || "").toLowerCase(); vb = (metaB.memo || "").toLowerCase(); break;
+            case "enabled":
+                va = isModelDisabled(a) ? 1 : 0; vb = isModelDisabled(b) ? 1 : 0; break;
+            default: return 0;
+        }
+        if (va < vb) return state.sortDir === "asc" ? -1 : 1;
+        if (va > vb) return state.sortDir === "asc" ? 1 : -1;
+        return 0;
+    });
 }
 
 function getAllTags() {
@@ -1058,6 +1106,14 @@ function renderThumbView(grid, models) {
 
 // ── Table View ────────────────────────────────────────────
 
+function thSortHtml(label, col, extraClass = "", extraStyle = "") {
+    const isActive = state.sortColumn === col;
+    const arrow = isActive ? (state.sortDir === "asc" ? " ▲" : " ▼") : "";
+    const activeStyle = isActive ? "color:var(--wfm-accent,#6366f1);" : "";
+    const cls = ["wfm-table-th-sortable", extraClass].filter(Boolean).join(" ");
+    return `<th class="${cls}" data-sort-col="${col}" style="${activeStyle}${extraStyle}">${label}${arrow}</th>`;
+}
+
 function renderTableView(grid, models) {
     const showBatchBtn = ["checkpoint", "lora"].includes(state.activeModelType);
     const showStackBtn = state.activeModelType === "lora";
@@ -1103,16 +1159,16 @@ function renderTableView(grid, models) {
     const checkTh = state.selectMode ? `<th style="width:24px;"></th>` : "";
     grid.innerHTML = `<table class="wfm-models-table"><thead><tr>
         ${checkTh}
-        <th style="width:30px;">&#9733;</th>
+        ${thSortHtml("&#9733;", "fav", "", "width:30px;text-align:center;")}
         <th style="width:40px;"></th>
-        <th class="wfm-table-th-filename">${t("modelsFileName")}</th>
-        <th class="wfm-table-th-subdir">${t("modelsSubdir")}</th>
-        <th class="wfm-table-th-civtype">${t("civitaiType")}</th>
-        <th class="wfm-table-th-basemodel">${t("civitaiBaseModel")}</th>
-        <th class="wfm-table-th-ext">${t("modelsExt")}</th>
-        <th>${t("modelsTags")}</th>
-        <th>${t("modelsMemo")}</th>
-        <th style="width:50px;"></th>
+        ${thSortHtml(t("modelsFileName"), "filename", "wfm-table-th-filename")}
+        ${thSortHtml(t("modelsSubdir"), "subdir", "wfm-table-th-subdir")}
+        ${thSortHtml(t("civitaiType"), "civtype", "wfm-table-th-civtype")}
+        ${thSortHtml(t("civitaiBaseModel"), "basemodel", "wfm-table-th-basemodel")}
+        ${thSortHtml(t("modelsExt"), "ext", "wfm-table-th-ext")}
+        ${thSortHtml(t("modelsTags"), "tags")}
+        ${thSortHtml(t("modelsMemo"), "memo")}
+        ${thSortHtml("E/D", "enabled", "", "width:50px;text-align:center;")}
         ${showBatchBtn ? `<th style="width:30px;">B</th>` : ""}
         ${showStackBtn ? `<th style="width:30px;">S</th>` : ""}
     </tr></thead><tbody>${rows}</tbody></table>`;
@@ -1152,6 +1208,24 @@ function renderTableView(grid, models) {
             e.stopPropagation();
             await toggleStack(mn);
             e.currentTarget.classList.toggle("active", isInStack(mn));
+        });
+    });
+
+    grid.querySelectorAll(".wfm-table-th-sortable").forEach((th) => {
+        th.addEventListener("click", () => {
+            const col = th.dataset.sortCol;
+            if (state.sortColumn === col) {
+                if (state.sortDir === "asc") {
+                    state.sortDir = "desc";
+                } else {
+                    state.sortColumn = null;
+                    state.sortDir = "asc";
+                }
+            } else {
+                state.sortColumn = col;
+                state.sortDir = "asc";
+            }
+            renderModelGrid();
         });
     });
 }
