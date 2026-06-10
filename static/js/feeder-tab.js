@@ -4,6 +4,7 @@
 
 import { comfyUI } from "./comfyui-client.js";
 import { showToast } from "./app.js";
+import { t } from "./i18n.js";
 
 // ── Module State ──────────────────────────────────────────────────
 const _s = {
@@ -76,11 +77,11 @@ function _applyToWorkflow() {
     const nodeId = document.getElementById("wfm-feeder-node-sel")?.value;
     const wf = comfyUI.currentWorkflow;
     if (!nodeId || !wf?.[nodeId]) {
-        showToast("No ImageFeeder node selected", "error");
+        showToast(t("feederNoNode"), "error");
         return;
     }
     _applyToNode(nodeId);
-    showToast("Applied to workflow", "success");
+    showToast(t("appliedToWorkflow"), "success");
 }
 
 // ── Run Loop ──────────────────────────────────────────────────────
@@ -108,18 +109,18 @@ function _applyToNode(nodeId) {
 
 async function _startRun() {
     if (_s.running) return;
-    if (!comfyUI.currentWorkflow) { showToast("No workflow loaded", "error"); return; }
-    if (!comfyUI.connected)       { showToast("Not connected to ComfyUI", "error"); return; }
+    if (!comfyUI.currentWorkflow) { showToast(t("noWorkflowLoaded"), "error"); return; }
+    if (!comfyUI.connected)       { showToast(t("notConnectedToComfyUI"), "error"); return; }
 
     const nodeId = document.getElementById("wfm-feeder-node-sel")?.value;
     if (!nodeId || !comfyUI.currentWorkflow[nodeId]) {
-        showToast("No ImageFeeder node selected", "error");
+        showToast(t("feederNoNode"), "error");
         return;
     }
 
     // WebSocket を先に接続してノード sync メッセージを受け取れるようにする
     const wsOk = await comfyUI.connectWebSocket();
-    if (!wsOk) { showToast("WebSocket connection failed", "error"); return; }
+    if (!wsOk) { showToast(t("wsConnectionFailed"), "error"); return; }
 
     _s.running = true;
     _setRunUI(true);
@@ -195,14 +196,14 @@ async function _startRun() {
                 if (indexEl) indexEl.value = _lastSync.next_index;
                 if (control === "increment" && !_lastSync.has_next) {
                     _s.running = false;
-                    showToast(`Feeder complete (${count} generated)`, "success");
+                    showToast(t("feederComplete", count), "success");
                     break;
                 }
                 // loop: has_next=false でも次は index=0 からなので続行
             }
         }
     } catch (err) {
-        if (_s.running) showToast("Feeder run error: " + err.message, "error");
+        if (_s.running) showToast(t("feederRunError", err.message), "error");
     } finally {
         comfyUI.socket?.removeEventListener("message", _syncHandler);
         _s.running = false;
@@ -215,7 +216,7 @@ async function _stopRun() {
     _s.running = false;
     try { await comfyUI.interrupt(); } catch {}
     _setRunUI(false);
-    showToast("Feeder stopped", "info");
+    showToast(t("feederStopped"), "info");
 }
 
 // ── Folder Tree ───────────────────────────────────────────────────
@@ -420,7 +421,7 @@ function _renderPresets() {
 
 async function _savePreset() {
     const name = document.getElementById("wfm-feeder-preset-name")?.value.trim();
-    if (!name) { showToast("Enter a preset name", "error"); return; }
+    if (!name) { showToast(t("enterPresetName"), "error"); return; }
     const sel = _s.images.filter(f => _s.selected.has(f));
     try {
         const res = await fetch("/image_feeder/presets", {
@@ -429,20 +430,20 @@ async function _savePreset() {
             body: JSON.stringify({ name, directory: _s.dir, selected_files: sel }),
         });
         if (res.ok) {
-            showToast(`Preset saved: ${name}`, "success");
+            showToast(t("presetSavedName", name), "success");
             const nameInput = document.getElementById("wfm-feeder-preset-name");
             if (nameInput) nameInput.value = "";
             await _loadPresets();
             const selEl = document.getElementById("wfm-feeder-preset-sel");
             if (selEl) selEl.value = name;
-        } else { showToast("Save failed", "error"); }
-    } catch (err) { showToast("Save error: " + err.message, "error"); }
+        } else { showToast(t("saveFailed"), "error"); }
+    } catch (err) { showToast(t("saveFailed", err.message), "error"); }
 }
 
 async function _applyPreset() {
     const selEl = document.getElementById("wfm-feeder-preset-sel");
     const name = selEl?.value;
-    if (!name || !_s.presets[name]) { showToast("Select a preset first", "error"); return; }
+    if (!name || !_s.presets[name]) { showToast(t("selectPresetFirst"), "error"); return; }
     const preset = _s.presets[name];
     const dir = preset.directory || "";
 
@@ -457,7 +458,7 @@ async function _applyPreset() {
     }
     _refreshGridCbs();
     _updateStatus();
-    showToast(`Preset loaded: ${name}`, "success");
+    showToast(t("presetLoaded", name), "success");
 }
 
 async function _deletePreset() {
@@ -465,9 +466,9 @@ async function _deletePreset() {
     if (!name) return;
     try {
         await fetch(`/image_feeder/presets/${encodeURIComponent(name)}`, { method: "DELETE" });
-        showToast(`Preset deleted: ${name}`, "info");
+        showToast(t("presetDeleted", name), "info");
         await _loadPresets();
-    } catch (err) { showToast("Delete error", "error"); }
+    } catch (err) { showToast(t("deleteFailed"), "error"); }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────

@@ -1,11 +1,23 @@
 # ComfyUI-Workflow-Studio
 
-A comprehensive workflow management and generation UI plugin for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
+A comprehensive workflow, asset management, and generation UI plugin for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
-Browse, organize, and execute workflows directly from a dedicated studio interface — without switching between windows or manually editing JSON.
+**📁 Management** — organize all your assets in one studio
+- Workflow, model, image, and prompt management
+- AI-powered prompt writing assistance, translation, and tag generation
+- File drop & Gallery-linked metadata viewing — inspect and reuse generation settings instantly
+
+**⚡ GenerateUI** — a productivity-focused generation tab connected to every other tab
+- Batch generation across models, samplers, prompts, and workflows
+- Image Feeder for continuous folder-based generation
+
+**📚 Workflow Studio Library** — a multi-function side panel for smooth ComfyUI integration
+- Drag & drop models, nodes, prompts, and workflows straight onto the canvas
+- View metadata from images / JSON, then drop the detected models and prompts onto the canvas
+- Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.35-green)
+![Version](https://img.shields.io/badge/version-0.3.36-green)
 
 ## Screenshots
 
@@ -17,13 +29,21 @@ Browse, organize, and execute workflows directly from a dedicated studio interfa
 |:---:|:---:|
 | ![Prompt Input Assistance](docs/3_PromptInputAssistance.png) | ![Gen UI Feeder](docs/4_GenUI_feeder.png) |
 
-| Top Bar | WS Library |
+| GenUI LoRA Stack | GenUI Batch |
 |:---:|:---:|
-| ![Top Bar](docs/5_topbar.png) | ![WS Library](docs/6_ws_library.png) |
+| ![GenUI LoRA Stack](docs/9_GenUI_LoraStack.png) | ![GenUI Batch](docs/10_GenUI_Batch.png) |
 
-| Library Information | Customize |
+| Models Multi-select Menu | Top Bar |
 |:---:|:---:|
-| ![Library Information](docs/7_library_Infomation.png) | ![Customize](docs/8_Customize.png) |
+| ![Models Multi-select Menu](docs/11_multiple_select_menu.png) | ![Top Bar](docs/5_topbar.png) |
+
+| WS Library | Library Information |
+|:---:|:---:|
+| ![WS Library](docs/6_ws_library.png) | ![Library Information](docs/7_library_Infomation.png) |
+
+| Customize | |
+|:---:|:---:|
+| ![Customize](docs/8_Customize.png) | |
 
 ---
 
@@ -285,6 +305,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.36
+- **GenerateUI Save — overwrite protection** — saving now checks for an existing file and asks for confirmation before overwriting; if the target file is in UI format, a dedicated warning explains that saving in API format will lose the node layout
+- **GenerateUI Save — Raw JSON sync** — unapplied Raw JSON edits are now included in the save (parsed and synced back to the editor); invalid JSON aborts the save with an error instead of silently saving stale content
+- **GenerateUI Save — hardening** — filename is set via DOM (no HTML-attribute injection), image extensions (`.png` etc.) are stripped from the default name, and a double-submit guard prevents duplicate POSTs
+- **Help i18n fixed** — v0.3.35 help text updates (Save button, table sort, JSON tab rename) were being overwritten at startup by stale i18n strings and never displayed; all help keys synced in EN / JA / ZH and new entries registered in the help ID map
+- **Toast i18n** — ~115 hard-coded English toasts replaced with translated messages (~60 new shared keys in EN / JA / ZH); Settings labels for Text Size / RAW JSON Colors that displayed raw key names are now properly defined
+- **Refactoring** — new shared `util.js` (`escapeHtml` unified across 5 files — the Metadata tab copy was missing `"` escaping; `readJsonStorage` / `getSettings` replace 15 direct `localStorage` parses); Models table sort now precomputes sort keys (faster on large libraries); Gallery action buttons moved off the tab-button class, removing all `!important` CSS overrides
+- **README refreshed** — intro rewritten around the three pillars (Management / GenerateUI / Library side panel); new screenshots: GenUI LoRA Stack, GenUI Batch, Models Multi-select Menu; WS Library image updated
 
 ### v0.3.35
 - **Models tab — Table column sort** — click any column header to sort ascending (▲), click again for descending (▼), click a third time to clear; active column name highlighted in accent color; Enable/Disable column header now labeled **E/D**

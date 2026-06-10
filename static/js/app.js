@@ -4,6 +4,7 @@
  */
 
 import { initI18n, t } from "./i18n.js";
+import { getSettings } from "./util.js";
 
 // Initialize i18n before anything else
 initI18n();
@@ -356,14 +357,15 @@ function applyI18nToHtml() {
         "wfm-help-models-5": "helpModels5", "wfm-help-models-6": "helpModels6",
         "wfm-help-models-7": "helpModels7", "wfm-help-models-8": "helpModels8",
         "wfm-help-models-9": "helpModels9", "wfm-help-models-10": "helpModels10",
-        "wfm-help-models-11": "helpModels11",
+        "wfm-help-models-11": "helpModels11", "wfm-help-models-12": "helpModels12",
         "wfm-help-gallery-title": "helpGalleryTitle",
         "wfm-help-gallery-1": "helpGallery1", "wfm-help-gallery-2": "helpGallery2",
         "wfm-help-gallery-3": "helpGallery3", "wfm-help-gallery-4": "helpGallery4",
         "wfm-help-gallery-5": "helpGallery5", "wfm-help-gallery-6": "helpGallery6",
         "wfm-help-gallery-7": "helpGallery7", "wfm-help-gallery-8": "helpGallery8",
         "wfm-help-gallery-9": "helpGallery9", "wfm-help-gallery-10": "helpGallery10",
-        "wfm-help-gallery-11": "helpGallery11",
+        "wfm-help-gallery-11": "helpGallery11", "wfm-help-gallery-12": "helpGallery12",
+        "wfm-help-gallery-13": "helpGallery13",
         "wfm-help-sidepanel-title": "helpSidepanelTitle",
         "wfm-help-sidepanel-1": "helpSidepanel1", "wfm-help-sidepanel-2": "helpSidepanel2",
         "wfm-help-sidepanel-3": "helpSidepanel3", "wfm-help-sidepanel-4": "helpSidepanel4",
@@ -383,7 +385,7 @@ function applyI18nToHtml() {
         "wfm-help-trouble-title": "helpTroubleTitle",
         "wfm-help-trouble-1": "helpTrouble1", "wfm-help-trouble-2": "helpTrouble2",
         "wfm-help-trouble-3": "helpTrouble3", "wfm-help-trouble-4": "helpTrouble4",
-        "wfm-help-trouble-5": "helpTrouble5",
+        "wfm-help-trouble-5": "helpTrouble5", "wfm-help-trouble-6": "helpTrouble6",
         "wfm-help-support-title": "helpSupportTitle",
         "wfm-help-support-desc": "helpSupportDesc",
         "wfm-help-github-desc": "helpGithubDesc",
@@ -440,15 +442,10 @@ import { initAiTab } from "./ai-tab.js";
 // Apply saved theme immediately to prevent flash of default theme
 applyTheme(getSavedTheme());
 
-// Apply saved textarea font size
+// Apply saved textarea font size & JSON highlight colors
 try {
-    const _s = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
+    const _s = getSettings();
     if (_s.textareaFontSize) applyTextareaFontSize(_s.textareaFontSize);
-} catch {}
-
-// Apply saved JSON highlight colors
-try {
-    const _s = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
     applyJsonColors(_s.jsonColors);
 } catch {}
 

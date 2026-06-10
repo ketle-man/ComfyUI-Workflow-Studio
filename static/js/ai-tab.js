@@ -5,6 +5,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
+import { readJsonStorage } from "./util.js";
 
 const SETTINGS_KEY = "wfm_ai_settings";
 
@@ -19,11 +20,7 @@ const LANG_NAMES = {
 // ============================================
 
 function loadAiSettings() {
-    try {
-        return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
-    } catch {
-        return {};
-    }
+    return readJsonStorage(SETTINGS_KEY);
 }
 
 function saveAiSettings(patch) {

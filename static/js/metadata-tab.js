@@ -5,6 +5,7 @@
  */
 
 import { t } from "./i18n.js";
+import { escapeHtml } from "./util.js";
 
 // ── File size limit ───────────────────────────────────────────
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -504,7 +505,6 @@ async function extractAllMetadata(file) {
 }
 
 // ── UI helpers ────────────────────────────────────────────────
-function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
 function buildModelItem(label) {
     const el = document.createElement("div");

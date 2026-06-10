@@ -1,5 +1,49 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-10: v0.3.36 — コードレビュー修正＋リファクタリング＋README刷新
+
+### コードレビュー修正（v0.3.35の不具合10件）
+
+#### ヘルプi18n配線の修正（`static/js/i18n.js`, `static/js/app.js`, `templates/index.html`）
+- **バグ**: `applyI18nToHtml()` が起動時に全言語でヘルプ文を上書きするため、v0.3.35でindex.htmlに追記したヘルプ更新（Saveボタン・ソート・JSONタブ改名）が一切表示されなかった
+- `helpGen2` / `helpModels2` / `helpGallery8` / `helpGallery10` を3言語ともindex.htmlの新文言に同期
+- `helpGallery12` / `helpGallery13` キーを3言語で新規追加（Metadata / Load GenUI ボタン説明）
+- `helpIdMap` に `wfm-help-models-12` / `wfm-help-trouble-6` / `wfm-help-gallery-12` / `wfm-help-gallery-13` を登録
+- index.html の「Thumbnail, Card, and Table」誤記を修正（カードビューはv0.3.22で廃止済み）
+
+#### GenerateUI Save の安全化（`static/js/generate-tab.js`）
+- **上書き確認**: 保存前に `GET /api/wfm/workflows` で既存ファイルを照会し、同名があれば confirm 表示。保存先が **UI形式**（`analysis.format === "ui"`）の場合はAPI形式上書きでノード配置が失われる旨の専用警告
+- **Raw JSON同期**: Raw JSONテキストエリアに未Applyの編集があればパースして保存対象に反映し、保存後エディタへ同期。不正JSONはエラーで中断（従来は古い内容を黙って保存していた）
+- **HTML注入防止**: ファイル名を `value="${...}"` 属性埋め込みからDOM経由の `input.value` 設定に変更
+- **デフォルト名**: 拡張子除去を `.json` のみ→画像拡張子（.png/.jpg/.jpeg/.webp/.gif）にも拡大
+- **二重送信ガード**: `saving` フラグでEnter連打・多重POSTを防止
+
+#### その他
+- `sortModels` を decorate-sort-undecorate 方式に変更（`sortKeyOf()` で1モデル1回だけキー計算。比較ごとの `parseModelPath` 再計算を解消）（`static/js/models-tab.js`）
+- ギャラリーの Metadata / Load GenUI ボタンを `.wfm-gallery-detail-tab-btn` から専用の `.wfm-gallery-action-btn` に分離し、CSSの `!important` 16箇所を全廃（`templates/index.html`, `static/css/gallery-tab.css`）
+- Save関連・ギャラリーの新規文字列をi18n化（`saveWorkflowTitle` / `savedAs` / `overwriteConfirm` / `gallerySelectImageFirst` 等を3言語追加）
+
+### リファクタリング
+
+#### util.js 新設（`static/js/util.js` 新規）
+- `escapeHtml()`: 5ファイル（gallery / metadata / models / nodes / workflow）の重複定義を統一。metadata-tab版は `"` エスケープが抜けており属性値でHTML注入の恐れがあった（修正済み）
+- `readJsonStorage(key, fallback)` / `getSettings()`: `JSON.parse(localStorage.getItem(...))` の直書き15箇所（8ファイル）を置換。try/catchの重複も削減
+
+#### トーストi18n化（全タブJS, `static/js/i18n.js`）
+- ハードコード英語トースト約115箇所をすべて `t()` 化（残り0件）
+- 共通キー約60個を3言語（EN/JA/ZH）で追加: `errorWithMsg` / `groupCreated` / `presetSavedName` / `batchNoneSelected` / `generationComplete` など
+- 既存キーとの衝突回避: 文字列型の既存 `importError` / `presetSaved` と重複したため、新関数型キーは `importErrorMsg` / `presetSavedName` に命名
+- 既存バグ修正: Settings画面の `textSizeLabel` / `jsonColor*` 系11キーが未定義で生キー名が表示されていた（v0.3.14由来。`t() || "fallback"` はt()がキー名を返すため機能しない）→ 3言語で定義追加
+- ZHブロックに欠落していた `copyPositivePrompt` / `copyNegativePrompt` / `copiedToClipboard` / `noTextToCopy` を追加
+- 検証: 全 `t()` 呼び出しキーの定義確認・3言語のキー完全一致・重複キーなし・全JS構文チェック通過
+
+### README刷新（`README.md`, `pyproject.toml`, `docs/`）
+- 冒頭説明文を3本柱構成に書き換え: 📁 Management（ワークフロー/モデル/画像/プロンプト管理、AIプロンプト支援・翻訳・タグ生成、ファイルドロップ＆ギャラリー連携メタデータ）/ ⚡ GenerateUI（全タブ連携、モデル・サンプラー等バッチ生成、Image Feeder）/ 📚 Workflow Studio Library（キャンバスドロップ、画像/JSONメタデータ表示＆ドロップ、AIツール）
+- スクリーンショット差し替え・追加: `6_ws_library.png` 差し替え、`9_GenUI_LoraStack.png`（GenUI LoRA Stack）・`10_GenUI_Batch.png`（GenUI Batch）・`11_multiple_select_menu.png`（Models Multi-select Menu）を新規追加し、生成UI系3枚が連続するよう表を再配置
+- `pyproject.toml` の `description` をREADME新説明文と整合する内容に更新
+
+---
+
 ## 2026-06-10: v0.3.35 — テーブルソート・Load GenUI・ワークフロー保存
 
 ### 変更内容

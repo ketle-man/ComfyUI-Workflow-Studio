@@ -9,21 +9,18 @@ import { comfyEditor } from "./comfyui-editor.js";
 import { t } from "./i18n.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js";
+import { getSettings, readJsonStorage } from "./util.js";
 
 // ============================================
 // Eagle Auto-Save
 // ============================================
 
 function getEagleSettings() {
-    try {
-        const s = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
-        return {
-            url: s.eagleUrl || "http://localhost:41595",
-            autoSave: !!s.eagleAutoSave,
-        };
-    } catch {
-        return { url: "http://localhost:41595", autoSave: false };
-    }
+    const s = getSettings();
+    return {
+        url: s.eagleUrl || "http://localhost:41595",
+        autoSave: !!s.eagleAutoSave,
+    };
 }
 
 async function saveToEagle(imageUrl, name, tags = []) {
@@ -109,48 +106,77 @@ function updateStatus(connected) {
 
 async function saveCurrentWorkflow() {
     if (!comfyUI.currentWorkflow) {
-        showToast("No workflow loaded", "warning");
+        showToast(t("noWorkflowLoaded"), "warning");
         return;
     }
 
     const currentFilename = document.getElementById("wfm-gen-wf-name")?.dataset?.filename || "";
-    const defaultStem = currentFilename.replace(/\.json$/, "") || "workflow";
+    const defaultStem = currentFilename.replace(/\.(json|png|jpg|jpeg|webp|gif)$/i, "") || "workflow";
 
     const html = `
         <div style="display:flex;flex-direction:column;gap:14px;min-width:300px;">
             <div>
-                <label style="font-size:12px;color:var(--wfm-text-secondary);display:block;margin-bottom:4px;">Filename</label>
+                <label style="font-size:12px;color:var(--wfm-text-secondary);display:block;margin-bottom:4px;">${t("filenameLabel")}</label>
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <input type="text" id="wfm-save-wf-name" class="wfm-input" value="${defaultStem}" style="flex:1;" placeholder="workflow name">
+                    <input type="text" id="wfm-save-wf-name" class="wfm-input" style="flex:1;" placeholder="workflow name">
                     <span style="color:var(--wfm-text-secondary);font-size:13px;">.json</span>
                 </div>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end;">
-                <button class="wfm-btn wfm-btn-sm" id="wfm-save-wf-cancel-btn">Cancel</button>
-                <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-save-wf-confirm-btn">Save</button>
+                <button class="wfm-btn wfm-btn-sm" id="wfm-save-wf-cancel-btn">${t("cancel")}</button>
+                <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-save-wf-confirm-btn">${t("save")}</button>
             </div>
         </div>`;
 
-    openModal("Save Workflow", html);
+    openModal(t("saveWorkflowTitle"), html);
 
+    // 属性値に埋め込まず DOM 経由で初期値を設定（ファイル名中の引用符等によるHTML注入防止）
+    const input = document.getElementById("wfm-save-wf-name");
+    if (input) input.value = defaultStem;
     setTimeout(() => {
-        const input = document.getElementById("wfm-save-wf-name");
         if (input) { input.focus(); input.select(); }
     }, 50);
 
     document.getElementById("wfm-save-wf-cancel-btn")?.addEventListener("click", () => closeModal());
 
+    let saving = false;
     const doSave = async () => {
-        const input = document.getElementById("wfm-save-wf-name");
+        if (saving) return;
         const stem = input?.value?.trim();
         if (!stem) {
-            showToast("Please enter a filename", "warning");
+            showToast(t("pleaseEnterFilename"), "warning");
             return;
         }
         const filename = stem.endsWith(".json") ? stem : `${stem}.json`;
+        saving = true;
         try {
+            // Raw JSON に未適用の編集があれば保存対象に反映する
+            let workflow = comfyUI.currentWorkflow;
+            const rawText = document.getElementById("wfm-gen-raw-json")?.value ?? "";
+            if (rawText.trim() && rawText !== JSON.stringify(workflow, null, 2)) {
+                try {
+                    workflow = JSON.parse(rawText);
+                } catch {
+                    showToast(t("rawJsonUnappliedInvalid"), "error");
+                    return;
+                }
+            }
+
+            // 上書き確認（保存先がUI形式ならAPI形式化でレイアウトが失われる旨を警告）
+            try {
+                const listRes = await fetch("/api/wfm/workflows");
+                const listData = await listRes.json();
+                const existing = (Array.isArray(listData) ? listData : []).find(w => w.filename === filename);
+                if (existing) {
+                    const msg = existing.analysis?.format === "ui"
+                        ? t("uiFormatOverwriteWarn")
+                        : t("overwriteConfirm", filename);
+                    if (!confirm(msg)) return;
+                }
+            } catch { /* 一覧取得失敗時は確認をスキップして保存を続行 */ }
+
             const blob = new Blob(
-                [JSON.stringify(comfyUI.currentWorkflow, null, 2)],
+                [JSON.stringify(workflow, null, 2)],
                 { type: "application/json" }
             );
             const file = new File([blob], filename, { type: "application/json" });
@@ -160,23 +186,30 @@ async function saveCurrentWorkflow() {
             const data = await res.json();
             const ng = (data.results || []).filter(r => r.status === "error");
             if (ng.length) {
-                showToast(`Save failed: ${ng[0].message || "unknown error"}`, "error");
+                showToast(t("saveFailed", ng[0].message || "unknown error"), "error");
                 return;
             }
             closeModal();
-            const nameEl = document.getElementById("wfm-gen-wf-name");
-            if (nameEl) {
-                nameEl.textContent = filename;
-                nameEl.dataset.filename = filename;
+            if (workflow !== comfyUI.currentWorkflow) {
+                // Raw JSON の編集を保存した場合はエディタにも反映して同期する
+                await loadWorkflowIntoEditor(workflow, filename);
+            } else {
+                const nameEl = document.getElementById("wfm-gen-wf-name");
+                if (nameEl) {
+                    nameEl.textContent = filename;
+                    nameEl.dataset.filename = filename;
+                }
             }
-            showToast(`Saved: ${filename}`, "success");
+            showToast(t("savedAs", filename), "success");
         } catch (err) {
-            showToast(`Save error: ${err.message}`, "error");
+            showToast(t("saveFailed", err.message), "error");
+        } finally {
+            saving = false;
         }
     };
 
     document.getElementById("wfm-save-wf-confirm-btn")?.addEventListener("click", doSave);
-    document.getElementById("wfm-save-wf-name")?.addEventListener("keydown", (e) => {
+    input?.addEventListener("keydown", (e) => {
         if (e.key === "Enter") doSave();
     });
 }
@@ -195,7 +228,7 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
     } else if (format === "ui") {
         apiWorkflow = await comfyWorkflow.convertUiToApi(workflow);
     } else if (format === "unknown") {
-        showToast("Unknown workflow format", "error");
+        showToast(t("unknownWorkflowFormat"), "error");
         return false;
     }
 
@@ -227,7 +260,7 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
 
     refreshFeederNodeList();
 
-    showToast(`Workflow loaded: ${filename || ""}`, "success");
+    showToast(t("workflowLoadedName", filename || ""), "success");
     return true;
 }
 
@@ -884,9 +917,7 @@ async function _loadPromptGroupsForBatch() {
         const res = await fetch("/api/wfm/prompts");
         _batchGroupState.promptPresets = res.ok ? await res.json() : [];
     } catch { _batchGroupState.promptPresets = []; }
-    try {
-        _batchGroupState.promptGroups = JSON.parse(localStorage.getItem("wfm_prompt_preset_groups") || "{}");
-    } catch { _batchGroupState.promptGroups = {}; }
+    _batchGroupState.promptGroups = readJsonStorage("wfm_prompt_preset_groups");
 
     const validIds = new Set(_batchGroupState.promptPresets.map((p) => p.id));
     for (const g of Object.keys(_batchGroupState.promptGroups)) {
@@ -922,9 +953,7 @@ function _renderBatchPromptGroupList() {
 // Workflow グループ
 // ============================================
 function _loadWorkflowGroupsForBatch() {
-    try {
-        _batchGroupState.wfGroups = JSON.parse(localStorage.getItem("wfm_groups") || "{}");
-    } catch { _batchGroupState.wfGroups = {}; }
+    _batchGroupState.wfGroups = readJsonStorage("wfm_groups");
 
     const currentNames = new Set(Object.keys(_batchGroupState.wfGroups));
     for (const name of _batchGroupState.wfSelectedGroups) {
@@ -1235,7 +1264,7 @@ async function _coreGenerate(silent = false) {
         saveGeneratedImagesMeta(images, { ...comfyUI.currentWorkflow }).catch(() => {});
     }
 
-    if (!silent) showToast("Generation complete", "success");
+    if (!silent) showToast(t("generationComplete"), "success");
 }
 
 // ============================================
@@ -1283,7 +1312,7 @@ async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x)) {
             } catch (err) {
                 if (_ckptBatch.aborted) break;
                 failed++;
-                showToast(`[${i + 1}/${items.length}] Failed: ${err.message}`, "error");
+                showToast(t("batchItemFailed", i + 1, items.length, err.message), "error");
             }
         }
     } finally {
@@ -1301,7 +1330,7 @@ async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x)) {
     if (batchCurrentName) batchCurrentName.textContent = _ckptBatch.aborted ? "Stopped" : "Done";
 
     if (_ckptBatch.aborted) {
-        showToast(`Batch stopped — ${completed} completed, ${failed} failed`, "info");
+        showToast(t("batchStopped", completed, failed), "info");
     } else {
         showToast(
             `Batch complete: ${completed}/${items.length}${failed > 0 ? ` (${failed} failed)` : ""}`,
@@ -1315,9 +1344,9 @@ async function _runBatchGenerate() {
     switch (_activeBatchType) {
         case "checkpoint": {
             const ckptNodes = comfyUI.currentAnalysis?.checkpoint_nodes || [];
-            if (ckptNodes.length === 0) { showToast("No checkpoint node found in workflow", "error"); return; }
+            if (ckptNodes.length === 0) { showToast(t("modelsGenUINoNode", "checkpoint"), "error"); return; }
             const list = _getSelectedCheckpoints();
-            if (list.length === 0) { showToast("No checkpoints selected", "error"); return; }
+            if (list.length === 0) { showToast(t("batchNoneSelected", "checkpoints"), "error"); return; }
             await _runBatchLoop(list, (model) => {
                 for (const node of ckptNodes) {
                     if (comfyUI.currentWorkflow?.[node.id])
@@ -1328,9 +1357,9 @@ async function _runBatchGenerate() {
         }
         case "lora": {
             const loraNodes = comfyUI.currentAnalysis?.lora_nodes || [];
-            if (loraNodes.length === 0) { showToast("No LoRA node found in workflow", "error"); return; }
+            if (loraNodes.length === 0) { showToast(t("modelsGenUINoNode", "LoRA"), "error"); return; }
             const list = [..._getSelectedLoraGroupItems()];
-            if (list.length === 0) { showToast("No LoRAs selected", "error"); return; }
+            if (list.length === 0) { showToast(t("batchNoneSelected", "LoRAs"), "error"); return; }
             await _runBatchLoop(list, (loraName) => {
                 for (const node of loraNodes) {
                     if (!comfyUI.currentWorkflow?.[node.id]) continue;
@@ -1351,11 +1380,11 @@ async function _runBatchGenerate() {
             const positiveNodes = (comfyUI.currentAnalysis?.prompt_nodes || []).filter((n) => n.role === "positive");
             const negativeNodes = (comfyUI.currentAnalysis?.prompt_nodes || []).filter((n) => n.role === "negative");
             if (positiveNodes.length === 0 && negativeNodes.length === 0) {
-                showToast("No prompt node found in workflow", "error"); return;
+                showToast(t("modelsGenUINoNode", "prompt"), "error"); return;
             }
             // _getSelectedPromptGroupItems() はすでにプリセットオブジェクトの配列を返す
             const list = _getSelectedPromptGroupItems();
-            if (list.length === 0) { showToast("No prompts selected", "error"); return; }
+            if (list.length === 0) { showToast(t("batchNoneSelected", "prompts"), "error"); return; }
             await _runBatchLoop(list, (preset) => {
                 for (const node of positiveNodes) {
                     if (comfyUI.currentWorkflow?.[node.id])
@@ -1370,7 +1399,7 @@ async function _runBatchGenerate() {
         }
         case "workflow": {
             const list = [..._getSelectedWfGroupItems()];
-            if (list.length === 0) { showToast("No workflows selected", "error"); return; }
+            if (list.length === 0) { showToast(t("batchNoneSelected", "workflows"), "error"); return; }
             const savedWorkflow = comfyUI.currentWorkflow ? JSON.stringify(comfyUI.currentWorkflow) : null;
             const savedFilename = document.getElementById("wfm-gen-workflow-name")?.textContent || "";
             try {
@@ -1389,9 +1418,9 @@ async function _runBatchGenerate() {
         }
         case "sampler": {
             const samplerNodes = comfyUI.currentAnalysis?.sampler_nodes || [];
-            if (samplerNodes.length === 0) { showToast("No KSampler node found in workflow", "error"); return; }
+            if (samplerNodes.length === 0) { showToast(t("modelsGenUINoNode", "KSampler"), "error"); return; }
             const list = [..._samplerSelected].sort();
-            if (list.length === 0) { showToast("No samplers selected", "error"); return; }
+            if (list.length === 0) { showToast(t("batchNoneSelected", "samplers"), "error"); return; }
             await _runBatchLoop(list, (samplerName) => {
                 for (const node of samplerNodes) {
                     if (comfyUI.currentWorkflow?.[node.id])
@@ -1402,9 +1431,9 @@ async function _runBatchGenerate() {
         }
         case "scheduler": {
             const samplerNodes = comfyUI.currentAnalysis?.sampler_nodes || [];
-            if (samplerNodes.length === 0) { showToast("No KSampler node found in workflow", "error"); return; }
+            if (samplerNodes.length === 0) { showToast(t("modelsGenUINoNode", "KSampler"), "error"); return; }
             const list = [..._schedulerSelected].sort();
-            if (list.length === 0) { showToast("No schedulers selected", "error"); return; }
+            if (list.length === 0) { showToast(t("batchNoneSelected", "schedulers"), "error"); return; }
             await _runBatchLoop(list, (schedulerName) => {
                 for (const node of samplerNodes) {
                     if (comfyUI.currentWorkflow?.[node.id])
@@ -1422,7 +1451,7 @@ async function _runBatchGenerate() {
 
 async function handleGenerate() {
     if (!comfyUI.currentWorkflow) {
-        showToast("No workflow loaded", "error");
+        showToast(t("noWorkflowLoaded"), "error");
         return;
     }
     if (comfyUI.generating) return;
@@ -1449,7 +1478,7 @@ async function handleGenerate() {
             } catch (err) {
                 const progressText = document.getElementById("wfm-gen-progress-text");
                 if (progressText) progressText.textContent = "Error";
-                showToast("Generation error: " + err.message, "error");
+                showToast(t("generationError", err.message), "error");
             }
         }
     } finally {
@@ -1472,9 +1501,9 @@ export async function initGenerateTab() {
         updateStatus(connected);
         if (connected) {
             await comfyEditor.loadModelLists();
-            showToast("Connected to ComfyUI", "success");
+            showToast(t("connectedToComfyUI"), "success");
         } else {
-            showToast("Failed to connect", "error");
+            showToast(t("failedToConnect"), "error");
         }
     });
 
@@ -1484,7 +1513,7 @@ export async function initGenerateTab() {
         if (comfyUI.currentAnalysis) {
             comfyEditor.renderAll(comfyUI.currentAnalysis, comfyUI.currentWorkflow);
         }
-        showToast("Model lists refreshed", "success");
+        showToast(t("modelListsRefreshed"), "success");
         _rebuildSamplerList();
         _rebuildSchedulerList();
         _renderBatchPreview();
@@ -1496,7 +1525,7 @@ export async function initGenerateTab() {
     document.getElementById("wfm-gen-reset-workflow-btn")?.addEventListener("click", async () => {
         const filename = document.getElementById("wfm-gen-wf-name")?.dataset?.filename;
         if (!filename || !filename.endsWith(".json")) {
-            showToast("No file-based workflow loaded", "warning");
+            showToast(t("noFileWorkflowLoaded"), "warning");
             return;
         }
         try {
@@ -1505,7 +1534,7 @@ export async function initGenerateTab() {
             const data = await resp.json();
             await loadWorkflowIntoEditor(data, filename);
         } catch (err) {
-            showToast("Reset failed: " + err.message, "error");
+            showToast(t("resetFailed", err.message), "error");
         }
     });
 
@@ -1522,7 +1551,7 @@ export async function initGenerateTab() {
             _ckptBatch._resumeResolve = null;
         }
         await comfyUI.interrupt();
-        showToast("Interrupted", "info");
+        showToast(t("interrupted"), "info");
     });
 
     // Move shared Raw JSON widget into the active tab's rawjson-col
@@ -1585,7 +1614,7 @@ export async function initGenerateTab() {
             const wf = JSON.parse(textarea.value);
             await loadWorkflowIntoEditor(wf, "Raw JSON");
         } catch (err) {
-            showToast("Invalid JSON: " + err.message, "error");
+            showToast(t("invalidJsonMsg", err.message), "error");
         }
     });
 
@@ -1740,7 +1769,7 @@ export async function initGenerateTab() {
     // Auto-load default workflow (doesn't require ComfyUI connection)
     if (!comfyUI.currentWorkflow) {
         try {
-            const settings = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
+            const settings = getSettings();
             if (settings.defaultWorkflow && settings.defaultWorkflowData) {
                 await loadWorkflowIntoEditor(settings.defaultWorkflowData, settings.defaultWorkflow);
                 console.log("Workflow Studio: Auto-loaded default workflow:", settings.defaultWorkflow);

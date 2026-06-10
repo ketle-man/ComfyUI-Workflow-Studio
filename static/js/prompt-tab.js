@@ -4,6 +4,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
+import { readJsonStorage } from "./util.js";
 
 // ============================================
 // State
@@ -115,9 +116,7 @@ async function loadAllPresets() {
     promptPresets = await fetchPresets();
 
     // Load groups from localStorage
-    try {
-        pmGroups = JSON.parse(localStorage.getItem(PM_GROUPS_KEY) || "{}");
-    } catch { pmGroups = {}; }
+    pmGroups = readJsonStorage(PM_GROUPS_KEY);
 
     // Clean stale entries from groups (preserve reserved groups even if empty)
     const validIds = new Set(promptPresets.map(p => p.id));
@@ -1050,43 +1049,43 @@ export function initPromptTab() {
         if (!name || !name.trim()) return;
         const key = name.trim();
         if (pmGroups[key]) {
-            showToast("Group already exists", "error");
+            showToast(t("groupExists"), "error");
             return;
         }
         pmGroups[key] = [];
         saveGroups();
         renderPresetManager();
-        showToast(`Group "${key}" created`, "success");
+        showToast(t("groupCreated", key), "success");
     });
 
     document.getElementById("wfm-preset-add-to-group-btn")?.addEventListener("click", () => {
         const groupSelect = document.getElementById("wfm-preset-group-select");
         const groupName = groupSelect?.value;
         if (!groupName) {
-            showToast("Select a group first", "error");
+            showToast(t("selectGroupFirst"), "error");
             return;
         }
         const id = presetSelect?.value;
         if (!id) {
-            showToast("Select a preset first", "error");
+            showToast(t("selectPresetFirst"), "error");
             return;
         }
         if (!pmGroups[groupName]) pmGroups[groupName] = [];
         if (pmGroups[groupName].includes(id)) {
-            showToast("Already in this group", "info");
+            showToast(t("alreadyInGroup"), "info");
             return;
         }
         pmGroups[groupName].push(id);
         saveGroups();
         renderPresetManager();
-        showToast("Added to group", "success");
+        showToast(t("addedToGroup"), "success");
     });
 
     document.getElementById("wfm-preset-del-group-btn")?.addEventListener("click", () => {
         const groupSelect = document.getElementById("wfm-preset-group-select");
         const groupName = groupSelect?.value;
         if (!groupName) {
-            showToast("Select a group first", "error");
+            showToast(t("selectGroupFirst"), "error");
             return;
         }
         if (PROMPT_RESERVED_GROUPS.includes(groupName)) {
@@ -1097,7 +1096,7 @@ export function initPromptTab() {
         delete pmGroups[groupName];
         saveGroups();
         renderPresetManager();
-        showToast(`Group "${groupName}" deleted`, "success");
+        showToast(t("groupDeleted", groupName), "success");
     });
 
     // --- Preset Manager ---
@@ -1160,7 +1159,7 @@ export function initPromptTab() {
         const n = prompt("Number of items to pick (n):", "2");
         if (n === null) return;
         const num = parseInt(n, 10);
-        if (isNaN(num) || num < 1) { showToast("Enter a positive integer", "error"); return; }
+        if (isNaN(num) || num < 1) { showToast(t("enterPositiveInt"), "error"); return; }
         const template = "{" + num + "$$|}";
         const start = ta.selectionStart;
         wcInsertAtCursor(ta, template);
@@ -1198,7 +1197,7 @@ export function initPromptTab() {
         if (!src || !dst) return;
         dst.value = src.value;
         dst.dispatchEvent(new Event("input", { bubbles: true }));
-        showToast("Sent to Positive Prompt", "success");
+        showToast(t("sentToPositive"), "success");
     });
 
     document.getElementById("wfm-wc-to-neg-btn")?.addEventListener("click", () => {
@@ -1207,7 +1206,7 @@ export function initPromptTab() {
         if (!src || !dst) return;
         dst.value = src.value;
         dst.dispatchEvent(new Event("input", { bubbles: true }));
-        showToast("Sent to Negative Prompt", "success");
+        showToast(t("sentToNegative"), "success");
     });
 
     document.getElementById("wfm-wc-clear-btn")?.addEventListener("click", () => {
@@ -1235,22 +1234,22 @@ export function initPromptTab() {
         const ext = extSelect?.value || "txt";
         const content = contentTA?.value || "";
 
-        if (!rawName) { showToast("Enter a filename", "error"); return; }
+        if (!rawName) { showToast(t("pleaseEnterFilename"), "error"); return; }
         // Validate each path component (allow letters, numbers, -, _, ., space)
         const nameParts = rawName.split("/");
         if (nameParts.some(p => !p || !/^[\w\-. ]+$/.test(p))) {
-            showToast("Invalid path. Use folder/name format, each part: letters, numbers, -, _, . only", "error");
+            showToast(t("invalidPathFormat"), "error");
             return;
         }
         const name = rawName;
         const filename = `${name}.${ext}`;
         const saved = await wcSaveFile(filename, content);
         if (saved) {
-            showToast(`Saved: ${filename}`, "success");
+            showToast(t("savedAs", filename), "success");
             wcCloseEditor();
             wcRefreshFiles();
         } else {
-            showToast("Failed to save file", "error");
+            showToast(t("saveFailed"), "error");
         }
     });
 
@@ -1259,7 +1258,7 @@ export function initPromptTab() {
         if (!wcEditingFilename) return;
         if (!confirm(`Delete "${wcEditingFilename}"?`)) return;
         await wcDeleteFile(wcEditingFilename);
-        showToast(`Deleted: ${wcEditingFilename}`, "success");
+        showToast(t("deletedName", wcEditingFilename), "success");
         wcCloseEditor();
         wcRefreshFiles();
     });

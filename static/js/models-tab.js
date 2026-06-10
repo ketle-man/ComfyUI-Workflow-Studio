@@ -7,6 +7,7 @@ import { showToast, openModal, closeModal } from "./app.js";
 import { t } from "./i18n.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
+import { escapeHtml, readJsonStorage } from "./util.js";
 
 // ── Constants ─────────────────────────────────────────────
 const RESERVED_GROUPS = ["Batch", "Stack"];
@@ -190,9 +191,7 @@ function applyToGenUI(modelName, modelType) {
 // User-defined badge colors (stored in metadata per model)
 // Global badge palette: label → color, stored in localStorage
 function getBadgePalette() {
-    try {
-        return JSON.parse(localStorage.getItem("wfm_models_badge_palette") || "{}");
-    } catch { return {}; }
+    return readJsonStorage("wfm_models_badge_palette");
 }
 
 function saveBadgePalette(palette) {
@@ -201,13 +200,6 @@ function saveBadgePalette(palette) {
 
 // ── Helpers ───────────────────────────────────────────────
 
-function escapeHtml(s) {
-    return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
 
 function parseModelPath(fullName) {
     const lastSlash = Math.max(fullName.lastIndexOf("/"), fullName.lastIndexOf("\\"));
@@ -670,7 +662,7 @@ async function saveModelMetadata(modelName, updates) {
         }
         return data;
     } catch (err) {
-        showToast("Error saving metadata: " + err.message, "error");
+        showToast(t("saveFailed", err.message), "error");
         return null;
     }
 }
@@ -742,50 +734,44 @@ function filterModels() {
     return sortModels(models);
 }
 
+function sortKeyOf(modelName) {
+    const meta = state.modelMetadata[modelName] || {};
+    switch (state.sortColumn) {
+        case "fav":
+            return meta.favorite ? 1 : 0;
+        case "filename":
+            return parseModelPath(modelName).name.toLowerCase();
+        case "subdir":
+            return parseModelPath(modelName).dir.toLowerCase();
+        case "civtype": {
+            const civ = meta.sha256 && state.civitaiCache[meta.sha256];
+            return (civ?.type || "").toLowerCase();
+        }
+        case "basemodel": {
+            const civ = meta.sha256 && state.civitaiCache[meta.sha256];
+            return (civ?.baseModel || "").toLowerCase();
+        }
+        case "ext":
+            return getExtension(parseModelPath(modelName).name).toLowerCase();
+        case "tags":
+            return (meta.tags || []).join(", ").toLowerCase();
+        case "memo":
+            return (meta.memo || "").toLowerCase();
+        case "enabled":
+            return isModelDisabled(modelName) ? 1 : 0;
+        default:
+            return 0;
+    }
+}
+
 function sortModels(models) {
     if (!state.sortColumn) return models;
-    return [...models].sort((a, b) => {
-        const metaA = state.modelMetadata[a] || {};
-        const metaB = state.modelMetadata[b] || {};
-        let va, vb;
-        switch (state.sortColumn) {
-            case "fav":
-                va = metaA.favorite ? 1 : 0; vb = metaB.favorite ? 1 : 0; break;
-            case "filename": {
-                const pa = parseModelPath(a); const pb = parseModelPath(b);
-                va = pa.name.toLowerCase(); vb = pb.name.toLowerCase(); break;
-            }
-            case "subdir": {
-                const pa = parseModelPath(a); const pb = parseModelPath(b);
-                va = pa.dir.toLowerCase(); vb = pb.dir.toLowerCase(); break;
-            }
-            case "civtype": {
-                const civA = metaA.sha256 && state.civitaiCache[metaA.sha256];
-                const civB = metaB.sha256 && state.civitaiCache[metaB.sha256];
-                va = (civA?.type || "").toLowerCase(); vb = (civB?.type || "").toLowerCase(); break;
-            }
-            case "basemodel": {
-                const civA = metaA.sha256 && state.civitaiCache[metaA.sha256];
-                const civB = metaB.sha256 && state.civitaiCache[metaB.sha256];
-                va = (civA?.baseModel || "").toLowerCase(); vb = (civB?.baseModel || "").toLowerCase(); break;
-            }
-            case "ext": {
-                const pa = parseModelPath(a); const pb = parseModelPath(b);
-                va = getExtension(pa.name).toLowerCase(); vb = getExtension(pb.name).toLowerCase(); break;
-            }
-            case "tags":
-                va = (metaA.tags || []).join(", ").toLowerCase();
-                vb = (metaB.tags || []).join(", ").toLowerCase(); break;
-            case "memo":
-                va = (metaA.memo || "").toLowerCase(); vb = (metaB.memo || "").toLowerCase(); break;
-            case "enabled":
-                va = isModelDisabled(a) ? 1 : 0; vb = isModelDisabled(b) ? 1 : 0; break;
-            default: return 0;
-        }
-        if (va < vb) return state.sortDir === "asc" ? -1 : 1;
-        if (va > vb) return state.sortDir === "asc" ? 1 : -1;
-        return 0;
-    });
+    // ソートキーを1モデル1回だけ計算（比較ごとのparseModelPath等の再計算を回避）
+    const dir = state.sortDir === "asc" ? 1 : -1;
+    return models
+        .map((m) => [sortKeyOf(m), m])
+        .sort((a, b) => (a[0] < b[0] ? -dir : a[0] > b[0] ? dir : 0))
+        .map((pair) => pair[1]);
 }
 
 function getAllTags() {
@@ -1283,7 +1269,7 @@ async function clearStackGroup() {
     state.allModelGroups[state.activeModelType] = state.modelGroups;
     await saveModelGroups(state.modelGroups);
     renderModelGrid();
-    showToast("Stack cleared", "success");
+    showToast(t("stackCleared"), "success");
 }
 
 // ── Favorite toggle ───────────────────────────────────────
@@ -2089,7 +2075,7 @@ async function loadModelsForCurrentType() {
     } catch (err) {
         console.error("Failed to load models:", err);
         if (placeholder) placeholder.textContent = t("modelsLoadError");
-        showToast("Error: " + err.message, "error");
+        showToast(t("errorWithMsg", err.message), "error");
     }
 }
 

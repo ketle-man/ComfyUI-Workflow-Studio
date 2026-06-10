@@ -5,6 +5,7 @@
 import { showToast } from "./app.js";
 import { comfyUI } from "./comfyui-client.js";
 import { t } from "./i18n.js";
+import { escapeHtml } from "./util.js";
 
 // ── State ─────────────────────────────────────────────────
 
@@ -50,9 +51,6 @@ function categoryBadgeHtml(cat) {
     return `<span class="wfm-badge wfm-badge-category">${cat}</span>`;
 }
 
-function escapeHtml(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 // ── API ───────────────────────────────────────────────────
 
@@ -586,7 +584,7 @@ function renderSideGroups(node) {
         const name = input?.value?.trim();
         if (!name) return;
         if (state.nodeGroups[name]) {
-            showToast("Group already exists", "warning");
+            showToast(t("groupExists"), "warning");
             return;
         }
         state.nodeGroups[name] = [node.name];
@@ -604,7 +602,7 @@ function renderSideGroups(node) {
         const newName = prompt(`Rename group "${oldName}" to:`, oldName);
         if (!newName || newName === oldName) return;
         if (state.nodeGroups[newName] !== undefined) {
-            showToast("Group name already exists", "warning");
+            showToast(t("groupNameExists"), "warning");
             return;
         }
         state.nodeGroups[newName] = state.nodeGroups[oldName];
@@ -613,7 +611,7 @@ function renderSideGroups(node) {
         if (state.groupFilter === oldName) state.groupFilter = newName;
         renderSideGroups(node);
         renderFilters();
-        showToast(`Renamed to "${newName}"`, "success");
+        showToast(t("renamedTo", newName), "success");
     });
 
     // グループ削除
@@ -627,7 +625,7 @@ function renderSideGroups(node) {
         if (state.groupFilter === name) state.groupFilter = "";
         renderSideGroups(node);
         renderFilters();
-        showToast(`Group "${name}" deleted`, "success");
+        showToast(t("groupDeleted", name), "success");
     });
 }
 

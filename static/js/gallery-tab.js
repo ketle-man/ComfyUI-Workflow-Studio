@@ -7,6 +7,7 @@ import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { loadFileIntoMetadataTab } from "./metadata-tab.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
+import { escapeHtml } from "./util.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ async function openImageInMetadataTab(img) {
         const file = new File([blob], img.filename, { type: blob.type || "image/png" });
         await loadFileIntoMetadataTab(file);
     } catch (e) {
-        showToast(`Metadata error: ${e.message}`, "error");
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -480,7 +481,7 @@ async function toggleFavoriteInPlace(img, btn) {
             state.selectedImage.favorite = data.favorite;
         }
     } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -606,7 +607,7 @@ async function saveMetaField(fields) {
         const idx = state.images.findIndex(i => i.path === state.selectedImage.path);
         if (idx >= 0) Object.assign(state.images[idx], fields);
     } catch (e) {
-        showToast(`Save failed: ${e.message}`, "error");
+        showToast(t("saveFailed", e.message), "error");
     }
 }
 
@@ -729,9 +730,9 @@ function renderDetailGroup(img) {
                 const cached = state.images.find(i => i.path === img.path);
                 if (cached) cached.groups = img.groups;
                 renderDetailGroup(img);
-                showToast(`Removed from "${g}"`, "success");
+                showToast(t("removedFromGroupName", g), "success");
             } catch (e) {
-                showToast(`Error: ${e.message}`, "error");
+                showToast(t("errorWithMsg", e.message), "error");
             }
         });
     });
@@ -751,9 +752,9 @@ function renderDetailGroup(img) {
             const cached = state.images.find(i => i.path === img.path);
             if (cached) cached.groups = img.groups;
             renderDetailGroup(img);
-            showToast(`Added to "${g}"`, "success");
+            showToast(t("addedToGroupName", g), "success");
         } catch (e) {
-            showToast(`Error: ${e.message}`, "error");
+            showToast(t("errorWithMsg", e.message), "error");
         }
     });
 
@@ -763,7 +764,7 @@ function renderDetailGroup(img) {
         const name = input?.value.trim();
         if (!name) return;
         if (state.groups.some(g => g.name === name)) {
-            showToast("Group already exists", "warning");
+            showToast(t("groupExists"), "warning");
             return;
         }
         try {
@@ -783,9 +784,9 @@ function renderDetailGroup(img) {
             if (cached) cached.groups = img.groups;
             input.value = "";
             await loadGroups(); // セレクト類を更新
-            showToast(`Group "${name}" created`, "success");
+            showToast(t("groupCreated", name), "success");
         } catch (e) {
-            showToast(`Error: ${e.message}`, "error");
+            showToast(t("errorWithMsg", e.message), "error");
         }
     });
 
@@ -797,7 +798,7 @@ function renderDetailGroup(img) {
         const newName = prompt(`Rename group "${oldName}" to:`, oldName);
         if (!newName || newName === oldName) return;
         if (state.groups.some(g => g.name === newName)) {
-            showToast("Group name already exists", "warning");
+            showToast(t("groupNameExists"), "warning");
             return;
         }
         try {
@@ -820,9 +821,9 @@ function renderDetailGroup(img) {
                 state.groupFilter = newName;
             }
             await loadGroups();
-            showToast(`Renamed to "${newName}"`, "success");
+            showToast(t("renamedTo", newName), "success");
         } catch (e) {
-            showToast(`Error: ${e.message}`, "error");
+            showToast(t("errorWithMsg", e.message), "error");
         }
     });
 
@@ -843,26 +844,19 @@ function renderDetailGroup(img) {
                 if (filterSel) filterSel.value = "";
             }
             await loadGroups();
-            showToast(`Group "${name}" deleted`, "success");
+            showToast(t("groupDeleted", name), "success");
         } catch (e) {
-            showToast(`Error: ${e.message}`, "error");
+            showToast(t("errorWithMsg", e.message), "error");
         }
     });
 }
 
-function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
 
 // ── フォルダ作成・削除 ────────────────────────────────────────
 
 async function createFolder() {
     if (!state.currentFolder) {
-        showToast("Please select a parent folder first", "error");
+        showToast(t("selectParentFolderFirst"), "error");
         return;
     }
     const name = prompt("New folder name:");
@@ -875,13 +869,13 @@ async function createFolder() {
         });
         const data = await res.json();
         if (!data.ok) {
-            showToast(`Error: ${data.error}`, "error");
+            showToast(t("errorWithMsg", data.error), "error");
             return;
         }
-        showToast(`Folder "${name.trim()}" created`, "success");
+        showToast(t("folderCreated", name.trim()), "success");
         await loadFolderTree();
     } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -896,16 +890,16 @@ async function deleteFolder() {
         });
         const data = await res.json();
         if (!data.ok) {
-            showToast(`Error: ${data.error}`, "error");
+            showToast(t("errorWithMsg", data.error), "error");
             return;
         }
-        showToast("Folder deleted", "success");
+        showToast(t("folderDeleted"), "success");
         state.currentFolder = "";
         state.images = [];
         document.getElementById("wfm-gallery-grid").innerHTML = `<p class="wfm-placeholder">Select a folder to browse images.</p>`;
         await loadFolderTree();
     } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -920,7 +914,7 @@ async function performDeleteImages(paths) {
         });
         const data = await res.json();
         if (data.deleted && data.deleted.length > 0) {
-            showToast(`Deleted ${data.deleted.length} image(s)`, "success");
+            showToast(t("deletedNImages", data.deleted.length), "success");
             // 削除された画像をstateから除去
             const deletedSet = new Set(data.deleted);
             state.images = state.images.filter(img => !deletedSet.has(img.path));
@@ -940,10 +934,10 @@ async function performDeleteImages(paths) {
             loadFolderTree();
         }
         if (data.errors && data.errors.length > 0) {
-            showToast(`Errors: ${data.errors.join(", ")}`, "error");
+            showToast(t("errorsList", data.errors.join(", ")), "error");
         }
     } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -956,7 +950,7 @@ async function performMoveImages(paths, destFolder) {
         });
         const data = await res.json();
         if (data.moved && data.moved.length > 0) {
-            showToast(`Moved ${data.moved.length} image(s)`, "success");
+            showToast(t("movedNImages", data.moved.length), "success");
             const movedSet = new Set(data.moved.map(m => m.from));
             state.images = state.images.filter(img => !movedSet.has(img.path));
             state.selectedImages = new Set([...state.selectedImages].filter(p => !movedSet.has(p)));
@@ -974,13 +968,13 @@ async function performMoveImages(paths, destFolder) {
             loadFolderTree();
         }
         if (data.errors && data.errors.length > 0) {
-            showToast(`Errors: ${data.errors.join(", ")}`, "error");
+            showToast(t("errorsList", data.errors.join(", ")), "error");
         }
         if (data.error) {
-            showToast(`Error: ${data.error}`, "error");
+            showToast(t("errorWithMsg", data.error), "error");
         }
     } catch (e) {
-        showToast(`Error: ${e.message}`, "error");
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -1002,7 +996,7 @@ function openMoveModal(paths) {
     const destinations = allFolders.filter(f => f.abs_path !== state.currentFolder);
 
     if (destinations.length === 0) {
-        showToast("No other folders available. Create a subfolder first.", "error");
+        showToast(t("noOtherFolders"), "error");
         return;
     }
 
@@ -1055,7 +1049,7 @@ async function bulkAddToGroup(groupName) {
             success++;
         } catch (e) { /* continue */ }
     }
-    showToast(`Added ${success} image(s) to "${groupName}"`, "success");
+    showToast(t("addedNImagesToGroup", success, groupName), "success");
 }
 
 async function bulkSetFavorite(favoriteValue) {
@@ -1076,7 +1070,7 @@ async function bulkSetFavorite(favoriteValue) {
         } catch (e) { /* continue */ }
     }
     if (success > 0) {
-        showToast(`${favoriteValue ? "Favorited" : "Unfavorited"} ${success} image(s)`, "success");
+        showToast(favoriteValue ? t("favoritedNImages", success) : t("unfavoritedNImages", success), "success");
         renderImages(); // お気に入り状態が変わったのでビュー更新
     }
 }
@@ -1220,18 +1214,18 @@ function bindEvents() {
     // メモ保存
     document.getElementById("wfm-gallery-memo-save-btn")?.addEventListener("click", () => {
         const memo = document.getElementById("wfm-gallery-memo").value;
-        saveMetaField({ memo }).then(() => showToast("Memo saved", "success"));
+        saveMetaField({ memo }).then(() => showToast(t("memoSaved"), "success"));
     });
 
     // ワークフローコピー
     document.getElementById("wfm-gallery-copy-workflow-btn")?.addEventListener("click", () => {
         if (!state.embeddedWorkflow) {
-            showToast("No embedded workflow found.", "error");
+            showToast(t("galleryNoEmbeddedWorkflow"), "error");
             return;
         }
         navigator.clipboard.writeText(JSON.stringify(state.embeddedWorkflow, null, 2))
-            .then(() => showToast("Workflow copied to clipboard!", "success"))
-            .catch(() => showToast("Copy failed", "error"));
+            .then(() => showToast(t("workflowCopied"), "success"))
+            .catch(() => showToast(t("copyFailed"), "error"));
     });
 
     // 一括操作バー
@@ -1247,7 +1241,7 @@ function bindEvents() {
         if (sel && sel.value) {
             bulkAddToGroup(sel.value);
         } else {
-            showToast("Please select a group", "error");
+            showToast(t("selectGroupFirst"), "error");
         }
     });
 
@@ -1294,7 +1288,7 @@ function bindEvents() {
     // Metadataボタン: 選択画像をMetadataタブで開く
     document.getElementById("wfm-gallery-open-metadata-btn")?.addEventListener("click", () => {
         if (!state.selectedImage) {
-            showToast("Please select an image first", "error");
+            showToast(t("gallerySelectImageFirst"), "error");
             return;
         }
         openImageInMetadataTab(state.selectedImage);
@@ -1303,11 +1297,11 @@ function bindEvents() {
     // Load in GenerateUI ボタン: 埋め込みワークフローをGenerateUIタブに読み込む
     document.getElementById("wfm-gallery-load-genui-btn")?.addEventListener("click", async () => {
         if (!state.selectedImage) {
-            showToast("Please select an image first", "error");
+            showToast(t("gallerySelectImageFirst"), "error");
             return;
         }
         if (!state.embeddedWorkflow) {
-            showToast("No ComfyUI workflow embedded in this image.", "warning");
+            showToast(t("galleryNoEmbeddedWorkflow"), "warning");
             return;
         }
         const loaded = await loadWorkflowIntoEditor(state.embeddedWorkflow, state.selectedImage.filename);
@@ -1316,7 +1310,7 @@ function bindEvents() {
         }
     });
 
-    // 詳細タブ切り替え（Metadataボタンはタブではないので除外）
+    // 詳細タブ切り替え（data-detail-tab を持つボタンのみ対象。Metadata / Load GenUI はアクションボタン）
     document.querySelectorAll(".wfm-gallery-detail-tab-btn[data-detail-tab]").forEach(btn => {
         btn.addEventListener("click", () => {
             document.querySelectorAll(".wfm-gallery-detail-tab-btn[data-detail-tab]").forEach(b => b.classList.remove("active"));

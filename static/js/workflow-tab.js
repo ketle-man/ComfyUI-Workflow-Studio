@@ -10,6 +10,7 @@ import { loadWorkflowIntoEditor } from "./generate-tab.js";
 import { t, getSummaryPrompt } from "./i18n.js";
 import { highlightJSON } from "./json-highlight.js";
 import { openBadgeEditModal } from "./models-tab.js";
+import { escapeHtml, getSettings, readJsonStorage } from "./util.js";
 
 // ============================================
 // Constants
@@ -33,21 +34,13 @@ const state = {
 
 
 function getBadgePalette() {
-    try { return JSON.parse(localStorage.getItem("wfm_models_badge_palette") || "{}"); }
-    catch { return {}; }
+    return readJsonStorage("wfm_models_badge_palette");
 }
 
 function saveBadgePalette(palette) {
     localStorage.setItem("wfm_models_badge_palette", JSON.stringify(palette));
 }
 
-function escapeHtml(s) {
-    return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
 
 // ============================================
 // Open in ComfyUI
@@ -94,7 +87,7 @@ const groups = {
 
     load() {
         try {
-            this._data = JSON.parse(localStorage.getItem("wfm_groups") || "{}");
+            this._data = readJsonStorage("wfm_groups");
         } catch {
             this._data = {};
         }
@@ -501,7 +494,7 @@ async function toggleFavorite(wf, btnEl) {
         btnEl.textContent = newVal ? "\u2605" : "\u2606";
         btnEl.classList.toggle("active", newVal);
     } catch (err) {
-        showToast("Error: " + err.message, "error");
+        showToast(t("errorWithMsg", err.message), "error");
     }
 }
 
@@ -677,7 +670,7 @@ function renderSideGroup(wf) {
             groups.remove(filename, btn.dataset.group);
             renderSideGroup(wf);
             _refreshGroupFilter();
-            showToast(`Removed from "${btn.dataset.group}"`, "success");
+            showToast(t("removedFromGroupName", btn.dataset.group), "success");
         });
     });
 
@@ -687,7 +680,7 @@ function renderSideGroup(wf) {
         if (!g) return;
         groups.assign(filename, g);
         renderSideGroup(wf);
-        showToast(`Added to "${g}"`, "success");
+        showToast(t("addedToGroupName", g), "success");
     });
 
     // グループ作成（作成後に現在のWFに追加）
@@ -696,14 +689,14 @@ function renderSideGroup(wf) {
         const name = input?.value.trim();
         if (!name) return;
         if (!groups.createGroup(name)) {
-            showToast(`"${name}" already exists`, "warning");
+            showToast(t("nameAlreadyExists", name), "warning");
             return;
         }
         groups.assign(filename, name);
         input.value = "";
         renderSideGroup(wf);
         _refreshGroupFilter();
-        showToast(`Group "${name}" created`, "success");
+        showToast(t("groupCreated", name), "success");
     });
 
     // グループ名変更
@@ -717,13 +710,13 @@ function renderSideGroup(wf) {
         const newName = prompt(`Rename group "${oldName}" to:`, oldName);
         if (!newName || newName === oldName) return;
         if (!groups.renameGroup(oldName, newName)) {
-            showToast("Rename failed", "error");
+            showToast(t("renameFailed"), "error");
             return;
         }
         if (state.groupFilter === oldName) state.groupFilter = newName;
         renderSideGroup(wf);
         _refreshGroupFilter();
-        showToast(`Renamed to "${newName}"`, "success");
+        showToast(t("renamedTo", newName), "success");
     });
 
     // グループ削除
@@ -743,7 +736,7 @@ function renderSideGroup(wf) {
         }
         renderSideGroup(wf);
         _refreshGroupFilter();
-        showToast(`Group "${name}" deleted`, "success");
+        showToast(t("groupDeleted", name), "success");
     });
 
     _refreshGroupFilter();
@@ -903,7 +896,7 @@ function openDetailModal(wf) {
                 favBtn.classList.toggle("active", newVal);
                 renderGrid();
             } catch (err) {
-                showToast("Error: " + err.message, "error");
+                showToast(t("errorWithMsg", err.message), "error");
             }
         });
         titleEl.parentNode.insertBefore(favBtn, titleEl);
@@ -1036,7 +1029,7 @@ function openDetailModal(wf) {
                 apiData = await comfyWorkflow.convertUiToApi(wfData);
             }
             // Save to localStorage
-            const settings = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
+            const settings = getSettings();
             settings.defaultWorkflow = wf.filename;
             settings.defaultWorkflowData = apiData;
             localStorage.setItem("wfm_settings", JSON.stringify(settings));
@@ -1186,7 +1179,7 @@ export function initWorkflowTab() {
                 showToast(msg, ng.length ? "error" : "success");
                 await loadWorkflows();
             } catch (err) {
-                showToast("Import error: " + err.message, "error");
+                showToast(t("importErrorMsg", err.message), "error");
             }
             e.target.value = "";
         });
@@ -1229,10 +1222,10 @@ export function initWorkflowTab() {
                 const data = await importFiles(files);
                 const ok =
                     data.results?.filter((r) => r.status === "success").length ?? 0;
-                showToast(`${ok} file(s) imported via drag & drop`, "success");
+                showToast(t("importedViaDrop", ok), "success");
                 await loadWorkflows();
             } catch (err) {
-                showToast("Import error: " + err.message, "error");
+                showToast(t("importErrorMsg", err.message), "error");
             }
         });
     }
@@ -1306,7 +1299,7 @@ export function initWorkflowTab() {
     // Toolbar: Refresh button
     document.getElementById("wfm-refresh-btn")?.addEventListener("click", async () => {
         await loadWorkflows();
-        showToast("Refreshed", "success");
+        showToast(t("refreshed"), "success");
     });
 
     // Toolbar: ⚙ settings button (view settings panel)

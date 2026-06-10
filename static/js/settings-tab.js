@@ -6,6 +6,8 @@ import { showToast } from "./app.js";
 import { comfyUI } from "./comfyui-client.js";
 import { t, getLang, getSummaryLang, setLang, setSummaryLang, getLanguageOptions, getSummaryLanguageOptions } from "./i18n.js";
 
+import { getSettings, readJsonStorage } from "./util.js";
+
 const SETTINGS_KEY = "wfm_settings";
 
 function rgbToHex(rgb) {
@@ -15,11 +17,7 @@ function rgbToHex(rgb) {
 }
 
 function loadLocalSettings() {
-    try {
-        return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
-    } catch {
-        return {};
-    }
+    return readJsonStorage(SETTINGS_KEY);
 }
 
 function saveLocalSettings(patch) {
@@ -960,7 +958,7 @@ export async function initSettingsTab() {
         setLang(lang);
         saveLocalSettings({ ...loadLocalSettings(), uiLang: lang });
         // Re-render the entire page to apply new language
-        showToast("Language changed. Reloading...", "success");
+        showToast(t("languageChanged"), "success");
         setTimeout(() => location.reload(), 500);
     });
 
@@ -1176,7 +1174,7 @@ export async function initSettingsTab() {
 
     // Clear default workflow
     document.getElementById("wfm-settings-clear-wf")?.addEventListener("click", () => {
-        const s = JSON.parse(localStorage.getItem("wfm_settings") || "{}");
+        const s = getSettings();
         delete s.defaultWorkflow;
         delete s.defaultWorkflowData;
         localStorage.setItem("wfm_settings", JSON.stringify(s));
