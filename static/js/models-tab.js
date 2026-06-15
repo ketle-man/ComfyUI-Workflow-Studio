@@ -314,6 +314,12 @@ function clearSelection() {
     renderBulkActionBar();
 }
 
+function selectAll() {
+    filterModels().forEach(m => state.selectedModels.add(m));
+    renderModelGrid();
+    renderBulkActionBar();
+}
+
 function renderBulkActionBar() {
     const bar = document.getElementById("wfm-models-bulk-bar");
     if (!bar) return;
@@ -340,6 +346,7 @@ function renderBulkActionBar() {
         <div class="wfm-bulk-header">
             <span class="wfm-bulk-count">${count} ${t("modelSelected")}</span>
             <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-deselect-all-btn">${t("modelBulkDeselectAll")}</button>
+            <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-select-all-btn">${t("modelBulkSelectAll")}</button>
             <span class="wfm-bulk-sep"></span>
             <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-fav-add-btn">${t("modelBulkFavAdd")}</button>
             <button class="wfm-btn wfm-btn-sm" id="wfm-bulk-fav-remove-btn">${t("modelBulkFavRemove")}</button>
@@ -377,6 +384,7 @@ function renderBulkActionBar() {
     `;
 
     document.getElementById("wfm-bulk-deselect-all-btn")?.addEventListener("click", clearSelection);
+    document.getElementById("wfm-bulk-select-all-btn")?.addEventListener("click", selectAll);
     document.getElementById("wfm-bulk-fav-add-btn")?.addEventListener("click", () => bulkSetFavorite(true));
     document.getElementById("wfm-bulk-fav-remove-btn")?.addEventListener("click", () => bulkSetFavorite(false));
     document.getElementById("wfm-bulk-add-btn")?.addEventListener("click", () => {

@@ -455,7 +455,7 @@ function updateBulkBar() {
     const count = state.selectedImages.size;
     if (count > 0) {
         bar.style.display = "";
-        countEl.textContent = `${count} selected`;
+        countEl.textContent = `${count} ${t("galleryBulkSelected")}`;
     } else {
         bar.style.display = "none";
     }
@@ -647,7 +647,7 @@ function _updateGroupSelects() {
     const bulkSel = document.getElementById("wfm-gallery-bulk-group-select");
     if (bulkSel) {
         const current = bulkSel.value;
-        bulkSel.innerHTML = `<option value="">Add to Group...</option>`;
+        bulkSel.innerHTML = `<option value="">${t("galleryBulkAddToGroup")}</option>`;
         state.groups.forEach(g => {
             const opt = document.createElement("option");
             opt.value = g.name;
@@ -1234,6 +1234,12 @@ function bindEvents() {
         updateBulkBar();
         // 選択状態をビューから除去
         document.querySelectorAll(".multi-selected").forEach(el => el.classList.remove("multi-selected"));
+    });
+
+    document.getElementById("wfm-gallery-bulk-select-all")?.addEventListener("click", () => {
+        state.images.forEach(img => state.selectedImages.add(img.path));
+        renderImages();
+        updateBulkBar();
     });
 
     document.getElementById("wfm-gallery-bulk-group-add")?.addEventListener("click", () => {

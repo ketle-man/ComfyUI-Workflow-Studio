@@ -1,5 +1,26 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-15: 全選択ボタン追加＋ギャラリーバルクバーi18n対応
+
+### 変更内容
+
+#### Modelsタブ: 複数選択バーに「全選択」ボタン追加（`static/js/models-tab.js`, `static/js/i18n.js`）
+- `selectAll()` 関数を追加: `filterModels()` の結果（フィルター・検索適用後の表示中モデル）を `state.selectedModels` に一括追加して `renderModelGrid()` / `renderBulkActionBar()` を呼び出す
+- `renderBulkActionBar()` のバーHTMLに `wfm-bulk-select-all-btn` を Deselect All ボタンの右隣に追加
+- イベントリスナーを追加（`"wfm-bulk-select-all-btn"` → `selectAll`）
+- i18n: `modelBulkSelectAll` を英語 "Select All" / 日本語 "全選択" / 中国語 "全选" で追加
+
+#### Galleryタブ: 複数選択バーに「全選択」ボタン追加＋全ボタンi18n対応（`templates/index.html`, `static/js/gallery-tab.js`, `static/js/app.js`, `static/js/i18n.js`）
+- `wfm-gallery-bulk-select-all` ボタンを Deselect All ボタンの右隣に追加（`templates/index.html`）
+- クリックリスナー: `state.images` の全パスを `state.selectedImages` に追加し `renderImages()` / `updateBulkBar()` を呼び出す
+- バルクバーの全ボタン・セレクトのテキストを空にして `applyI18nToHtml()` 経由で `t()` 設定に変更（ハードコード英語文字列を排除）
+- `updateBulkBar()` の選択件数表示を `t("galleryBulkSelected")` でi18n化（`"${count} selected"` → `"${count} ${t(...)}"` ）
+- グループセレクトの初期オプションを `t("galleryBulkAddToGroup")` でi18n化
+- `app.js` の `applyI18nToHtml()` にギャラリーバルクバー全要素のi18n設定処理を追加
+- i18n: 英語 / 日本語 / 中国語の3言語でギャラリーバルクバー用キー10個を新規追加: `galleryBulkSelected` / `galleryBulkDeselectAll` / `galleryBulkSelectAll` / `galleryBulkAddToGroup` / `galleryBulkAdd` / `galleryBulkFavAll` / `galleryBulkUnfavAll` / `galleryBulkMoveTo` / `galleryBulkDelete`
+
+---
+
 ## 2026-06-10: v0.3.36 — コードレビュー修正＋リファクタリング＋README刷新
 
 ### コードレビュー修正（v0.3.35の不具合10件）

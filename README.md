@@ -17,7 +17,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.36-green)
+![Version](https://img.shields.io/badge/version-0.3.37-green)
 
 ## Screenshots
 
@@ -305,6 +305,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.37
+- **Models tab — Select All button** — new button added to the right of "Deselect All" in the multi-select action bar; selects all models currently visible after applying the active search / filter / group filters
+- **Gallery tab — Select All button** — new button added to the right of "Deselect All" in the bulk action bar; selects all images in the current folder view
+- **Gallery bulk bar — i18n** — all bulk action bar buttons and the selection count were hard-coded English strings; they now use the `t()` translation system (EN / JA / ZH) so the bar respects the selected UI language
 
 ### v0.3.36
 - **GenerateUI Save — overwrite protection** — saving now checks for an existing file and asks for confirmation before overwriting; if the target file is in UI format, a dedicated warning explains that saving in API format will lose the node layout

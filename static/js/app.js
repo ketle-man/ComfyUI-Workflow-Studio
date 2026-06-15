@@ -196,6 +196,25 @@ function applyI18nToHtml() {
         if (btn.dataset.detailTab === "meta") btn.textContent = t("gallerySideMetadata");
         if (btn.dataset.detailTab === "group") btn.textContent = t("modelsSideGroup");
     });
+    const galleryBulkDeselect = document.getElementById("wfm-gallery-bulk-deselect");
+    if (galleryBulkDeselect) galleryBulkDeselect.textContent = t("galleryBulkDeselectAll");
+    const galleryBulkSelectAll = document.getElementById("wfm-gallery-bulk-select-all");
+    if (galleryBulkSelectAll) galleryBulkSelectAll.textContent = t("galleryBulkSelectAll");
+    const galleryBulkGroupSelect = document.getElementById("wfm-gallery-bulk-group-select");
+    if (galleryBulkGroupSelect) {
+        const opt = galleryBulkGroupSelect.querySelector("option[value='']");
+        if (opt) opt.textContent = t("galleryBulkAddToGroup");
+    }
+    const galleryBulkGroupAdd = document.getElementById("wfm-gallery-bulk-group-add");
+    if (galleryBulkGroupAdd) galleryBulkGroupAdd.textContent = t("galleryBulkAdd");
+    const galleryBulkFav = document.getElementById("wfm-gallery-bulk-fav");
+    if (galleryBulkFav) galleryBulkFav.textContent = t("galleryBulkFavAll");
+    const galleryBulkUnfav = document.getElementById("wfm-gallery-bulk-unfav");
+    if (galleryBulkUnfav) galleryBulkUnfav.textContent = t("galleryBulkUnfavAll");
+    const galleryBulkMove = document.getElementById("wfm-gallery-bulk-move");
+    if (galleryBulkMove) galleryBulkMove.textContent = t("galleryBulkMoveTo");
+    const galleryBulkDelete = document.getElementById("wfm-gallery-bulk-delete");
+    if (galleryBulkDelete) galleryBulkDelete.textContent = t("galleryBulkDelete");
 
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
