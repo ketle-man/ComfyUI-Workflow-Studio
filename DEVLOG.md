@@ -1,5 +1,82 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-15: TaggerシングルGenUI:Pボタン追加＋生成UIのZITワークフロープロンプト解析修正
+
+### TaggerシングルGenUI:Pボタン（`templates/index.html`, `static/js/tagger-tab.js`, `static/js/i18n.js`）
+- Single タブの結果アクション行に **GenUI:P** ボタンを追加（「プロンプトに送信」の左隣）
+- クリックすると生成UIタブの `#wfm-prompt-pos-text`（ポジティブプロンプトtextarea）末尾にタグを追記し、`#wfm-prompt-pos-apply` を自動クリックしてワークフローへ即時反映
+- 生成UIにワークフローが読み込まれていない場合は警告トーストを表示
+- i18n: `taggerSendToGenUI` / `taggerSentToGenUI` / `taggerNoGenUI` を EN/JA/ZH に追加
+- ヘルプ: `helpTagger6` を5項目に更新（GenUI:P を先頭に追加）
+
+### 生成UIのZIT/Lumina2ワークフロープロンプト解析修正（`static/js/comfyui-workflow.js`, `py/services/workflow_analyzer.py`）
+- `comfyui-workflow.js` の `COND_PASSTHROUGH` から `"ConditioningZeroOut"` を除外
+  - ZITワークフローでは KSampler.negative → ConditioningZeroOut → CLIPTextEncode という接続を持つが、ConditioningZeroOut は上流テキストを完全に破棄するため negative ロールを上流に伝播すべきでない
+  - 修正前: CLIPTextEncode が positive / negative 両ロール付与 → `getRole()` が "unknown" → Generate UI のプロンプト欄に表示されない
+  - 修正後: CLIPTextEncode は positive ロールのみ → 正常にポジティブプロンプトとして表示
+- `workflow_analyzer.py` の `_CLIP_TYPE_TO_MODEL` に `"lumina2": "Z-IMAGE"` を追加
+  - CLIPLoader の `type` フィールドが `"lumina2"` のワークフローを Z-IMAGE として正確に分類
+
+---
+
+## 2026-06-15: Taggerバッチ.txt出力追加＋Galleryタグ保存バグ修正
+
+### Taggerバッチ.txt出力（`templates/index.html`, `static/js/tagger-tab.js`, `static/js/i18n.js`, `py/routes/tagger_routes.py`, `py/services/tagger_service.py`）
+- バッチ出力オプションに **Write .txt** チェックボックスを追加
+- 有効にすると処理した各画像と同一フォルダに `<ファイル名>.txt`（UTF-8）を生成、Interrogator + VLM タグのカンマ区切り文字列を書き込む
+- `batch_start()` シグネチャに `write_txt: bool` パラメータを追加、ルート・フロントエンドも連動更新
+- i18n: `taggerBatchWriteTxt` キーを EN/JA/ZH に追加
+
+### Galleryタグ保存バグ修正（`static/js/tagger-tab.js`）
+- `_saveToGallery()` がタグをカンマ区切り文字列のまま POST していたため、Gallery が `img.tags.forEach is not a function` エラーで更新不能になっていた
+- 修正: 送信前に `tags.split(",").map(s => s.trim()).filter(Boolean)` で配列に変換
+
+---
+
+## 2026-06-15: Taggerタブ新規実装＋ギャラリー詳細パネルUI改善＋パストラバーサル修正
+
+### Taggerタブ新規実装
+
+#### バックエンド（`py/config.py`, `py/services/tagger_service.py`, `py/services/tagger_db_service.py`, `py/routes/tagger_routes.py`, `py/wfm.py`）
+- `py/config.py`: `TAGGER_DB_FILE` / `TAGGER_SETTINGS_FILE` / `TAGGER_MODELS_DIR`（`ComfyUI/models/tagger/`）定数追加
+- `TaggerService`: WD Tagger（ONNX）・SwinV2・DeepDanbooru（.h5 / TensorFlow optional）推論、Ollama VLM連携（`/api/chat`）、JPEGへのpiexif EXIF書込・PNGへのPngInfo書込・サイドカー.tags.json書込、スレッドベースバッチ処理（`batch_start` / `batch_stop` / `batch_status`）、設定の永続化
+- `TaggerDbService`: SQLite（`tagger.db`）によるタグ保存・一覧・検索・更新・削除・CSV出力
+- `tagger_routes.py`: `/wfm/tagger/` 配下に17エンドポイントを登録（models・predict・ollama/models・ollama/predict・batch/start/status/stop・db CRUD・write_meta・settings）、全CPU処理を `asyncio.to_thread()` でラップ
+- `py/wfm.py`: `tagger_routes.setup_routes(app)` を追加
+- `requirements.txt` 新規作成: `onnxruntime>=1.16`・`piexif>=1.1.3` を必須、TensorFlow をオプション（コメントアウト）として記載
+
+#### フロントエンド（`templates/index.html`, `static/css/tagger-tab.css`, `static/js/tagger-tab.js`, `static/js/i18n.js`, `static/js/app.js`）
+- `templates/index.html`: Taggerタブナビボタン追加、`<section id="wfm-tab-tagger">` を追加（Single / Batch / DBの3サブタブ構成）
+- `static/css/tagger-tab.css` 新規作成: サブタブナビ・シングルレイアウト・プレビューエリア（破線ボーダー＋ドラッグオーバーハイライト）・バッチ進行状況バー・DBテーブルのスタイル
+- `static/js/tagger-tab.js` 新規作成:
+  - `initTaggerTab()`: i18n適用・サブタブ切り替え・スライダー連動・Ollamaトグル・各種イベント登録・モデル一覧ロード・設定読み込み
+  - `openImageInTaggerTab(img)`: Gallery→Taggerタブ遷移＋画像ロード（`/wfm/gallery/image/serve` 経由でbase64変換）
+  - Single: ドラッグ＆ドロップ・ファイルアップロード・タグ生成（WD Tagger＋Ollama並行）・4出力先（Prompt送信・Gallery保存・ファイル書込・DB保存）
+  - Batch: バッチ開始/停止・1秒間隔ポーリングによるリアルタイム進行状況更新
+  - DB: 一覧表示・検索・行選択編集・保存・削除・CSV出力
+- `static/js/i18n.js`: `tabTagger`・Taggerタブ関連キー約50件を EN/JA/ZH 3言語で追加
+- `static/js/app.js`: `tabMap` に `tagger` 追加、`initTaggerTab()` インポート＆呼び出し追加
+
+### ギャラリー詳細パネルUI改善（`templates/index.html`, `static/css/gallery-tab.css`, `static/js/gallery-tab.js`, `static/js/app.js`）
+- タブ行（Info / JSON / Groups）とアクションボタン行（Metadata / Load GenUI / Tagger）を分離: タブは `wfm-side-tab-nav`、ボタンは新設の `wfm-gallery-detail-action-row` へ移動
+- `.wfm-gallery-detail-action-row` のCSSを `gallery-tab.css` に追加（`flex`・`flex-wrap`・`padding`）
+- Galleryの詳細パネルに **Tagger** ボタン（`wfm-gallery-open-tagger-btn`、紫）追加: クリックで選択画像を `openImageInTaggerTab()` へ渡してTaggerタブへ遷移・画像ロード
+- `.wfm-gallery-action-btn-tagger` スタイル（`gallery-tab.css`）追加
+- `app.js` の `applyI18nToHtml()` でTaggerボタンのテキストを `t("tabTagger")` に設定
+
+### セキュリティ修正: パストラバーサル対策（`py/services/tagger_service.py`, `py/services/gallery_service.py`）
+- `TaggerService._validate_model_name()`: モデル名に `/` `\` `..` `\x00` が含まれる場合はロード拒否（`mdir / model_name` のパストラバーサルを防止）
+- `TaggerService.write_meta_to_file()`: ユーザー指定パスを `resolve()` した上で許可拡張子（`.jpg/.jpeg/.png/.webp/.bmp/.gif`）のみ処理、それ以外はエラー返却
+- `GalleryService._check_path_allowed()`: `_allowed_root is None` のときに tautology（`resolved == path.resolve()`、常にTrue）だった判定を `return False` に修正（`list_folder_tree` 呼び出し前に全パスが通る問題を解消）
+
+### ヘルプ更新（`templates/index.html`, `static/js/i18n.js`, `static/js/app.js`）
+- ヘルプナビに「Tagger Tab」追加
+- Taggerタブのヘルプページ新設（9項目: モデル配置・Single操作・閾値・Ollama・出力先・Batch・DB・インストール手順）EN/JA/ZH
+- Galleryタブヘルプに `helpGallery14`（Taggerボタン説明）を EN/JA/ZH で追加
+- トラブルシューティングに `helpTrouble7`（Taggerモデル未表示時の対処）を EN/JA/ZH で追加
+
+---
+
 ## 2026-06-15: 全選択ボタン追加＋ギャラリーバルクバーi18n対応
 
 ### 変更内容

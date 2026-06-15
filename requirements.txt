@@ -1,0 +1,21 @@
+# ComfyUI-Workflow-Studio - Tagger tab dependencies
+#
+# numpy and Pillow are already bundled with ComfyUI and do not need to be installed.
+# torch is managed by ComfyUI and must NOT be pinned here.
+#
+# Install into ComfyUI's embedded Python:
+#   python_embeded\python.exe -m pip install -r requirements.txt
+#
+# For GPU-accelerated ONNX inference, install onnxruntime-gpu instead of onnxruntime:
+#   python_embeded\python.exe -m pip install onnxruntime-gpu
+
+# -- Required for WD Tagger / SwinV2 ONNX inference --
+onnxruntime>=1.16
+
+# -- Required for JPEG EXIF tag writing --
+piexif>=1.1.3
+
+# -- Optional: DeepDanbooru (.h5 model) support --
+# Omit if you do not use DeepDanbooru models.
+# TensorFlow is large (~600MB) and conflicts with some CUDA setups.
+# tensorflow>=2.10

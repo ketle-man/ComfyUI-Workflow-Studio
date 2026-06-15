@@ -18,6 +18,7 @@ _CLIP_TYPE_TO_MODEL = {
     "wan": "Wan",
     "cosmos": "Cosmos",
     "lumina": "Lumina",
+    "lumina2": "Z-IMAGE",
 }
 
 

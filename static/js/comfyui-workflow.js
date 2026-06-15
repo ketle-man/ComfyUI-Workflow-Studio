@@ -520,7 +520,10 @@ export const comfyWorkflow = {
         // Nodes that pass CONDITIONING through without changing positive/negative role
         const COND_PASSTHROUGH = new Set([
             "ConditioningCombine", "ConditioningConcat", "ConditioningAverage",
-            "ConditioningZeroOut", "ConditioningSetTimestepRange",
+            "ConditioningSetTimestepRange",
+            // ConditioningZeroOut is intentionally excluded: it discards upstream text entirely
+            // (used as a no-text negative in ZIT/Lumina2 workflows). Propagating the negative
+            // role upstream would incorrectly mark the shared positive CLIPTextEncode as "unknown".
             "ControlNetApply", "ControlNetApplyAdvanced",
             "IPAdapterApply", "IPAdapterApplyFaceID",
             "StyleModelApply",

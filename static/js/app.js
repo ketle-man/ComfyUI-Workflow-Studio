@@ -91,7 +91,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", metadata: "tabMetadata", gallery: "tabGallery", settings: "tabSettings", help: "tabHelp", ai: "tabAi" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", metadata: "tabMetadata", gallery: "tabGallery", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -215,6 +215,8 @@ function applyI18nToHtml() {
     if (galleryBulkMove) galleryBulkMove.textContent = t("galleryBulkMoveTo");
     const galleryBulkDelete = document.getElementById("wfm-gallery-bulk-delete");
     if (galleryBulkDelete) galleryBulkDelete.textContent = t("galleryBulkDelete");
+    const galleryOpenTaggerBtn = document.getElementById("wfm-gallery-open-tagger-btn");
+    if (galleryOpenTaggerBtn) galleryOpenTaggerBtn.textContent = t("tabTagger");
 
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
@@ -384,7 +386,13 @@ function applyI18nToHtml() {
         "wfm-help-gallery-7": "helpGallery7", "wfm-help-gallery-8": "helpGallery8",
         "wfm-help-gallery-9": "helpGallery9", "wfm-help-gallery-10": "helpGallery10",
         "wfm-help-gallery-11": "helpGallery11", "wfm-help-gallery-12": "helpGallery12",
-        "wfm-help-gallery-13": "helpGallery13",
+        "wfm-help-gallery-13": "helpGallery13", "wfm-help-gallery-14": "helpGallery14",
+        "wfm-help-tagger-title": "helpTaggerTitle",
+        "wfm-help-tagger-1": "helpTagger1", "wfm-help-tagger-2": "helpTagger2",
+        "wfm-help-tagger-3": "helpTagger3", "wfm-help-tagger-4": "helpTagger4",
+        "wfm-help-tagger-5": "helpTagger5", "wfm-help-tagger-6": "helpTagger6",
+        "wfm-help-tagger-7": "helpTagger7", "wfm-help-tagger-8": "helpTagger8",
+        "wfm-help-tagger-9": "helpTagger9",
         "wfm-help-sidepanel-title": "helpSidepanelTitle",
         "wfm-help-sidepanel-1": "helpSidepanel1", "wfm-help-sidepanel-2": "helpSidepanel2",
         "wfm-help-sidepanel-3": "helpSidepanel3", "wfm-help-sidepanel-4": "helpSidepanel4",
@@ -405,6 +413,7 @@ function applyI18nToHtml() {
         "wfm-help-trouble-1": "helpTrouble1", "wfm-help-trouble-2": "helpTrouble2",
         "wfm-help-trouble-3": "helpTrouble3", "wfm-help-trouble-4": "helpTrouble4",
         "wfm-help-trouble-5": "helpTrouble5", "wfm-help-trouble-6": "helpTrouble6",
+        "wfm-help-trouble-7": "helpTrouble7",
         "wfm-help-support-title": "helpSupportTitle",
         "wfm-help-support-desc": "helpSupportDesc",
         "wfm-help-github-desc": "helpGithubDesc",
@@ -457,6 +466,7 @@ import { initModelsTab } from "./models-tab.js";
 import { initGalleryTab } from "./gallery-tab.js";
 import { initMetadataTab } from "./metadata-tab.js";
 import { initAiTab } from "./ai-tab.js";
+import { initTaggerTab } from "./tagger-tab.js";
 
 // Apply saved theme immediately to prevent flash of default theme
 applyTheme(getSavedTheme());
@@ -494,6 +504,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initMetadataTab();
     initGalleryTab();
     initAiTab();
+    initTaggerTab();
 
     console.log("Workflow Studio: App initialized");
 });

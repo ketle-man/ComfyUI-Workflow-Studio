@@ -81,8 +81,7 @@ class GalleryService:
     def _check_path_allowed(self, path: Path) -> bool:
         """パスが許可ルート配下かチェック（パストラバーサル防止）"""
         if self._allowed_root is None:
-            resolved = path.resolve()
-            return resolved == path.resolve()
+            return False
         try:
             path.resolve().relative_to(self._allowed_root)
             return True

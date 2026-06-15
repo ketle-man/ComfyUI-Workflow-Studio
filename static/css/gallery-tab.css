@@ -602,7 +602,18 @@
     background: rgba(255,255,255,0.2);
 }
 
-/* ── 詳細パネル アクションボタン (タブナビ内) ────────────────── */
+/* ── 詳細パネル アクションボタン行 ───────────────────────────── */
+
+.wfm-gallery-detail-action-row {
+    display: flex;
+    gap: 6px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* ── 詳細パネル アクションボタン ─────────────────────────────── */
 
 .wfm-gallery-action-btn {
     padding: 4px 10px;
@@ -632,6 +643,15 @@
 .wfm-gallery-action-btn-primary:hover {
     background: var(--wfm-primary-hover);
     border-color: var(--wfm-primary-hover);
+}
+
+.wfm-gallery-action-btn-tagger {
+    background: var(--wfm-accent, #7c5cfc);
+    border-color: var(--wfm-accent, #7c5cfc);
+}
+.wfm-gallery-action-btn-tagger:hover {
+    background: #6a4de0;
+    border-color: #6a4de0;
 }
 
 /* ── ファイル操作ボタン (詳細パネル) ─────────────────────────── */

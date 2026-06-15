@@ -69,3 +69,8 @@ NODE_SETS_FILE = DATA_DIR / "node_sets.json"
 PROMPTS_FILE = DATA_DIR / "prompts.json"
 MODEL_METADATA_FILE = DATA_DIR / "model_metadata.json"
 WILDCARD_DIR = DATA_DIR / "wildcard"
+
+# Tagger
+TAGGER_DB_FILE = DATA_DIR / "tagger.db"
+TAGGER_SETTINGS_FILE = DATA_DIR / "tagger_settings.json"
+TAGGER_MODELS_DIR = _COMFYUI_ROOT / "models" / "tagger"

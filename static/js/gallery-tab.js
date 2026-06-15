@@ -1300,6 +1300,15 @@ function bindEvents() {
         openImageInMetadataTab(state.selectedImage);
     });
 
+    document.getElementById("wfm-gallery-open-tagger-btn")?.addEventListener("click", async () => {
+        if (!state.selectedImage) {
+            showToast(t("gallerySelectImageFirst"), "error");
+            return;
+        }
+        const { openImageInTaggerTab } = await import("./tagger-tab.js");
+        openImageInTaggerTab(state.selectedImage);
+    });
+
     // Load in GenerateUI ボタン: 埋め込みワークフローをGenerateUIタブに読み込む
     document.getElementById("wfm-gallery-load-genui-btn")?.addEventListener("click", async () => {
         if (!state.selectedImage) {

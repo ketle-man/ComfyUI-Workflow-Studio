@@ -17,7 +17,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.37-green)
+![Version](https://img.shields.io/badge/version-0.3.38-green)
 
 ## Screenshots
 
@@ -183,6 +183,17 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
   - **Badge row** — select a badge and **+Badge** / **−Badge** to apply or remove from all selected
   - **File row** — select a destination subfolder (or type a new folder name and create it) then **Move** to relocate the model file with all sidecar files; **Delete Files** (right end) permanently removes selected models and all associated files
 
+### Tagger Tab (v0.3.38)
+- **3 sub-tabs** — Single / Batch / DB for single-image tagging, folder batch processing, and tag database management
+- **Model support** — WD Tagger (ONNX, NCHW/NHWC auto-detect), SwinV2 (ONNX), DeepDanbooru (.h5, requires TensorFlow); place each model in its own subfolder under `ComfyUI/models/tagger/<model-name>/` containing the `.onnx` + `selected_tags.csv` (or `.h5` + label file)
+- **Threshold sliders** — General threshold (default 0.35) and Character threshold for `character:` prefix tags (default 0.85); sliders update the display value in real time
+- **Ollama VLM** — optional vision model alongside WD Tagger; set API URL and select model (↻ to refresh list); results from both models are merged into one comma-separated tag string
+- **Single tab** — drag & drop an image onto the preview area or click Upload; Gallery detail panel **Tagger** button opens the selected image directly here
+- **Single output options** — (1) **GenUI:P** — appends tags to the GenerateUI tab's positive prompt and immediately applies to the loaded workflow; (2) **Send to Prompt** — appends tags to the Prompt tab's positive textarea; (3) **Save to Gallery** — saves tags to Gallery image metadata (requires image opened from Gallery); (4) **Write to File** — embeds tags into JPEG EXIF (`ImageDescription`) or PNG `tEXt` chunk (`Tags` key), other formats get a `.tags.json` sidecar; (5) **Save to DB** — stores in internal SQLite database
+- **Batch tab** — enter a folder path, configure WD Tagger and Ollama settings; output options: **Save to DB** (default on), **Write to File** (EXIF/PNG metadata), **Write .txt** (creates `<filename>.txt` alongside each image with all tags); real-time progress bar and log; Stop cancels after the current image
+- **DB tab** — searchable SQLite database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records
+- **Dependencies** — install into ComfyUI's embedded Python: `python_embedded\python.exe -m pip install -r requirements.txt`; for GPU inference use `onnxruntime-gpu`; TensorFlow (DeepDanbooru) is optional and commented out in `requirements.txt`
+
 ### AI TOOL Tab (v0.3.14)
 - **3-pane layout** — Translation (40%) | TOOLS (40%) | Settings (20%); all panes always visible simultaneously; no sub-tab switching required
 - **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
@@ -305,6 +316,16 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.38
+- **Tagger tab** — new tab for automatic image tagging; supports WD Tagger (ONNX), SwinV2, DeepDanbooru (.h5), and Ollama VLM; 3 sub-tabs: Single (drag & drop / upload, 5 output targets), Batch (folder processing with real-time progress), DB (searchable SQLite database with CSV export)
+- **Tagger single — GenUI:P button** — new button (left of "Send to Prompt") that appends generated tags to the GenerateUI positive prompt and immediately applies them to the loaded workflow; shows a warning if no workflow is loaded in GenerateUI
+- **Tagger batch — Write .txt output** — new output option that creates `<filename>.txt` alongside each processed image containing all generated tags (comma-separated)
+- **Gallery detail panel — Tagger button** — new action button in the Gallery detail panel opens the selected image directly in the Tagger tab for instant single-image tagging
+- **Gallery detail panel layout** — tabs (Info / JSON / Groups) and action buttons (Metadata / Load GenUI / Tagger) are now on separate rows, preventing button overflow on narrow panels
+- **Gallery — Save to Gallery tags fix** — tags saved from the Tagger tab were stored as a string instead of an array, causing `forEach is not a function` errors on the next Gallery refresh; now correctly stored as a string array
+- **GenerateUI — ZIT/Lumina2 workflow prompt fix** — `ConditioningZeroOut` removed from the CONDITIONING passthrough set; previously it propagated the "negative" role upstream through the shared CLIPTextEncode node, marking it as "unknown" and hiding the positive prompt in the GenerateUI Input tab; ZIT (Z-Image Turbo) workflows now correctly show the positive prompt
+- **Workflow analyzer — lumina2 model type** — CLIPLoader `type: "lumina2"` is now correctly classified as Z-IMAGE in the workflow type detector
 
 ### v0.3.37
 - **Models tab — Select All button** — new button added to the right of "Deselect All" in the multi-select action bar; selects all models currently visible after applying the active search / filter / group filters

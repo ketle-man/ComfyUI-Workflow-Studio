@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="/wfm_static/favicon.svg">
     <link rel="stylesheet" href="/wfm_static/css/main.css">
     <link rel="stylesheet" href="/wfm_static/css/gallery-tab.css">
+    <link rel="stylesheet" href="/wfm_static/css/tagger-tab.css">
 </head>
 <body>
     <!-- Header -->
@@ -22,6 +23,7 @@
             <button class="wfm-tab" data-tab="prompt">Prompt</button>
             <button class="wfm-tab" data-tab="metadata">Metadata</button>
             <button class="wfm-tab" data-tab="gallery">Gallery</button>
+            <button class="wfm-tab" data-tab="tagger">Tagger</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
             <button class="wfm-tab" data-tab="ai">AI TOOL</button>
@@ -920,6 +922,7 @@
                         <button class="wfm-help-nav-item" data-help-page="models">Models Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="sidepanel">Library (Side Panel)</button>
                         <button class="wfm-help-nav-item" data-help-page="aitool">AI TOOL Tab</button>
+                        <button class="wfm-help-nav-item" data-help-page="tagger">Tagger Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="shortcuts">Keyboard Shortcuts</button>
                         <button class="wfm-help-nav-item" data-help-page="trouble">Troubleshooting</button>
                     </div>
@@ -1080,6 +1083,7 @@
                                 <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF; workflow extraction reads ComfyUI prompt and workflow keys embedded in PNG metadata</li>
                                 <li id="wfm-help-gallery-12"><b>Metadata</b> button (green, in the detail panel tab bar): opens the selected image in the Metadata tab for full embedded-data inspection; Alt+click on any image thumbnail has the same effect</li>
                                 <li id="wfm-help-gallery-13"><b>Load GenUI</b> button (blue, in the detail panel tab bar): loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab and switches to it; shows a warning toast if no workflow is embedded or the format is not supported</li>
+                                <li id="wfm-help-gallery-14"><b>Tagger</b> button (purple, in the detail panel action row): opens the selected image directly in the Tagger tab's Single mode for instant tagging</li>
                             </ul>
                         </div>
                     </div>
@@ -1141,6 +1145,23 @@
                         </div>
                     </div>
 
+                    <div class="wfm-help-page" id="wfm-help-page-tagger">
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagger-title">Tagger Tab</h3>
+                            <ul>
+                                <li id="wfm-help-tagger-1"></li>
+                                <li id="wfm-help-tagger-2"></li>
+                                <li id="wfm-help-tagger-3"></li>
+                                <li id="wfm-help-tagger-4"></li>
+                                <li id="wfm-help-tagger-5"></li>
+                                <li id="wfm-help-tagger-6"></li>
+                                <li id="wfm-help-tagger-7"></li>
+                                <li id="wfm-help-tagger-8"></li>
+                                <li id="wfm-help-tagger-9"></li>
+                            </ul>
+                        </div>
+                    </div>
+
                     <div class="wfm-help-page" id="wfm-help-page-shortcuts">
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-shortcuts-title">Keyboard Shortcuts</h3>
@@ -1163,6 +1184,7 @@
                                 <li id="wfm-help-trouble-4">Image generation fails: Check if specified models exist in ComfyUI, verify connection, try restarting</li>
                                 <li id="wfm-help-trouble-5">LoRA Stack fails with "No such file or directory" error: The LoRA may not be recognized by comfyui-lora-manager (known issue). Try a different LoRA or check if the file appears in Lora Manager's own UI</li>
                                 <li id="wfm-help-trouble-6">Model loading error after moving or deleting models: ComfyUI caches file paths and may still reference old locations. Perform a Hard Reset from the ComfyUI menu (Queue → Hard Reset) or restart ComfyUI to clear the cache.</li>
+                                <li id="wfm-help-trouble-7"></li>
                             </ul>
                         </div>
                     </div>
@@ -1274,8 +1296,11 @@
                         <button class="wfm-gallery-detail-tab-btn active" data-detail-tab="info">Info</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="meta">JSON</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="group">Groups</button>
+                    </div>
+                    <div class="wfm-gallery-detail-action-row">
                         <button id="wfm-gallery-open-metadata-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-green" title="Open in Metadata tab (or Alt+click image)">Metadata</button>
                         <button id="wfm-gallery-load-genui-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-primary" title="Load workflow into GenerateUI">Load GenUI</button>
+                        <button id="wfm-gallery-open-tagger-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-tagger" title="Open in Tagger"></button>
                     </div>
                     <!-- Info タブ -->
                     <div id="wfm-gallery-detail-info" class="wfm-gallery-detail-tab-content active">
@@ -1320,6 +1345,226 @@
                     <!-- Group タブ -->
                     <div id="wfm-gallery-detail-group" class="wfm-gallery-detail-tab-content" style="display:none;overflow-y:auto;">
                         <!-- JS動的生成: renderDetailGroup() -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tagger Tab -->
+        <section id="wfm-tab-tagger" class="wfm-tab-content">
+            <div class="wfm-tagger-subtab-nav">
+                <button class="wfm-tagger-subtab-btn active" data-tagger-tab="single"></button>
+                <button class="wfm-tagger-subtab-btn" data-tagger-tab="batch"></button>
+                <button class="wfm-tagger-subtab-btn" data-tagger-tab="db"></button>
+            </div>
+
+            <!-- Single サブタブ -->
+            <div id="wfm-tagger-single" class="wfm-tagger-subtab">
+                <div class="wfm-tagger-single-layout">
+                    <!-- 左: 画像 -->
+                    <div class="wfm-tagger-image-pane">
+                        <div class="wfm-tagger-image-sources">
+                            <label class="wfm-btn wfm-btn-sm" style="cursor:pointer">
+                                <span id="wfm-tagger-upload-label"></span>
+                                <input type="file" id="wfm-tagger-upload" accept="image/*" style="display:none">
+                            </label>
+                        </div>
+                        <div class="wfm-tagger-preview-wrap" id="wfm-tagger-drop-zone">
+                            <img id="wfm-tagger-preview" style="display:none; max-width:100%; max-height:100%; object-fit:contain;">
+                            <div id="wfm-tagger-preview-placeholder" class="wfm-placeholder"></div>
+                        </div>
+                        <div id="wfm-tagger-image-name" class="wfm-tagger-image-name"></div>
+                    </div>
+
+                    <!-- 右: 設定・結果 -->
+                    <div class="wfm-tagger-controls-pane">
+                        <!-- WD Tagger -->
+                        <div class="wfm-tagger-section">
+                            <div class="wfm-tagger-section-header">WD Tagger / DeepDanbooru</div>
+                            <div class="wfm-form-row wfm-tagger-form-row">
+                                <label class="wfm-tagger-label"></label>
+                                <select id="wfm-tagger-model" class="wfm-select wfm-tagger-select"></select>
+                            </div>
+                            <div class="wfm-form-row wfm-tagger-form-row">
+                                <label class="wfm-tagger-label" id="wfm-tagger-threshold-label"></label>
+                                <input type="range" id="wfm-tagger-threshold" min="0" max="1" step="0.01" value="0.35" class="wfm-tagger-slider">
+                                <span id="wfm-tagger-threshold-val" class="wfm-tagger-slider-val">0.35</span>
+                            </div>
+                            <div class="wfm-form-row wfm-tagger-form-row">
+                                <label class="wfm-tagger-label" id="wfm-tagger-char-threshold-label"></label>
+                                <input type="range" id="wfm-tagger-char-threshold" min="0" max="1" step="0.01" value="0.85" class="wfm-tagger-slider">
+                                <span id="wfm-tagger-char-threshold-val" class="wfm-tagger-slider-val">0.85</span>
+                            </div>
+                            <button id="wfm-tagger-generate-btn" class="wfm-btn wfm-btn-primary" style="width:100%;margin-top:6px;"></button>
+                        </div>
+
+                        <!-- Ollama VLM -->
+                        <div class="wfm-tagger-section">
+                            <div class="wfm-tagger-section-header">
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
+                                    <input type="checkbox" id="wfm-tagger-ollama-enable">
+                                    <span id="wfm-tagger-ollama-header-label">Ollama VLM</span>
+                                </label>
+                            </div>
+                            <div id="wfm-tagger-ollama-settings" style="display:none">
+                                <div class="wfm-form-row wfm-tagger-form-row">
+                                    <label class="wfm-tagger-label" id="wfm-tagger-ollama-url-label"></label>
+                                    <input type="text" id="wfm-tagger-ollama-url" class="wfm-search-input" value="http://127.0.0.1:11434" style="flex:1;">
+                                </div>
+                                <div class="wfm-form-row wfm-tagger-form-row">
+                                    <label class="wfm-tagger-label" id="wfm-tagger-ollama-model-label"></label>
+                                    <select id="wfm-tagger-ollama-model" class="wfm-select wfm-tagger-select"></select>
+                                    <button id="wfm-tagger-ollama-refresh-btn" class="wfm-btn wfm-btn-sm" title="Refresh models">↻</button>
+                                </div>
+                                <div class="wfm-form-row wfm-tagger-form-row" style="align-items:flex-start">
+                                    <label class="wfm-tagger-label" id="wfm-tagger-ollama-prompt-label" style="padding-top:4px;"></label>
+                                    <textarea id="wfm-tagger-ollama-prompt" class="wfm-textarea" rows="3" style="flex:1;resize:vertical;">Output danbooru-style, comma-separated, English tags for this image. ONLY output the tags. Do not use double quotes or hyphens in the tags.</textarea>
+                                </div>
+                                <div class="wfm-form-row wfm-tagger-form-row">
+                                    <label class="wfm-tagger-label" id="wfm-tagger-ollama-max-label"></label>
+                                    <input type="number" id="wfm-tagger-ollama-max-tags" class="wfm-search-input" value="40" min="1" max="500" style="width:70px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 結果 -->
+                        <div class="wfm-tagger-section">
+                            <div class="wfm-tagger-section-header" id="wfm-tagger-result-header"></div>
+                            <textarea id="wfm-tagger-result" class="wfm-textarea" rows="5" style="width:100%;resize:vertical;" placeholder="Tags will appear here..."></textarea>
+                            <div class="wfm-tagger-result-actions">
+                                <button id="wfm-tagger-send-genui-btn" class="wfm-btn wfm-btn-sm"></button>
+                                <button id="wfm-tagger-send-prompt-btn" class="wfm-btn wfm-btn-sm"></button>
+                                <button id="wfm-tagger-save-gallery-btn" class="wfm-btn wfm-btn-sm"></button>
+                                <button id="wfm-tagger-write-file-btn" class="wfm-btn wfm-btn-sm"></button>
+                                <button id="wfm-tagger-save-db-btn" class="wfm-btn wfm-btn-sm"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch サブタブ -->
+            <div id="wfm-tagger-batch" class="wfm-tagger-subtab" style="display:none">
+                <div class="wfm-tagger-batch-layout">
+                    <div class="wfm-tagger-section">
+                        <div class="wfm-tagger-section-header" id="wfm-tagger-batch-folder-header"></div>
+                        <div class="wfm-form-row wfm-tagger-form-row">
+                            <input type="text" id="wfm-tagger-batch-folder" class="wfm-search-input" style="flex:1;" placeholder="C:\path\to\images">
+                        </div>
+                    </div>
+                    <div class="wfm-tagger-batch-cols">
+                        <!-- WD Tagger 設定 -->
+                        <div class="wfm-tagger-section">
+                            <div class="wfm-tagger-section-header">WD Tagger / DeepDanbooru</div>
+                            <div class="wfm-form-row wfm-tagger-form-row">
+                                <label class="wfm-tagger-label"></label>
+                                <select id="wfm-tagger-batch-model" class="wfm-select wfm-tagger-select"></select>
+                            </div>
+                            <div class="wfm-form-row wfm-tagger-form-row">
+                                <label class="wfm-tagger-label" id="wfm-tagger-batch-threshold-label"></label>
+                                <input type="range" id="wfm-tagger-batch-threshold" min="0" max="1" step="0.01" value="0.35" class="wfm-tagger-slider">
+                                <span id="wfm-tagger-batch-threshold-val" class="wfm-tagger-slider-val">0.35</span>
+                            </div>
+                            <div class="wfm-form-row wfm-tagger-form-row">
+                                <label class="wfm-tagger-label" id="wfm-tagger-batch-char-threshold-label"></label>
+                                <input type="range" id="wfm-tagger-batch-char-threshold" min="0" max="1" step="0.01" value="0.85" class="wfm-tagger-slider">
+                                <span id="wfm-tagger-batch-char-threshold-val" class="wfm-tagger-slider-val">0.85</span>
+                            </div>
+                        </div>
+                        <!-- Ollama 設定 -->
+                        <div class="wfm-tagger-section">
+                            <div class="wfm-tagger-section-header">
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
+                                    <input type="checkbox" id="wfm-tagger-batch-ollama-enable">
+                                    Ollama VLM
+                                </label>
+                            </div>
+                            <div id="wfm-tagger-batch-ollama-settings">
+                                <div class="wfm-form-row wfm-tagger-form-row">
+                                    <label class="wfm-tagger-label" id="wfm-tagger-batch-url-label"></label>
+                                    <input type="text" id="wfm-tagger-batch-ollama-url" class="wfm-search-input" value="http://127.0.0.1:11434" style="flex:1;">
+                                </div>
+                                <div class="wfm-form-row wfm-tagger-form-row">
+                                    <label class="wfm-tagger-label" id="wfm-tagger-batch-model-label"></label>
+                                    <select id="wfm-tagger-batch-ollama-model" class="wfm-select wfm-tagger-select"></select>
+                                    <button id="wfm-tagger-batch-ollama-refresh-btn" class="wfm-btn wfm-btn-sm">↻</button>
+                                </div>
+                                <div class="wfm-form-row wfm-tagger-form-row" style="align-items:flex-start">
+                                    <label class="wfm-tagger-label" id="wfm-tagger-batch-prompt-label" style="padding-top:4px;"></label>
+                                    <textarea id="wfm-tagger-batch-ollama-prompt" class="wfm-textarea" rows="3" style="flex:1;resize:vertical;">Output danbooru-style, comma-separated, English tags for this image. ONLY output the tags.</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 出力設定 -->
+                    <div class="wfm-tagger-section">
+                        <div class="wfm-tagger-section-header" id="wfm-tagger-batch-output-header"></div>
+                        <div style="display:flex;gap:16px;">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                <input type="checkbox" id="wfm-tagger-batch-save-db" checked>
+                                <span id="wfm-tagger-batch-save-db-label"></span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                <input type="checkbox" id="wfm-tagger-batch-write-file">
+                                <span id="wfm-tagger-batch-write-file-label"></span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                <input type="checkbox" id="wfm-tagger-batch-write-txt">
+                                <span id="wfm-tagger-batch-write-txt-label"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <!-- ボタン + プログレス -->
+                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                        <button id="wfm-tagger-batch-start-btn" class="wfm-btn wfm-btn-primary"></button>
+                        <button id="wfm-tagger-batch-stop-btn" class="wfm-btn wfm-btn-danger" disabled></button>
+                        <span id="wfm-tagger-batch-progress-text" style="font-size:12px;color:var(--wfm-text-muted);"></span>
+                    </div>
+                    <div class="wfm-tagger-progress-bar-wrap">
+                        <div id="wfm-tagger-batch-progress-bar" class="wfm-tagger-progress-bar" style="width:0%"></div>
+                    </div>
+                    <textarea id="wfm-tagger-batch-log" class="wfm-textarea" rows="10" readonly style="width:100%;margin-top:8px;font-family:monospace;font-size:11px;"></textarea>
+                </div>
+            </div>
+
+            <!-- DB サブタブ -->
+            <div id="wfm-tagger-db" class="wfm-tagger-subtab" style="display:none">
+                <div class="wfm-tagger-db-layout">
+                    <div class="wfm-tagger-db-toolbar">
+                        <input type="text" id="wfm-tagger-db-search-input" class="wfm-search-input" style="flex:1;" placeholder="Search tags or filename...">
+                        <button id="wfm-tagger-db-search-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary"></button>
+                        <button id="wfm-tagger-db-show-all-btn" class="wfm-btn wfm-btn-sm"></button>
+                        <button id="wfm-tagger-db-export-btn" class="wfm-btn wfm-btn-sm"></button>
+                    </div>
+                    <div id="wfm-tagger-db-table-wrap" class="wfm-tagger-db-table-wrap">
+                        <table id="wfm-tagger-db-table" class="wfm-table wfm-tagger-db-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th id="wfm-tagger-db-th-file"></th>
+                                    <th id="wfm-tagger-db-th-interrogator"></th>
+                                    <th id="wfm-tagger-db-th-vlm"></th>
+                                    <th id="wfm-tagger-db-th-date"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="wfm-tagger-db-tbody"></tbody>
+                        </table>
+                    </div>
+                    <!-- 編集パネル -->
+                    <div id="wfm-tagger-db-edit-panel" class="wfm-tagger-db-edit-panel" style="display:none">
+                        <div class="wfm-tagger-section-header" id="wfm-tagger-db-edit-header"></div>
+                        <div class="wfm-form-row wfm-tagger-form-row">
+                            <label class="wfm-tagger-label" id="wfm-tagger-db-edit-interr-label"></label>
+                            <textarea id="wfm-tagger-db-edit-interrogator" class="wfm-textarea" rows="3" style="flex:1;resize:vertical;"></textarea>
+                        </div>
+                        <div class="wfm-form-row wfm-tagger-form-row">
+                            <label class="wfm-tagger-label" id="wfm-tagger-db-edit-vlm-label"></label>
+                            <textarea id="wfm-tagger-db-edit-vlm" class="wfm-textarea" rows="3" style="flex:1;resize:vertical;"></textarea>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:6px;">
+                            <button id="wfm-tagger-db-save-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary"></button>
+                            <button id="wfm-tagger-db-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger"></button>
+                        </div>
                     </div>
                 </div>
             </div>
