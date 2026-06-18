@@ -115,7 +115,7 @@ function applyI18nToHtml() {
 
     const listOpenComfyBtn = document.getElementById("wfm-list-open-comfyui-btn");
     if (listOpenComfyBtn) {
-        listOpenComfyBtn.textContent = t("openInComfyUI");
+        listOpenComfyBtn.textContent = t("sendToCanvas");
         if (listOpenComfyBtn.disabled) listOpenComfyBtn.title = t("selectCardFirst");
     }
 
@@ -403,6 +403,7 @@ function applyI18nToHtml() {
         "wfm-help-sidepanel-13": "helpSidepanel13",
         "wfm-help-sidepanel-14": "helpSidepanel14", "wfm-help-sidepanel-15": "helpSidepanel15",
         "wfm-help-sidepanel-16": "helpSidepanel16",
+        "wfm-help-sidepanel-17": "helpSidepanel17",
         "wfm-help-ai-title": "helpAiTitle",
         "wfm-help-ai-1": "helpAi1", "wfm-help-ai-2": "helpAi2", "wfm-help-ai-3": "helpAi3",
         "wfm-help-ai-4": "helpAi4", "wfm-help-ai-5": "helpAi5", "wfm-help-ai-6": "helpAi6",

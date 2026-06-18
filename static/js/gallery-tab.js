@@ -1217,14 +1217,18 @@ function bindEvents() {
         saveMetaField({ memo }).then(() => showToast(t("memoSaved"), "success"));
     });
 
-    // ワークフローコピー
+    // ワークフローコピー＆キャンバスへ送る
     document.getElementById("wfm-gallery-copy-workflow-btn")?.addEventListener("click", () => {
         if (!state.embeddedWorkflow) {
             showToast(t("galleryNoEmbeddedWorkflow"), "error");
             return;
         }
-        navigator.clipboard.writeText(JSON.stringify(state.embeddedWorkflow, null, 2))
-            .then(() => showToast(t("workflowCopied"), "success"))
+        const jsonStr = JSON.stringify(state.embeddedWorkflow, null, 2);
+        navigator.clipboard.writeText(jsonStr)
+            .then(() => {
+                localStorage.setItem("wfm_pending_workflow", jsonStr);
+                showToast(t("workflowSentToCanvas"), "success");
+            })
             .catch(() => showToast(t("copyFailed"), "error"));
     });
 

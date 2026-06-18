@@ -1,5 +1,32 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-18: Send to Canvas機能追加（ワークフロータブ・ギャラリータブ→LibraryタイトルDnD）
+
+### ワークフロータブ — Send to Canvas（`static/js/workflow-tab.js`, `static/js/app.js`, `templates/index.html`）
+- ツールバーおよび詳細モーダルの **Open in ComfyUI** ボタンを **Send to Canvas** に変更
+- `sendToCanvas(workflowData)`: ワークフローJSONを `localStorage["wfm_pending_workflow"]` に保存してトースト表示（新しいブラウザタブを開かない）
+- `openInComfyUI()` 関数は後方互換のため残置
+
+### ギャラリータブ — Copy & Send Canvas（`static/js/gallery-tab.js`, `templates/index.html`）
+- **Copy Workflow** ボタンを **Copy & Send Canvas** にリネーム
+- クリック時にクリップボードコピーと `localStorage["wfm_pending_workflow"]` への保存を同時実行
+
+### Workflow Studio Library — タイトルドラッグ（`web/comfyui/node_sets_menu.js`）
+- `createPanel()` 内でタイトル要素（`.wfm-nlp-title`）にドラッグロジックを追加
+  - `updateTitlePendingState()`: `localStorage` の `wfm_pending_workflow` 有無を検出して `draggable` 属性・CSS クラス・`title` 属性を動的切り替え
+  - `panel.mouseenter` / `window.storage` イベントで状態を自動更新（メインアプリ→ComfyUI切り替え後も検出）
+  - `dragstart`: pending JSON を `application/x-wfm-pending` MIME タイプにセット
+- `installCanvasDropHandler()`: `application/x-wfm-pending` を dragover と drop の両ハンドラに追加
+  - drop 時に `JSON.parse` → `app.loadGraphData()` → localStorage削除 → タイトルリセット
+- CSS: `.wfm-nlp-title-pending { color: #66aaff; cursor: grab }` + `::after` で緑●インジケーター表示
+
+### i18n・ヘルプ（`static/js/i18n.js`, `static/js/app.js`, `templates/index.html`）
+- `sendToCanvas` / `copyAndSendCanvas` / `workflowSentToCanvas` を EN/JA/ZH に追加
+- ヘルプ: `helpWf6`（send to canvas）・`helpGallery8`（Copy & Send Canvas説明）を3言語更新
+- ヘルプ: `helpSidepanel17` 新規追加（タイトルドラッグ機能説明）を3言語で追加、app.jsマッピング・index.html li要素も追加
+
+---
+
 ## 2026-06-15: TaggerシングルGenUI:Pボタン追加＋生成UIのZITワークフロープロンプト解析修正
 
 ### TaggerシングルGenUI:Pボタン（`templates/index.html`, `static/js/tagger-tab.js`, `static/js/i18n.js`）

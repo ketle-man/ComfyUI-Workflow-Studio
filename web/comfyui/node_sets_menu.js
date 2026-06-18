@@ -548,7 +548,8 @@ const installCanvasDropHandler = () => {
             e.dataTransfer.types.includes("application/x-wfm-prompt") ||
             e.dataTransfer.types.includes("application/x-wfm-model") ||
             e.dataTransfer.types.includes("application/x-wfm-lora-multi") ||
-            e.dataTransfer.types.includes("application/x-wfm-clip-text")) {
+            e.dataTransfer.types.includes("application/x-wfm-clip-text") ||
+            e.dataTransfer.types.includes("application/x-wfm-pending")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
         }
@@ -592,6 +593,29 @@ const installCanvasDropHandler = () => {
             const data = JSON.parse(promptRaw);
             const pos = getCanvasDropPos(e);
             placePromptNode(data.text, data.negText, data.name, pos);
+            return;
+        }
+
+        // Handle pending workflow drop (from Gallery / Workflow tab "Send to Canvas")
+        const pendingRaw = e.dataTransfer.getData("application/x-wfm-pending");
+        if (pendingRaw) {
+            e.preventDefault();
+            try {
+                const wfData = JSON.parse(pendingRaw);
+                app.loadGraphData(wfData);
+                localStorage.removeItem("wfm_pending_workflow");
+                if (panelEl) {
+                    const titleEl = panelEl.querySelector(".wfm-nlp-title");
+                    if (titleEl) {
+                        titleEl.draggable = false;
+                        titleEl.classList.remove("wfm-nlp-title-pending");
+                        titleEl.title = "Workflow Studio Library";
+                    }
+                }
+                showToast("Workflow loaded on canvas", "success");
+            } catch (err) {
+                showToast("Failed to load workflow: " + err.message, "error");
+            }
             return;
         }
 
@@ -761,6 +785,28 @@ const createPanel = () => {
             rebuildSubTabs();
             renderContent();
         });
+    });
+
+    // Pending workflow drag-to-canvas
+    const titleEl = panel.querySelector(".wfm-nlp-title");
+    const updateTitlePendingState = () => {
+        const hasPending = !!localStorage.getItem("wfm_pending_workflow");
+        titleEl.draggable = hasPending;
+        titleEl.classList.toggle("wfm-nlp-title-pending", hasPending);
+        titleEl.title = hasPending
+            ? "Drag to canvas to load workflow"
+            : "Workflow Studio Library";
+    };
+    updateTitlePendingState();
+    panel.addEventListener("mouseenter", updateTitlePendingState);
+    window.addEventListener("storage", (e) => {
+        if (e.key === "wfm_pending_workflow") updateTitlePendingState();
+    });
+    titleEl.addEventListener("dragstart", (e) => {
+        const pendingRaw = localStorage.getItem("wfm_pending_workflow");
+        if (!pendingRaw) { e.preventDefault(); return; }
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("application/x-wfm-pending", pendingRaw);
     });
 
     // Close
@@ -3426,6 +3472,16 @@ const injectStyles = () => {
             font-weight: 600;
             font-size: 14px;
             flex: 1;
+        }
+        .wfm-nlp-title-pending {
+            cursor: grab;
+            color: #66aaff;
+        }
+        .wfm-nlp-title-pending::after {
+            content: " ●";
+            font-size: 7px;
+            color: #4caf50;
+            vertical-align: super;
         }
         .wfm-nlp-close {
             background: none;

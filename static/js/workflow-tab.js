@@ -43,8 +43,17 @@ function saveBadgePalette(palette) {
 
 
 // ============================================
-// Open in ComfyUI
+// Open in ComfyUI / Send to Canvas
 // ============================================
+
+function sendToCanvas(workflowData) {
+    try {
+        localStorage.setItem("wfm_pending_workflow", JSON.stringify(workflowData));
+        showToast(t("workflowSentToCanvas"), "success");
+    } catch (err) {
+        showToast(t("errorWithMsg", err.message), "error");
+    }
+}
 
 function openInComfyUI(workflowData) {
     // Open ComfyUI frontend in a new tab and load the workflow.
@@ -858,7 +867,7 @@ function openDetailModal(wf) {
                 </section>
                 <div class="wfm-modal-actions">
                     <button class="wfm-btn wfm-btn-primary" id="wfm-detail-load">${t("loadInGenerate")}</button>
-                    <button class="wfm-btn wfm-btn-sm" id="wfm-detail-open-comfyui">${t("openInComfyUI")}</button>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-detail-open-comfyui">${t("sendToCanvas")}</button>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-detail-set-default">${t("setAsDefault")}</button>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-detail-change-thumb">${t("changeThumbnail")}</button>
                     <input type="file" id="wfm-detail-thumb-file" accept="image/png,image/webp,image/jpeg" style="display:none">
@@ -1008,11 +1017,11 @@ function openDetailModal(wf) {
         }
     });
 
-    // Open in ComfyUI
+    // Send to Canvas
     document.getElementById("wfm-detail-open-comfyui")?.addEventListener("click", async () => {
         try {
             const wfData = await getRawWorkflow(wf.filename);
-            openInComfyUI(wfData);
+            sendToCanvas(wfData);
         } catch (err) {
             showToast(t("loadError") + ": " + err.message, "error");
         }
@@ -1285,12 +1294,12 @@ export function initWorkflowTab() {
         }
     });
 
-    // Toolbar: Open in ComfyUI button
+    // Toolbar: Send to Canvas button
     document.getElementById("wfm-list-open-comfyui-btn")?.addEventListener("click", async () => {
         if (!state.selectedWf) return;
         try {
             const wfData = await getRawWorkflow(state.selectedWf.filename);
-            openInComfyUI(wfData);
+            sendToCanvas(wfData);
         } catch (err) {
             showToast(t("loadError") + ": " + err.message, "error");
         }

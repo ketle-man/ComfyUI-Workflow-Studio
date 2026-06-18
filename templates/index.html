@@ -49,7 +49,7 @@
                         <option value="">All Groups</option>
                     </select>
                     <button id="wfm-list-load-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" disabled title="Select a card first">Load in GenerateUI</button>
-                    <button id="wfm-list-open-comfyui-btn" class="wfm-btn wfm-btn-sm" disabled title="Select a card first">Open in ComfyUI</button>
+                    <button id="wfm-list-open-comfyui-btn" class="wfm-btn wfm-btn-sm" disabled title="Select a card first">Send to Canvas</button>
                     <div class="wfm-view-btns">
                         <button class="wfm-view-btn active" data-view="thumb" title="Thumbnail">&#8862;</button>
                         <button class="wfm-view-btn" data-view="table" title="Table">&#8801;</button>
@@ -953,7 +953,7 @@
                                 <li id="wfm-help-wf-3">Create, rename, delete groups and assign/remove workflows</li>
                                 <li id="wfm-help-wf-4">Import JSON/PNG files via button or drag &amp; drop</li>
                                 <li id="wfm-help-wf-5">Side panel: thumbnail, JSON viewer (format badge: UI/API/App), clipboard copy, group management</li>
-                                <li id="wfm-help-wf-6">Detail modal: rename, favorite, thumbnail change, badge assignment, tags, memo, AI summary, open in ComfyUI, load in GenerateUI, set as default, delete</li>
+                                <li id="wfm-help-wf-6">Detail modal: rename, favorite, thumbnail change, badge assignment, tags, memo, AI summary, send to canvas, load in GenerateUI, set as default, delete</li>
                                 <li id="wfm-help-wf-7">Badge management: add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)</li>
                             </ul>
                         </div>
@@ -1077,7 +1077,7 @@
                                 <li id="wfm-help-gallery-5">Folder tree: click to load images, expand with ▶; "+ New" creates a subfolder inside the selected folder, "Del" deletes it with all contents</li>
                                 <li id="wfm-help-gallery-6">Multi-select with Ctrl+click — bulk operations: Add to Group, Favorite All, Unfavorite All, Move To..., Delete</li>
                                 <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, date, tags (add/remove), memo; "Move To..." moves the image to another folder, "Delete" removes it permanently</li>
-                                <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; one-click clipboard copy</li>
+                                <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; 'Copy &amp; Send Canvas' button copies to clipboard and stores the workflow for title-drag to canvas</li>
                                 <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image</li>
                                 <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the JSON tab</li>
                                 <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF; workflow extraction reads ComfyUI prompt and workflow keys embedded in PNG metadata</li>
@@ -1128,6 +1128,7 @@
                                 <li id="wfm-help-sidepanel-14">Information tab — drag items to canvas: model sub-tab places the loader node (Checkpoint → CheckpointLoaderSimple, VAE → VAELoader, Diffusion Model → UNETLoader, Text Encoder → CLIPLoader); double-click also places at canvas center</li>
                                 <li id="wfm-help-sidepanel-15">Information tab — LoRA sub-tab: drag individual LoRA to place LoraLoader; "Multiple LORA" section at bottom places all LoRAs in a single Lora Loader (LoraManager) node; Prompts sub-tab: drag a prompt to place CLIPTextEncode node with text pre-filled; click prompt to view full text and copy</li>
                                 <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation and TOOLS (VLM) panes powered by Ollama or LM Studio; 3-pane layout (Translation | TOOLS | Settings) always visible; settings (backend, URL, model) are shared with the SPA AI TOOL tab via localStorage</li>
+                                <li id="wfm-help-sidepanel-17">Title drag (Send to Canvas): after clicking 'Send to Canvas' (Workflow tab) or 'Copy &amp; Send Canvas' (Gallery tab), the 'Workflow Studio Library' title turns blue with a green ● — drag it onto the canvas to load the workflow; title resets automatically after loading</li>
                             </ul>
                         </div>
                     </div>
@@ -1337,7 +1338,7 @@
                     <div id="wfm-gallery-detail-meta" class="wfm-gallery-detail-tab-content wfm-gallery-meta-tab" style="display:none;">
                         <div class="wfm-gallery-meta-toolbar">
                             <span id="wfm-gallery-meta-status" class="wfm-gallery-meta-status"></span>
-                            <button id="wfm-gallery-copy-workflow-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" disabled title="Copy embedded workflow JSON">Copy Workflow</button>
+                            <button id="wfm-gallery-copy-workflow-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" disabled title="Copy to clipboard and send to canvas">Copy &amp; Send Canvas</button>
                         </div>
                         <pre id="wfm-gallery-workflow-json" class="wfm-gallery-workflow-json">No workflow found in this image.</pre>
                     </div>

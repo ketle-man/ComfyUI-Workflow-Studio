@@ -13,11 +13,12 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 
 **📚 Workflow Studio Library** — a multi-function side panel for smooth ComfyUI integration
 - Drag & drop models, nodes, prompts, and workflows straight onto the canvas
+- **Send to Canvas**: click "Send to Canvas" (Workflow tab) or "Copy & Send Canvas" (Gallery tab) — the panel title highlights blue; drag it onto the canvas to load the workflow
 - View metadata from images / JSON, then drop the detected models and prompts onto the canvas
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.38-green)
+![Version](https://img.shields.io/badge/version-0.3.39-green)
 
 ## Screenshots
 
@@ -57,7 +58,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Side panel tabs** — Thumbnail preview, JSON viewer with syntax highlighting, and Group management
 - **Badge management** — add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)
 - **AI summary** — generate workflow descriptions using Ollama
-- **Import / Export** — import workflows from files or clipboard, open in ComfyUI directly
+- **Import / Export** — import workflows from files or clipboard; **Send to Canvas** button stores the selected workflow for title-drag onto the ComfyUI canvas
 - **Default view setting** — persist your preferred view mode (Thumbnail / Table)
 
 ### Canvas Snapshot (v0.1.2)
@@ -147,7 +148,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Group management** — create, rename, delete groups and assign/remove images using the same 4-section panel as Models tab
 - **Favorites** — star images inline without reopening the detail panel
 - **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel
-- **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab
+- **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab; **Copy & Send Canvas** button copies the JSON to the clipboard and stores it for title-drag to the ComfyUI canvas
 - **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
@@ -219,6 +220,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Drag & drop workflows** — drag a workflow onto the canvas to load it
 - **Drag & drop nodes** — drag nodes/node sets onto the canvas to place them
 - **Drag & drop prompts** — drag a preset onto the canvas to create a WFS_PromptText node with positive/negative prompts
+- **Title drag (Send to Canvas)** — after clicking "Send to Canvas" (Workflow tab toolbar / detail modal) or "Copy & Send Canvas" (Gallery tab JSON panel), the "Workflow Studio Library" title highlights blue with a green ● indicator; drag the title onto the canvas to load the stored workflow; title resets automatically after loading
 - **Copy prompts** — copy individual positive (P) or negative (N) prompts from sidebar items
 - **Double-click** — load workflows or place nodes without dragging
 - **Search** — search within each sub-tab to quickly find items
@@ -316,6 +318,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.39
+- **Workflow tab — Send to Canvas button** — replaced "Open in ComfyUI" (toolbar and detail modal) with "Send to Canvas"; stores the selected workflow in `localStorage` for title-drag to the canvas without opening a new browser tab
+- **Gallery tab — Copy & Send Canvas button** — renamed "Copy Workflow" to "Copy & Send Canvas"; copies the embedded workflow JSON to the clipboard and simultaneously stores it for title-drag
+- **Workflow Studio Library — title drag** — after "Send to Canvas" or "Copy & Send Canvas" is clicked, the "Workflow Studio Library" panel title turns blue with a green ● indicator; drag the title onto the ComfyUI canvas to load the workflow; title resets automatically after loading
 
 ### v0.3.38
 - **Tagger tab** — new tab for automatic image tagging; supports WD Tagger (ONNX), SwinV2, DeepDanbooru (.h5), and Ollama VLM; 3 sub-tabs: Single (drag & drop / upload, 5 output targets), Batch (folder processing with real-time progress), DB (searchable SQLite database with CSV export)
