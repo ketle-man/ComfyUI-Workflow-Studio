@@ -399,6 +399,14 @@ export const comfyWorkflow = {
                 } // end else (non-LoraManager path)
             }
 
+            // ImpactWildcardEncode / ImpactWildcardProcessor: widgets[0] is always wildcard_text.
+            // Always overwrite: object_info ordering may misalign when widget order differs between
+            // impact-pack versions; widgets[0] is stable across all known versions.
+            if ((node.type === "ImpactWildcardEncode" || node.type === "ImpactWildcardProcessor")
+                && widgets.length > 0) {
+                inputs["wildcard_text"] = widgets[0];
+            }
+
             api[nodeId] = {
                 class_type: node.type,
                 inputs,
@@ -571,6 +579,16 @@ export const comfyWorkflow = {
                         if (isNeg) samplerNegativeRef[tv[0]] = true;
                     }
                 }
+                // CLIPTextEncodeEditPlus — propagate role to its STRING inputs (text1, text2)
+                if (ct === "CLIPTextEncodeEditPlus") {
+                    for (const key of ["text1", "text2"]) {
+                        const tv = inputs[key];
+                        if (Array.isArray(tv)) {
+                            if (isPos) samplerPositiveRef[tv[0]] = true;
+                            if (isNeg) samplerNegativeRef[tv[0]] = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -645,10 +663,12 @@ export const comfyWorkflow = {
                 }
             }
 
-            // CLIPTextEncodeEditPlus — text_edit is the locally editable override; text1 is always a link
+            // CLIPTextEncodeEditPlus — text_edit is the locally editable override; text1 is always a link.
+            // Skip when text_edit is empty: it means upstream nodes (ImpactWildcardEncode etc.) supply
+            // the actual prompt text and the edit field is just an optional local override.
             if (ct === "CLIPTextEncodeEditPlus") {
                 const textVal = inputs.text_edit;
-                if (typeof textVal === "string") {
+                if (typeof textVal === "string" && textVal !== "") {
                     result.prompt_nodes.push({
                         id, type: ct, title, role: getRole(),
                         text: textVal, textKey: "text_edit",
@@ -854,6 +874,10 @@ function _getWidgetMapping(nodeType) {
         CLIPLoader: ["clip_name", "type", "device"],
         FluxGuidance: ["guidance"],
         CFGNorm: ["strength"],
+        // Impact Pack wildcard nodes — only map wildcard_text (index 0); remaining widgets
+        // vary between versions and include frontend-only extras, so we leave them unmapped.
+        ImpactWildcardProcessor: ["wildcard_text"],
+        ImpactWildcardEncode: ["wildcard_text"],
     };
     return mappings[nodeType] || null;
 }

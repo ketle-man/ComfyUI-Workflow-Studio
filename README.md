@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.40-green)
+![Version](https://img.shields.io/badge/version-0.3.41-green)
 
 ## Screenshots
 
@@ -320,6 +320,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.41
+- **Generate UI — ImpactWildcardEncode / ImpactWildcardProcessor prompt detection** — fixed: wildcard text inputs from comfy-impact-pack nodes were not shown in the Prompt tab of Generate UI
+  - `CLIPTextEncodeEditPlus` node (used as the text encoder in these workflows) now correctly propagates positive/negative roles upstream to ImpactWildcard nodes via BFS
+  - `CLIPTextEncodeEditPlus` with an empty `text_edit` field is no longer added to `prompt_nodes` ahead of the upstream ImpactWildcard node, preventing a blank text area
+  - `widgets[0]` is now always written to `wildcard_text` in the API conversion step, regardless of `object_info` widget-order differences between impact-pack versions
+  - Static fallback mapping added for `ImpactWildcardProcessor` and `ImpactWildcardEncode` so detection works even when the ComfyUI server is offline
 
 ### v0.3.40
 - **AI TOOL tab — Chat pane** — new pane (between Translation and TOOLS) for multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`

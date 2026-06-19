@@ -1,5 +1,28 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-19: Generate UI — ImpactWildcardEncode/Processor プロンプト検出バグ修正（v0.3.41）
+
+### 修正内容（`static/js/comfyui-workflow.js`）
+
+**症状**：comfy-impact-pack の `ImpactWildcardEncode` / `ImpactWildcardProcessor` ノードを含むワークフローを Generate UI に読み込んだとき、Prompt タブにプロンプトが表示されない（ID は正しく表示されていた）。
+
+**原因1: CLIPTextEncodeEditPlus 経由の BFS ロール伝播漏れ**
+- これらのワークフローでは ImpactWildcard ノードの出力が `CLIPTextEncodeEditPlus` の `text2` 入力に接続され、CLIPTextEncodeEditPlus が KSampler の positive に繋がる構成。
+- BFS 伝播で `CLIPTextEncodeEditPlus` の STRING 入力（text1, text2）に positive/negative ロールを伝播するコードが未実装だったため、上流の ImpactWildcard ノードのロールが `unknown` のままになっていた。
+- **修正**: BFS ループに `CLIPTextEncodeEditPlus` の `text1` / `text2` への伝播を追加。
+
+**原因2: CLIPTextEncodeEditPlus が空の text_edit で prompt_nodes の先頭に入り込む**
+- CLIPTextEncodeEditPlus 自体も positive ロールとして検出され、`text_edit = ""` でノードIDが小さいため `positiveNodes[0]` になっていた。
+- これによりテキストエリアに空文字が表示され、ImpactWildcard ノードのプロンプトが埋もれていた。
+- **修正**: `text_edit` が空文字列の場合は `prompt_nodes` に追加しないよう条件を追加（`textVal !== ""`）。空の text_edit は「上流ノードからプロンプトが来る場合のデフォルト状態」であり、UI で表示する必要がない。
+
+**原因3: object_info マッピングの不確実性**
+- `convertUiToApi()` で impact-pack バージョンによる `object_info` のウィジェット順序差異が発生した場合、`wildcard_text` が正しくマッピングされない可能性があった。
+- **修正1**: ポストプロセスで `widgets[0]` を常に `wildcard_text` として上書き（`!("wildcard_text" in inputs)` ガードを除去）。
+- **修正2**: `_getWidgetMapping()` フォールバックに `ImpactWildcardProcessor: ["wildcard_text"]`、`ImpactWildcardEncode: ["wildcard_text"]` を追加（ComfyUI オフライン時の対応）。
+
+---
+
 ## 2026-06-19: AI TOOL タブ Chat ペイン・ワイルドカード生成追加（v0.3.40）
 
 ### Chat ペイン（`templates/index.html`, `static/css/main.css`, `static/js/ai-tab.js`, `web/comfyui/node_sets_menu.js`）
