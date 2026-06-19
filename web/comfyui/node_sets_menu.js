@@ -61,7 +61,7 @@ const state = {
     infoSubTab: "info-model",   // "info-model" | "info-lora" | "info-prompt"
     infoMeta: null,             // parsed metadata from dropped file
     // AI tab
-    aiSubTab: "ai-translate",   // "ai-translate" | "ai-vlm" | "ai-settings"
+    aiSubTab: "ai-translate",   // "ai-translate" | "ai-chat" | "ai-vlm" | "ai-settings"
 };
 
 // ============================================
@@ -879,6 +879,7 @@ const rebuildSubTabs = () => {
     if (state.topTab === "ai") {
         const row1Tabs = [
             { key: "ai-translate", label: "Translation" },
+            { key: "ai-chat",      label: "Chat" },
             { key: "ai-vlm",       label: "TOOLS" },
             { key: "ai-settings",  label: "Settings" },
         ];
@@ -3005,6 +3006,24 @@ async function aiCallVLM(url, backend, model, prompt, base64Image, mimeType) {
     }
 }
 
+async function aiCallChat(url, backend, model, messages) {
+    if (backend === "ollama") {
+        const r = await fetch(`${url}/api/chat`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages, stream: false }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()).message?.content || "";
+    } else {
+        const r = await fetch(`${url}/v1/chat/completions`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages, stream: false }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()).choices?.[0]?.message?.content || "";
+    }
+}
+
 async function aiFetchModels(url, backend) {
     if (backend === "ollama") {
         const r = await fetch(`${url}/api/tags`);
@@ -3046,6 +3065,16 @@ const renderAiTab = (container) => {
                     </div>
                     <textarea id="wfm-nlp-ai-output" class="wfm-nlp-ai-textarea wfm-nlp-ai-output" placeholder="Translation result..." readonly></textarea>
                 </div>
+                <!-- Chat sub -->
+                <div id="wfm-nlp-ai-chat" class="wfm-nlp-ai-pane" style="display:none;">
+                    <div class="wfm-nlp-ai-chat-msgs" id="wfm-nlp-ai-chat-msgs"></div>
+                    <textarea id="wfm-nlp-ai-chat-input" class="wfm-nlp-ai-textarea wfm-nlp-ai-chat-input" placeholder="Type a message..."></textarea>
+                    <div class="wfm-nlp-ai-actions">
+                        <button id="wfm-nlp-ai-chat-send" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">Send</button>
+                        <button id="wfm-nlp-ai-chat-clear" class="wfm-nlp-ai-btn">Clear</button>
+                        <span id="wfm-nlp-ai-chat-status" class="wfm-nlp-ai-status"></span>
+                    </div>
+                </div>
                 <!-- TOOLS sub -->
                 <div id="wfm-nlp-ai-vlm" class="wfm-nlp-ai-pane" style="display:none;">
                     <div class="wfm-nlp-ai-vlm-drop" id="wfm-nlp-ai-vlm-drop">
@@ -3053,11 +3082,22 @@ const renderAiTab = (container) => {
                         <span id="wfm-nlp-ai-vlm-label" class="wfm-nlp-ai-vlm-label">Drop PNG / JPG / WebP</span>
                         <input type="file" id="wfm-nlp-ai-vlm-file" accept="image/png,image/jpeg,image/webp" style="display:none;">
                     </div>
+                    <div id="wfm-nlp-ai-wc-inputs" style="display:none;flex-direction:column;gap:5px;">
+                        <div class="wfm-nlp-ai-row">
+                            <span class="wfm-nlp-ai-lbl">Name</span>
+                            <input type="text" id="wfm-nlp-ai-wc-name" class="wfm-nlp-ai-input" style="flex:1;" placeholder="e.g. sports">
+                        </div>
+                        <div class="wfm-nlp-ai-row">
+                            <span class="wfm-nlp-ai-lbl">Count</span>
+                            <input type="number" id="wfm-nlp-ai-wc-count" class="wfm-nlp-ai-input wfm-nlp-ai-wc-count" value="20" min="1" max="200">
+                        </div>
+                    </div>
                     <div class="wfm-nlp-ai-row">
                         <select id="wfm-nlp-ai-vlm-task" class="wfm-nlp-ai-sel" style="flex:1;">
                             <option value="describe">Describe image</option>
                             <option value="prompt">Create prompt</option>
                             <option value="tags">Create tags</option>
+                            <option value="wildcard">Create wildcards</option>
                         </select>
                         <button id="wfm-nlp-ai-vlm-run" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">Run</button>
                     </div>
@@ -3115,7 +3155,7 @@ const renderAiTab = (container) => {
 
 const renderAiSubContent = () => {
     if (!panelEl) return;
-    const panes = { "ai-translate": "wfm-nlp-ai-translate", "ai-vlm": "wfm-nlp-ai-vlm", "ai-settings": "wfm-nlp-ai-settings" };
+    const panes = { "ai-translate": "wfm-nlp-ai-translate", "ai-chat": "wfm-nlp-ai-chat", "ai-vlm": "wfm-nlp-ai-vlm", "ai-settings": "wfm-nlp-ai-settings" };
     for (const [key, id] of Object.entries(panes)) {
         const el = panelEl.querySelector(`#${id}`);
         if (el) el.style.display = state.aiSubTab === key ? "flex" : "none";
@@ -3270,6 +3310,67 @@ const setupAiHandlers = (container) => {
     // Auto-load models if settings exist
     if (cfg.backendUrl && cfg.backend) refreshModels().catch(() => {});
 
+    // ---- Chat handlers ----
+    let chatHistory = [];
+    const chatMsgsEl  = container.querySelector("#wfm-nlp-ai-chat-msgs");
+    const chatInputEl = container.querySelector("#wfm-nlp-ai-chat-input");
+    const chatSendBtn = container.querySelector("#wfm-nlp-ai-chat-send");
+    const chatClearBtn= container.querySelector("#wfm-nlp-ai-chat-clear");
+    const chatStatusEl= container.querySelector("#wfm-nlp-ai-chat-status");
+
+    const appendChatBubble = (role, content) => {
+        const div = document.createElement("div");
+        div.className = `wfm-nlp-ai-chat-msg wfm-nlp-ai-chat-msg-${role}`;
+        div.textContent = content;
+        chatMsgsEl.appendChild(div);
+        chatMsgsEl.scrollTop = chatMsgsEl.scrollHeight;
+    };
+
+    const sendChatMessage = async () => {
+        const text = chatInputEl?.value?.trim();
+        if (!text) return;
+        const c = loadAiCfg();
+        const backend = c.backend || "ollama";
+        const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const model = c.model;
+        if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
+        if (!model) { showToast("Please select a model in Settings", "error"); return; }
+
+        chatInputEl.value = "";
+        chatHistory.push({ role: "user", content: text });
+        appendChatBubble("user", text);
+
+        chatSendBtn.disabled = true;
+        chatStatusEl.textContent = "Thinking...";
+        chatStatusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
+
+        try {
+            const reply = await aiCallChat(url, backend, model, chatHistory);
+            chatHistory.push({ role: "assistant", content: reply });
+            appendChatBubble("assistant", reply);
+            chatStatusEl.textContent = "";
+            chatStatusEl.className = "wfm-nlp-ai-status";
+        } catch (err) {
+            chatHistory.pop();
+            if (chatMsgsEl.lastChild) chatMsgsEl.removeChild(chatMsgsEl.lastChild);
+            chatInputEl.value = text;
+            chatStatusEl.textContent = `エラー: ${err.message}`;
+            chatStatusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
+        } finally {
+            chatSendBtn.disabled = false;
+        }
+    };
+
+    chatSendBtn?.addEventListener("click", sendChatMessage);
+    chatInputEl?.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+    });
+    chatClearBtn?.addEventListener("click", () => {
+        chatHistory = [];
+        if (chatMsgsEl) chatMsgsEl.innerHTML = "";
+        if (chatStatusEl) { chatStatusEl.textContent = ""; chatStatusEl.className = "wfm-nlp-ai-status"; }
+    });
+
     // ---- VLM handlers ----
     let vlmImage = null; // { base64, mimeType }
 
@@ -3277,10 +3378,22 @@ const setupAiHandlers = (container) => {
     const vlmPreview = container.querySelector("#wfm-nlp-ai-vlm-preview");
     const vlmLabel   = container.querySelector("#wfm-nlp-ai-vlm-label");
     const vlmFile    = container.querySelector("#wfm-nlp-ai-vlm-file");
+    const vlmTaskSel = container.querySelector("#wfm-nlp-ai-vlm-task");
     const vlmRunBtn  = container.querySelector("#wfm-nlp-ai-vlm-run");
     const vlmStatus  = container.querySelector("#wfm-nlp-ai-vlm-status");
     const vlmResult  = container.querySelector("#wfm-nlp-ai-vlm-result");
     const vlmCopy    = container.querySelector("#wfm-nlp-ai-vlm-copy");
+    const wcInputs   = container.querySelector("#wfm-nlp-ai-wc-inputs");
+    const wcNameEl   = container.querySelector("#wfm-nlp-ai-wc-name");
+    const wcCountEl  = container.querySelector("#wfm-nlp-ai-wc-count");
+
+    const updateVlmTaskUI = () => {
+        const isWc = vlmTaskSel?.value === "wildcard";
+        if (vlmDrop) vlmDrop.style.display = isWc ? "none" : "";
+        if (wcInputs) wcInputs.style.display = isWc ? "flex" : "none";
+    };
+    vlmTaskSel?.addEventListener("change", updateVlmTaskUI);
+    updateVlmTaskUI();
 
     const loadVlmImage = async (file) => {
         if (!file || !file.type.startsWith("image/")) return;
@@ -3309,7 +3422,7 @@ const setupAiHandlers = (container) => {
     };
 
     vlmRunBtn?.addEventListener("click", async () => {
-        if (!vlmImage) { showToast("Please drop an image", "error"); return; }
+        const task = vlmTaskSel?.value || "describe";
         const c = loadAiCfg();
         const backend = c.backend || "ollama";
         const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
@@ -3317,7 +3430,37 @@ const setupAiHandlers = (container) => {
         if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
         if (!model) { showToast("Please select a model in Settings", "error"); return; }
 
-        const task = container.querySelector("#wfm-nlp-ai-vlm-task")?.value || "describe";
+        if (task === "wildcard") {
+            const name  = wcNameEl?.value?.trim() || "";
+            const count = Math.max(1, parseInt(wcCountEl?.value) || 20);
+            if (!name) { showToast("Please enter a wildcard name", "error"); return; }
+
+            vlmRunBtn.disabled = true;
+            vlmStatus.textContent = "Running...";
+            vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
+            vlmResult.value = "";
+
+            const prompt = `Generate ${count} wildcard entries for the category "${name}". Output only plain text in English, one entry per line, no numbers, no markdown, no asterisks, no bold, nothing else.`;
+            try {
+                const result = await aiCallLLM(url, backend, model, prompt);
+                vlmResult.value = result.trim()
+                    .split("\n")
+                    .map(l => l.replace(/\*\*/g, "").replace(/^\*\s*/, "").replace(/^\d+\.\s*/, "").trim())
+                    .filter(l => l.length > 0)
+                    .join("\n");
+                vlmStatus.textContent = "完了";
+                vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";
+            } catch (err) {
+                vlmStatus.textContent = `エラー: ${err.message}`;
+                vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
+            } finally {
+                vlmRunBtn.disabled = false;
+            }
+            return;
+        }
+
+        if (!vlmImage) { showToast("Please drop an image", "error"); return; }
+
         vlmRunBtn.disabled = true;
         vlmStatus.textContent = "Running...";
         vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
@@ -4183,6 +4326,46 @@ const injectStyles = () => {
             font-size: 11px;
             color: var(--descrip-text, #999);
             pointer-events: none;
+        }
+        /* Chat */
+        .wfm-nlp-ai-chat-msgs {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-height: 0;
+            padding: 2px;
+        }
+        .wfm-nlp-ai-chat-msg {
+            max-width: 92%;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            line-height: 1.5;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .wfm-nlp-ai-chat-msg-user {
+            align-self: flex-end;
+            background: var(--p-button-background, #4a9eff);
+            color: #fff;
+        }
+        .wfm-nlp-ai-chat-msg-assistant {
+            align-self: flex-start;
+            background: var(--comfy-input-bg, #2a2a2a);
+            border: 1px solid var(--border-color, #4e4e4e);
+            color: var(--input-text, #ddd);
+        }
+        .wfm-nlp-ai-chat-input {
+            min-height: 50px;
+            max-height: 100px;
+            flex: none;
+            flex-shrink: 0;
+        }
+        /* Wildcard count */
+        .wfm-nlp-ai-wc-count {
+            width: 60px;
         }
     `;
     document.head.appendChild(style);

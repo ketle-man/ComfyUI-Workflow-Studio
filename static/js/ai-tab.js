@@ -365,6 +365,111 @@ function initSettingsTab() {
 }
 
 // ============================================
+// Chat tab
+// ============================================
+
+async function callChat(url, backend, model, messages) {
+    if (backend === "ollama") {
+        const res = await fetch(`${url}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages, stream: false }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()).message?.content || "";
+    } else {
+        const res = await fetch(`${url}/v1/chat/completions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages, stream: false }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()).choices?.[0]?.message?.content || "";
+    }
+}
+
+function appendChatBubble(messagesEl, role, content) {
+    const div = document.createElement("div");
+    div.className = `wfm-ai-chat-msg wfm-ai-chat-msg-${role}`;
+    div.textContent = content;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+}
+
+function initChatTab() {
+    const messagesEl = document.getElementById("wfm-ai-chat-messages");
+    const inputEl    = document.getElementById("wfm-ai-chat-input");
+    const sendBtn    = document.getElementById("wfm-ai-chat-send-btn");
+    const clearBtn   = document.getElementById("wfm-ai-chat-clear-btn");
+    const statusEl   = document.getElementById("wfm-ai-chat-status");
+
+    if (!messagesEl || !inputEl || !sendBtn) return;
+
+    let chatHistory = [];
+
+    async function sendMessage() {
+        const text = inputEl.value.trim();
+        if (!text) return;
+
+        const settings = loadAiSettings();
+        const { backend = "ollama", backendUrl, model } = settings;
+        const url = backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+
+        if (!isValidBackendUrl(url)) {
+            showToast(t("aiToastInvalidUrl"), "error");
+            return;
+        }
+        if (!model) {
+            showToast(t("aiToastNoModel"), "error");
+            return;
+        }
+
+        inputEl.value = "";
+        inputEl.style.height = "";
+        chatHistory.push({ role: "user", content: text });
+        appendChatBubble(messagesEl, "user", text);
+
+        sendBtn.disabled = true;
+        statusEl.textContent = t("aiStatusChatting");
+        statusEl.className = "wfm-ai-trans-status wfm-ai-status-working";
+
+        try {
+            const reply = await callChat(url, backend, model, chatHistory);
+            chatHistory.push({ role: "assistant", content: reply });
+            appendChatBubble(messagesEl, "assistant", reply);
+            statusEl.textContent = "";
+            statusEl.className = "wfm-ai-trans-status";
+        } catch (err) {
+            chatHistory.pop();
+            if (messagesEl.lastChild) messagesEl.removeChild(messagesEl.lastChild);
+            inputEl.value = text;
+            statusEl.textContent = `${t("aiStatusConnectFail")}${err.message}`;
+            statusEl.className = "wfm-ai-trans-status wfm-ai-status-error";
+            showToast(t("aiToastChatFailed") + err.message, "error");
+        } finally {
+            sendBtn.disabled = false;
+        }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+
+    inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    clearBtn.addEventListener("click", () => {
+        chatHistory = [];
+        messagesEl.innerHTML = "";
+        statusEl.textContent = "";
+        statusEl.className = "wfm-ai-trans-status";
+    });
+}
+
+// ============================================
 // VLM tab
 // ============================================
 
@@ -378,10 +483,21 @@ function initVlmTab() {
     const statusEl  = document.getElementById("wfm-ai-vlm-status");
     const resultEl  = document.getElementById("wfm-ai-vlm-result");
     const copyBtn   = document.getElementById("wfm-ai-vlm-copy");
+    const wcInputs  = document.getElementById("wfm-ai-wc-inputs");
+    const wcNameEl  = document.getElementById("wfm-ai-wc-name");
+    const wcCountEl = document.getElementById("wfm-ai-wc-count");
 
     if (!dropEl) return;
 
     let vlmImage = null; // { base64, mimeType }
+
+    function updateTaskUI() {
+        const isWildcard = taskSel?.value === "wildcard";
+        dropEl.style.display = isWildcard ? "none" : "";
+        if (wcInputs) wcInputs.style.display = isWildcard ? "" : "none";
+    }
+    taskSel?.addEventListener("change", updateTaskUI);
+    updateTaskUI();
 
     const loadImage = async (file) => {
         if (!file || !file.type.startsWith("image/")) return;
@@ -402,19 +518,47 @@ function initVlmTab() {
     });
 
     runBtn.addEventListener("click", async () => {
-        if (!vlmImage) { showToast(t("aiToastNoImage"), "error"); return; }
-
+        const task = taskSel?.value || "describe";
         const settings = loadAiSettings();
         const { backend = "ollama", backendUrl, model } = settings;
         const url = backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
 
-        if (!isValidBackendUrl(url)) {
-            showToast(t("aiToastInvalidUrl"), "error");
-            return;
-        }
+        if (!isValidBackendUrl(url)) { showToast(t("aiToastInvalidUrl"), "error"); return; }
         if (!model) { showToast(t("aiToastNoModel"), "error"); return; }
 
-        const task = taskSel?.value || "describe";
+        if (task === "wildcard") {
+            const name  = wcNameEl?.value.trim() || "";
+            const count = Math.max(1, parseInt(wcCountEl?.value) || 20);
+            if (!name) { showToast(t("aiToastWcNoName"), "error"); return; }
+
+            runBtn.disabled = true;
+            statusEl.textContent = t("aiStatusRunning");
+            statusEl.className = "wfm-ai-trans-status wfm-ai-status-working";
+            resultEl.value = "";
+
+            const prompt = `Generate ${count} wildcard entries for the category "${name}". Output only plain text in English, one entry per line, no numbers, no markdown, no asterisks, no bold, nothing else.`;
+
+            try {
+                const result = await callLLM(url, backend, model, prompt);
+                resultEl.value = result.trim()
+                    .split("\n")
+                    .map(l => l.replace(/\*\*/g, "").replace(/^\*\s*/, "").replace(/^\d+\.\s*/, "").trim())
+                    .filter(l => l.length > 0)
+                    .join("\n");
+                statusEl.textContent = t("aiStatusDone");
+                statusEl.className = "wfm-ai-trans-status wfm-ai-status-ok";
+            } catch (err) {
+                statusEl.textContent = `${t("aiStatusConnectFail")}${err.message}`;
+                statusEl.className = "wfm-ai-trans-status wfm-ai-status-error";
+                showToast(t("aiToastVlmFailed") + err.message, "error");
+            } finally {
+                runBtn.disabled = false;
+            }
+            return;
+        }
+
+        if (!vlmImage) { showToast(t("aiToastNoImage"), "error"); return; }
+
         runBtn.disabled = true;
         statusEl.textContent = t("aiStatusRunning");
         statusEl.className = "wfm-ai-trans-status wfm-ai-status-working";
@@ -447,6 +591,7 @@ function initVlmTab() {
 
 export function initAiTab() {
     initTranslateTab();
+    initChatTab();
     initVlmTab();
     initSettingsTab();
 }

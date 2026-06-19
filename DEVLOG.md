@@ -1,5 +1,30 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-19: AI TOOL タブ Chat ペイン・ワイルドカード生成追加（v0.3.40）
+
+### Chat ペイン（`templates/index.html`, `static/css/main.css`, `static/js/ai-tab.js`, `web/comfyui/node_sets_menu.js`）
+- AI TOOL タブを 3ペイン → **4ペイン**（Translation | Chat | TOOLS | Settings）に変更
+- Chat ペイン: LLM とのマルチターン会話；会話履歴を毎回送信；Enter で送信、Shift+Enter で改行；Clear ボタンで履歴リセット
+- Ollama: `/api/chat` エンドポイント（`messages` 配列）、LM Studio: `/v1/chat/completions`（同形式）
+- 送信失敗時は入力テキストを復元してリトライ可能
+- サイドパネル Aタブにも Chat サブタブを追加（Translation → **Chat** → TOOLS → Settings の4タブ構成）
+- CSS: `.wfm-ai-chat-*` / `.wfm-nlp-ai-chat-*` でユーザーバブル（右）・アシスタントバブル（左）スタイル追加
+
+### ワイルドカード生成（`templates/index.html`, `static/css/main.css`, `static/js/ai-tab.js`, `web/comfyui/node_sets_menu.js`）
+- TOOLS ペインのドロップダウンに「Create wildcards」オプションを追加
+- タスク切替で UI を動的切り替え：VLM選択時→ドロップゾーン表示、Wildcard選択時→Name・Count入力フォームを表示
+- プロンプト: `Generate ${count} wildcard entries for the category "${name}". Output only plain text in English, one entry per line, no numbers, no markdown, no asterisks, no bold, nothing else.`
+- 後処理: `**` / 行頭 `*` / 行頭数字（`\d+\.\s*`）を除去してプレーンテキストを保証
+- SPA（`static/js/ai-tab.js`）とサイドパネル（`web/comfyui/node_sets_menu.js`）両方に実装
+
+### ヘルプ・i18n（`static/js/i18n.js`, `static/js/app.js`, `templates/index.html`）
+- AI TOOL タブヘルプを5項目→6項目に再構成（ai-3: Chat、ai-4: VLM、ai-5: Wildcards、ai-6: 設定）
+- `helpSidepanel16` を EN/JA/ZH 更新（Chat・ワイルドカード機能を追記）
+- `helpAi1`〜`helpAi6` を EN/JA/ZH 全更新
+- 新 i18n キー追加（3言語）: `aiStatusChatting`, `aiToastChatFailed`, `aiToastWcNoName`
+
+---
+
 ## 2026-06-18: Send to Canvas機能追加（ワークフロータブ・ギャラリータブ→LibraryタイトルDnD）
 
 ### ワークフロータブ — Send to Canvas（`static/js/workflow-tab.js`, `static/js/app.js`, `templates/index.html`）

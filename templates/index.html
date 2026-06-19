@@ -1127,7 +1127,7 @@
                                 <li id="wfm-help-sidepanel-13">I tab (Information): drop a ComfyUI PNG/WebP/JSON to inspect model, LoRA, and prompt metadata in the side panel — sub-tabs: model / lora / Prompts; supports UnetLoaderGGUF and QuadrupleCLIPLoader node types</li>
                                 <li id="wfm-help-sidepanel-14">Information tab — drag items to canvas: model sub-tab places the loader node (Checkpoint → CheckpointLoaderSimple, VAE → VAELoader, Diffusion Model → UNETLoader, Text Encoder → CLIPLoader); double-click also places at canvas center</li>
                                 <li id="wfm-help-sidepanel-15">Information tab — LoRA sub-tab: drag individual LoRA to place LoraLoader; "Multiple LORA" section at bottom places all LoRAs in a single Lora Loader (LoraManager) node; Prompts sub-tab: drag a prompt to place CLIPTextEncode node with text pre-filled; click prompt to view full text and copy</li>
-                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation and TOOLS (VLM) panes powered by Ollama or LM Studio; 3-pane layout (Translation | TOOLS | Settings) always visible; settings (backend, URL, model) are shared with the SPA AI TOOL tab via localStorage</li>
+                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama or LM Studio; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage</li>
                                 <li id="wfm-help-sidepanel-17">Title drag (Send to Canvas): after clicking 'Send to Canvas' (Workflow tab) or 'Copy &amp; Send Canvas' (Gallery tab), the 'Workflow Studio Library' title turns blue with a green ● — drag it onto the canvas to load the workflow; title resets automatically after loading</li>
                             </ul>
                         </div>
@@ -1137,11 +1137,12 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-ai-title">AI TOOL Tab</h3>
                             <ul>
-                                <li id="wfm-help-ai-1">3-pane layout — Translation (40%) | TOOLS (40%) | Settings (20%) — all panes are always visible simultaneously</li>
-                                <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button; text content is also swapped on swap; selections are saved automatically</li>
-                                <li id="wfm-help-ai-3">TOOLS pane (VLM): drop an image into the drop zone and select a task — Describe Image or Create Prompt — then click Run to analyze with a vision model; result displayed with Copy button</li>
-                                <li id="wfm-help-ai-4">Settings pane: choose backend (Ollama / LM Studio), set the API URL, test connection, select model, and configure Free language names for translation</li>
-                                <li id="wfm-help-ai-5">Settings are saved to localStorage and shared with the Library panel's AI TOOL tab</li>
+                                <li id="wfm-help-ai-1">4-pane layout — Translation | Chat | TOOLS | Settings — all panes are always visible simultaneously</li>
+                                <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</li>
+                                <li id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history</li>
+                                <li id="wfm-help-ai-4">TOOLS pane — VLM: drop an image (PNG/JPG/WebP) and select a task (Describe Image, Create Prompt, Create Tags), then click Run to analyze with a vision model; result shown with Copy button</li>
+                                <li id="wfm-help-ai-5">TOOLS pane — Wildcards: select "Create wildcards" from the dropdown, enter a category name and count, click Run to generate plain-text wildcard entries one per line</li>
+                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio), set API URL, test connection, select model, configure Free language names; settings are shared with the Library panel's A tab via localStorage</li>
                             </ul>
                         </div>
                     </div>
@@ -1602,6 +1603,22 @@
                 </div>
             </div>
             <div class="wfm-ai-pane-divider"></div>
+            <!-- Chat pane -->
+            <div class="wfm-ai-pane wfm-ai-pane-chat">
+                <div class="wfm-ai-pane-header">Chat</div>
+                <div class="wfm-ai-chat-container">
+                    <div class="wfm-ai-chat-messages" id="wfm-ai-chat-messages"></div>
+                    <div class="wfm-ai-chat-input-area">
+                        <textarea id="wfm-ai-chat-input" class="wfm-ai-chat-input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)"></textarea>
+                        <div class="wfm-ai-chat-actions">
+                            <button id="wfm-ai-chat-send-btn" class="wfm-btn wfm-btn-primary">Send</button>
+                            <button id="wfm-ai-chat-clear-btn" class="wfm-btn">Clear</button>
+                            <span id="wfm-ai-chat-status" class="wfm-ai-trans-status"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="wfm-ai-pane-divider"></div>
             <!-- TOOLS pane -->
             <div class="wfm-ai-pane wfm-ai-pane-tools">
                 <div class="wfm-ai-pane-header">TOOLS</div>
@@ -1611,11 +1628,22 @@
                         <span id="wfm-ai-vlm-label" class="wfm-ai-vlm-label">Drop or click PNG / JPG / WebP</span>
                         <input type="file" id="wfm-ai-vlm-file" accept="image/png,image/jpeg,image/webp" style="display:none;">
                     </div>
+                    <div class="wfm-ai-wc-inputs" id="wfm-ai-wc-inputs" style="display:none">
+                        <div class="wfm-ai-wc-row">
+                            <label class="wfm-ai-label">Name</label>
+                            <input type="text" id="wfm-ai-wc-name" class="wfm-input" placeholder="e.g. sports, emotions, colors">
+                        </div>
+                        <div class="wfm-ai-wc-row">
+                            <label class="wfm-ai-label">Count</label>
+                            <input type="number" id="wfm-ai-wc-count" class="wfm-input wfm-ai-wc-count" value="20" min="1" max="200">
+                        </div>
+                    </div>
                     <div class="wfm-ai-vlm-task-row">
                         <select id="wfm-ai-vlm-task" class="wfm-select">
                             <option value="describe">Describe image</option>
                             <option value="prompt">Create prompt</option>
                             <option value="tags">Create tags</option>
+                            <option value="wildcard">Create wildcards</option>
                         </select>
                         <button id="wfm-ai-vlm-run" class="wfm-btn wfm-btn-primary">Run</button>
                     </div>

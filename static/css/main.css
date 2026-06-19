@@ -5116,7 +5116,7 @@ body {
     display: flex;
 }
 
-/* 3-pane layout */
+/* 4-pane layout */
 .wfm-ai-pane {
     display: flex;
     flex-direction: column;
@@ -5124,8 +5124,9 @@ body {
     min-width: 0;
 }
 
-.wfm-ai-pane-translate { flex: 4; }
-.wfm-ai-pane-tools     { flex: 4; }
+.wfm-ai-pane-translate { flex: 3; }
+.wfm-ai-pane-chat      { flex: 4; }
+.wfm-ai-pane-tools     { flex: 3; }
 .wfm-ai-pane-settings  { flex: 2; }
 
 .wfm-ai-pane-header {
@@ -5300,6 +5301,25 @@ body {
     margin-left: 4px;
 }
 
+/* Wildcard inputs */
+.wfm-ai-wc-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.wfm-ai-wc-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wfm-ai-wc-count {
+    width: 70px;
+    flex-shrink: 0;
+}
+
 /* VLM Tab */
 .wfm-ai-vlm-container {
     display: flex;
@@ -5368,4 +5388,82 @@ body {
 .wfm-ai-vlm-copy-btn {
     align-self: flex-end;
     flex-shrink: 0;
+}
+
+/* Chat pane */
+.wfm-ai-chat-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    padding: 8px;
+    gap: 8px;
+}
+
+.wfm-ai-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    padding: 4px;
+}
+
+.wfm-ai-chat-msg {
+    max-width: 90%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.wfm-ai-chat-msg-user {
+    align-self: flex-end;
+    background: var(--wfm-primary);
+    color: #fff;
+}
+
+.wfm-ai-chat-msg-assistant {
+    align-self: flex-start;
+    background: var(--wfm-surface);
+    border: 1px solid var(--wfm-border);
+    color: var(--wfm-text);
+}
+
+.wfm-ai-chat-input-area {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.wfm-ai-chat-input {
+    width: 100%;
+    min-height: 60px;
+    max-height: 120px;
+    padding: 8px 10px;
+    background: var(--wfm-bg);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius-sm);
+    color: var(--wfm-text);
+    font-size: 13px;
+    font-family: inherit;
+    resize: none;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
+.wfm-ai-chat-input:focus {
+    outline: none;
+    border-color: var(--wfm-primary);
+}
+
+.wfm-ai-chat-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }

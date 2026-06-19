@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.39-green)
+![Version](https://img.shields.io/badge/version-0.3.40-green)
 
 ## Screenshots
 
@@ -196,12 +196,14 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **Dependencies** — install into ComfyUI's embedded Python: `python_embedded\python.exe -m pip install -r requirements.txt`; for GPU inference use `onnxruntime-gpu`; TensorFlow (DeepDanbooru) is optional and commented out in `requirements.txt`
 
 ### AI TOOL Tab (v0.3.14)
-- **3-pane layout** — Translation (40%) | TOOLS (40%) | Settings (20%); all panes always visible simultaneously; no sub-tab switching required
+- **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
 - **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
+- **Chat pane** (v0.3.40) — multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for a newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`
 - **TOOLS pane (VLM)** — drop an image into the 110px drop zone, select a task (Describe Image / Create Prompt / Create Tags), and click Run to analyze with a vision model; result shown in the output area with a Copy button
+- **TOOLS pane (Wildcards)** (v0.3.40) — select "Create wildcards" from the task dropdown; enter a category name and count; click Run to generate plain-text wildcard entries one per line (no markdown, no numbering); result can be copied directly into wildcard `.txt` files
 - **Settings pane** — choose backend (Ollama / LM Studio), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
 - **Settings shared** — settings saved to `localStorage` under `wfm_ai_settings`; shared with the Library panel's AI TOOL tab so configuration is consistent across both interfaces
-- **Backend support** — Ollama (`/api/generate` for text, `/api/tags` for model list); LM Studio OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio)
+- **Backend support** — Ollama (`/api/generate` for text, `/api/chat` for conversations, `/api/tags` for model list); LM Studio OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio)
 - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
 
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
@@ -213,7 +215,7 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs); LoRA groups show an **All N LoRAs** item — drag to canvas to place a `Lora Loader (LoraManager)` node with all LoRAs pre-loaded
 - **P — Prompts tab** — browse prompt presets with All / ★ Favorites / Categories sub-tabs; **Groups sub-tab** (row 2) — view presets by group (shared with the Batch tab's `wfm_prompt_preset_groups`)
 - **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON in the side panel to view its metadata; detects LoRAs from `LoraLoader`, `LoraLoaderModelOnly`, and `Lora Loader (LoraManager)` nodes (API format supported); supports `UnetLoaderGGUF` and `QuadrupleCLIPLoader` node types; preview area fixed at 110px
-- **A — AI TOOL tab** — 3-pane layout (Translation | TOOLS | Settings) always visible; Translation and TOOLS (VLM) powered by Ollama or LM Studio; settings (backend, URL, model) shared with the SPA AI TOOL tab via `localStorage`
+- **A — AI TOOL tab** — Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama or LM Studio; Chat supports multi-turn conversations (full history sent each turn); TOOLS includes VLM image analysis and wildcard generation; settings (backend, URL, model) shared with the SPA AI TOOL tab via `localStorage`
   - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder; drag items to canvas to place the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`); double-click also places at canvas center
   - **lora sub-tab** — detects LoRAs from `LoraLoader`, `LoraLoaderModelOnly`, and `Lora Loader (LoraManager)` nodes (API format `inputs.loras.__value__` supported); shows `strength_model / strength_clip` values; drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (appears for 1+ LoRAs) drags all LoRAs into a single `Lora Loader (LoraManager)` node with LoRA syntax pre-filled
   - **Prompts sub-tab** — POS / NEG badge list; drag a prompt to place `CLIPTextEncode` with text pre-filled; click any entry to view full text + Copy button
@@ -318,6 +320,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.40
+- **AI TOOL tab — Chat pane** — new pane (between Translation and TOOLS) for multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`
+- **AI TOOL tab — Wildcard generation** — new "Create wildcards" task in the TOOLS pane dropdown; enter a category name and count, click Run to generate plain-text entries one per line (no markdown, no numbering); output can be pasted directly into wildcard `.txt` files
+- **Library A tab — Chat and Wildcards** — both features added to the side panel's A tab: Chat as a new sub-tab (Translation → Chat → TOOLS → Settings), wildcard generation as a new option in the TOOLS sub-tab dropdown
+- **Help updated** — AI TOOL tab help card updated to 6 items (Chat and Wildcards added); Library panel sidepanel-16 updated; EN/JA/ZH
 
 ### v0.3.39
 - **Workflow tab — Send to Canvas button** — replaced "Open in ComfyUI" (toolbar and detail modal) with "Send to Canvas"; stores the selected workflow in `localStorage` for title-drag to the canvas without opening a new browser tab
