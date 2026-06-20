@@ -219,6 +219,43 @@
     color: #fbbf24;
 }
 
+/* Feederグループボタン（サムネイルカード左上） */
+.wfm-gallery-thumb-feeder-btn {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: rgba(0,0,0,0.5);
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    color: rgba(255,255,255,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.wfm-gallery-thumb-card:hover .wfm-gallery-thumb-feeder-btn {
+    opacity: 1;
+}
+
+.wfm-gallery-thumb-feeder-btn.active {
+    color: #38bdf8;
+    opacity: 1;
+}
+
+.wfm-gallery-thumb-feeder-btn:hover {
+    background: rgba(0,0,0,0.75);
+    color: #38bdf8;
+}
+
 /* テーブルビューのお気に入りボタン */
 .wfm-gallery-table-fav-btn {
     background: none;

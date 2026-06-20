@@ -15,6 +15,35 @@ logger = logging.getLogger(__name__)
 _service = GalleryService(DATA_DIR)
 
 
+def _init_allowed_root() -> None:
+    """起動時に保存済みの出力ディレクトリで _allowed_root を初期化する。
+    Gallery タブを開く前に Feeder タブの Gallery モードが serve_image を呼んでも
+    404 にならないようにするために必要。"""
+    try:
+        settings_file = DATA_DIR / "settings.json"
+        if settings_file.exists():
+            with open(settings_file, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+            saved_root = settings.get("gallery_output_dir", "").strip()
+            if saved_root and Path(saved_root).is_dir():
+                _service.update_output_root(saved_root)
+                return
+    except Exception as e:
+        logger.warning("GalleryRoutes: failed to load saved gallery root: %s", e)
+
+    # フォールバック: ComfyUI のデフォルト output フォルダ
+    try:
+        import folder_paths  # type: ignore
+        output_dir = folder_paths.get_output_directory()
+        if output_dir and Path(output_dir).is_dir():
+            _service.update_output_root(output_dir)
+    except Exception as e:
+        logger.warning("GalleryRoutes: failed to get ComfyUI output dir: %s", e)
+
+
+_init_allowed_root()
+
+
 def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/folders", list_folders)
     app.router.add_get("/wfm/gallery/images", list_images)
@@ -27,8 +56,10 @@ def setup_routes(app: web.Application):
     app.router.add_post("/wfm/gallery/groups", create_group)
     app.router.add_put("/wfm/gallery/groups/{name}", rename_group)
     app.router.add_delete("/wfm/gallery/groups/{name}", delete_group)
+    app.router.add_post("/wfm/gallery/groups/ensure", ensure_group)
     app.router.add_post("/wfm/gallery/groups/{name}/add", add_to_group)
     app.router.add_post("/wfm/gallery/groups/{name}/remove", remove_from_group)
+    app.router.add_post("/wfm/gallery/groups/{name}/clear", clear_group_images)
     app.router.add_get("/wfm/gallery/groups/{name}/images", list_group_images)
     # フォルダ・ファイル操作
     app.router.add_post("/wfm/gallery/folder", create_folder_route)
@@ -174,10 +205,15 @@ async def create_group(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+_RESERVED_GROUPS = {"__Feeder__"}
+
+
 async def rename_group(request: web.Request) -> web.Response:
     """PUT /wfm/gallery/groups/{name} - グループ名変更"""
     try:
         old_name = request.match_info.get("name", "")
+        if old_name in _RESERVED_GROUPS:
+            return web.json_response({"error": f"Group '{old_name}' is reserved and cannot be renamed"}, status=403)
         body = await request.json()
         new_name = body.get("new_name", "").strip()
         if not old_name or not new_name:
@@ -192,6 +228,8 @@ async def rename_group(request: web.Request) -> web.Response:
 
 async def delete_group(request: web.Request) -> web.Response:
     name = request.match_info.get("name", "")
+    if name in _RESERVED_GROUPS:
+        return web.json_response({"error": f"Group '{name}' is reserved and cannot be deleted"}, status=403)
     ok = _service.delete_group(name)
     return web.json_response({"ok": ok})
 
@@ -222,6 +260,28 @@ async def list_group_images(request: web.Request) -> web.Response:
     name = request.match_info.get("name", "")
     images = _service.list_images_in_group(name)
     return web.json_response({"images": images})
+
+
+async def clear_group_images(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/groups/{name}/clear - グループ内の全画像を除外"""
+    name = request.match_info.get("name", "")
+    if not name:
+        return web.json_response({"error": "name required"}, status=400)
+    ok = _service.clear_group(name)
+    return web.json_response({"ok": ok})
+
+
+async def ensure_group(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/groups/ensure - グループが存在しない場合のみ作成"""
+    try:
+        body = await request.json()
+        name = body.get("name", "").strip()
+        if not name:
+            return web.json_response({"error": "name required"}, status=400)
+        _service.ensure_group(name)
+        return web.json_response({"ok": True})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 # ──────────────────────────────────────────────────────────────

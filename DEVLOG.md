@@ -1,5 +1,130 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-20: セキュリティ修正（XSS・パスバリデーション）
+
+### 修正内容
+
+**XSS — タグ名がエスケープなしで `innerHTML` に挿入される（`static/js/gallery-tab.js`）**
+- `createTable` (L425): `tdTags.innerHTML` のタグ名を `escapeHtml` でエスケープ
+- `renderTagsDisplay` (L605): タグ名と `data-tag` 属性を `escapeHtml` でエスケープ
+- 悪意あるタグ名（例: `<img onerror=...>`）を保存→表示したときに JS が実行される問題
+
+**XSS — ファイル名がエスケープなしで `innerHTML` に挿入される（`static/js/gallery-tab.js`）**
+- `loadImageDetail` (L566): `alt="${img.filename}"` を `escapeHtml` でエスケープ
+- `openLightbox` (L1175-1176): `alt` 属性とライトボックスフッターの両方をエスケープ
+
+**XSS — エラーメッセージが `innerHTML` に未エスケープ（`static/js/gallery-tab.js`）**
+- フォルダツリーエラー (L139, L155) と 画像グリッドエラー (L263) を `escapeHtml` でエスケープ
+- サーバーエラーメッセージにパス名等の特殊文字が含まれる場合の対策
+
+**メタデータ書き込みエンドポイントにパスバリデーション追加（`py/services/gallery_service.py`）**
+- `save_image_meta`, `toggle_favorite`, `add_to_group`, `remove_from_group` に `_check_path_allowed()` を追加
+- delete/move など他の書き込みエンドポイントには既にあったが、これら4メソッドのみ漏れていた
+- 修正により `gallery_metadata.json` に許可ルート外のパス文字列が書き込まれるのを防止
+
+**`list_folder_tree` が `_allowed_root` を任意パスで上書きできる問題（`py/routes/gallery_routes.py`）**
+- `gallery_routes.py` のモジュールロード時に `_init_allowed_root()` を呼び出し、保存済み `gallery_output_dir`（なければ ComfyUI デフォルト output ディレクトリ）で `_allowed_root` を初期化
+- `_allowed_root` が起動直後に設定済みになるため、`list_folder_tree` の `if self._allowed_root is None` ブランチが発火せず、任意パスによる上書き不可
+- 副次効果として、Gallery タブを一度も開かない状態でも `serve_image` が正常動作（→ Feeder Gallery モードでの 404 バグ修正に直結）
+
+**`escapeHtml` にシングルクォートのエスケープを追加（`static/js/util.js`）**
+- `'` → `&#x27;` を追加
+- 現在の使用箇所はすべて二重引用符属性のため即時影響はないが、将来の誤用を防止
+
+---
+
+## 2026-06-20: WFS_GalleryFeeder — ComfyUI キャンバス上コントロール追加
+
+### 新規ファイル（`web/comfyui/gallery_feeder_extension.js`）
+`app.registerExtension` を使い、ComfyUI キャンバス上の `WFS_GalleryFeeder` ノードに直接コントロールを追加。
+
+- **After Gen** コンボ（`loop` / `increment` / `fixed`）: `serialize: false` で prompt には含まれない
+- **▶ Run ボタン**: グループ画像を取得 → `index` ウィジェットを更新 → `app.queuePrompt` → 完了待ち → 繰り返し
+- **■ Stop ボタン**: `app.api.interrupt()` で現在の生成を中断し、ループフラグをクリア
+- `waitForExecution()`: `executing` (null)・`execution_interrupted`・`execution_error` の3イベントを購読して1プロンプトの完了を Promise で待つ
+- `onRemoved` フックでノード削除時にループを自動停止・状態をクリーンアップ
+
+---
+
+## 2026-06-20: __Feeder__ グループ保護 + サムネイル F ボタン + seed バグ修正
+
+### `__Feeder__` グループの予約済み保護
+
+**サーバーサイド（`py/routes/gallery_routes.py`）**
+- `_RESERVED_GROUPS = {"__Feeder__"}` 定数を追加
+- `rename_group` / `delete_group` エンドポイントで予約グループへの操作を 403 で拒否
+
+**クライアントサイド（`static/js/gallery-tab.js`）**
+- グループ管理ドロップダウンで `__Feeder__` を選択したとき、リネーム・削除ボタンを `disabled` に
+- セレクトオプションに 🔒 プレフィックスを追加して視覚的に区別
+- `change` イベントリスナーで動的に切り替え
+
+### ギャラリーサムネイル「F」オーバーレイボタン（`static/js/gallery-tab.js`, `static/css/gallery-tab.css`）
+- モデルタブの「B」バッチ登録ボタンと同様の位置（カード左上）に「F」ボタンを追加
+- `inFeeder` 初期状態は `img.groups` 配列から判定（`list_images()` が返す `groups` フィールドを使用）
+- クリックで `__Feeder__` グループへの追加 / 除外をトグル（APIコール + in-memory キャッシュ更新）
+- アクティブ時はシアン色 (`#38bdf8`)、ホバー時のみ表示（active 時は常時表示）
+
+**i18n（`static/js/i18n.js`）**
+- 英/日/中に `addedToFeeder` / `removedFromFeeder` キーを追加
+
+### seed バリデーションエラー修正（`py/nodes/gallery_feeder_node.py`）
+**症状**: Feeder run 実行時に "Prompt outputs failed validation" エラーが発生
+
+**原因**: `comfyui-client.js` の `applySeedToWorkflow()` がグラフ内の全ノードの seed を `Number.MAX_SAFE_INTEGER`（約 9×10¹⁵）以下のランダム値に上書きする。`WFS_GalleryFeeder` が宣言していた `max: 0x7FFFFFFF`（約 2.1×10⁹）を大幅に超えるため、ComfyUI の `validate_prompt()` が `value_bigger_than_max` でリジェクト。
+
+**修正**: seed の `max` を `0x7FFFFFFF` → `0xffffffffffffffff`（KSampler と同値）に変更。
+
+---
+
+## 2026-06-20: Gallery Feeder 機能追加（WFS_GalleryFeeder ノード）
+
+### 概要
+Feeder タブにギャラリー連携モードを追加。外部プラグイン（comfyui-image-feeder）に依存せず、本プラグイン単独でギャラリーグループの画像を連続生成ループに利用できるようになった。
+
+### 新規ノード（`py/nodes/gallery_feeder_node.py`）
+- **`WFS_GalleryFeeder`**（Workflow Studio カテゴリ）
+  - 入力: `group_name` (STRING), `index` (INT), `sort_mode` (COMBO: filename_asc/filename_desc/random), `seed` (INT)
+  - 出力: `IMAGE`
+  - `gallery_metadata.json` を直接読み込み、指定グループの画像を `index % len(images)` で1枚出力
+  - ファイルの存在チェックつき（削除済み画像はスキップ）
+  - `IS_CHANGED` で毎回実行（インデックスが変わるためキャッシュ無効化）
+  - データファイルの場所は `Path(__file__)` ベースで自動解決（ComfyUI のパス構成に依存しない）
+
+### ノード登録（`__init__.py`）
+- `WFS_GalleryFeeder` を `_NODE_MODULES` に追加（`"Gallery Feeder (WFS)"` として表示）
+- あわせて既存の `WFS_PromptText` のディスプレイ名がハードコードされていたバグを修正（`_NODE_MODULES` にディスプレイ名を持たせる構造に変更）
+
+### Feeder グループ管理（`py/services/gallery_metadata.py`, `py/services/gallery_service.py`）
+- `clear_group(group_name)`: グループ内の全画像を除外（グループ自体は残す）
+- `ensure_group(name)`: グループが存在しない場合のみ作成
+
+### API エンドポイント（`py/routes/gallery_routes.py`）
+- `POST /wfm/gallery/groups/{name}/clear` — グループの全画像を除外（FC ボタン用）
+- `POST /wfm/gallery/groups/ensure` — グループが存在しない場合のみ作成（Feeder タブ初期化時に `__Feeder__` を自動作成）
+
+### ギャラリータブ FC ボタン（`static/js/gallery-tab.js`, `templates/index.html`）
+- `FEEDER_GROUP = "__Feeder__"` 定数を export
+- `ensureFeederGroup()` を export（Feeder タブ初期化時に呼び出す）
+- `clearFeederGroup()`: `/wfm/gallery/groups/__Feeder__/clear` を呼び出してグループをクリア
+- ギャラリーツールバーのグループフィルタ横に **[FC]** ボタンを追加（BC/SC ボタンと同様の位置）
+- API 定数に `groupEnsure`, `groupClear`, `groupImages` を追加
+
+### Feeder タブ Gallery モード（`static/js/feeder-tab.js`, `templates/index.html`）
+- 左ペイン上部に **[Image Loop] / [Gallery]** のモード切り替えボタンを追加（`localStorage` に保存）
+- **Image Loop モード**（既存機能）: 変更なし
+- **Gallery モード**（新機能）:
+  - 左ペイン: `WFS_GalleryFeeder` ノード選択・Apply・グループ選択・Sort Mode / Index / Seed・After gen (Loop/Increment/Fixed)・Run/Stop
+  - 中央ペイン: 選択グループの画像グリッド（`/wfm/gallery/image/serve` でサムネイル表示）。クリックで Index を更新
+  - 右ペイン: プレビュー（既存と共通）
+  - Run ループ: JS 側でインデックスを管理（WebSocket sync 不要）。Increment モードで末尾到達時に自動停止
+  - タブ初期化時に `ensureFeederGroup()` を呼び出して `__Feeder__` グループを自動作成
+
+### i18n（`static/js/i18n.js`）
+- 英・日・中に3キー追加: `feederGalNoNode`, `feederGalEmptyGroup`, `feederGroupCleared`
+
+---
+
 ## 2026-06-19: Generate UI — ImpactWildcardEncode/Processor プロンプト検出バグ修正（v0.3.41）
 
 ### 修正内容（`static/js/comfyui-workflow.js`）

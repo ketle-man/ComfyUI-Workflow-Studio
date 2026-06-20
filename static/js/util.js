@@ -2,13 +2,14 @@
  * Shared utilities
  */
 
-// HTMLエスケープ（属性値で使うため " も必ずエスケープする）
+// HTMLエスケープ（属性値・テキストコンテンツ両方で安全に使える）
 export function escapeHtml(s) {
     return String(s)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#x27;");
 }
 
 // localStorage からJSONを安全に読む（不正JSON・未設定時はfallback）

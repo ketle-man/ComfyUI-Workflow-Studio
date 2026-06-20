@@ -453,6 +453,14 @@
                         <div class="wfm-feeder-layout">
                             <!-- Left: Node selector + params + presets -->
                             <div class="wfm-feeder-settings">
+                                <!-- Mode toggle -->
+                                <div style="display:flex;gap:4px;margin-bottom:10px;">
+                                    <button id="wfm-feeder-mode-loop" class="wfm-btn wfm-btn-sm wfm-btn-primary" data-mode="loop">Image Loop</button>
+                                    <button id="wfm-feeder-mode-gallery" class="wfm-btn wfm-btn-sm" data-mode="gallery">Gallery</button>
+                                </div>
+
+                                <!-- Image Loop mode section -->
+                                <div id="wfm-feeder-loop-section">
                                 <div class="wfm-feeder-pane-header">ImageFeeder Node</div>
                                 <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
                                     <select id="wfm-feeder-node-sel" class="wfm-select" style="flex:1;min-width:0;"></select>
@@ -519,10 +527,56 @@
                                     <button id="wfm-feeder-run-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">▶ Run</button>
                                     <button id="wfm-feeder-stop-btn" class="wfm-btn wfm-btn-danger" style="flex:1;" disabled>■ Stop</button>
                                 </div>
+                                </div><!-- /wfm-feeder-loop-section -->
+
+                                <!-- Gallery mode section -->
+                                <div id="wfm-feeder-gal-section" style="display:none;">
+                                <div class="wfm-feeder-pane-header">Gallery Feeder Node</div>
+                                <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+                                    <select id="wfm-feeder-gal-node-sel" class="wfm-select" style="flex:1;min-width:0;"></select>
+                                    <button id="wfm-feeder-gal-apply-btn" class="wfm-btn wfm-btn-primary" style="white-space:nowrap;">Apply</button>
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Group</label>
+                                    <select id="wfm-feeder-gal-group" class="wfm-select wfm-feeder-input"></select>
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Sort Mode</label>
+                                    <select id="wfm-feeder-gal-sort" class="wfm-select wfm-feeder-input">
+                                        <option value="filename_asc">Filename A-Z</option>
+                                        <option value="filename_desc">Filename Z-A</option>
+                                        <option value="random">Random</option>
+                                    </select>
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Index</label>
+                                    <input type="number" id="wfm-feeder-gal-index" class="wfm-input wfm-feeder-input" value="0" min="0">
+                                </div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">Seed</label>
+                                    <input type="number" id="wfm-feeder-gal-seed" class="wfm-input wfm-feeder-input" value="0">
+                                </div>
+                                <div class="wfm-feeder-pane-header" style="margin-top:12px;">Run</div>
+                                <div class="wfm-feeder-field-row">
+                                    <label class="wfm-feeder-label">After gen</label>
+                                    <select id="wfm-feeder-gal-control-after" class="wfm-select wfm-feeder-input">
+                                        <option value="loop">Loop</option>
+                                        <option value="increment">Increment</option>
+                                        <option value="fixed">Fixed</option>
+                                    </select>
+                                </div>
+                                <div style="display:flex;gap:8px;margin-top:4px;">
+                                    <button id="wfm-feeder-gal-run-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">▶ Run</button>
+                                    <button id="wfm-feeder-gal-stop-btn" class="wfm-btn wfm-btn-danger" style="flex:1;" disabled>■ Stop</button>
+                                </div>
+                                <div id="wfm-feeder-gal-status" style="font-size:11px;color:var(--wfm-text-secondary);margin-top:6px;"></div>
+                                </div><!-- /wfm-feeder-gal-section -->
                             </div>
 
                             <!-- Center: Image Library -->
                             <div class="wfm-feeder-library">
+                                <!-- Image Loop library -->
+                                <div id="wfm-feeder-loop-library">
                                 <!-- Status bar -->
                                 <div id="wfm-feeder-status" class="wfm-feeder-status-bar">Select a folder</div>
 
@@ -552,6 +606,17 @@
                                         </div>
                                     </div>
                                 </div>
+                                </div><!-- /wfm-feeder-loop-library -->
+
+                                <!-- Gallery mode library -->
+                                <div id="wfm-feeder-gal-library" style="display:none;height:100%;">
+                                <div class="wfm-feeder-pane-header" style="display:flex;align-items:center;justify-content:space-between;">
+                                    <span>Group Images</span>
+                                </div>
+                                <div id="wfm-feeder-gal-grid" class="wfm-feeder-grid" style="flex:1;overflow-y:auto;">
+                                    <div class="wfm-feeder-grid-msg">Select a group</div>
+                                </div>
+                                </div><!-- /wfm-feeder-gal-library -->
                             </div>
 
                             <!-- Right: Preview -->
@@ -985,7 +1050,10 @@
                     <div class="wfm-help-page" id="wfm-help-page-feeder">
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-feeder-title">GenerateUI Tab — Feeder subtab</h3>
-                            <p id="wfm-help-feeder-desc">Requires the comfyui-image-feeder custom node. Controls ImageFeeder nodes and runs continuous generation loops over an image library stored in user/default/image-loop-data/.</p>
+                            <p id="wfm-help-feeder-desc">Two modes switchable via the [Image Loop] / [Gallery] toggle at the top of the left pane.</p>
+
+                            <h4 style="margin:10px 0 4px;color:var(--wfm-accent)">Image Loop mode</h4>
+                            <p>Requires the comfyui-image-feeder custom node. Controls ImageFeeder nodes and runs continuous generation loops over an image library stored in user/default/image-loop-data/.</p>
                             <ul>
                                 <li id="wfm-help-feeder-1">Left pane — Node settings: select the target ImageFeeder node from the dropdown; edit all node parameters (Directory, Sort Mode, Index, Start/End Index, Batch Size, Seed, Use Selection); click Apply to write changes to the loaded workflow</li>
                                 <li id="wfm-help-feeder-2">Left pane — Presets: save the current directory + selection as a named preset; load or delete saved presets</li>
@@ -996,6 +1064,17 @@
                                 <li id="wfm-help-feeder-7">Status bar: shows the current folder path and how many images are selected out of the total in the folder</li>
                                 <li id="wfm-help-feeder-8">Seed during Run: uses the right-pane seed setting (Random / Fixed / Increment / Decrement) — the ImageFeeder's own Seed field controls random sort order only</li>
                                 <li id="wfm-help-feeder-9">Index sync: after each generation the node returns the next index via WebSocket; the Index field updates automatically so the display stays in sync</li>
+                            </ul>
+
+                            <h4 style="margin:14px 0 4px;color:var(--wfm-accent)">Gallery mode</h4>
+                            <p>Uses the built-in <b>WFS_GalleryFeeder</b> node (no external plugin required). Feeds images from a Gallery group into a continuous generation loop.</p>
+                            <ul>
+                                <li id="wfm-help-feeder-gal-1">Left pane — Node: select a WFS_GalleryFeeder node from the dropdown and click Apply to link it to the workflow; select the source group (defaults to <b>__Feeder__</b>), Sort Mode, Index (current image position), and Seed</li>
+                                <li id="wfm-help-feeder-gal-2">Left pane — Run controls: <b>After gen</b> — Loop (wrap to start and repeat), Increment (advance and stop at last image), Fixed (always use the same index); click <b>Run</b> to start the loop, <b>Stop</b> to interrupt after the current generation</li>
+                                <li id="wfm-help-feeder-gal-3">Center pane — Group image grid: shows all images in the selected group; click a thumbnail to select it and jump to that index; the selected image is highlighted</li>
+                                <li id="wfm-help-feeder-gal-4">Right pane — Preview: displays the currently selected input image; updates when a thumbnail is clicked</li>
+                                <li id="wfm-help-feeder-gal-5"><b>__Feeder__ group</b>: reserved group pre-created automatically; cannot be renamed or deleted; add images to it from the Gallery tab using the <b>F</b> overlay button on each thumbnail</li>
+                                <li id="wfm-help-feeder-gal-6"><b>WFS_GalleryFeeder canvas controls</b>: the node also has Run / Stop / After Gen widgets added directly on the ComfyUI canvas — these work the same as the WFM UI controls and allow running the gallery feeder loop without opening WFM</li>
                             </ul>
                         </div>
                     </div>
@@ -1078,7 +1157,8 @@
                                 <li id="wfm-help-gallery-6">Multi-select with Ctrl+click — bulk operations: Add to Group, Favorite All, Unfavorite All, Move To..., Delete</li>
                                 <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, date, tags (add/remove), memo; "Move To..." moves the image to another folder, "Delete" removes it permanently</li>
                                 <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; 'Copy &amp; Send Canvas' button copies to clipboard and stores the workflow for title-drag to canvas</li>
-                                <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image</li>
+                                <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image; the <b>__Feeder__</b> group is reserved (shown with 🔒) and cannot be renamed or deleted — rename and delete buttons are disabled when it is selected</li>
+                                <li id="wfm-help-gallery-15"><b>F button</b> (cyan overlay, top-left of each thumbnail): toggle the image in/out of the <b>__Feeder__</b> group with a single click; active state stays visible (cyan) when the image is already in the group; use this to quickly queue images for the Feeder tab Gallery mode</li>
                                 <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the JSON tab</li>
                                 <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF; workflow extraction reads ComfyUI prompt and workflow keys embedded in PNG metadata</li>
                                 <li id="wfm-help-gallery-12"><b>Metadata</b> button (green, in the detail panel tab bar): opens the selected image in the Metadata tab for full embedded-data inspection; Alt+click on any image thumbnail has the same effect</li>
@@ -1232,6 +1312,7 @@
                     <select id="wfm-gallery-group-filter" class="wfm-select wfm-toolbar-select">
                         <option value="">All Groups</option>
                     </select>
+                    <button id="wfm-gallery-fc-btn" class="wfm-btn wfm-btn-sm" title="Clear Feeder Group (__Feeder__)">FC</button>
                     <select id="wfm-gallery-sort" class="wfm-select wfm-toolbar-select">
                         <option value="date_desc">Date (Newest)</option>
                         <option value="date_asc">Date (Oldest)</option>

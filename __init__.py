@@ -9,15 +9,16 @@ WorkflowStudio.add_routes()
 
 # Register custom nodes (isolated loading)
 _NODE_MODULES = {
-    "WFS_PromptText": (".py.nodes.prompt_text", "WFS_PromptText"),
+    "WFS_PromptText":     (".py.nodes.prompt_text",          "WFS_PromptText",     "Prompt Text (WFS)"),
+    "WFS_GalleryFeeder":  (".py.nodes.gallery_feeder_node",  "WFS_GalleryFeeder",  "Gallery Feeder (WFS)"),
 }
 
-for _name, (_mod_path, _cls_name) in _NODE_MODULES.items():
+for _name, (_mod_path, _cls_name, _display_name) in _NODE_MODULES.items():
     try:
         import importlib
         _mod = importlib.import_module(_mod_path, package=__name__)
         NODE_CLASS_MAPPINGS[_name] = getattr(_mod, _cls_name)
-        NODE_DISPLAY_NAME_MAPPINGS[_name] = "Prompt Text (WFS)"
+        NODE_DISPLAY_NAME_MAPPINGS[_name] = _display_name
     except Exception as _e:
         print(f"[WARNING] Workflow Studio: Failed to load '{_name}': {_e}")
 

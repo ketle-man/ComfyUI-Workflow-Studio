@@ -124,6 +124,19 @@ class GalleryMetadataStore:
             if group_name in meta.get("groups", [])
         }
 
+    def clear_group(self, group_name: str) -> bool:
+        """グループ内の全画像を除外する（グループ自体は残す）"""
+        for meta in self._data["images"].values():
+            if group_name in meta.get("groups", []):
+                meta["groups"] = [g for g in meta["groups"] if g != group_name]
+        return self._save_to_disk()
+
+    def ensure_group(self, name: str) -> bool:
+        """グループが存在しない場合のみ作成する"""
+        if any(g["name"] == name for g in self._data.get("groups", [])):
+            return True
+        return self.create_group(name)
+
     def delete(self, image_path: str) -> bool:
         """画像のメタデータエントリを削除する"""
         key = self._normalize_path(image_path)

@@ -21,15 +21,20 @@ const API = {
     toggleFavorite:             `/wfm/gallery/image/favorite`,
     groups:                     `/wfm/gallery/groups`,
     groupCreate:                `/wfm/gallery/groups`,
+    groupEnsure:                `/wfm/gallery/groups/ensure`,
     groupRename:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}`,
     groupDelete:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}`,
     groupAdd:       (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/add`,
     groupRemove:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/remove`,
+    groupClear:     (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/clear`,
+    groupImages:    (name)     => `/wfm/gallery/groups/${encodeURIComponent(name)}/images`,
     folderCreate:               `/wfm/gallery/folder`,
     folderDelete:               `/wfm/gallery/folder`,
     imagesDelete:               `/wfm/gallery/images/delete`,
     imagesMove:                 `/wfm/gallery/images/move`,
 };
+
+export const FEEDER_GROUP = "__Feeder__";
 
 // ── 状態 ─────────────────────────────────────────────────────
 
@@ -131,7 +136,7 @@ async function loadFolderTree() {
     try {
         const data = await apiFetch(API.folders(state.outputRoot));
         if (data.error) {
-            tree.innerHTML = `<p class="wfm-placeholder">${data.error}</p>`;
+            tree.innerHTML = `<p class="wfm-placeholder">${escapeHtml(data.error)}</p>`;
             return;
         }
         state.folderTree = data;
@@ -147,7 +152,7 @@ async function loadFolderTree() {
             _restoreTreeState(expandedPaths, state.currentFolder);
         }
     } catch (e) {
-        tree.innerHTML = `<p class="wfm-placeholder">Error: ${e.message}</p>`;
+        tree.innerHTML = `<p class="wfm-placeholder">Error: ${escapeHtml(e.message)}</p>`;
     }
 }
 
@@ -255,7 +260,7 @@ async function loadImages() {
         renderImages();
         updateTagFilter(state.images);
     } catch (e) {
-        grid.innerHTML = `<p class="wfm-placeholder">Error: ${e.message}</p>`;
+        grid.innerHTML = `<p class="wfm-placeholder">Error: ${escapeHtml(e.message)}</p>`;
     }
 }
 
@@ -316,6 +321,18 @@ function createThumbCard(img) {
         await toggleFavoriteInPlace(img, favBtn);
     });
     card.appendChild(favBtn);
+
+    // Feederグループトグルボタン（カード左上）
+    const inFeeder = (img.groups || []).includes(FEEDER_GROUP);
+    const feederBtn = document.createElement("button");
+    feederBtn.className = `wfm-gallery-thumb-feeder-btn${inFeeder ? " active" : ""}`;
+    feederBtn.title = inFeeder ? "Remove from Feeder" : "Add to Feeder";
+    feederBtn.textContent = "F";
+    feederBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await toggleFeederGroupInPlace(img, feederBtn);
+    });
+    card.appendChild(feederBtn);
 
     // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Alt+クリック: Metadataタブで開く
     card.addEventListener("click", (e) => {
@@ -405,7 +422,7 @@ function createTable(images) {
         tdDate.textContent = formatDate(img.mtime);
 
         const tdTags = document.createElement("td");
-        tdTags.innerHTML = (img.tags || []).map(tag => `<span class="wfm-gallery-tag-badge">${tag}</span>`).join("");
+        tdTags.innerHTML = (img.tags || []).map(tag => `<span class="wfm-gallery-tag-badge">${escapeHtml(tag)}</span>`).join("");
 
         tr.appendChild(tdFav);
         tr.appendChild(tdThumb);
@@ -485,6 +502,39 @@ async function toggleFavoriteInPlace(img, btn) {
     }
 }
 
+async function toggleFeederGroupInPlace(img, btn) {
+    const inFeeder = (img.groups || []).includes(FEEDER_GROUP);
+    try {
+        if (inFeeder) {
+            await fetch(API.groupRemove(FEEDER_GROUP), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: img.path }),
+            });
+            img.groups = (img.groups || []).filter(g => g !== FEEDER_GROUP);
+            showToast(t("removedFromFeeder"), "success");
+        } else {
+            await fetch(API.groupAdd(FEEDER_GROUP), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: img.path }),
+            });
+            img.groups = [...(img.groups || []), FEEDER_GROUP];
+            showToast(t("addedToFeeder"), "success");
+        }
+        const cached = state.images.find(i => i.path === img.path);
+        if (cached) cached.groups = img.groups;
+        const nowInFeeder = img.groups.includes(FEEDER_GROUP);
+        btn.classList.toggle("active", nowInFeeder);
+        btn.title = nowInFeeder ? "Remove from Feeder" : "Add to Feeder";
+        if (state.selectedImage && state.selectedImage.path === img.path) {
+            state.selectedImage.groups = img.groups;
+        }
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+    }
+}
+
 // ── タグフィルター更新 ────────────────────────────────────────
 
 function updateTagFilter(images) {
@@ -513,7 +563,7 @@ async function loadImageDetail(img) {
 
     // プレビュー
     const preview = document.getElementById("wfm-gallery-detail-preview");
-    preview.innerHTML = `<img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${img.filename}" title="Double-click to enlarge">`;
+    preview.innerHTML = `<img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${escapeHtml(img.filename)}" title="Double-click to enlarge">`;
     preview.querySelector("img").addEventListener("dblclick", () => openLightbox(img));
 
     // ファイル名
@@ -552,7 +602,7 @@ function renderTagsDisplay(tags) {
     tags.forEach(tag => {
         const span = document.createElement("span");
         span.className = "wfm-gallery-tag-badge wfm-gallery-tag-removable";
-        span.innerHTML = `${tag} <button class="wfm-gallery-tag-remove" data-tag="${tag}" title="Remove">&times;</button>`;
+        span.innerHTML = `${escapeHtml(tag)} <button class="wfm-gallery-tag-remove" data-tag="${escapeHtml(tag)}" title="Remove">&times;</button>`;
         span.querySelector("button").addEventListener("click", () => removeTag(tag));
         container.appendChild(span);
     });
@@ -624,6 +674,34 @@ async function loadGroups() {
         }
     } catch (e) {
         console.error("loadGroups error:", e);
+    }
+}
+
+/** Feederグループ(__Feeder__)が存在しない場合に作成する */
+export async function ensureFeederGroup() {
+    try {
+        await fetch(API.groupEnsure, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: FEEDER_GROUP }),
+        });
+        await loadGroups();
+    } catch (e) {
+        console.warn("[Gallery] ensureFeederGroup error:", e);
+    }
+}
+
+/** Feederグループ内の全画像を除外する（FC ボタン） */
+async function clearFeederGroup() {
+    try {
+        await fetch(API.groupClear(FEEDER_GROUP), { method: "POST" });
+        showToast(t("feederGroupCleared"), "success");
+        // グループフィルタが __Feeder__ ならリロード
+        if (state.groupFilter === FEEDER_GROUP) {
+            await loadImages();
+        }
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -705,12 +783,15 @@ function renderDetailGroup(img) {
                     <select id="wfm-gallery-grp-manage-sel" class="wfm-select" style="flex:1;font-size:12px;padding:3px 6px;">
                         ${allGroups.length === 0
                             ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
-                            : allGroups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("")}
+                            : allGroups.map(g => {
+                                const label = g === FEEDER_GROUP ? `🔒 ${escapeHtml(g)}` : escapeHtml(g);
+                                return `<option value="${escapeHtml(g)}">${label}</option>`;
+                            }).join("")}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-gallery-grp-rename-btn"
-                        ${allGroups.length === 0 ? "disabled" : ""} title="${t("modelsRename")}">&#9998;</button>
+                        ${allGroups.length === 0 || allGroups[0] === FEEDER_GROUP ? "disabled" : ""} title="${t("modelsRename")}">&#9998;</button>
                     <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-gallery-grp-delete-btn"
-                        ${allGroups.length === 0 ? "disabled" : ""} title="${t("modelsDelete")}">&times;</button>
+                        ${allGroups.length === 0 || allGroups[0] === FEEDER_GROUP ? "disabled" : ""} title="${t("modelsDelete")}">&times;</button>
                 </div>
             </div>
         </div>
@@ -788,6 +869,15 @@ function renderDetailGroup(img) {
         } catch (e) {
             showToast(t("errorWithMsg", e.message), "error");
         }
+    });
+
+    // 管理セレクト変更時: __Feeder__ は rename/delete を無効化
+    el.querySelector("#wfm-gallery-grp-manage-sel")?.addEventListener("change", (e) => {
+        const isReserved = e.target.value === FEEDER_GROUP;
+        const renameBtn = el.querySelector("#wfm-gallery-grp-rename-btn");
+        const deleteBtn = el.querySelector("#wfm-gallery-grp-delete-btn");
+        if (renameBtn) renameBtn.disabled = isReserved;
+        if (deleteBtn) deleteBtn.disabled = isReserved;
     });
 
     // グループ名変更
@@ -1082,8 +1172,8 @@ function openLightbox(img) {
     overlay.className = "wfm-gallery-lightbox";
     overlay.innerHTML = `
         <div class="wfm-gallery-lightbox-inner">
-            <img src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" alt="${img.filename}">
-            <div class="wfm-gallery-lightbox-footer">${img.filename}</div>
+            <img src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" alt="${escapeHtml(img.filename)}">
+            <div class="wfm-gallery-lightbox-footer">${escapeHtml(img.filename)}</div>
             <button class="wfm-gallery-lightbox-close">&times;</button>
         </div>
     `;
@@ -1183,6 +1273,9 @@ function bindEvents() {
         state.groupFilter = e.target.value;
         loadImages();
     });
+
+    // FC ボタン: Feeder グループをクリア
+    document.getElementById("wfm-gallery-fc-btn")?.addEventListener("click", clearFeederGroup);
 
     // ビュー切替
     document.querySelectorAll("[data-gallery-view]").forEach(btn => {

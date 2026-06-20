@@ -384,9 +384,13 @@ class GalleryService:
     # ──────────────────────────────────────────────────────────────
 
     def save_image_meta(self, image_path: str, data: dict) -> bool:
+        if not self._check_path_allowed(Path(image_path).resolve()):
+            return False
         return self.metadata_store.save(image_path, data)
 
     def toggle_favorite(self, image_path: str) -> bool:
+        if not self._check_path_allowed(Path(image_path).resolve()):
+            return False
         meta = self.metadata_store.get(image_path)
         new_val = not meta.get("favorite", False)
         self.metadata_store.save(image_path, {"favorite": new_val})
@@ -409,6 +413,8 @@ class GalleryService:
         return self.metadata_store.delete_group(name)
 
     def add_to_group(self, image_path: str, group_name: str) -> bool:
+        if not self._check_path_allowed(Path(image_path).resolve()):
+            return False
         meta = self.metadata_store.get(image_path)
         groups = meta.get("groups", [])
         if group_name not in groups:
@@ -417,12 +423,20 @@ class GalleryService:
         return True
 
     def remove_from_group(self, image_path: str, group_name: str) -> bool:
+        if not self._check_path_allowed(Path(image_path).resolve()):
+            return False
         meta = self.metadata_store.get(image_path)
         groups = [g for g in meta.get("groups", []) if g != group_name]
         return self.metadata_store.save(image_path, {"groups": groups})
 
     def list_images_in_group(self, group_name: str) -> list[str]:
         return self.metadata_store.list_images_in_group(group_name)
+
+    def clear_group(self, group_name: str) -> bool:
+        return self.metadata_store.clear_group(group_name)
+
+    def ensure_group(self, name: str) -> bool:
+        return self.metadata_store.ensure_group(name)
 
     # ──────────────────────────────────────────────────────────────
     # 画像配信

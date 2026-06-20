@@ -1,18 +1,29 @@
 /**
- * Feeder Tab - ImageFeeder node control with embedded image library
+ * Feeder Tab - ImageFeeder node control (Image Loop mode)
+ *              + WFS_GalleryFeeder node control (Gallery mode)
  */
 
 import { comfyUI } from "./comfyui-client.js";
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
+import { FEEDER_GROUP, ensureFeederGroup } from "./gallery-tab.js";
 
 // ── Module State ──────────────────────────────────────────────────
 const _s = {
-    dir: "",            // current folder relative path
-    images: [],         // filenames in current folder
-    selected: new Set(),// selected filenames (across all interactions)
+    dir: "",            // current folder relative path (loop mode)
+    images: [],         // filenames in current folder (loop mode)
+    selected: new Set(),// selected filenames (loop mode)
     presets: {},        // {presetName: {directory, selected_files}}
     running: false,     // feeder run loop active
+    mode: localStorage.getItem("wfm_feeder_mode") || "loop",  // "loop" | "gallery"
+};
+
+// Gallery mode state
+const _gs = {
+    groups: [],          // [{name}]
+    group: FEEDER_GROUP, // selected group name
+    images: [],          // absolute paths in selected group
+    idx: 0,              // current index
 };
 
 // ── Node helpers ──────────────────────────────────────────────────
@@ -25,12 +36,40 @@ function _feederNodes() {
         .map(([id, n]) => ({ id, title: n._meta?.title || `ImageFeeder` }));
 }
 
+function _galFeederNodes() {
+    const wf = comfyUI.currentWorkflow;
+    if (!wf) return [];
+    return Object.entries(wf)
+        .filter(([, n]) => n?.class_type === "WFS_GalleryFeeder")
+        .map(([id, n]) => ({ id, title: n._meta?.title || `GalleryFeeder` }));
+}
+
 export function refreshFeederNodeList() {
-    const sel = document.getElementById("wfm-feeder-node-sel");
+    if (_s.mode === "gallery") {
+        _refreshGalNodeList();
+    } else {
+        const sel = document.getElementById("wfm-feeder-node-sel");
+        if (!sel) return;
+        const nodes = _feederNodes();
+        if (nodes.length === 0) {
+            sel.innerHTML = `<option value="">-- No ImageFeeder node --</option>`;
+            return;
+        }
+        const prevVal = sel.value;
+        sel.innerHTML = nodes.map(n =>
+            `<option value="${n.id}">${n.title} (ID:${n.id})</option>`
+        ).join("");
+        if (prevVal && nodes.find(n => n.id === prevVal)) sel.value = prevVal;
+        _loadFromNode(sel.value || nodes[0].id);
+    }
+}
+
+function _refreshGalNodeList() {
+    const sel = document.getElementById("wfm-feeder-gal-node-sel");
     if (!sel) return;
-    const nodes = _feederNodes();
+    const nodes = _galFeederNodes();
     if (nodes.length === 0) {
-        sel.innerHTML = `<option value="">-- No ImageFeeder node --</option>`;
+        sel.innerHTML = `<option value="">-- No WFS_GalleryFeeder node --</option>`;
         return;
     }
     const prevVal = sel.value;
@@ -38,7 +77,7 @@ export function refreshFeederNodeList() {
         `<option value="${n.id}">${n.title} (ID:${n.id})</option>`
     ).join("");
     if (prevVal && nodes.find(n => n.id === prevVal)) sel.value = prevVal;
-    _loadFromNode(sel.value || nodes[0].id);
+    _loadFromGalNode(sel.value || nodes[0].id);
 }
 
 function _loadFromNode(nodeId) {
@@ -55,7 +94,6 @@ function _loadFromNode(nodeId) {
     _setVal("wfm-feeder-seed",       inp.seed        ?? 0);
     _setCheck("wfm-feeder-use-sel",  inp.use_selection ?? true);
 
-    // Restore selected_files
     _s.selected.clear();
     try {
         const arr = JSON.parse(inp.selected_files || "[]");
@@ -73,6 +111,24 @@ function _loadFromNode(nodeId) {
     _updateStatus();
 }
 
+function _loadFromGalNode(nodeId) {
+    const wf = comfyUI.currentWorkflow;
+    if (!wf?.[nodeId]) return;
+    const inp = wf[nodeId].inputs || {};
+
+    const group = inp.group_name || FEEDER_GROUP;
+    _setVal("wfm-feeder-gal-sort", inp.sort_mode || "filename_asc");
+    _setVal("wfm-feeder-gal-index", inp.index ?? 0);
+    _setVal("wfm-feeder-gal-seed", inp.seed ?? 0);
+    _gs.idx = inp.index ?? 0;
+
+    if (_gs.group !== group) {
+        _gs.group = group;
+        _setGalGroupSelect(group);
+        _loadGalImages(group);
+    }
+}
+
 function _applyToWorkflow() {
     const nodeId = document.getElementById("wfm-feeder-node-sel")?.value;
     const wf = comfyUI.currentWorkflow;
@@ -84,11 +140,29 @@ function _applyToWorkflow() {
     showToast(t("appliedToWorkflow"), "success");
 }
 
+function _applyGalToWorkflow() {
+    const nodeId = document.getElementById("wfm-feeder-gal-node-sel")?.value;
+    const wf = comfyUI.currentWorkflow;
+    if (!nodeId || !wf?.[nodeId]) {
+        showToast(t("feederGalNoNode"), "error");
+        return;
+    }
+    _applyToGalNode(nodeId);
+    showToast(t("appliedToWorkflow"), "success");
+}
+
 // ── Run Loop ──────────────────────────────────────────────────────
 
 function _setRunUI(running) {
     const runBtn  = document.getElementById("wfm-feeder-run-btn");
     const stopBtn = document.getElementById("wfm-feeder-stop-btn");
+    if (runBtn)  runBtn.disabled  = running;
+    if (stopBtn) stopBtn.disabled = !running;
+}
+
+function _setGalRunUI(running) {
+    const runBtn  = document.getElementById("wfm-feeder-gal-run-btn");
+    const stopBtn = document.getElementById("wfm-feeder-gal-stop-btn");
     if (runBtn)  runBtn.disabled  = running;
     if (stopBtn) stopBtn.disabled = !running;
 }
@@ -107,6 +181,15 @@ function _applyToNode(nodeId) {
     inp.selected_files = JSON.stringify([..._s.selected]);
 }
 
+function _applyToGalNode(nodeId) {
+    const wf  = comfyUI.currentWorkflow;
+    const inp = wf[nodeId].inputs;
+    inp.group_name = _gs.group;
+    inp.index      = _gs.idx;
+    inp.sort_mode  = document.getElementById("wfm-feeder-gal-sort")?.value || "filename_asc";
+    inp.seed       = parseInt(document.getElementById("wfm-feeder-gal-seed")?.value) || 0;
+}
+
 async function _startRun() {
     if (_s.running) return;
     if (!comfyUI.currentWorkflow) { showToast(t("noWorkflowLoaded"), "error"); return; }
@@ -118,7 +201,6 @@ async function _startRun() {
         return;
     }
 
-    // WebSocket を先に接続してノード sync メッセージを受け取れるようにする
     const wsOk = await comfyUI.connectWebSocket();
     if (!wsOk) { showToast(t("wsConnectionFailed"), "error"); return; }
 
@@ -129,7 +211,6 @@ async function _startRun() {
     const progressText = document.getElementById("wfm-gen-progress-text");
     const resultImg    = document.getElementById("wfm-gen-result-img");
 
-    // image_loop_node_sync メッセージを捕捉するリスナー
     let _lastSync = null;
     const _syncHandler = (ev) => {
         try {
@@ -157,7 +238,6 @@ async function _startRun() {
             if (progressBar)  progressBar.style.width  = "0%";
             if (progressText) progressText.textContent = `#${++count} 0%`;
 
-            // 右ペインのseed設定を使用（KSamplerに適用される）
             const seedMode  = document.getElementById("wfm-gen-seed-mode")?.value  || "random";
             const seedValue = parseInt(document.getElementById("wfm-gen-seed-value")?.value) || -1;
 
@@ -173,7 +253,6 @@ async function _startRun() {
                 }
             );
 
-            // 右ペインのseed表示を更新（通常の生成と同じ挙動）
             const seedEl = document.getElementById("wfm-gen-seed-value");
             if (seedEl) seedEl.value = seed;
 
@@ -187,7 +266,6 @@ async function _startRun() {
 
             if (!_s.running) break;
 
-            // control after generate: ノードから返された next_index を反映
             const control = document.getElementById("wfm-feeder-control-after")?.value || "loop";
             if (control === "fixed") {
                 // index を変えない
@@ -199,7 +277,6 @@ async function _startRun() {
                     showToast(t("feederComplete", count), "success");
                     break;
                 }
-                // loop: has_next=false でも次は index=0 からなので続行
             }
         }
     } catch (err) {
@@ -219,7 +296,104 @@ async function _stopRun() {
     showToast(t("feederStopped"), "info");
 }
 
-// ── Folder Tree ───────────────────────────────────────────────────
+// ── Gallery Mode Run Loop ─────────────────────────────────────────
+
+async function _startGalRun() {
+    if (_s.running) return;
+    if (!comfyUI.currentWorkflow) { showToast(t("noWorkflowLoaded"), "error"); return; }
+    if (!comfyUI.connected)       { showToast(t("notConnectedToComfyUI"), "error"); return; }
+
+    const nodeId = document.getElementById("wfm-feeder-gal-node-sel")?.value;
+    if (!nodeId || !comfyUI.currentWorkflow[nodeId]) {
+        showToast(t("feederGalNoNode"), "error");
+        return;
+    }
+    if (_gs.images.length === 0) {
+        showToast(t("feederGalEmptyGroup"), "error");
+        return;
+    }
+
+    const wsOk = await comfyUI.connectWebSocket();
+    if (!wsOk) { showToast(t("wsConnectionFailed"), "error"); return; }
+
+    _s.running = true;
+    _setGalRunUI(true);
+
+    const progressBar  = document.getElementById("wfm-gen-progress-bar");
+    const progressText = document.getElementById("wfm-gen-progress-text");
+    const resultImg    = document.getElementById("wfm-gen-result-img");
+    const indexEl      = document.getElementById("wfm-feeder-gal-index");
+
+    const total = _gs.images.length;
+    let count = 0;
+    try {
+        while (_s.running) {
+            _applyToGalNode(nodeId);
+
+            if (progressBar)  progressBar.style.width  = "0%";
+            if (progressText) progressText.textContent = `#${++count} [${_gs.idx + 1}/${total}] 0%`;
+
+            const seedMode  = document.getElementById("wfm-gen-seed-mode")?.value  || "random";
+            const seedValue = parseInt(document.getElementById("wfm-gen-seed-value")?.value) || -1;
+
+            const { images, seed } = await comfyUI.generate(
+                { ...comfyUI.currentWorkflow },
+                {
+                    seedMode,
+                    seedValue,
+                    onProgress: (pct) => {
+                        if (progressBar)  progressBar.style.width  = `${(pct * 100).toFixed(1)}%`;
+                        if (progressText) progressText.textContent = `#${count} [${_gs.idx + 1}/${total}] ${(pct * 100).toFixed(0)}%`;
+                    },
+                }
+            );
+
+            const seedEl = document.getElementById("wfm-gen-seed-value");
+            if (seedEl) seedEl.value = seed;
+
+            if (progressBar) progressBar.style.width = "100%";
+
+            if (images.length > 0 && resultImg) {
+                const blob = await comfyUI.getImageBlob(images[0]);
+                resultImg.src = URL.createObjectURL(blob);
+                resultImg.style.display = "block";
+            }
+
+            if (!_s.running) break;
+
+            const control = document.getElementById("wfm-feeder-gal-control-after")?.value || "loop";
+            const nextIdx = (_gs.idx + 1) % total;
+            const isLast  = _gs.idx === total - 1;
+
+            if (control === "fixed") {
+                // idx を変えない
+            } else if (control === "increment" && isLast) {
+                _s.running = false;
+                showToast(t("feederComplete", count), "success");
+                break;
+            } else {
+                _gs.idx = nextIdx;
+                if (indexEl) indexEl.value = _gs.idx;
+                _highlightGalCard(_gs.images[_gs.idx]);
+            }
+        }
+    } catch (err) {
+        if (_s.running) showToast(t("feederRunError", err.message), "error");
+    } finally {
+        _s.running = false;
+        _setGalRunUI(false);
+        if (progressText) progressText.textContent = `Done (${count} generated)`;
+    }
+}
+
+async function _stopGalRun() {
+    _s.running = false;
+    try { await comfyUI.interrupt(); } catch {}
+    _setGalRunUI(false);
+    showToast(t("feederStopped"), "info");
+}
+
+// ── Folder Tree (loop mode) ───────────────────────────────────────
 
 async function _loadTree() {
     const container = document.getElementById("wfm-feeder-tree");
@@ -276,7 +450,7 @@ function _highlightTreeRow(path) {
     });
 }
 
-// ── Image Grid ────────────────────────────────────────────────────
+// ── Image Grid (loop mode) ────────────────────────────────────────
 
 async function _loadImages(dir) {
     const grid = document.getElementById("wfm-feeder-grid");
@@ -367,13 +541,109 @@ function _deselectAll() {
     _updateStatus();
 }
 
-// ── Status Bar ───────────────────────────────────────────────────
-
 function _updateStatus() {
     const el = document.getElementById("wfm-feeder-status");
     if (!el) return;
     const inCurrent = _s.images.filter(f => _s.selected.has(f)).length;
     el.textContent = `📂 ${_s.dir || "(root)"} | ${inCurrent} / ${_s.images.length} selected`;
+}
+
+// ── Gallery Mode: Group & Image Grid ─────────────────────────────
+
+async function _loadGalGroups() {
+    try {
+        const res = await fetch("/wfm/gallery/groups");
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        _gs.groups = data.groups || [];
+        _renderGalGroupSelect();
+    } catch (err) {
+        console.warn("[Feeder] loadGalGroups failed:", err);
+    }
+}
+
+function _renderGalGroupSelect() {
+    const sel = document.getElementById("wfm-feeder-gal-group");
+    if (!sel) return;
+    sel.innerHTML = _gs.groups
+        .map(g => `<option value="${g.name}"${g.name === _gs.group ? " selected" : ""}>${g.name}</option>`)
+        .join("");
+    if (!_gs.groups.find(g => g.name === _gs.group) && _gs.groups.length > 0) {
+        _gs.group = _gs.groups[0].name;
+    }
+}
+
+function _setGalGroupSelect(group) {
+    const sel = document.getElementById("wfm-feeder-gal-group");
+    if (sel) sel.value = group;
+}
+
+async function _loadGalImages(group) {
+    const grid = document.getElementById("wfm-feeder-gal-grid");
+    const statusEl = document.getElementById("wfm-feeder-gal-status");
+    if (!grid) return;
+    grid.innerHTML = `<div class="wfm-feeder-grid-msg">Loading...</div>`;
+    try {
+        const res = await fetch(`/wfm/gallery/groups/${encodeURIComponent(group)}/images`);
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        _gs.images = data.images || [];
+        _gs.idx    = 0;
+        const idxEl = document.getElementById("wfm-feeder-gal-index");
+        if (idxEl) idxEl.value = 0;
+        _renderGalGrid();
+        if (statusEl) statusEl.textContent = `${_gs.images.length} image(s) in "${group}"`;
+    } catch (err) {
+        _gs.images = [];
+        grid.innerHTML = `<div class="wfm-feeder-grid-msg" style="color:var(--wfm-danger)">Load failed: ${err.message}</div>`;
+        if (statusEl) statusEl.textContent = "";
+    }
+}
+
+function _renderGalGrid() {
+    const grid = document.getElementById("wfm-feeder-gal-grid");
+    if (!grid) return;
+    if (_gs.images.length === 0) {
+        grid.innerHTML = `<div class="wfm-feeder-grid-msg">No images in this group</div>`;
+        return;
+    }
+    grid.innerHTML = "";
+    _gs.images.forEach((absPath, i) => grid.appendChild(_makeGalCard(absPath, i)));
+}
+
+function _makeGalCard(absPath, idx) {
+    const fname = absPath.replace(/\\/g, "/").split("/").pop();
+    const card = document.createElement("div");
+    card.className = "wfm-feeder-card" + (idx === _gs.idx ? " selected" : "");
+    card.dataset.path = absPath;
+    card.dataset.idx  = idx;
+
+    const img = document.createElement("img");
+    img.className = "wfm-feeder-card-img";
+    img.loading = "lazy";
+    img.src = `/wfm/gallery/image/serve?path=${encodeURIComponent(absPath)}`;
+    img.onerror = () => { img.style.display = "none"; card.style.minHeight = "110px"; };
+
+    const name = document.createElement("div");
+    name.className = "wfm-feeder-card-name";
+    name.textContent = fname;
+    name.title = fname;
+
+    card.append(img, name);
+    card.addEventListener("click", () => {
+        _gs.idx = idx;
+        const idxEl = document.getElementById("wfm-feeder-gal-index");
+        if (idxEl) idxEl.value = idx;
+        _highlightGalCard(absPath);
+        _showGalPreview(absPath, fname);
+    });
+    return card;
+}
+
+function _highlightGalCard(absPath) {
+    document.querySelectorAll("#wfm-feeder-gal-grid .wfm-feeder-card").forEach(c => {
+        c.classList.toggle("selected", c.dataset.path === absPath);
+    });
 }
 
 // ── Preview Panel ────────────────────────────────────────────────
@@ -400,7 +670,20 @@ async function _showPreview(relPath, fname) {
     } catch { if (infoEl) infoEl.textContent = ""; }
 }
 
-// ── Presets ──────────────────────────────────────────────────────
+async function _showGalPreview(absPath, fname) {
+    const imgEl  = document.getElementById("wfm-feeder-preview-img");
+    const nameEl = document.getElementById("wfm-feeder-preview-name");
+    const infoEl = document.getElementById("wfm-feeder-preview-info");
+
+    if (imgEl) {
+        imgEl.src = `/wfm/gallery/image/serve?path=${encodeURIComponent(absPath)}`;
+        imgEl.style.display = "block";
+    }
+    if (nameEl) nameEl.textContent = fname;
+    if (infoEl) infoEl.textContent = "";
+}
+
+// ── Presets (loop mode) ───────────────────────────────────────────
 
 async function _loadPresets() {
     try {
@@ -471,6 +754,34 @@ async function _deletePreset() {
     } catch (err) { showToast(t("deleteFailed"), "error"); }
 }
 
+// ── Mode Switch ───────────────────────────────────────────────────
+
+function _setMode(mode) {
+    _s.mode = mode;
+    localStorage.setItem("wfm_feeder_mode", mode);
+
+    const loopBtn = document.getElementById("wfm-feeder-mode-loop");
+    const galBtn  = document.getElementById("wfm-feeder-mode-gallery");
+    const loopSec = document.getElementById("wfm-feeder-loop-section");
+    const galSec  = document.getElementById("wfm-feeder-gal-section");
+    const loopLib = document.getElementById("wfm-feeder-loop-library");
+    const galLib  = document.getElementById("wfm-feeder-gal-library");
+
+    const isGallery = mode === "gallery";
+
+    if (loopBtn) loopBtn.classList.toggle("wfm-btn-primary", !isGallery);
+    if (galBtn)  galBtn.classList.toggle("wfm-btn-primary",  isGallery);
+    if (loopSec) loopSec.style.display = isGallery ? "none" : "";
+    if (galSec)  galSec.style.display  = isGallery ? "" : "none";
+    if (loopLib) loopLib.style.display = isGallery ? "none" : "";
+    if (galLib)  galLib.style.display  = isGallery ? "" : "none";
+
+    if (isGallery) {
+        _loadGalGroups().then(() => _loadGalImages(_gs.group));
+        _refreshGalNodeList();
+    }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────
 
 function _setVal(id, val) {
@@ -485,6 +796,11 @@ function _setCheck(id, val) {
 // ── Init ─────────────────────────────────────────────────────────
 
 export async function initFeederTab() {
+    // Mode toggle
+    document.getElementById("wfm-feeder-mode-loop")?.addEventListener("click", () => _setMode("loop"));
+    document.getElementById("wfm-feeder-mode-gallery")?.addEventListener("click", () => _setMode("gallery"));
+
+    // ── Image Loop mode events ──
     document.getElementById("wfm-feeder-node-sel")?.addEventListener("change", e => {
         _loadFromNode(e.target.value);
     });
@@ -511,6 +827,33 @@ export async function initFeederTab() {
     document.getElementById("wfm-feeder-run-btn")?.addEventListener("click", _startRun);
     document.getElementById("wfm-feeder-stop-btn")?.addEventListener("click", _stopRun);
 
-    await Promise.all([_loadTree(), _loadPresets()]);
-    _selectDir("");
+    // ── Gallery mode events ──
+    document.getElementById("wfm-feeder-gal-node-sel")?.addEventListener("change", e => {
+        _loadFromGalNode(e.target.value);
+    });
+
+    document.getElementById("wfm-feeder-gal-apply-btn")?.addEventListener("click", _applyGalToWorkflow);
+
+    document.getElementById("wfm-feeder-gal-group")?.addEventListener("change", e => {
+        _gs.group = e.target.value;
+        _gs.idx   = 0;
+        _loadGalImages(_gs.group);
+    });
+
+    document.getElementById("wfm-feeder-gal-index")?.addEventListener("change", e => {
+        _gs.idx = Math.max(0, parseInt(e.target.value) || 0);
+        if (_gs.images[_gs.idx]) _highlightGalCard(_gs.images[_gs.idx]);
+    });
+
+    document.getElementById("wfm-feeder-gal-run-btn")?.addEventListener("click", _startGalRun);
+    document.getElementById("wfm-feeder-gal-stop-btn")?.addEventListener("click", _stopGalRun);
+
+    // 初期化
+    await ensureFeederGroup();
+    _setMode(_s.mode);
+
+    if (_s.mode === "loop") {
+        await Promise.all([_loadTree(), _loadPresets()]);
+        _selectDir("");
+    }
 }

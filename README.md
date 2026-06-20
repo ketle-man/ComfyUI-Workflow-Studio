@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.41-green)
+![Version](https://img.shields.io/badge/version-0.3.42-green)
 
 ## Screenshots
 
@@ -84,8 +84,10 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and more
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
-### Feeder subtab (v0.3.5)
-Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder)** custom node.
+### Feeder subtab (v0.3.5 / v0.3.42)
+Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons at the top of the left pane (persisted in `localStorage`).
+
+**Image Loop mode** — requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder)** custom node.
 - **ImageFeeder node control** — select the target node from a dropdown auto-populated from the loaded workflow; edit all node parameters (Directory, Sort Mode, Index, Start/End Index, Batch Size, Seed, Use Selection) and Apply to the workflow
 - **Image library** — 3-pane layout: folder tree (left) browsing `user/default/image-loop-data/`, image grid with checkbox selection (center), preview panel with resolution and file size (right)
 - **Selection management** — check individual images; All / None buttons for the current folder; selected files are reflected in `selected_files` on Apply
@@ -96,6 +98,13 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
   - **Fixed** — always use the same index
 - **Index sync** — after each generation the node returns `next_index` via WebSocket (`image_loop_node_sync`); the Index field updates automatically
 - **Seed** — Run loop uses the right-pane seed setting (Random / Fixed / Increment / Decrement); the node's own Seed field only affects random sort order
+
+**Gallery mode** (v0.3.42) — no external plugin required; uses the built-in **WFS_GalleryFeeder** custom node.
+- **WFS_GalleryFeeder node** — reads images directly from a Gallery group and outputs them one at a time; inputs: `group_name`, `index`, `sort_mode` (filename_asc / filename_desc / random), `seed`
+- **Node & group selector** — pick the WFS_GalleryFeeder node from the loaded workflow and choose which Gallery group to feed images from; `__Feeder__` group is auto-created on first open
+- **Image grid** — center pane shows all images in the selected group; click any image to update the Index to that position
+- **After Gen modes** — Loop (wrap at end and continue indefinitely), Increment (stop automatically when last image is reached), Fixed (always use the same index)
+- **Run / Stop controls** — left pane Run / Stop buttons manage the generation loop; After Gen combo (loop / increment / fixed), ▶ Run, and ■ Stop widgets are also available directly on the WFS_GalleryFeeder node in the ComfyUI canvas (`gallery_feeder_extension.js`)
 
 ### Prompt Tab
 - **3-column layout** — AI Assistant (left), Presets/Preset Manager tab-panel (center), Wildcard support (right)
@@ -145,7 +154,8 @@ Requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image
 - **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To... and Delete from the multi-select bar
 - **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations (group, favorite, move, delete)
 - **Server-side filtering** — filter by group, favorites, or tags with fast server-side set lookup (no full rescan)
-- **Group management** — create, rename, delete groups and assign/remove images using the same 4-section panel as Models tab
+- **Group management** — create, rename, delete groups and assign/remove images using the same 4-section panel as Models tab; **`__Feeder__`** is a reserved group (🔒 prefix) that cannot be renamed or deleted; used by the Feeder Gallery mode to define the generation queue; **FC** button in the toolbar clears all members without deleting the group
+- **Thumbnail F button** — cyan overlay button (top-left of each image card) toggles the image's membership in the `__Feeder__` group; cyan and always-visible when the image is in the group; visible on hover only when inactive
 - **Favorites** — star images inline without reopening the detail panel
 - **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel
 - **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab; **Copy & Send Canvas** button copies the JSON to the clipboard and stores it for title-drag to the ComfyUI canvas
@@ -320,6 +330,17 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.42
+- **Feeder tab — Gallery mode** — new [Image Loop] / [Gallery] toggle in the Feeder tab; Gallery mode drives a WFS_GalleryFeeder node without any external plugin: node selector, group select, sort mode / index / seed, After Gen (Loop / Increment / Fixed), Run / Stop; center pane shows the selected group's images — click any image to jump to that index; `__Feeder__` group is auto-created on first open
+- **WFS_GalleryFeeder custom node** — new ComfyUI node (Workflow Studio category) that reads images from a Gallery group and outputs one `IMAGE` at a time; inputs: `group_name`, `index`, `sort_mode` (filename_asc / filename_desc / random), `seed`; skips missing files; `IS_CHANGED` ensures re-execution on every queue
+- **WFS_GalleryFeeder — ComfyUI canvas controls** — `gallery_feeder_extension.js` adds After Gen combo (loop / increment / fixed), ▶ Run button, and ■ Stop button as non-serialized widgets directly on the node in the ComfyUI canvas; manages per-node loop state with `waitForExecution()` Promise pattern; `onRemoved` hook auto-stops the loop on node deletion
+- **Gallery tab — thumbnail F button** — cyan overlay button (top-left of each image card) toggles `__Feeder__` group membership; active state is always visible in cyan, inactive shows only on hover; initial state derived from `img.groups` returned by `list_images()`
+- **Gallery tab — `__Feeder__` reserved group** — shown with 🔒 prefix in group dropdowns; rename and delete blocked server-side (403) and client-side (buttons disabled); **FC** toolbar button clears all group members without deleting the group
+- **Security: XSS fixes in `gallery-tab.js`** — tag names, filenames, and server error messages now escaped via `escapeHtml()` before insertion into `innerHTML` (tag badge list, detail panel `alt` attributes, lightbox footer, folder tree errors, grid errors); `util.js` `escapeHtml` updated to also escape single quotes (`'` → `&#x27;`)
+- **Security: path validation in `gallery_service.py`** — `save_image_meta`, `toggle_favorite`, `add_to_group`, `remove_from_group` now call `_check_path_allowed()` before any file operation; previously these four methods were missing the guard that other write methods already had
+- **Security: `_init_allowed_root()` in `gallery_routes.py`** — `_allowed_root` is now initialized at module load from saved `gallery_output_dir` (falls back to ComfyUI default output dir); prevents `list_folder_tree` from overriding `_allowed_root` via a crafted `?root=` request, and also fixes serve_image returning 404 in Feeder Gallery mode before the Gallery tab is opened
+- **Bug fix: WFS_GalleryFeeder seed validation error** — seed `max` changed from `0x7FFFFFFF` to `0xffffffffffffffff` (matching KSampler); `applySeedToWorkflow()` was writing values exceeding the old max, causing `value_bigger_than_max` validation failures
 
 ### v0.3.41
 - **Generate UI — ImpactWildcardEncode / ImpactWildcardProcessor prompt detection** — fixed: wildcard text inputs from comfy-impact-pack nodes were not shown in the Prompt tab of Generate UI
@@ -655,7 +676,8 @@ ComfyUI-Workflow-Studio/
 │   ├── wfm.py                   # Main class & route registration
 │   ├── config.py                # Path configuration
 │   ├── nodes/
-│   │   └── prompt_text.py       # WFS_PromptText custom node (positive/negative prompt)
+│   │   ├── prompt_text.py       # WFS_PromptText custom node (positive/negative prompt)
+│   │   └── gallery_feeder_node.py  # WFS_GalleryFeeder custom node (gallery group → IMAGE)
 │   ├── routes/
 │   │   ├── workflow_routes.py   # Workflow CRUD & analysis API
 │   │   ├── nodes_routes.py      # Nodes metadata & node sets API
@@ -682,21 +704,25 @@ ComfyUI-Workflow-Studio/
 │       ├── app.js               # App initialization & routing
 │       ├── workflow-tab.js      # Workflow browser
 │       ├── generate-tab.js      # Generation UI
-│       ├── feeder-tab.js        # Feeder subtab (ImageFeeder node control + image library)
+│       ├── feeder-tab.js        # Feeder subtab (Image Loop + Gallery modes)
+│       ├── gallery-tab.js       # Gallery tab (image browser, groups, metadata)
+│       ├── tagger-tab.js        # Tagger tab (WD Tagger, DeepDanbooru, Ollama VLM)
 │       ├── prompt-tab.js        # AI assistant & presets
 │       ├── metadata-tab.js      # Metadata extraction & display (PNG/WebP/JSON)
 │       ├── settings-tab.js      # Settings panel
 │       ├── comfyui-client.js    # ComfyUI WebSocket/API client
 │       ├── nodes-tab.js          # Node browser & node sets
 │       ├── models-tab.js         # Model browser & CivitAI integration
-│       ├── ai-tab.js             # AI TOOL tab (Translation | TOOLS/VLM | Settings — Ollama / LM Studio)
+│       ├── ai-tab.js             # AI TOOL tab (Translation | Chat | TOOLS/VLM | Settings)
 │       ├── comfyui-workflow.js  # UI-to-API format conversion
 │       ├── comfyui-editor.js    # Dynamic parameter editor
 │       ├── json-highlight.js    # JSON syntax highlighting
+│       ├── util.js              # Shared utilities (escapeHtml, readJsonStorage, getSettings)
 │       └── i18n.js              # Internationalization
 ├── web/comfyui/
 │   ├── top_menu_extension.js    # ComfyUI menu bar integration
-│   └── node_sets_menu.js        # Workflow Studio Library side panel
+│   ├── node_sets_menu.js        # Workflow Studio Library side panel
+│   └── gallery_feeder_extension.js  # WFS_GalleryFeeder canvas widgets (After Gen / Run / Stop)
 └── data/                        # Fallback data dir (used when ComfyUI user/default/ is not found)
 ```
 
