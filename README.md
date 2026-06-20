@@ -13,12 +13,12 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 
 **📚 Workflow Studio Library** — a multi-function side panel for smooth ComfyUI integration
 - Drag & drop models, nodes, prompts, and workflows straight onto the canvas
-- **Send to Canvas**: click "Send to Canvas" (Workflow tab) or "Copy & Send Canvas" (Gallery tab) — the panel title highlights blue; drag it onto the canvas to load the workflow
+- **Send to Canvas**: click "Send to Canvas" (Workflow tab) or "Copy & Send Canvas" (Gallery tab) to send the workflow directly to the ComfyUI canvas — UI and API formats both supported
 - View metadata from images / JSON, then drop the detected models and prompts onto the canvas
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.42-green)
+![Version](https://img.shields.io/badge/version-0.3.43-green)
 
 ## Screenshots
 
@@ -58,7 +58,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Side panel tabs** — Thumbnail preview, JSON viewer with syntax highlighting, and Group management
 - **Badge management** — add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)
 - **AI summary** — generate workflow descriptions using Ollama
-- **Import / Export** — import workflows from files or clipboard; **Send to Canvas** button stores the selected workflow for title-drag onto the ComfyUI canvas
+- **Import / Export** — import workflows from files or clipboard; **Send to Canvas** button sends the selected workflow directly to the ComfyUI canvas (UI and API formats both supported)
 - **Default view setting** — persist your preferred view mode (Thumbnail / Table)
 
 ### Canvas Snapshot (v0.1.2)
@@ -158,7 +158,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Thumbnail F button** — cyan overlay button (top-left of each image card) toggles the image's membership in the `__Feeder__` group; cyan and always-visible when the image is in the group; visible on hover only when inactive
 - **Favorites** — star images inline without reopening the detail panel
 - **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel
-- **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab; **Copy & Send Canvas** button copies the JSON to the clipboard and stores it for title-drag to the ComfyUI canvas
+- **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab; **Copy & Send Canvas** button copies the JSON to the clipboard and sends the workflow directly to the ComfyUI canvas (UI and API formats both supported)
 - **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
@@ -232,7 +232,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Drag & drop workflows** — drag a workflow onto the canvas to load it
 - **Drag & drop nodes** — drag nodes/node sets onto the canvas to place them
 - **Drag & drop prompts** — drag a preset onto the canvas to create a WFS_PromptText node with positive/negative prompts
-- **Title drag (Send to Canvas)** — after clicking "Send to Canvas" (Workflow tab toolbar / detail modal) or "Copy & Send Canvas" (Gallery tab JSON panel), the "Workflow Studio Library" title highlights blue with a green ● indicator; drag the title onto the canvas to load the stored workflow; title resets automatically after loading
+- **Send to Canvas** — clicking "Send to Canvas" (Workflow tab toolbar / detail modal) or "Copy & Send Canvas" (Gallery tab JSON panel) sends the workflow directly to the ComfyUI canvas via `window.opener` (UI and API formats both supported); if Workflow Studio was opened from a bookmark instead of the ComfyUI toolbar, UI-format workflows fall back to title drag (panel title highlights blue with a green ● — drag it onto the canvas to load)
 - **Copy prompts** — copy individual positive (P) or negative (N) prompts from sidebar items
 - **Double-click** — load workflows or place nodes without dragging
 - **Search** — search within each sub-tab to quickly find items
@@ -330,6 +330,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.43
+- **Send to Canvas — direct canvas load via `window.opener`** — clicking "Send to Canvas" (Workflow tab) or "Copy & Send Canvas" (Gallery tab) now sends the workflow directly to the ComfyUI canvas without requiring a title drag; uses `window.opener.wfmReceiveWorkflow()` registered by `node_sets_menu.js` via `app.handleFile()`; both UI and API formats are supported; fallback to localStorage + title drag when `window.opener` is unavailable (e.g. opened from a bookmark), UI-format only
+- **Workflow Studio Library — API-format DnD enabled** — API-format workflows in the W (Workflows) sub-tab are no longer grayed out; drag & drop and double-click now work for all formats via `app.handleFile()`
 
 ### v0.3.42
 - **Feeder tab — Gallery mode** — new [Image Loop] / [Gallery] toggle in the Feeder tab; Gallery mode drives a WFS_GalleryFeeder node without any external plugin: node selector, group select, sort mode / index / seed, After Gen (Loop / Increment / Fixed), Run / Stop; center pane shows the selected group's images — click any image to jump to that index; `__Feeder__` group is auto-created on first open

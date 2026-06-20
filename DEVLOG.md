@@ -1,5 +1,62 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-21: Send to Canvas — window.opener経由のキャンバス直接ロード対応
+
+**背景**: SPAは `window.open(url, "_blank")` でComfyUIとは別タブとして開かれる。同一オリジンの別タブでは `window.opener` 経由でComfyUIウィンドウのJavaScriptに直接アクセスできる。従来の「タイトルドラッグ（Send to Canvas）」はSPAウィンドウ→ComfyUIウィンドウのクロスウィンドウDnDだったが、`dragover` イベント中はブラウザのセキュリティ制限でカスタムMIMEタイプが `DataTransfer.types` に含まれず `e.preventDefault()` が呼ばれないため `drop` イベントがキャンバスに届かなかった（Wタブ内DnDは同一ウィンドウなので `app.handleFile` が機能していた）。
+
+**修正（`web/comfyui/node_sets_menu.js`）**
+- `window.wfmReceiveWorkflow(data)` グローバル関数を追加: `loadDataOnCanvas(data)` → `app.handleFile(file)` 経由でワークフローをキャンバスにロード（UI/API形式どちらも対応）
+- WタブのAPI形式アイテムのグレーアウト（`wfm-nlp-item--disabled` クラス・`draggable=false`・title属性）を削除 → 全フォーマットでDnD・ダブルクリック対応
+
+**修正（`static/js/workflow-tab.js`）**
+- `sendToCanvas()`: `window.opener.wfmReceiveWorkflow` が存在する場合は直接呼び出す（UI/API形式両対応）。存在しない場合（ブックマーク等から直接開いた場合）はlocalStorageフォールバック（UI形式のみ、API形式はエラートーストで案内）
+- サイドパネル・詳細モーダルのSend to CanvasボタンのAPI形式 `disabled` 属性を削除
+
+**修正（`static/js/gallery-tab.js`）**
+- `_updateCopyCanvasBtn()`: API形式による `disabled` 制限を削除（workflow存在チェックのみ）
+- Copy & Send Canvasクリックハンドラ: `window.opener.wfmReceiveWorkflow` 優先に変更（フォールバックはlocalStorage + タイトルドラッグ）
+
+**修正（`static/js/i18n.js`）**
+- `apiFormatCanvasNoOpener` キーを追加（EN/JA/ZH）: window.openerなしでAPI形式を送ろうとした場合のエラーガイドメッセージ
+- `helpGallery8` / `helpSidepanel17` を新しい動作（直接送信・フォールバック説明）に合わせて更新（3言語）
+
+---
+
+## 2026-06-20: API形式ワークフローのキャンバス読み込み修正・画像メタデータ埋め込み修正
+
+### API形式ワークフローをキャンバスへドラッグすると空になる問題を修正
+
+**症状**: Workflowタブ「Send to Canvas」やLibraryからのDnDで、API形式（`_api.json`）のワークフローをComfyUIキャンバスへドロップすると空のグラフになる。ファイルエクスプローラーからのドロップは正常。
+
+**原因**: `app.loadGraphData()` はUIフォーマット（`{nodes:[...], links:[...]}`）を期待するが、API形式（`{nodeId: {class_type, inputs}}`）が渡されていた。
+
+**修正（`web/comfyui/node_sets_menu.js`）**
+- `isApiWorkflowFormat(data)`: API形式かUI形式かを判定するヘルパーを追加
+- `convertApiToUiWorkflow(api)`: API形式→UI形式に変換するヘルパーを追加（ノードはグリッド自動配置、リンクタイプは `"*"`、`last_node_id`/`last_link_id` を正しく設定）
+- `loadWorkflowOnCanvas`: `fetchWorkflowRaw` 後にAPI形式を検出・変換してから `app.loadGraphData()` を呼ぶよう修正
+- `pendingRaw` ドロップハンドラ: Send to Canvas経由のタイトルDnD時にも同様の変換を挿入
+
+**修正（`static/js/workflow-tab.js`）**
+- `sendToCanvas()`: `comfyWorkflow.detectFormat` でフォーマット判定し、API形式なら `comfyWorkflow.convertApiToUi()` でUI形式に変換してからlocalStorageに保存
+
+**修正（`static/js/gallery-tab.js`）**
+- `comfyWorkflow` を `comfyui-workflow.js` からimport追加
+- 「Copy & Send Canvas」ハンドラ: クリップボードにはオリジナルJSON（API形式のまま）をコピーしつつ、localStorage保存前にAPI→UI変換を適用
+
+---
+
+### 生成UIタブから生成した画像にワークフローメタデータが含まれない問題を修正
+
+**症状**: 生成UIタブ（およびFeederタブ）から実行した画像生成で、SaveImageノードが保存するPNGに `workflow` テキストチャンクが埋め込まれず、GalleryタブでのWorkflow表示や他ツールでのメタデータ読み込みができない。
+
+**原因**: `comfyui-client.js` の `queuePrompt()` が ComfyUI の `/prompt` エンドポイントに `extra_data` を渡していなかった。ComfyUIのSaveImageノードは `extra_data.extra_pnginfo.workflow` を受け取ってPNGの `workflow` テキストチャンクに埋め込むが、これが未設定のため埋め込みが行われなかった。
+
+**修正（`static/js/comfyui-client.js`）**
+- `queuePrompt(workflow, extraData = null)`: `extraData` 引数を追加。存在する場合に `body.extra_data` として `/prompt` リクエストに含める
+- `generate()`: `queuePrompt` 呼び出し時に `{ extra_pnginfo: { workflow } }` を渡し、SaveImageノードがワークフロー（API形式）をPNGメタデータとして埋め込むよう修正
+
+---
+
 ## 2026-06-20: セキュリティ修正（XSS・パスバリデーション）
 
 ### 修正内容

@@ -48,6 +48,18 @@ function saveBadgePalette(palette) {
 
 function sendToCanvas(workflowData) {
     try {
+        // window.opener経由でComfyUIキャンバスに直接ロード（推奨）
+        if (window.opener && typeof window.opener.wfmReceiveWorkflow === "function") {
+            window.opener.wfmReceiveWorkflow(workflowData);
+            showToast(t("workflowSentToCanvas"), "success");
+            return;
+        }
+        // フォールバック: localStorage + タイトルドラッグ（UI形式のみ）
+        const fmt = comfyWorkflow.detectFormat(workflowData);
+        if (fmt === "api") {
+            showToast(t("apiFormatCanvasNoOpener"), "error");
+            return;
+        }
         localStorage.setItem("wfm_pending_workflow", JSON.stringify(workflowData));
         showToast(t("workflowSentToCanvas"), "success");
     } catch (err) {

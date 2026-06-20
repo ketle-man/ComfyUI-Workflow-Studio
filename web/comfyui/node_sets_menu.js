@@ -241,6 +241,52 @@ const fetchWorkflowRaw = async (filename) => {
     } catch { return null; }
 };
 
+// Returns true if the JSON is in ComfyUI API format (dict of nodeId→{class_type, inputs})
+// rather than the UI format (has nodes[] and links[] arrays).
+const isApiWorkflowFormat = (data) => {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+    if (Array.isArray(data.nodes)) return false;
+    const keys = Object.keys(data);
+    return keys.length > 0 && keys.every((k) => data[k]?.class_type);
+};
+
+// Minimal API→UI conversion so app.loadGraphData() can handle API-format workflows.
+// Nodes are arranged in a grid; link types use "*" since object_info is not queried here.
+const convertApiToUiWorkflow = (api) => {
+    const nodes = [];
+    const links = [];
+    let linkId = 1;
+    const sortedIds = Object.keys(api).sort((a, b) => Number(a) - Number(b));
+    sortedIds.forEach((id, idx) => {
+        const node = api[id];
+        const col = idx % 5;
+        const row = Math.floor(idx / 5);
+        const uiNode = {
+            id: Number(id),
+            type: node.class_type,
+            title: node._meta?.title || node.class_type,
+            pos: [col * 300 + 50, row * 250 + 50],
+            size: [250, 200],
+            inputs: [],
+            outputs: [],
+            widgets_values: [],
+            mode: 0,
+        };
+        for (const [key, val] of Object.entries(node.inputs || {})) {
+            if (Array.isArray(val) && val.length === 2 && typeof val[0] === "string" && typeof val[1] === "number") {
+                uiNode.inputs.push({ name: key, type: "*", link: linkId });
+                links.push([linkId, Number(val[0]), val[1], Number(id), uiNode.inputs.length - 1, "*"]);
+                linkId++;
+            } else {
+                uiNode.widgets_values.push(val);
+            }
+        }
+        nodes.push(uiNode);
+    });
+    const maxNodeId = Math.max(0, ...sortedIds.map(Number));
+    return { nodes, links, groups: [], config: {}, extra: {}, version: 0.4, last_node_id: maxNodeId, last_link_id: linkId };
+};
+
 const loadWfData = async () => {
     const workflows = await fetchWorkflows();
     state.wfList = workflows.filter(w => w.filename !== ".index.json");
@@ -513,6 +559,30 @@ const placeLoraMgrNode = (loras, pos) => {
 // Workflow canvas loading
 // ============================================
 
+/**
+ * Load workflow JSON onto the ComfyUI canvas.
+ * Delegates to app.handleFile() so ComfyUI's native path handles both UI and API
+ * formats (identical to dragging a file from Explorer). Falls back to
+ * convertApiToUiWorkflow() + loadGraphData() if handleFile is unavailable.
+ */
+const loadDataOnCanvas = async (data) => {
+    if (typeof app?.handleFile === "function") {
+        const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+        const file = new File([blob], "workflow.json", { type: "application/json" });
+        await app.handleFile(file);
+    } else {
+        if (isApiWorkflowFormat(data)) data = convertApiToUiWorkflow(data);
+        await app.loadGraphData(data);
+    }
+};
+
+// ============================================
+// Cross-window receiver for SPA Send-to-Canvas
+// ============================================
+window.wfmReceiveWorkflow = async (data) => {
+    await loadDataOnCanvas(data);
+};
+
 const loadWorkflowOnCanvas = async (filename) => {
     const displayName = filename.replace(/\.json$/i, "");
     showToast(`Loading "${displayName}"...`, "info");
@@ -522,7 +592,7 @@ const loadWorkflowOnCanvas = async (filename) => {
         return;
     }
     try {
-        await app.loadGraphData(data);
+        await loadDataOnCanvas(data);
         showToast(`Loaded: ${displayName}`, "success");
     } catch (err) {
         showToast("Failed to load: " + err.message, "error");
@@ -600,22 +670,24 @@ const installCanvasDropHandler = () => {
         const pendingRaw = e.dataTransfer.getData("application/x-wfm-pending");
         if (pendingRaw) {
             e.preventDefault();
-            try {
-                const wfData = JSON.parse(pendingRaw);
-                app.loadGraphData(wfData);
-                localStorage.removeItem("wfm_pending_workflow");
-                if (panelEl) {
-                    const titleEl = panelEl.querySelector(".wfm-nlp-title");
-                    if (titleEl) {
-                        titleEl.draggable = false;
-                        titleEl.classList.remove("wfm-nlp-title-pending");
-                        titleEl.title = "Workflow Studio Library";
+            (async () => {
+                try {
+                    const wfData = JSON.parse(pendingRaw);
+                    await loadDataOnCanvas(wfData);
+                    localStorage.removeItem("wfm_pending_workflow");
+                    if (panelEl) {
+                        const titleEl = panelEl.querySelector(".wfm-nlp-title");
+                        if (titleEl) {
+                            titleEl.draggable = false;
+                            titleEl.classList.remove("wfm-nlp-title-pending");
+                            titleEl.title = "Workflow Studio Library";
+                        }
                     }
+                    showToast("Workflow loaded on canvas", "success");
+                } catch (err) {
+                    showToast("Failed to load workflow: " + err.message, "error");
                 }
-                showToast("Workflow loaded on canvas", "success");
-            } catch (err) {
-                showToast("Failed to load workflow: " + err.message, "error");
-            }
+            })();
             return;
         }
 

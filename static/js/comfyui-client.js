@@ -168,14 +168,16 @@ export const comfyUI = {
     },
 
     // Generation
-    async queuePrompt(workflow) {
+    async queuePrompt(workflow, extraData = null) {
+        const body = {
+            prompt: workflow,
+            client_id: this.clientId,
+        };
+        if (extraData) body.extra_data = extraData;
         const res = await fetch(`${this.baseUrl}/prompt`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                prompt: workflow,
-                client_id: this.clientId,
-            }),
+            body: JSON.stringify(body),
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -275,8 +277,8 @@ export const comfyUI = {
                 throw new Error("Failed to connect WebSocket");
             }
 
-            // Queue prompt
-            const result = await this.queuePrompt(workflow);
+            // Queue prompt — pass workflow as extra_pnginfo so SaveImage embeds it in PNG metadata
+            const result = await this.queuePrompt(workflow, { extra_pnginfo: { workflow } });
             this.currentPromptId = result.prompt_id;
 
             // Track progress

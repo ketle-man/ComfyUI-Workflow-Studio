@@ -8,6 +8,7 @@ import { t } from "./i18n.js";
 import { loadFileIntoMetadataTab } from "./metadata-tab.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
 import { escapeHtml } from "./util.js";
+import { comfyWorkflow } from "./comfyui-workflow.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -554,6 +555,13 @@ function updateTagFilter(images) {
 
 // ── 詳細パネル ────────────────────────────────────────────────
 
+function _updateCopyCanvasBtn() {
+    const btn = document.getElementById("wfm-gallery-copy-workflow-btn");
+    if (!btn) return;
+    btn.disabled = !state.embeddedWorkflow;
+    btn.title = "";
+}
+
 async function loadImageDetail(img) {
     // ファイル操作ボタンを有効化
     const moveBtn = document.getElementById("wfm-gallery-img-move-btn");
@@ -588,8 +596,10 @@ async function loadImageDetail(img) {
         ]);
         state.embeddedWorkflow = wfRes.has_workflow ? wfRes.workflow : null;
         renderWorkflowJson(state.embeddedWorkflow);
+        _updateCopyCanvasBtn();
     } catch (e) {
         renderWorkflowJson(null);
+        _updateCopyCanvasBtn();
     }
 
     // グループタブ更新
@@ -1311,18 +1321,32 @@ function bindEvents() {
     });
 
     // ワークフローコピー＆キャンバスへ送る
-    document.getElementById("wfm-gallery-copy-workflow-btn")?.addEventListener("click", () => {
+    document.getElementById("wfm-gallery-copy-workflow-btn")?.addEventListener("click", async () => {
         if (!state.embeddedWorkflow) {
             showToast(t("galleryNoEmbeddedWorkflow"), "error");
             return;
         }
-        const jsonStr = JSON.stringify(state.embeddedWorkflow, null, 2);
-        navigator.clipboard.writeText(jsonStr)
-            .then(() => {
-                localStorage.setItem("wfm_pending_workflow", jsonStr);
+        try {
+            // window.opener経由でComfyUIキャンバスに直接ロード（推奨）
+            if (window.opener && typeof window.opener.wfmReceiveWorkflow === "function") {
+                window.opener.wfmReceiveWorkflow(state.embeddedWorkflow);
+                await navigator.clipboard.writeText(JSON.stringify(state.embeddedWorkflow, null, 2)).catch(() => {});
                 showToast(t("workflowSentToCanvas"), "success");
-            })
-            .catch(() => showToast(t("copyFailed"), "error"));
+                return;
+            }
+            // フォールバック: localStorage + タイトルドラッグ（UI形式のみ）
+            const fmt = comfyWorkflow.detectFormat(state.embeddedWorkflow);
+            if (fmt === "api") {
+                showToast(t("apiFormatCanvasNoOpener"), "error");
+                return;
+            }
+            const jsonStr = JSON.stringify(state.embeddedWorkflow, null, 2);
+            await navigator.clipboard.writeText(jsonStr).catch(() => {});
+            localStorage.setItem("wfm_pending_workflow", jsonStr);
+            showToast(t("workflowSentToCanvas"), "success");
+        } catch (err) {
+            showToast(t("errorWithMsg", err.message), "error");
+        }
     });
 
     // 一括操作バー
