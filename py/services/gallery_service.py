@@ -1,6 +1,7 @@
 """
 Gallery Service - outputフォルダの画像管理、メタデータ閲覧
 """
+import hashlib
 import json
 import logging
 import mimetypes
@@ -26,7 +27,7 @@ _PNG_CHUNK_MAX = 32 * 1024 * 1024
 _JPEG_READ_MAX = 64 * 1024 * 1024
 
 # フォルダキャッシュのTTL秒（フォルダmtimeが同じでも念のため）
-_CACHE_TTL = 30.0
+_CACHE_TTL = 60.0
 
 
 class _FolderCache:
@@ -217,13 +218,14 @@ class GalleryService:
                 "groups": meta.get("groups", []),
             }
 
-            # 検索フィルタ
+            # 検索フィルタ（ファイル名・メモ・タグ・キャッシュ済みプロンプト）
             if search:
                 s = search.lower()
                 if not (
                     s in name.lower()
                     or s in item["memo"].lower()
                     or any(s in t.lower() for t in tags)
+                    or s in meta.get("prompt_cache", "").lower()
                 ):
                     continue
 
@@ -261,6 +263,14 @@ class GalleryService:
             embedded = self._read_jpeg_metadata(path)
 
         saved = self.metadata_store.get(str(path))
+
+        # workflow キーを除く文字列フィールドをプロンプトキャッシュとして保存（検索用）
+        prompt_text = " ".join(
+            str(v) for k, v in embedded.items()
+            if k != "workflow" and isinstance(v, str) and len(v) < 50_000
+        ).strip()
+        if prompt_text and prompt_text != saved.get("prompt_cache", ""):
+            self.metadata_store.save(str(path), {"prompt_cache": prompt_text})
 
         stat = path.stat()
         return {
@@ -395,6 +405,30 @@ class GalleryService:
         new_val = not meta.get("favorite", False)
         self.metadata_store.save(image_path, {"favorite": new_val})
         return new_val
+
+    def bulk_set_favorite(self, paths: list[str], value: bool) -> dict:
+        """複数画像のお気に入りを一括設定する"""
+        ok = fail = 0
+        for p in paths:
+            if not self._check_path_allowed(Path(p).resolve()):
+                fail += 1
+                continue
+            if self.metadata_store.save(p, {"favorite": value}):
+                ok += 1
+            else:
+                fail += 1
+        return {"ok": ok, "fail": fail}
+
+    def bulk_group_op(self, paths: list[str], group_name: str, action: str = "add") -> dict:
+        """複数画像のグループ追加 / 削除を一括処理する。action は "add" または "remove"。"""
+        ok = fail = 0
+        for p in paths:
+            success = self.add_to_group(p, group_name) if action == "add" else self.remove_from_group(p, group_name)
+            if success:
+                ok += 1
+            else:
+                fail += 1
+        return {"ok": ok, "fail": fail}
 
     # ──────────────────────────────────────────────────────────────
     # グループ管理
@@ -553,3 +587,46 @@ class GalleryService:
             logger.warning("serve_image: path not allowed: %s", p)
             return None
         return p
+
+    def serve_thumbnail(self, image_path: str, width: int = 256) -> Path | None:
+        """縮小サムネイルのPathを返す。
+        ディスクキャッシュがあればそれを返し、なければPillowで生成して保存する。
+        GIFはアニメーション保持のため元ファイルをそのまま返す。
+        Pillowが使えない場合は元ファイルにフォールバック。
+        """
+        p = Path(image_path).resolve()
+        if not p.is_file():
+            return None
+        if p.suffix.lower() not in IMAGE_EXTENSIONS:
+            return None
+        if not self._check_path_allowed(p):
+            logger.warning("serve_thumbnail: path not allowed: %s", p)
+            return None
+
+        # GIF はアニメーション保持のためそのまま返す
+        if p.suffix.lower() == ".gif":
+            return p
+
+        try:
+            mtime = int(p.stat().st_mtime * 1000)
+        except OSError:
+            return None
+
+        cache_key = hashlib.md5(f"{p}:{mtime}:{width}".encode()).hexdigest()
+        cache_dir = self.data_dir / "thumb_cache"
+        cache_dir.mkdir(exist_ok=True)
+        thumb_path = cache_dir / f"{cache_key}.jpg"
+
+        if thumb_path.exists():
+            return thumb_path
+
+        try:
+            from PIL import Image
+            with Image.open(p) as img:
+                img = img.convert("RGB")
+                img.thumbnail((width, width), Image.LANCZOS)
+                img.save(thumb_path, "JPEG", quality=85, optimize=True)
+            return thumb_path
+        except Exception as e:
+            logger.warning("serve_thumbnail: failed for %s: %s", p, e)
+            return p  # フォールバック: 元ファイル

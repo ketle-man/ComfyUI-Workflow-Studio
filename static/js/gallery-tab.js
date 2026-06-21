@@ -18,6 +18,9 @@ const API = {
     imageMeta:      (path)     => `/wfm/gallery/image/meta?path=${encodeURIComponent(path)}`,
     imageWorkflow:  (path)     => `/wfm/gallery/image/workflow?path=${encodeURIComponent(path)}`,
     serveImage:     (path)     => `/wfm/gallery/image/serve?path=${encodeURIComponent(path)}`,
+    thumb:          (path, w = 256) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}`,
+    bulkFavorite:   "/wfm/gallery/bulk/favorite",
+    bulkGroup:      "/wfm/gallery/bulk/group",
     saveImageMeta:              `/wfm/gallery/image/meta`,
     toggleFavorite:             `/wfm/gallery/image/favorite`,
     groups:                     `/wfm/gallery/groups`,
@@ -36,6 +39,11 @@ const API = {
 };
 
 export const FEEDER_GROUP = "__Feeder__";
+
+// ── ページング ────────────────────────────────────────────────
+const PAGE_SIZE = 50;
+let _renderedCount = 0;
+let _scrollObserver = null;
 
 // ── 状態 ─────────────────────────────────────────────────────
 
@@ -269,6 +277,9 @@ function renderImages() {
     const grid = document.getElementById("wfm-gallery-grid");
     grid.className = `wfm-gallery-grid wfm-gallery-view-${state.viewMode}`;
 
+    _disconnectScrollObserver();
+    _renderedCount = 0;
+
     if (state.images.length === 0) {
         grid.innerHTML = `<p class="wfm-placeholder">No images found.</p>`;
         return;
@@ -277,13 +288,51 @@ function renderImages() {
     grid.innerHTML = "";
 
     if (state.viewMode === "thumb") {
-        state.images.forEach(img => {
-            const card = createThumbCard(img);
-            grid.appendChild(card);
-        });
+        _appendNextPage(grid);
+        if (_renderedCount < state.images.length) {
+            _attachScrollSentinel(grid);
+        }
     } else {
         grid.appendChild(createTable(state.images));
     }
+}
+
+function _appendNextPage(grid) {
+    const end = Math.min(_renderedCount + PAGE_SIZE, state.images.length);
+    const fragment = document.createDocumentFragment();
+    for (let i = _renderedCount; i < end; i++) {
+        fragment.appendChild(createThumbCard(state.images[i]));
+    }
+    grid.appendChild(fragment);
+    _renderedCount = end;
+}
+
+function _disconnectScrollObserver() {
+    if (_scrollObserver) {
+        _scrollObserver.disconnect();
+        _scrollObserver = null;
+    }
+    document.getElementById("wfm-gallery-scroll-sentinel")?.remove();
+}
+
+function _attachScrollSentinel(grid) {
+    const sentinel = document.createElement("div");
+    sentinel.id = "wfm-gallery-scroll-sentinel";
+    sentinel.style.cssText = "height:1px;width:100%;grid-column:1/-1";
+    grid.appendChild(sentinel);
+
+    _scrollObserver = new IntersectionObserver((entries) => {
+        if (!entries[0].isIntersecting) return;
+        _appendNextPage(grid);
+        if (_renderedCount >= state.images.length) {
+            _disconnectScrollObserver();
+        } else {
+            // sentinel を末尾に移動
+            grid.appendChild(sentinel);
+        }
+    }, { rootMargin: "300px" });
+
+    _scrollObserver.observe(sentinel);
 }
 
 function createThumbCard(img) {
@@ -301,7 +350,7 @@ function createThumbCard(img) {
     const imgEl = document.createElement("img");
     imgEl.className = "wfm-gallery-thumb-img";
     imgEl.loading = "lazy";
-    imgEl.src = API.serveImage(img.path);
+    imgEl.src = API.thumb(img.path);
     imgEl.alt = img.filename;
     imgEl.onerror = () => {
         imgEl.style.display = "none";
@@ -409,7 +458,7 @@ function createTable(images) {
         tdFav.appendChild(favBtn);
 
         const tdThumb = document.createElement("td");
-        tdThumb.innerHTML = `<img src="${API.serveImage(img.path)}" class="wfm-gallery-table-thumb" loading="lazy" alt="">`;
+        tdThumb.innerHTML = `<img src="${API.thumb(img.path, 128)}" class="wfm-gallery-table-thumb" loading="lazy" alt="">`;
 
         const tdName = document.createElement("td");
         tdName.className = "wfm-gallery-table-name";
@@ -476,6 +525,13 @@ function updateBulkBar() {
         countEl.textContent = `${count} ${t("galleryBulkSelected")}`;
     } else {
         bar.style.display = "none";
+    }
+    // Compare ボタンは 2〜4 枚選択時のみ表示
+    const compareBtn = document.getElementById("wfm-gallery-bulk-compare");
+    if (compareBtn) {
+        const show = count >= 2 && count <= 4;
+        compareBtn.style.display = show ? "" : "none";
+        compareBtn.textContent = t("galleryBulkCompare");
     }
 }
 
@@ -1132,46 +1188,76 @@ function openMoveModal(paths) {
 async function bulkAddToGroup(groupName) {
     if (!groupName || state.selectedImages.size === 0) return;
     const paths = [...state.selectedImages];
-    let success = 0;
-    for (const path of paths) {
-        try {
-            await fetch(API.groupAdd(groupName), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path }),
+    try {
+        const res = await fetch(API.bulkGroup, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paths, group: groupName, action: "add" }),
+        });
+        const data = await res.json();
+        if (data.ok > 0) {
+            paths.forEach(path => {
+                const img = state.images.find(im => im.path === path);
+                if (img) {
+                    if (!img.groups) img.groups = [];
+                    if (!img.groups.includes(groupName)) img.groups.push(groupName);
+                }
             });
-            // キャッシュ更新
-            const img = state.images.find(i => i.path === path);
-            if (img) {
-                if (!img.groups) img.groups = [];
-                if (!img.groups.includes(groupName)) img.groups.push(groupName);
-            }
-            success++;
-        } catch (e) { /* continue */ }
+        }
+        showToast(t("addedNImagesToGroup", data.ok, groupName), "success");
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
     }
-    showToast(t("addedNImagesToGroup", success, groupName), "success");
+}
+
+async function bulkRemoveFromGroup(groupName) {
+    if (!groupName || state.selectedImages.size === 0) return;
+    const paths = [...state.selectedImages];
+    try {
+        const res = await fetch(API.bulkGroup, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paths, group: groupName, action: "remove" }),
+        });
+        const data = await res.json();
+        if (data.ok > 0) {
+            paths.forEach(path => {
+                const img = state.images.find(im => im.path === path);
+                if (img && img.groups) {
+                    img.groups = img.groups.filter(g => g !== groupName);
+                }
+            });
+        }
+        showToast(t("removedNImagesFromGroup", data.ok, groupName), "success");
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+    }
 }
 
 async function bulkSetFavorite(favoriteValue) {
     if (state.selectedImages.size === 0) return;
-    const paths = [...state.selectedImages];
-    let success = 0;
-    for (const path of paths) {
-        try {
-            const img = state.images.find(i => i.path === path);
-            if (!img || img.favorite === favoriteValue) continue;
-            await fetch(API.toggleFavorite, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path }),
+    const paths = [...state.selectedImages].filter(path => {
+        const img = state.images.find(i => i.path === path);
+        return img && img.favorite !== favoriteValue;
+    });
+    if (paths.length === 0) return;
+    try {
+        const res = await fetch(API.bulkFavorite, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paths, value: favoriteValue }),
+        });
+        const data = await res.json();
+        if (data.ok > 0) {
+            paths.forEach(path => {
+                const img = state.images.find(im => im.path === path);
+                if (img) img.favorite = favoriteValue;
             });
-            img.favorite = favoriteValue;
-            success++;
-        } catch (e) { /* continue */ }
-    }
-    if (success > 0) {
-        showToast(favoriteValue ? t("favoritedNImages", success) : t("unfavoritedNImages", success), "success");
-        renderImages(); // お気に入り状態が変わったのでビュー更新
+            showToast(favoriteValue ? t("favoritedNImages", data.ok) : t("unfavoritedNImages", data.ok), "success");
+            renderImages();
+        }
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }
 
@@ -1186,6 +1272,36 @@ function openLightbox(img) {
             <div class="wfm-gallery-lightbox-footer">${escapeHtml(img.filename)}</div>
             <button class="wfm-gallery-lightbox-close">&times;</button>
         </div>
+    `;
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay || e.target.classList.contains("wfm-gallery-lightbox-close")) {
+            overlay.remove();
+        }
+    });
+    document.body.appendChild(overlay);
+}
+
+// ── 画像比較ライトボックス ─────────────────────────────────────
+
+function openCompare(paths) {
+    const imgs = paths.map(p => state.images.find(im => im.path === p)).filter(Boolean);
+    if (imgs.length < 2) return;
+
+    const overlay = document.createElement("div");
+    overlay.className = "wfm-gallery-lightbox wfm-lightbox-compare";
+
+    const itemsHtml = imgs.map(img => `
+        <div class="wfm-lightbox-compare-item">
+            <img src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" alt="${escapeHtml(img.filename)}" loading="lazy">
+            <div class="wfm-lightbox-compare-label">${escapeHtml(img.filename)}</div>
+        </div>
+    `).join("");
+
+    overlay.innerHTML = `
+        <div class="wfm-lightbox-compare-inner">
+            <div class="wfm-lightbox-compare-grid" style="--compare-cols:${imgs.length}">${itemsHtml}</div>
+        </div>
+        <button class="wfm-gallery-lightbox-close wfm-lightbox-compare-close">&times;</button>
     `;
     overlay.addEventListener("click", (e) => {
         if (e.target === overlay || e.target.classList.contains("wfm-gallery-lightbox-close")) {
@@ -1372,12 +1488,26 @@ function bindEvents() {
         }
     });
 
+    document.getElementById("wfm-gallery-bulk-group-remove")?.addEventListener("click", () => {
+        const sel = document.getElementById("wfm-gallery-bulk-group-select");
+        if (sel && sel.value) {
+            bulkRemoveFromGroup(sel.value);
+        } else {
+            showToast(t("selectGroupFirst"), "error");
+        }
+    });
+
     document.getElementById("wfm-gallery-bulk-fav")?.addEventListener("click", () => {
         bulkSetFavorite(true);
     });
 
     document.getElementById("wfm-gallery-bulk-unfav")?.addEventListener("click", () => {
         bulkSetFavorite(false);
+    });
+
+    document.getElementById("wfm-gallery-bulk-compare")?.addEventListener("click", () => {
+        if (state.selectedImages.size < 2) return;
+        openCompare([...state.selectedImages]);
     });
 
     document.getElementById("wfm-gallery-bulk-move")?.addEventListener("click", () => {

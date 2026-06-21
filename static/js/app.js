@@ -207,6 +207,8 @@ function applyI18nToHtml() {
     }
     const galleryBulkGroupAdd = document.getElementById("wfm-gallery-bulk-group-add");
     if (galleryBulkGroupAdd) galleryBulkGroupAdd.textContent = t("galleryBulkAdd");
+    const galleryBulkGroupRemove = document.getElementById("wfm-gallery-bulk-group-remove");
+    if (galleryBulkGroupRemove) galleryBulkGroupRemove.textContent = t("galleryBulkGroupRemove");
     const galleryBulkFav = document.getElementById("wfm-gallery-bulk-fav");
     if (galleryBulkFav) galleryBulkFav.textContent = t("galleryBulkFavAll");
     const galleryBulkUnfav = document.getElementById("wfm-gallery-bulk-unfav");
@@ -353,11 +355,18 @@ function applyI18nToHtml() {
         "wfm-help-gen-15": "helpGen15",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
+        "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",
+        "wfm-help-feeder-imgloop-desc": "helpFeederImgloopDesc",
         "wfm-help-feeder-1": "helpFeeder1", "wfm-help-feeder-2": "helpFeeder2",
         "wfm-help-feeder-3": "helpFeeder3", "wfm-help-feeder-4": "helpFeeder4",
         "wfm-help-feeder-5": "helpFeeder5", "wfm-help-feeder-6": "helpFeeder6",
         "wfm-help-feeder-7": "helpFeeder7", "wfm-help-feeder-8": "helpFeeder8",
         "wfm-help-feeder-9": "helpFeeder9",
+        "wfm-help-feeder-gal-title": "helpFeederGalTitle",
+        "wfm-help-feeder-gal-desc": "helpFeederGalDesc",
+        "wfm-help-feeder-gal-1": "helpFeederGal1", "wfm-help-feeder-gal-2": "helpFeederGal2",
+        "wfm-help-feeder-gal-3": "helpFeederGal3", "wfm-help-feeder-gal-4": "helpFeederGal4",
+        "wfm-help-feeder-gal-5": "helpFeederGal5", "wfm-help-feeder-gal-6": "helpFeederGal6",
         "wfm-help-prompt-1": "helpPrompt1", "wfm-help-prompt-2": "helpPrompt2",
         "wfm-help-prompt-3": "helpPrompt3", "wfm-help-prompt-4": "helpPrompt4",
         "wfm-help-prompt-5": "helpPrompt5", "wfm-help-prompt-6": "helpPrompt6",
@@ -425,6 +434,41 @@ function applyI18nToHtml() {
         const el = document.getElementById(id);
         if (el) el.textContent = t(key);
     }
+
+    // Search box placeholder
+    const helpSearch = document.getElementById("wfm-help-search");
+    if (helpSearch) {
+        helpSearch.placeholder = t("helpSearchPlaceholder");
+        helpSearch.addEventListener("input", _onHelpSearch);
+    }
+}
+
+function _onHelpSearch(e) {
+    const q = e.target.value.trim().toLowerCase();
+    const navItems = document.querySelectorAll("[data-help-page]");
+    if (!q) {
+        navItems.forEach(btn => btn.classList.remove("search-hidden"));
+        return;
+    }
+
+    const matchedPages = new Set();
+    document.querySelectorAll(".wfm-help-page").forEach(page => {
+        const pageId = page.id.replace("wfm-help-page-", "");
+        if (page.textContent.toLowerCase().includes(q)) matchedPages.add(pageId);
+    });
+
+    let firstBtn = null;
+    navItems.forEach(btn => {
+        const pageId = btn.dataset.helpPage;
+        if (matchedPages.has(pageId)) {
+            btn.classList.remove("search-hidden");
+            if (!firstBtn) firstBtn = btn;
+        } else {
+            btn.classList.add("search-hidden");
+        }
+    });
+
+    if (firstBtn && !firstBtn.classList.contains("active")) firstBtn.click();
 }
 
 // ============================================

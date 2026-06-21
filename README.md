@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.43-green)
+![Version](https://img.shields.io/badge/version-0.3.44-green)
 
 ## Screenshots
 
@@ -147,12 +147,14 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Wildcard Integration** — link the WFS wildcard directory to ComfyUI-Impact-Pack's `wildcards/` directory (directory junction on Windows, symlink on other OS); existing WFS wildcard files are automatically migrated; requires [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)
 - **Language** — English / Japanese / Chinese
 
-### Gallery Tab (v0.3.1)
+### Gallery Tab (v0.3.44)
 - **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
 - **Folder management** — create subfolders ("+ New") or delete the selected folder with all contents ("Del") from the folder tree header
-- **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To... and Delete from the multi-select bar
-- **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations (group, favorite, move, delete)
+- **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To... and Delete File from the multi-select bar
+- **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations: select group → "Add to Group" / "Remove from Group"; Favorite All / Unfavorite All; Compare (2–4 images); Move To...; Delete File
+- **Image Compare** — select 2–4 images with Ctrl+click, then click "Compare" in the Bulk Bar to open a side-by-side lightbox; grid adapts to the number of selected images
+- **Prompt search** — text search covers filename, tags, memo, and prompt text (A1111 `parameters` field cached on first detail panel open)
 - **Server-side filtering** — filter by group, favorites, or tags with fast server-side set lookup (no full rescan)
 - **Group management** — create, rename, delete groups and assign/remove images using the same 4-section panel as Models tab; **`__Feeder__`** is a reserved group (🔒 prefix) that cannot be renamed or deleted; used by the Feeder Gallery mode to define the generation queue; **FC** button in the toolbar clears all members without deleting the group
 - **Thumbnail F button** — cyan overlay button (top-left of each image card) toggles the image's membership in the `__Feeder__` group; cyan and always-visible when the image is in the group; visible on hover only when inactive
@@ -162,7 +164,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
-- **Performance** — folder-level mtime cache (30s TTL) for fast incremental refresh; tree expansion state preserved across folder operations
+- **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
 
 ### Nodes Tab (v0.1.7)
 - **Node Browser** — browse all installed ComfyUI nodes from `/object_info` API with Card/Table views
@@ -330,6 +332,18 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.44
+- **Gallery tab — server-side thumbnail generation** — `GET /wfm/gallery/image/thumb?path=...&w=256` endpoint generates 256px JPEG thumbnails via Pillow and caches them to `data/thumb_cache/` keyed by `md5(path:mtime:width)`; GIF served as-is to preserve animation; falls back to the original file if Pillow is unavailable; thumbnail view and table view both switched from `/image/serve` to `/image/thumb`
+- **Gallery tab — infinite-scroll paging** — thumbnail view renders 50 images initially; an IntersectionObserver sentinel (rootMargin 300px) appends the next page on scroll; sentinel is disconnected and removed when all images are rendered; paging resets on every `renderImages()` call (folder change, filter, sort)
+- **Gallery tab — bulk API endpoints** — `POST /wfm/gallery/bulk/favorite` and `POST /wfm/gallery/bulk/group` handle favorite set and group add/remove for any number of images in a single request; replaced N-parallel individual fetches in `bulkSetFavorite()` and `bulkAddToGroup()`
+- **Gallery tab — image compare mode** — Ctrl+click 2–4 images, then click "Compare" in the Bulk Bar to open a side-by-side lightbox; CSS grid adapts to the image count via `--compare-cols` custom property; close button is `position:fixed` at the top-right corner to avoid `overflow:auto` clipping
+- **Gallery tab — "Remove from Group" bulk button** — new button in the Bulk Bar (right of "Add to Group"); uses the same group selector dropdown; calls `POST /wfm/gallery/bulk/group` with `action:"remove"`
+- **Gallery tab — bulk bar UI labels** — dropdown placeholder "Add to Group..." → "Select Group"; "Add" button → "Add to Group"; "Delete" button → "Delete File" (distinguishes file deletion from group removal)
+- **Gallery tab — prompt search** — text search now covers A1111 `parameters` text embedded in PNG/JPEG metadata; prompt text is extracted on first detail-panel open and stored as `prompt_cache` in `metadata.json`; subsequent `list_images` searches include `prompt_cache` without re-reading image files
+- **Help tab — Gallery mode i18n** — Feeder subtab Gallery mode section (h4, description, 6 bullet points) now translated to Japanese and Chinese via `i18n.js`
+- **Help tab — font size ×1.5** — nav items, headings, body text, link cards, and support card text all scaled up in `main.css`
+- **Help tab — search box** — live search input above the nav sidebar filters matching pages and auto-clicks the first result; placeholder text localized (EN/JA/ZH)
 
 ### v0.3.43
 - **Send to Canvas — direct canvas load via `window.opener`** — clicking "Send to Canvas" (Workflow tab) or "Copy & Send Canvas" (Gallery tab) now sends the workflow directly to the ComfyUI canvas without requiring a title drag; uses `window.opener.wfmReceiveWorkflow()` registered by `node_sets_menu.js` via `app.handleFile()`; both UI and API formats are supported; fallback to localStorage + title drag when `window.opener` is unavailable (e.g. opened from a bookmark), UI-format only
@@ -745,3 +759,6 @@ MIT License
 - [ComfyUI-Lora-Manager](https://github.com/willmiao/ComfyUI-Lora-Manager) — Plugin architecture and UI pattern reference
 - [Ollama](https://ollama.com/) for local LLM inference
 - [Eagle](https://eagle.cool/) for image management
+- [Pillow (PIL Fork)](https://python-pillow.org/) — server-side thumbnail generation (`data/thumb_cache/`)
+- [ComfyUI-Gallery](https://github.com/PanicTitan/ComfyUI-Gallery) by PanicTitan — thumbnail grid UX reference
+- [infinite-image-browsing](https://github.com/zanllp/sd-webui-infinite-image-browsing) by zanllp — thumbnail caching and index strategy reference

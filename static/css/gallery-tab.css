@@ -639,6 +639,57 @@
     background: rgba(255,255,255,0.2);
 }
 
+/* ── 画像比較ライトボックス ──────────────────────────────────── */
+
+.wfm-lightbox-compare .wfm-lightbox-compare-inner {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 96vw;
+    max-height: 92vh;
+    overflow: auto;
+}
+
+.wfm-lightbox-compare-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--compare-cols, 2), 1fr);
+    gap: 12px;
+    padding: 16px;
+}
+
+.wfm-lightbox-compare-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.wfm-lightbox-compare-img {
+    max-width: calc(92vw / var(--compare-cols, 2) - 12px);
+    max-height: 78vh;
+    object-fit: contain;
+    border-radius: 4px;
+    cursor: default;
+}
+
+.wfm-lightbox-compare-label {
+    color: rgba(255,255,255,0.75);
+    font-size: 12px;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wfm-lightbox-compare-close {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10001;
+}
+
 /* ── 詳細パネル アクションボタン行 ───────────────────────────── */
 
 .wfm-gallery-detail-action-row {

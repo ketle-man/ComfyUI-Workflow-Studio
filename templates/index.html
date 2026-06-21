@@ -974,6 +974,9 @@
             <div class="wfm-help-layout">
                 <!-- Left Sidebar -->
                 <nav class="wfm-help-sidebar">
+                    <div class="wfm-help-search-wrap">
+                        <input id="wfm-help-search" class="wfm-help-search" type="text" placeholder="Search help...">
+                    </div>
                     <div class="wfm-help-nav">
                         <button class="wfm-help-nav-item active" data-help-page="about">About</button>
                         <button class="wfm-help-nav-item" data-help-page="workflow">Workflow Tab</button>
@@ -1052,8 +1055,8 @@
                             <h3 id="wfm-help-feeder-title">GenerateUI Tab — Feeder subtab</h3>
                             <p id="wfm-help-feeder-desc">Two modes switchable via the [Image Loop] / [Gallery] toggle at the top of the left pane.</p>
 
-                            <h4 style="margin:10px 0 4px;color:var(--wfm-accent)">Image Loop mode</h4>
-                            <p>Requires the comfyui-image-feeder custom node. Controls ImageFeeder nodes and runs continuous generation loops over an image library stored in user/default/image-loop-data/.</p>
+                            <h4 id="wfm-help-feeder-imgloop-title" style="margin:10px 0 4px;color:var(--wfm-accent)">Image Loop mode</h4>
+                            <p id="wfm-help-feeder-imgloop-desc">Requires the comfyui-image-feeder custom node. Controls ImageFeeder nodes and runs continuous generation loops over an image library stored in user/default/image-loop-data/.</p>
                             <ul>
                                 <li id="wfm-help-feeder-1">Left pane — Node settings: select the target ImageFeeder node from the dropdown; edit all node parameters (Directory, Sort Mode, Index, Start/End Index, Batch Size, Seed, Use Selection); click Apply to write changes to the loaded workflow</li>
                                 <li id="wfm-help-feeder-2">Left pane — Presets: save the current directory + selection as a named preset; load or delete saved presets</li>
@@ -1066,8 +1069,8 @@
                                 <li id="wfm-help-feeder-9">Index sync: after each generation the node returns the next index via WebSocket; the Index field updates automatically so the display stays in sync</li>
                             </ul>
 
-                            <h4 style="margin:14px 0 4px;color:var(--wfm-accent)">Gallery mode</h4>
-                            <p>Uses the built-in <b>WFS_GalleryFeeder</b> node (no external plugin required). Feeds images from a Gallery group into a continuous generation loop.</p>
+                            <h4 id="wfm-help-feeder-gal-title" style="margin:14px 0 4px;color:var(--wfm-accent)">Gallery mode</h4>
+                            <p id="wfm-help-feeder-gal-desc">Uses the built-in WFS_GalleryFeeder node (no external plugin required). Feeds images from a Gallery group into a continuous generation loop.</p>
                             <ul>
                                 <li id="wfm-help-feeder-gal-1">Left pane — Node: select a WFS_GalleryFeeder node from the dropdown and click Apply to link it to the workflow; select the source group (defaults to <b>__Feeder__</b>), Sort Mode, Index (current image position), and Seed</li>
                                 <li id="wfm-help-feeder-gal-2">Left pane — Run controls: <b>After gen</b> — Loop (wrap to start and repeat), Increment (advance and stop at last image), Fixed (always use the same index); click <b>Run</b> to start the loop, <b>Stop</b> to interrupt after the current generation</li>
@@ -1152,10 +1155,10 @@
                                 <li id="wfm-help-gallery-1">Browse images in the ComfyUI output folder — set the folder path in Settings &gt; Gallery Output Folder</li>
                                 <li id="wfm-help-gallery-2">3-column layout: folder tree (left) | image grid (center) | detail panel (right)</li>
                                 <li id="wfm-help-gallery-3">Thumbnail and Table view modes; double-click any image to open fullscreen lightbox</li>
-                                <li id="wfm-help-gallery-4">Toolbar filters: favorites (★), text search, tag filter, group filter, sort by date/name</li>
+                                <li id="wfm-help-gallery-4">Toolbar filters: favorites (★), text search (filename / tag / prompt), tag filter, group filter, sort by date/name</li>
                                 <li id="wfm-help-gallery-5">Folder tree: click to load images, expand with ▶; "+ New" creates a subfolder inside the selected folder, "Del" deletes it with all contents</li>
-                                <li id="wfm-help-gallery-6">Multi-select with Ctrl+click — bulk operations: Add to Group, Favorite All, Unfavorite All, Move To..., Delete</li>
-                                <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, date, tags (add/remove), memo; "Move To..." moves the image to another folder, "Delete" removes it permanently</li>
+                                <li id="wfm-help-gallery-6">Multi-select with Ctrl+click — bulk bar: select group → 'Add to Group' / 'Remove from Group'; 'Favorite All' / 'Unfavorite All'; 'Compare' (2–4 images); 'Move To...'; 'Delete File'</li>
+                                <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, date, tags (add/remove), memo; "Move To..." moves the image to another folder, "Delete File" removes it permanently</li>
                                 <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; 'Copy &amp; Send Canvas' button copies to clipboard and stores the workflow for title-drag to canvas</li>
                                 <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image; the <b>__Feeder__</b> group is reserved (shown with 🔒) and cannot be renamed or deleted — rename and delete buttons are disabled when it is selected</li>
                                 <li id="wfm-help-gallery-15"><b>F button</b> (cyan overlay, top-left of each thumbnail): toggle the image in/out of the <b>__Feeder__</b> group with a single click; active state stays visible (cyan) when the image is already in the group; use this to quickly queue images for the Feeder tab Gallery mode</li>
@@ -1335,8 +1338,10 @@
                         <option value=""></option>
                     </select>
                     <button id="wfm-gallery-bulk-group-add" class="wfm-btn wfm-btn-sm wfm-btn-primary"></button>
+                    <button id="wfm-gallery-bulk-group-remove" class="wfm-btn wfm-btn-sm"></button>
                     <button id="wfm-gallery-bulk-fav" class="wfm-btn wfm-btn-sm"></button>
                     <button id="wfm-gallery-bulk-unfav" class="wfm-btn wfm-btn-sm"></button>
+                    <button id="wfm-gallery-bulk-compare" class="wfm-btn wfm-btn-sm" style="display:none;"></button>
                     <button id="wfm-gallery-bulk-move" class="wfm-btn wfm-btn-sm"></button>
                     <button id="wfm-gallery-bulk-delete" class="wfm-btn wfm-btn-sm wfm-btn-danger"></button>
                 </div>

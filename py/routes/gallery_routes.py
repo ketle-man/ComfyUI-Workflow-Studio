@@ -50,6 +50,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/image/meta", get_image_meta)
     app.router.add_get("/wfm/gallery/image/workflow", get_image_workflow)
     app.router.add_get("/wfm/gallery/image/serve", serve_image)
+    app.router.add_get("/wfm/gallery/image/thumb", serve_thumb)
     app.router.add_post("/wfm/gallery/image/meta", save_image_meta)
     app.router.add_post("/wfm/gallery/image/favorite", toggle_favorite)
     app.router.add_get("/wfm/gallery/groups", list_groups)
@@ -61,6 +62,9 @@ def setup_routes(app: web.Application):
     app.router.add_post("/wfm/gallery/groups/{name}/remove", remove_from_group)
     app.router.add_post("/wfm/gallery/groups/{name}/clear", clear_group_images)
     app.router.add_get("/wfm/gallery/groups/{name}/images", list_group_images)
+    # バルク操作
+    app.router.add_post("/wfm/gallery/bulk/favorite", bulk_favorite)
+    app.router.add_post("/wfm/gallery/bulk/group", bulk_group)
     # フォルダ・ファイル操作
     app.router.add_post("/wfm/gallery/folder", create_folder_route)
     app.router.add_delete("/wfm/gallery/folder", delete_folder_route)
@@ -156,6 +160,70 @@ async def serve_image(request: web.Request) -> web.Response:
         "Content-Type": content_type or "image/png",
         "Cache-Control": "max-age=3600",
     })
+
+
+async def serve_thumb(request: web.Request) -> web.Response:
+    """サムネイル配信。Pillowで縮小したJPEGをディスクキャッシュして返す。"""
+    path = request.rel_url.query.get("path", "")
+    if not path:
+        return web.Response(status=400)
+    try:
+        width = int(request.rel_url.query.get("w", "256"))
+        width = max(32, min(512, width))
+    except ValueError:
+        width = 256
+
+    thumb_path = _service.serve_thumbnail(path, width)
+    if thumb_path is None:
+        return web.Response(status=404)
+
+    ext = thumb_path.suffix.lower()
+    if ext in (".jpg", ".jpeg"):
+        content_type = "image/jpeg"
+    elif ext == ".gif":
+        content_type = "image/gif"
+    else:
+        content_type = mimetypes.guess_type(str(thumb_path))[0] or "image/jpeg"
+
+    return web.FileResponse(thumb_path, headers={
+        "Content-Type": content_type,
+        "Cache-Control": "max-age=86400",
+    })
+
+
+# ──────────────────────────────────────────────────────────────
+# バルク操作
+# ──────────────────────────────────────────────────────────────
+
+async def bulk_favorite(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/bulk/favorite — 複数画像のお気に入りを一括設定"""
+    try:
+        body = await request.json()
+        paths = body.get("paths", [])
+        value = bool(body.get("value", True))
+        if not paths:
+            return web.json_response({"error": "paths required"}, status=400)
+        result = _service.bulk_set_favorite(paths, value)
+        return web.json_response(result)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def bulk_group(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/bulk/group — 複数画像のグループ追加/削除を一括処理"""
+    try:
+        body = await request.json()
+        paths = body.get("paths", [])
+        group = body.get("group", "").strip()
+        action = body.get("action", "add")  # "add" or "remove"
+        if not paths or not group:
+            return web.json_response({"error": "paths and group required"}, status=400)
+        if action not in ("add", "remove"):
+            return web.json_response({"error": "action must be 'add' or 'remove'"}, status=400)
+        result = _service.bulk_group_op(paths, group, action)
+        return web.json_response(result)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 async def save_image_meta(request: web.Request) -> web.Response:

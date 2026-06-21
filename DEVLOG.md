@@ -1,5 +1,106 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-21: v0.3.44 — Galleryタブ高速化・比較モード・バルク強化・バルクバーUI整理
+
+**変更ファイル**: `py/services/gallery_service.py`, `py/routes/gallery_routes.py`, `static/js/gallery-tab.js`, `static/css/gallery-tab.css`, `templates/index.html`, `static/js/app.js`, `static/js/i18n.js`
+
+### フェーズ2-A: サーバーサイドサムネイル生成
+
+- `gallery_service.py` に `serve_thumbnail(path, width=256)` を追加
+- Pillow で画像を 256px JPEG に縮小し `data/thumb_cache/` にキャッシュ（キー: `md5(path:mtime:width)`）
+- GIF はアニメーション保持のため元ファイルをそのまま返す；Pillow 未インストール時は元ファイルにフォールバック
+- `GET /wfm/gallery/image/thumb?path=...&w=256` エンドポイントを `gallery_routes.py` に追加（Cache-Control 24時間）
+- `gallery-tab.js` のサムネイルビュー・テーブルビューを `/image/serve` → `/image/thumb` に切り替え；ライトボックス・詳細プレビューは引き続き元画像を使用
+
+### フェーズ2-B: 無限スクロールページング
+
+- モジュールレベル変数 `PAGE_SIZE=50`, `_renderedCount`, `_scrollObserver` を追加
+- `renderImages()` をリファクタリング: 初回は50枚のみ DOM に追加し、末尾にセンチネル div を配置
+- `IntersectionObserver`（rootMargin 300px）がセンチネルを検出するたびに次の50枚を追加
+- 全枚数を描画し終えたらオブザーバーを切断してセンチネルを削除
+- `renderImages()` 呼び出し（フォルダ切替・フィルタ変更・ソート変更）のたびに自動リセット
+
+### フェーズ3-A: バルクAPIエンドポイント
+
+- `gallery_service.py` に `bulk_set_favorite(paths, value)` と `bulk_group_op(paths, group, action)` を追加
+- `POST /wfm/gallery/bulk/favorite`, `POST /wfm/gallery/bulk/group` を `gallery_routes.py` に追加
+- フロントエンドの `bulkSetFavorite()` / `bulkAddToGroup()` を N並列個別リクエスト → 単一バルクリクエストに変更
+
+### フェーズ3-B: 画像比較モード
+
+- Ctrl+クリックで2〜4枚選択すると Bulk Bar に「比較」ボタンが出現
+- `openCompare(paths)` 関数を追加: `--compare-cols` CSS カスタムプロパティで列数を動的制御した CSS Grid サイドバイサイドライトボックス
+- 閉じるボタンは `position:fixed; top:16px; right:16px` で配置し `overflow:auto` コンテナによるクリッピングを防止
+- i18n: `galleryBulkCompare`（EN/JA/ZH）追加
+
+### フェーズ3-C: プロンプト全文検索
+
+- `get_image_metadata()` 実行時に PNG/JPEG 埋め込みテキスト（`workflow` キーを除く文字列フィールド）を連結して `metadata.json` の `prompt_cache` に保存
+- `list_images()` の検索フィルタに `prompt_cache` を追加（ファイル名・メモ・タグに加えて）
+- 検索プレースホルダを「名前・タグ・プロンプトで検索...」に更新（EN/JA/ZH）
+- ヘルプ `helpGallery4` を更新して prompt 検索対応を明記
+
+### バルクバーUI整理
+
+- ドロップダウンプレースホルダ「グループに追加...」→「グループ選択」
+- 「追加」ボタン → 「グループに追加」
+- 「グループから削除」ボタンを「グループに追加」の右隣に新規追加
+  - `bulkRemoveFromGroup()` 関数を追加（`POST /wfm/gallery/bulk/group` の `action:"remove"` を使用）
+  - `removedNImagesFromGroup` i18n キー追加（EN/JA/ZH）
+- 「削除」ボタン → 「ファイル削除」（グループ削除との混同を防ぐ）
+- ヘルプ `helpGallery6`, `helpGallery7` を更新
+
+---
+
+## 2026-06-21: ヘルプタブ改善 — Gallery mode 多言語対応・フォント拡大・検索機能追加
+
+**変更ファイル**: `templates/index.html`, `static/js/app.js`, `static/js/i18n.js`, `static/css/main.css`
+
+### Gallery mode の多言語対応
+
+Feeder サブタブの Gallery mode セクション（h4 見出し・説明文・リスト6項目）が英語のハードコードのままだったのを i18n 対応に変更。
+
+**修正（`templates/index.html`）**
+- `<h4 id="wfm-help-feeder-imgloop-title">` と `<p id="wfm-help-feeder-imgloop-desc">` を追加（Image Loop mode 見出し・説明文を i18n 化）
+- `<h4 id="wfm-help-feeder-gal-title">` と `<p id="wfm-help-feeder-gal-desc">` を追加
+- Gallery mode 6項目に `id="wfm-help-feeder-gal-1"` 〜 `id="wfm-help-feeder-gal-6"` を付与
+
+**修正（`static/js/app.js`）**
+- `helpIdMap` に `helpFeederImgloopTitle` / `helpFeederImgloopDesc` / `helpFeederGalTitle` / `helpFeederGalDesc` / `helpFeederGal1`〜`helpFeederGal6` を追加
+
+**修正（`static/js/i18n.js`）**
+- `helpFeederDesc`: 「2モード切り替え」の説明に EN/JA/ZH で更新
+- `helpFeederImgloopTitle` / `helpFeederImgloopDesc`: Image Loop mode 見出し・説明を EN/JA/ZH で追加
+- `helpFeederGalTitle` / `helpFeederGalDesc` / `helpFeederGal1`〜`helpFeederGal6`: Gallery mode 全項目を EN/JA/ZH で追加
+- `helpSearchPlaceholder`: 検索ボックスのプレースホルダーを EN/JA/ZH で追加
+
+### ヘルプ全体フォントを 1.5 倍に変更
+
+**修正（`static/css/main.css`）**
+- `.wfm-help-nav-item`: 12px → 18px
+- `.wfm-help-sidebar` 幅: 170px → 220px（フォント拡大に伴う調整）
+- `.wfm-help-card h3`: 14px → 21px
+- `.wfm-help-card h4`: 18px（新規追加）
+- `.wfm-help-card p`: 20px（新規追加）
+- `.wfm-help-card li`: 13px → 20px
+- `.wfm-help-link-title`: 15px → 23px
+- `.wfm-help-link-desc`: 12px → 18px
+- `.wfm-help-thanks`: 13px → 20px
+- `.wfm-help-support-card > p`: 14px → 21px
+
+### ヘルプタブに検索機能を追加
+
+**修正（`templates/index.html`）**
+- サイドバーの `.wfm-help-nav` 上部に `<input id="wfm-help-search">` を追加
+
+**修正（`static/js/app.js`）**
+- `_onHelpSearch()`: 入力テキストで全ヘルプページの `textContent` を検索。マッチしないナビゲーションボタンは `search-hidden` クラスで非表示。マッチするページが1つでもあれば最初にマッチしたページを自動表示
+
+**修正（`static/css/main.css`）**
+- `.wfm-help-search-wrap` / `.wfm-help-search` / `.wfm-help-search:focus` / `.wfm-help-nav-item.search-hidden` のスタイルを追加
+
+---
+
 ## 2026-06-21: Send to Canvas — window.opener経由のキャンバス直接ロード対応
 
 **背景**: SPAは `window.open(url, "_blank")` でComfyUIとは別タブとして開かれる。同一オリジンの別タブでは `window.opener` 経由でComfyUIウィンドウのJavaScriptに直接アクセスできる。従来の「タイトルドラッグ（Send to Canvas）」はSPAウィンドウ→ComfyUIウィンドウのクロスウィンドウDnDだったが、`dragover` イベント中はブラウザのセキュリティ制限でカスタムMIMEタイプが `DataTransfer.types` に含まれず `e.preventDefault()` が呼ばれないため `drop` イベントがキャンバスに届かなかった（Wタブ内DnDは同一ウィンドウなので `app.handleFile` が機能していた）。
