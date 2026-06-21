@@ -61,6 +61,7 @@ const state = {
     groups: [],
     embeddedWorkflow: null,  // 選択画像のworkflow JSON
     selectedImages: new Set(), // 複数選択中のパス Set
+    lastSelectionIndex: -1,    // Shift選択のアンカーインデックス
     folderTree: null,      // フォルダツリー全体（移動先選択に使用）
 };
 
@@ -204,6 +205,7 @@ function renderTreeNode(node, container, depth, isRoot) {
         item.classList.add("selected");
         state.currentFolder = absPath;
         state.selectedImages.clear();
+        state.lastSelectionIndex = -1;
         updateBulkBar();
         loadImages();
         // Delete Folder ボタン: rootは削除不可
@@ -265,6 +267,7 @@ async function loadImages() {
     try {
         const images = (await apiFetch(API.images(params))).images || [];
         state.images = images;
+        state.lastSelectionIndex = -1;
         document.getElementById("wfm-gallery-count").textContent = `${state.images.length} images`;
         renderImages();
         updateTagFilter(state.images);
@@ -339,6 +342,7 @@ function createThumbCard(img) {
     const card = document.createElement("div");
     card.className = "wfm-gallery-thumb-card";
     card.title = img.filename;
+    card.dataset.path = img.path;
     if (state.selectedImages.has(img.path)) {
         card.classList.add("multi-selected");
     }
@@ -384,14 +388,24 @@ function createThumbCard(img) {
     });
     card.appendChild(feederBtn);
 
-    // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Alt+クリック: Metadataタブで開く
+    // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Shift+クリック: 範囲選択 / Alt+クリック: Metadataタブで開く
     card.addEventListener("click", (e) => {
         if (e.altKey) {
             e.preventDefault();
             openImageInMetadataTab(img);
             return;
         }
-        if (e.ctrlKey || e.metaKey) {
+        const idx = state.images.findIndex(i => i.path === img.path);
+        if (e.shiftKey && state.lastSelectionIndex !== -1) {
+            // 範囲選択: アンカーから現在位置まで一括追加
+            const from = Math.min(state.lastSelectionIndex, idx);
+            const to = Math.max(state.lastSelectionIndex, idx);
+            for (let i = from; i <= to; i++) {
+                state.selectedImages.add(state.images[i].path);
+            }
+            _applySelectionToDOM();
+            updateBulkBar();
+        } else if (e.ctrlKey || e.metaKey) {
             // 複数選択トグル
             if (state.selectedImages.has(img.path)) {
                 state.selectedImages.delete(img.path);
@@ -400,10 +414,12 @@ function createThumbCard(img) {
                 state.selectedImages.add(img.path);
                 card.classList.add("multi-selected");
             }
+            state.lastSelectionIndex = idx;
             updateBulkBar();
         } else {
             // 通常選択: 詳細表示
             state.selectedImage = img;
+            state.lastSelectionIndex = idx;
             document.querySelectorAll(".wfm-gallery-thumb-card.selected").forEach(el => el.classList.remove("selected"));
             card.classList.add("selected");
             loadImageDetail(img);
@@ -437,6 +453,7 @@ function createTable(images) {
     const tbody = document.createElement("tbody");
     images.forEach(img => {
         const tr = document.createElement("tr");
+        tr.dataset.path = img.path;
         if (state.selectedImages.has(img.path)) {
             tr.classList.add("multi-selected");
         }
@@ -481,14 +498,23 @@ function createTable(images) {
         tr.appendChild(tdDate);
         tr.appendChild(tdTags);
 
-        // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Alt+クリック: Metadataタブで開く
+        // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Shift+クリック: 範囲選択 / Alt+クリック: Metadataタブで開く
         tr.addEventListener("click", (e) => {
             if (e.altKey) {
                 e.preventDefault();
                 openImageInMetadataTab(img);
                 return;
             }
-            if (e.ctrlKey || e.metaKey) {
+            const idx = state.images.findIndex(i => i.path === img.path);
+            if (e.shiftKey && state.lastSelectionIndex !== -1) {
+                const from = Math.min(state.lastSelectionIndex, idx);
+                const to = Math.max(state.lastSelectionIndex, idx);
+                for (let i = from; i <= to; i++) {
+                    state.selectedImages.add(state.images[i].path);
+                }
+                _applySelectionToDOM();
+                updateBulkBar();
+            } else if (e.ctrlKey || e.metaKey) {
                 if (state.selectedImages.has(img.path)) {
                     state.selectedImages.delete(img.path);
                     tr.classList.remove("multi-selected");
@@ -496,9 +522,11 @@ function createTable(images) {
                     state.selectedImages.add(img.path);
                     tr.classList.add("multi-selected");
                 }
+                state.lastSelectionIndex = idx;
                 updateBulkBar();
             } else {
                 state.selectedImage = img;
+                state.lastSelectionIndex = idx;
                 tbody.querySelectorAll("tr.selected").forEach(el => el.classList.remove("selected"));
                 tr.classList.add("selected");
                 loadImageDetail(img);
@@ -511,6 +539,17 @@ function createTable(images) {
     });
     table.appendChild(tbody);
     return table;
+}
+
+// ── 複数選択ユーティリティ ────────────────────────────────────
+
+/** state.selectedImages に基づき、描画済みの要素の multi-selected クラスを同期する */
+function _applySelectionToDOM() {
+    const grid = document.getElementById("wfm-gallery-grid");
+    if (!grid) return;
+    grid.querySelectorAll("[data-path]").forEach(el => {
+        el.classList.toggle("multi-selected", state.selectedImages.has(el.dataset.path));
+    });
 }
 
 // ── 複数選択バー ──────────────────────────────────────────────
@@ -1468,6 +1507,7 @@ function bindEvents() {
     // 一括操作バー
     document.getElementById("wfm-gallery-bulk-deselect")?.addEventListener("click", () => {
         state.selectedImages.clear();
+        state.lastSelectionIndex = -1;
         updateBulkBar();
         // 選択状態をビューから除去
         document.querySelectorAll(".multi-selected").forEach(el => el.classList.remove("multi-selected"));

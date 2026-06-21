@@ -117,6 +117,18 @@ class GalleryMetadataStore:
                 result.append(key)
         return result
 
+    def remove_stale_paths_from_group(self, group_name: str, stale_paths: list) -> int:
+        """存在しないパスをグループから一括削除する（1回の保存で完結）"""
+        stale_set = {self._normalize_path(p) for p in stale_paths}
+        count = 0
+        for key, meta in self._data["images"].items():
+            if key in stale_set and group_name in meta.get("groups", []):
+                meta["groups"] = [g for g in meta["groups"] if g != group_name]
+                count += 1
+        if count:
+            self._save_to_disk()
+        return count
+
     def get_group_member_set(self, group_name: str) -> set:
         """グループメンバーのパスをsetで返す（高速フィルタ用）"""
         return {
@@ -153,3 +165,22 @@ class GalleryMetadataStore:
             self._data["images"][new_key] = self._data["images"].pop(old_key)
             return self._save_to_disk()
         return True
+
+    def cleanup_stale_images(self, folder_path: str, existing_paths: set) -> int:
+        """folder_path 配下の存在しないファイルのメタデータを削除する。
+        existing_paths: そのフォルダの現在のファイルパス集合（_normalize_path 済み）
+        """
+        folder_key = self._normalize_path(folder_path)
+        if not folder_key.endswith("/"):
+            folder_key += "/"
+        stale = [
+            key for key in self._data["images"]
+            if key.startswith(folder_key) and key not in existing_paths
+        ]
+        if not stale:
+            return 0
+        for key in stale:
+            del self._data["images"][key]
+        self._save_to_disk()
+        logger.info("Cleaned up %d stale metadata entries from %s", len(stale), folder_path)
+        return len(stale)

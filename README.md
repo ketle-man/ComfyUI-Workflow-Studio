@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.44-green)
+![Version](https://img.shields.io/badge/version-0.3.45-green)
 
 ## Screenshots
 
@@ -332,6 +332,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.45
+- **Group auto-cleanup — Models tab** — stale group entries (models that no longer exist on disk) are automatically removed when the Models tab is loaded or the model type is switched; models moved within the app via "Move To..." also update their group membership immediately
+- **Group auto-cleanup — Gallery tab (folder view)** — metadata entries for missing files are cleaned up each time a folder is scanned (`list_images`), synchronized with the 60s TTL + folder-mtime cache
+- **Group auto-cleanup — Gallery tab (group image list)** — `list_images_in_group` (used by the Feeder tab Gallery mode) now filters out non-existent paths and removes them from the group in a single write operation
+- **Gallery tab — Shift+click range selection** — Shift+click selects all images between the last clicked item (anchor) and the current item; works in both thumbnail and table views; anchor is updated on Ctrl+click and regular click; resets on folder change, image reload, and Deselect All; help text updated (EN/JA/ZH)
 
 ### v0.3.44
 - **Gallery tab — server-side thumbnail generation** — `GET /wfm/gallery/image/thumb?path=...&w=256` endpoint generates 256px JPEG thumbnails via Pillow and caches them to `data/thumb_cache/` keyed by `md5(path:mtime:width)`; GIF served as-is to preserve animation; falls back to the original file if Pillow is unavailable; thumbnail view and table view both switched from `/image/serve` to `/image/thumb`

@@ -188,6 +188,10 @@ class GalleryService:
         # os.scandir() でファイル情報を一括取得（stat()の個別呼び出しを排除）
         raw_entries = self._scan_folder(folder)
 
+        # 孤立メタデータを自動クリーンアップ（移動・削除されたファイルの残骸を除去）
+        existing_paths = {abs_path for _, abs_path, _, _ in raw_entries}
+        self.metadata_store.cleanup_stale_images(str(folder), existing_paths)
+
         results = []
         for name, abs_path, size, mtime in raw_entries:
             # グループフィルタ（サーバーサイド）
@@ -464,7 +468,13 @@ class GalleryService:
         return self.metadata_store.save(image_path, {"groups": groups})
 
     def list_images_in_group(self, group_name: str) -> list[str]:
-        return self.metadata_store.list_images_in_group(group_name)
+        all_paths = self.metadata_store.list_images_in_group(group_name)
+        existing = [p for p in all_paths if Path(p).is_file()]
+        stale = [p for p in all_paths if not Path(p).is_file()]
+        if stale:
+            self.metadata_store.remove_stale_paths_from_group(group_name, stale)
+            logger.info("Cleaned up %d stale paths from group '%s'", len(stale), group_name)
+        return existing
 
     def clear_group(self, group_name: str) -> bool:
         return self.metadata_store.clear_group(group_name)

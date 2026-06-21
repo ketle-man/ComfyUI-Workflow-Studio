@@ -110,6 +110,25 @@ class ModelsService:
         self._save_metadata(data)
         return entry
 
+    def _scan_model_names(self, model_type: str) -> set:
+        """モデルタイプの全ファイル名をスキャンして返す（相対パス、/区切り、.disabled除く）"""
+        dirs = _get_model_dirs(model_type)
+        names = set()
+        for d in dirs:
+            if not d.is_dir():
+                continue
+            for f in d.rglob("*"):
+                if not f.is_file():
+                    continue
+                try:
+                    rel = str(f.relative_to(d)).replace("\\", "/")
+                    if rel.endswith(_DISABLED_SUFFIX):
+                        rel = rel[: -len(_DISABLED_SUFFIX)]
+                    names.add(rel)
+                except ValueError:
+                    pass
+        return names
+
     def get_model_groups(self, model_type=None):
         data = self._load_metadata()
         raw = data.get("_groups", {})
@@ -123,7 +142,23 @@ class ModelsService:
             raw = {}
 
         if model_type:
-            return raw.get(model_type, {})
+            groups = raw.get(model_type, {})
+            valid_names = self._scan_model_names(model_type)
+            cleaned = {}
+            dirty = False
+            for g_name, members in groups.items():
+                filtered = [m for m in members if m in valid_names]
+                cleaned[g_name] = filtered
+                if len(filtered) != len(members):
+                    dirty = True
+            if dirty:
+                removed = sum(len(groups[g]) - len(cleaned[g]) for g in groups)
+                logger.info("Cleaned up %d stale group entries for model_type=%s", removed, model_type)
+                if not isinstance(data.get("_groups"), dict):
+                    data["_groups"] = {}
+                data["_groups"][model_type] = cleaned
+                self._save_metadata(data)
+            return cleaned
         return raw
 
     def save_model_groups(self, groups, model_type):
@@ -311,6 +346,7 @@ class ModelsService:
 
         meta_data = self._load_metadata()
         meta_changed = False
+        renames = []  # [(old_name, new_name)]
 
         for model_name in model_names:
             if ".." in model_name:
@@ -389,10 +425,27 @@ class ModelsService:
                     meta_changed = True
 
                 moved.append({"from": model_name, "to": new_rel})
+                renames.append((model_name, new_rel))
 
             except Exception as e:
                 logger.error("Error moving model %s: %s", model_name, e)
                 errors.append({"model": model_name, "error": str(e)})
+
+        # Update group entries for renamed/moved models
+        if renames:
+            groups_for_type = meta_data.get("_groups", {}).get(model_type, {})
+            groups_dirty = False
+            for old_name, new_name in renames:
+                for members in groups_for_type.values():
+                    for i, m in enumerate(members):
+                        if m == old_name:
+                            members[i] = new_name
+                            groups_dirty = True
+            if groups_dirty:
+                if not isinstance(meta_data.get("_groups"), dict):
+                    meta_data["_groups"] = {}
+                meta_data["_groups"][model_type] = groups_for_type
+                meta_changed = True
 
         if meta_changed:
             self._save_metadata(meta_data)

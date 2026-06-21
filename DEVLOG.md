@@ -1,5 +1,52 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-21: v0.3.45 — グループ孤立エントリ自動クリーンアップ・Galleryタブ Shift+クリック範囲選択
+
+**変更ファイル**: `py/services/models_service.py`, `py/services/gallery_service.py`, `py/services/gallery_metadata.py`, `static/js/gallery-tab.js`, `static/js/i18n.js`
+
+### グループ孤立エントリ自動クリーンアップ
+
+ファイルをアプリ外（OS）で移動・削除した際にグループデータに残る孤立エントリを自動的に除去する仕組みを追加。
+
+#### Modelsタブ
+
+- `models_service.py` に `_scan_model_names(model_type)` を追加 — `_get_model_dirs` の全ディレクトリを `rglob` で走査し、有効なモデルファイル名のセットを返す（`.disabled` サフィックスを除いた相対パス）
+- `get_model_groups(model_type)` に自動クリーンアップを追加 — タイプ指定時にファイルスキャンを実行し、存在しないモデル名をグループから除去；変更があった場合のみ保存
+- `move_models()` でグループエントリを即時更新 — アプリ内での移動時に `renames` リストを収集し、`_groups[model_type]` 内の旧パスを新パスに一括書き換え
+
+#### Galleryタブ（フォルダ表示）
+
+- `gallery_metadata.py` に `cleanup_stale_images(folder_path, existing_paths)` を追加 — `folder_path` 配下のメタデータキーのうち `existing_paths` に含まれないものを削除して保存
+- `gallery_service.py` の `list_images()` で `_scan_folder` 直後にクリーンアップを呼ぶ — スキャン結果の `abs_path` セットを渡すため、60秒 TTL キャッシュとフォルダ mtime 変化検知に連動して自動実行
+
+#### Galleryタブ（グループ画像一覧）
+
+- `gallery_metadata.py` に `remove_stale_paths_from_group(group_name, stale_paths)` を追加 — 孤立パスをグループから一括削除し1回の保存で完結
+- `gallery_service.py` の `list_images_in_group()` で `Path.is_file()` チェックを追加 — FeederタブのGalleryモード（`GET /wfm/gallery/groups/{name}/images`）呼び出し時に孤立パスをグループから自動除去して既存ファイルのみ返す
+
+#### 各タブのクリーンアップトリガー
+
+| タブ | トリガー | 対象 |
+|---|---|---|
+| Modelsタブ | タブ切替・モデルタイプ変更時 | 全グループから存在しないモデル名を削除 |
+| Modelsタブ（アプリ内移動） | `move_models` API 呼び出し時 | グループ内パスを即時更新 |
+| Galleryタブ（フォルダUI） | フォルダ表示時（mtime 変化 or 60秒後） | フォルダ内の孤立メタデータエントリを削除 |
+| Galleryタブ（Feederモード） | グループ画像一覧取得時 | グループから孤立パスを削除 |
+
+### GalleryタブのShift+クリック範囲選択
+
+- `state` に `lastSelectionIndex: -1` を追加（Shift 選択のアンカーインデックス）
+- `createThumbCard()` / `createTable()` に `data-path` 属性を追加
+- `_applySelectionToDOM()` ヘルパーを追加 — `state.selectedImages` を元に描画済み要素の `multi-selected` クラスを一括同期；ページング未描画の要素はスクロールで描画される際に `createThumbCard` が自動で反映
+- サムネイルビュー・テーブルビューのクリックハンドラを更新：
+  - Shift+クリック: アンカーから現在位置まで `state.images` のインデックス範囲で一括追加
+  - Ctrl+クリック: 個別トグル（既存）＋アンカー更新
+  - 通常クリック: 詳細表示（既存）＋アンカー更新
+- `lastSelectionIndex` リセット箇所: フォルダ切替時・`loadImages()` 完了時（ソート/フィルタ変更後も含む）・一括解除ボタン押下時
+- `i18n.js` の `helpGallery6`（EN/JA/ZH）を更新して Shift+クリック範囲選択を追記
+
+---
+
 ## 2026-06-21: v0.3.44 — Galleryタブ高速化・比較モード・バルク強化・バルクバーUI整理
 
 **変更ファイル**: `py/services/gallery_service.py`, `py/routes/gallery_routes.py`, `static/js/gallery-tab.js`, `static/css/gallery-tab.css`, `templates/index.html`, `static/js/app.js`, `static/js/i18n.js`
