@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.46-green)
+![Version](https://img.shields.io/badge/version-0.3.47-green)
 
 ## Screenshots
 
@@ -332,6 +332,9 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.47
+- **Models tab — fix stale group state after file move** — when models were moved to a subdirectory via "Move To...", `state.modelGroups` in the JS client was not updated to reflect the new model paths; the group filter view would lose the moved models immediately after the operation. Now the client-side group membership is updated in sync with the server-side rename (mirrors the existing Python `move_models` logic). Generate tab Batch groups are unaffected as they always fetch fresh from the server.
 
 ### v0.3.46
 - **Prompt tab AI Assistant — LM Studio support** — switched from Python proxy (`/api/wfm/ollama/*`) to direct browser-to-backend API calls (same pattern as the AI TOOL tab); supports Ollama (`/api/chat`) and LM Studio (`/v1/chat/completions`); image attachments are automatically converted to the correct format per backend

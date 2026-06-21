@@ -556,6 +556,10 @@ async function bulkMoveModels(destSubdir) {
                 const ds = state.disabledModels[state.activeModelType];
                 if (ds && ds.has(from)) { ds.delete(from); ds.add(to); }
                 state.selectedModels.delete(from);
+                for (const members of Object.values(state.modelGroups)) {
+                    const gi = members.indexOf(from);
+                    if (gi !== -1) members[gi] = to;
+                }
             });
             if (state.selectedModel && data.moved.some((m) => m.from === state.selectedModel)) {
                 state.selectedModel = null;

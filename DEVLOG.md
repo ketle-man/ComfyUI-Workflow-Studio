@@ -1,5 +1,22 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-22: v0.3.47 — モデルタブ ファイル移動後グループ状態修正
+
+**変更ファイル**: `static/js/models-tab.js`
+
+### モデル移動後のグループ状態不整合を修正
+
+`bulkMoveModels` でモデルをサブディレクトリ間移動した際、Python側（`move_models`）はグループメンバーの名前を `from → to` に更新していたが、JS の `state.modelGroups` が更新されていなかった。
+
+このため移動直後にグループフィルターで絞り込むと、移動したモデルが消えてしまう（旧名で参照されるため一致しなくなる）問題があった。
+
+- `data.moved.forEach` ループ内で `state.modelGroups` の各グループメンバーを `from → to` でリネーム
+- サーバーが `_groups` を更新する処理と対称的なクライアント側更新
+- `state.modelGroups` と `state.allModelGroups[type]` は同一オブジェクト参照のためインプレース更新で両方に反映される
+- Generate タブ Batch の `_batchGroupState.groups` はサーバーから毎回取得するため影響なし
+
+---
+
 ## 2026-06-21: v0.3.46 — プロンプトタブ AI Assistant LM Studio対応・設定タブ AI Assistant設定に変更
 
 **変更ファイル**: `static/js/settings-tab.js`, `static/js/prompt-tab.js`, `static/js/i18n.js`, `templates/index.html`
