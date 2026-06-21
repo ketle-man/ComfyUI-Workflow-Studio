@@ -1,5 +1,51 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-21: v0.3.46 — プロンプトタブ AI Assistant LM Studio対応・設定タブ AI Assistant設定に変更
+
+**変更ファイル**: `static/js/settings-tab.js`, `static/js/prompt-tab.js`, `static/js/i18n.js`, `templates/index.html`
+
+### 設定タブ「AI Assistant設定（プロンプトタブ）」
+
+設定タブの「Ollama設定（プロンプトタブ）」セクションを AI TOOL タブの SETTINGS ペインと同等の内容に変更。
+
+- セクション名を **「AI Assistant設定（プロンプトタブ）」** に変更
+- **バックエンド選択ラジオ（Ollama / LM Studio）** を追加
+- **API URL 入力** — バックエンド切替時にプレースホルダーが自動変更（Ollama: `http://localhost:11434`、LM Studio: `http://localhost:1234`）
+- **モデル選択 + Refresh** — 選択中のバックエンドへ直接接続してモデル一覧を取得
+- **Test ボタン** — バックエンドへ直接接続テスト
+- **Save ボタン** — 設定を localStorage `wfm_prompt_ai_settings` に保存（サーバーAPI不要）
+- AI TOOL タブの設定（`wfm_ai_settings`）とは独立した設定キーを使用
+
+### プロンプトタブ AI Assistant LM Studio対応
+
+Python プロキシルート（`/api/wfm/ollama/*`）依存を廃止し、AI TOOL タブと同方式のブラウザから直接バックエンドAPIを呼び出す実装に変更。
+
+- Ollama: `{url}/api/tags`（モデル一覧）、`{url}/api/chat`（チャット）
+- LM Studio: `{url}/v1/models`（モデル一覧）、`{url}/v1/chat/completions`（チャット）
+- 画像添付（ビジョンモデル）も両バックエンド対応 — Ollama形式（`images`フィールド）を LM Studio形式（`content`配列の`image_url`）に自動変換
+- 設定タブで保存したモデルを初期選択として表示
+- ウェルカムメッセージの "AI Assistant (Ollama)" 表記を削除
+
+### バックエンド変更時の自動モデル再取得
+
+設定タブでバックエンドを変更した後にプロンプトタブですぐ送信しようとすると、ドロップダウンに旧バックエンドのモデル名が残ったまま送信されモデル未認識エラーが発生する問題を修正。
+
+- `_promptAiBackendForModels` 変数にモデル一覧取得時のバックエンドを記録
+- `sendMessage()` の冒頭で現在設定と比較し、バックエンドが変わっていた場合は自動でモデル一覧をリフレッシュしてから送信
+- モデル一覧表示に `[ollama]` / `[lmstudio]` のバックエンド名を付記
+
+### i18n 更新（EN/JA/ZH）
+
+- `ollamaSettings` → "AI Assistant Settings (Prompt Tab)"
+- `ollamaUrl` → "API URL"（汎用）
+- `saveOllama` → "Save AI Assistant Settings"
+- `ollamaSaved` → "AI Assistant settings saved"
+- `helpPrompt1` — "Ollama" → "Ollama / LM Studio"・設定場所の説明を追記
+- `helpSettings5` — バックエンド選択・URL・モデル・接続テストの説明に更新
+- `helpTrouble2` — "Ollamaに接続できない" → "AIアシスタントに接続できない（Ollama/LM Studio両対応）"
+
+---
+
 ## 2026-06-21: v0.3.45 — グループ孤立エントリ自動クリーンアップ・Galleryタブ Shift+クリック範囲選択
 
 **変更ファイル**: `py/services/models_service.py`, `py/services/gallery_service.py`, `py/services/gallery_metadata.py`, `static/js/gallery-tab.js`, `static/js/i18n.js`

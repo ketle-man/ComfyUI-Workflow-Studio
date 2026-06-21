@@ -378,26 +378,70 @@ function renderPmGroups(container) {
 }
 
 // ============================================
-// Ollama API helpers
+// AI Assistant helpers (Ollama / LM Studio)
 // ============================================
 
-async function ollamaModels() {
-    const res = await fetch("/api/wfm/ollama/models");
-    return await res.json();
+const PROMPT_AI_KEY = "wfm_prompt_ai_settings";
+
+function loadPromptAiSettings() {
+    try { return JSON.parse(localStorage.getItem(PROMPT_AI_KEY) || "{}"); } catch { return {}; }
 }
 
-async function ollamaTest() {
-    const res = await fetch("/api/wfm/ollama/test", { method: "POST" });
-    return await res.json();
+// バックエンド変更検知用: モデル一覧を取得した時点のバックエンド名を記録
+let _promptAiBackendForModels = null;
+
+function getPromptAiConfig() {
+    const s = loadPromptAiSettings();
+    const backend = s.backend || "ollama";
+    const url = (s.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234")).replace(/\/$/, "");
+    return { backend, url };
 }
 
-async function ollamaChat(model, messages) {
-    const res = await fetch("/api/wfm/ollama/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages }),
-    });
-    return await res.json();
+async function fetchAiModels() {
+    const { backend, url } = getPromptAiConfig();
+    if (backend === "ollama") {
+        const res = await fetch(`${url}/api/tags`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()).models?.map(m => m.name) || [];
+    } else {
+        const res = await fetch(`${url}/v1/models`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return ((await res.json()).data || []).map(m => m.id);
+    }
+}
+
+async function chatWithAi(model, messages) {
+    const { backend, url } = getPromptAiConfig();
+    if (backend === "ollama") {
+        const res = await fetch(`${url}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages, stream: false }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()).message?.content || "";
+    } else {
+        // LM Studio: convert Ollama-style messages (with .images) to OpenAI content arrays
+        const openAiMessages = messages.map(msg => {
+            if (msg.images?.length) {
+                return {
+                    role: msg.role,
+                    content: [
+                        { type: "text", text: msg.content },
+                        ...msg.images.map(b64 => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } })),
+                    ],
+                };
+            }
+            return { role: msg.role, content: msg.content };
+        });
+        const res = await fetch(`${url}/v1/chat/completions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages: openAiMessages, stream: false }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()).choices?.[0]?.message?.content || "";
+    }
 }
 
 // ============================================
@@ -462,7 +506,7 @@ function clearChat() {
     if (chat) {
         chat.innerHTML = `
             <div class="wfm-ollama-welcome">
-                <p>AI Assistant (Ollama)</p>
+                <p>AI Assistant</p>
                 <p>${t("assistantWelcome")}</p>
             </div>
         `;
@@ -526,6 +570,24 @@ async function sendMessage() {
     const message = input.value.trim();
     if (!message) return;
 
+    // バックエンドが変更されていたらモデル一覧を自動更新
+    const { backend } = getPromptAiConfig();
+    if (backend !== _promptAiBackendForModels) {
+        const status = document.getElementById("wfm-ollama-status");
+        if (status) { status.textContent = `Switching to ${backend}...`; status.className = "wfm-ollama-status"; }
+        try {
+            const models = await fetchAiModels();
+            const savedModel = loadPromptAiSettings().model || "";
+            modelSelect.innerHTML = models.length
+                ? models.map(name => `<option value="${name}" ${name === savedModel ? "selected" : ""}>${name}</option>`).join("")
+                : `<option value="">${t("noModelsFound")}</option>`;
+            _promptAiBackendForModels = backend;
+            if (status) { status.textContent = `${models.length} models [${backend}]`; status.className = "wfm-ollama-status connected"; }
+        } catch {
+            if (status) { status.textContent = t("failedConnect"); status.className = "wfm-ollama-status error"; }
+        }
+    }
+
     const model = modelSelect.value;
     if (!model) {
         showToast(t("selectModelFirst"), "error");
@@ -545,16 +607,11 @@ async function sendMessage() {
     if (sendBtn) sendBtn.disabled = true;
 
     try {
-        const data = await ollamaChat(model, ollamaState.chatHistory);
-        if (data.status === "success" && data.message) {
-            const reply = data.message.content;
-            addChatMessage("assistant", reply);
-            ollamaState.chatHistory.push({ role: "assistant", content: reply });
-            ollamaState.attachedImage = null;
-            updateAttachmentDisplay();
-        } else {
-            showToast(t("error") + ": " + (data.error || data.message || "No response"), "error");
-        }
+        const reply = await chatWithAi(model, ollamaState.chatHistory);
+        addChatMessage("assistant", reply);
+        ollamaState.chatHistory.push({ role: "assistant", content: reply });
+        ollamaState.attachedImage = null;
+        updateAttachmentDisplay();
     } catch (err) {
         showToast(t("error") + ": " + err.message, "error");
     } finally {
@@ -597,12 +654,8 @@ async function sendTranslate(direction) {
         };
         const prompt = prompts[direction];
 
-        const data = await ollamaChat(model, [{ role: "user", content: prompt }]);
-        if (data.status === "success" && data.message) {
-            addChatMessage("assistant", data.message.content);
-        } else {
-            showToast(t("error") + ": No response", "error");
-        }
+        const reply = await chatWithAi(model, [{ role: "user", content: prompt }]);
+        addChatMessage("assistant", reply);
     } catch (err) {
         showToast(t("error") + ": " + err.message, "error");
     } finally {
@@ -858,20 +911,23 @@ function wcUpdateFilePicker() {
 // ============================================
 
 export function initPromptTab() {
-    // Ollama model refresh
+    // AI model refresh
     async function refreshModels() {
         const select = document.getElementById("wfm-ollama-model");
         const status = document.getElementById("wfm-ollama-status");
+        const { backend } = getPromptAiConfig();
         try {
-            const data = await ollamaModels();
-            if (data.status === "success" && data.models) {
-                select.innerHTML = data.models
-                    .map((m) => `<option value="${m.name}">${m.name}</option>`)
-                    .join("");
-                if (status) {
-                    status.textContent = `${data.models.length} models`;
-                    status.className = "wfm-ollama-status connected";
-                }
+            const models = await fetchAiModels();
+            const savedModel = loadPromptAiSettings().model || "";
+            if (select) {
+                select.innerHTML = models.length
+                    ? models.map(name => `<option value="${name}" ${name === savedModel ? "selected" : ""}>${name}</option>`).join("")
+                    : `<option value="">${t("noModelsFound")}</option>`;
+            }
+            _promptAiBackendForModels = backend;
+            if (status) {
+                status.textContent = `${models.length} models [${backend}]`;
+                status.className = "wfm-ollama-status connected";
             }
         } catch {
             if (status) {
@@ -891,15 +947,11 @@ export function initPromptTab() {
         const status = document.getElementById("wfm-ollama-status");
         if (status) { status.textContent = "Testing..."; status.className = "wfm-ollama-status"; }
         try {
-            const data = await ollamaTest();
-            if (data.connected) {
-                if (status) { status.textContent = t("connected"); status.className = "wfm-ollama-status connected"; }
-                await refreshModels();
-            } else {
-                if (status) { status.textContent = t("failedConnect"); status.className = "wfm-ollama-status error"; }
-            }
+            await fetchAiModels();
+            if (status) { status.textContent = t("connectedCheck"); status.className = "wfm-ollama-status connected"; }
+            await refreshModels();
         } catch {
-            if (status) { status.textContent = t("error"); status.className = "wfm-ollama-status error"; }
+            if (status) { status.textContent = t("failedConnect"); status.className = "wfm-ollama-status error"; }
         }
     });
 

@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.45-green)
+![Version](https://img.shields.io/badge/version-0.3.46-green)
 
 ## Screenshots
 
@@ -332,6 +332,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.46
+- **Prompt tab AI Assistant — LM Studio support** — switched from Python proxy (`/api/wfm/ollama/*`) to direct browser-to-backend API calls (same pattern as the AI TOOL tab); supports Ollama (`/api/chat`) and LM Studio (`/v1/chat/completions`); image attachments are automatically converted to the correct format per backend
+- **Settings tab — AI Assistant Settings (Prompt Tab)** — renamed from "Ollama Settings"; added backend selector (Ollama / LM Studio), URL input with per-backend placeholder, model select with Refresh, and Test button; settings saved to localStorage `wfm_prompt_ai_settings` (independent of AI TOOL tab settings)
+- **Auto-refresh on backend change** — if the backend is switched in Settings tab while Prompt tab is already open, `sendMessage()` now detects the mismatch and automatically re-fetches the model list before sending; model status shows the active backend name (`[ollama]` / `[lmstudio]`)
+- **Help text updated** (EN/JA/ZH) — Prompt tab, Settings tab, and Troubleshooting sections updated to reflect Ollama / LM Studio dual-backend support
 
 ### v0.3.45
 - **Group auto-cleanup — Models tab** — stale group entries (models that no longer exist on disk) are automatically removed when the Models tab is loaded or the model type is switched; models moved within the app via "Move To..." also update their group membership immediately

@@ -637,28 +637,38 @@ export async function initSettingsTab() {
             <div id="wfm-settings-url-status" style="font-size:12px;margin-top:4px;"></div>
         </details>
 
-        <!-- Ollama Settings -->
+        <!-- AI Assistant Settings (Prompt Tab) -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">${t("ollamaSettings")}</summary>
             <div class="wfm-form-group">
+                <label>${t("aiSettingsBackend")}</label>
+                <div class="wfm-ai-backend-row">
+                    <label class="wfm-ai-radio-label">
+                        <input type="radio" name="wfm-prompt-ai-backend" value="ollama"> Ollama
+                    </label>
+                    <label class="wfm-ai-radio-label">
+                        <input type="radio" name="wfm-prompt-ai-backend" value="lmstudio"> LM Studio
+                    </label>
+                </div>
+            </div>
+            <div class="wfm-form-group">
                 <label>${t("ollamaUrl")}</label>
-                <input type="text" class="wfm-input" id="wfm-settings-ollama-url"
-                    value="${serverSettings.ollama_url || "http://localhost:11434"}"
+                <input type="text" class="wfm-input" id="wfm-settings-prompt-ai-url"
                     placeholder="http://localhost:11434">
             </div>
             <div class="wfm-form-group">
                 <label>${t("ollamaDefaultModel")}</label>
                 <div style="display:flex;gap:8px;">
-                    <select class="wfm-select" id="wfm-settings-ollama-model" style="flex:1;">
+                    <select class="wfm-select" id="wfm-settings-prompt-ai-model" style="flex:1;">
                         <option value="">${t("selectModel")}</option>
                     </select>
-                    <button class="wfm-btn wfm-btn-sm" id="wfm-settings-ollama-refresh">${t("refresh")}</button>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-settings-prompt-ai-refresh">${t("refresh")}</button>
                 </div>
             </div>
             <div style="display:flex;gap:8px;margin-top:8px;">
-                <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-ollama-save">${t("saveOllama")}</button>
-                <button class="wfm-btn wfm-btn-sm" id="wfm-settings-ollama-test">${t("testConnection")}</button>
-                <span id="wfm-settings-ollama-status" style="font-size:12px;line-height:28px;"></span>
+                <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-prompt-ai-save">${t("saveOllama")}</button>
+                <button class="wfm-btn wfm-btn-sm" id="wfm-settings-prompt-ai-test">${t("testConnection")}</button>
+                <span id="wfm-settings-prompt-ai-status" style="font-size:12px;line-height:28px;"></span>
             </div>
         </details>
 
@@ -1054,54 +1064,90 @@ export async function initSettingsTab() {
         }
     });
 
-    // --- Ollama model list loader ---
-    async function loadOllamaModels() {
-        const select = document.getElementById("wfm-settings-ollama-model");
+    // --- AI Assistant (Prompt Tab) settings ---
+    const PROMPT_AI_KEY = "wfm_prompt_ai_settings";
+    const loadPromptAiCfg = () => {
+        try { return JSON.parse(localStorage.getItem(PROMPT_AI_KEY) || "{}"); } catch { return {}; }
+    };
+    const savePromptAiCfg = (patch) => {
+        const data = { ...loadPromptAiCfg(), ...patch };
+        localStorage.setItem(PROMPT_AI_KEY, JSON.stringify(data));
+    };
+
+    // Restore saved values into UI
+    const promptAiSaved = loadPromptAiCfg();
+    const promptAiBackendSaved = promptAiSaved.backend || "ollama";
+    document.querySelectorAll('input[name="wfm-prompt-ai-backend"]').forEach(r => {
+        r.checked = r.value === promptAiBackendSaved;
+    });
+    const promptAiUrlEl = document.getElementById("wfm-settings-prompt-ai-url");
+    if (promptAiUrlEl) {
+        promptAiUrlEl.value = promptAiSaved.backendUrl || "";
+        promptAiUrlEl.placeholder = promptAiBackendSaved === "ollama" ? "http://localhost:11434" : "http://localhost:1234";
+    }
+
+    // Backend change → update URL placeholder
+    document.querySelectorAll('input[name="wfm-prompt-ai-backend"]').forEach(r => {
+        r.addEventListener("change", () => {
+            const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
+            if (promptAiUrlEl) promptAiUrlEl.placeholder = backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234";
+        });
+    });
+
+    // Load models directly from the selected backend
+    async function loadPromptAiModels() {
+        const select = document.getElementById("wfm-settings-prompt-ai-model");
+        if (!select) return;
+        const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
+        const url = (promptAiUrlEl?.value.trim() || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234")).replace(/\/$/, "");
         try {
-            const res = await fetch("/api/wfm/ollama/models");
-            const data = await res.json();
-            const models = data.models || [];
-            const savedModel = serverSettings.ollama_model || "llava";
+            let models = [];
+            if (backend === "ollama") {
+                const res = await fetch(`${url}/api/tags`);
+                models = (await res.json()).models?.map(m => m.name) || [];
+            } else {
+                const res = await fetch(`${url}/v1/models`);
+                models = ((await res.json()).data || []).map(m => m.id);
+            }
+            const saved = loadPromptAiCfg().model || "";
             select.innerHTML = models.length
-                ? models.map((m) => `<option value="${m.name}" ${m.name === savedModel ? "selected" : ""}>${m.name}</option>`).join("")
+                ? models.map(name => `<option value="${name}" ${name === saved ? "selected" : ""}>${name}</option>`).join("")
                 : `<option value="">${t("noModelsFound")}</option>`;
         } catch {
             select.innerHTML = `<option value="">${t("failedLoadModels")}</option>`;
         }
     }
-    await loadOllamaModels();
+    await loadPromptAiModels();
 
-    // Refresh Ollama models
-    document.getElementById("wfm-settings-ollama-refresh")?.addEventListener("click", loadOllamaModels);
+    document.getElementById("wfm-settings-prompt-ai-refresh")?.addEventListener("click", loadPromptAiModels);
 
-    // Test Ollama connection
-    document.getElementById("wfm-settings-ollama-test")?.addEventListener("click", async () => {
-        const statusEl = document.getElementById("wfm-settings-ollama-status");
-        statusEl.textContent = "Testing...";
-        statusEl.style.color = "var(--wfm-text-secondary)";
+    document.getElementById("wfm-settings-prompt-ai-test")?.addEventListener("click", async () => {
+        const statusEl = document.getElementById("wfm-settings-prompt-ai-status");
+        const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
+        const url = (promptAiUrlEl?.value.trim() || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234")).replace(/\/$/, "");
+        if (statusEl) { statusEl.textContent = t("aiStatusConnecting"); statusEl.style.color = "var(--wfm-text-secondary)"; }
         try {
-            const res = await fetch("/api/wfm/ollama/test", { method: "POST" });
-            const data = await res.json();
-            statusEl.textContent = data.connected ? t("ollamaConnected") : `${t("ollamaFailed")}: ${data.message}`;
-            statusEl.style.color = data.connected ? "var(--wfm-success)" : "var(--wfm-danger)";
+            let count = 0;
+            if (backend === "ollama") {
+                const res = await fetch(`${url}/api/tags`);
+                count = ((await res.json()).models || []).length;
+            } else {
+                const res = await fetch(`${url}/v1/models`);
+                count = ((await res.json()).data || []).length;
+            }
+            if (statusEl) { statusEl.textContent = `${t("ollamaConnected")} (${count} models)`; statusEl.style.color = "var(--wfm-success)"; }
+            await loadPromptAiModels();
         } catch (err) {
-            statusEl.textContent = `${t("error")}: ${err.message}`;
-            statusEl.style.color = "var(--wfm-danger)";
+            if (statusEl) { statusEl.textContent = `${t("ollamaFailed")}: ${err.message}`; statusEl.style.color = "var(--wfm-danger)"; }
         }
     });
 
-    // Save Ollama settings (to server)
-    document.getElementById("wfm-settings-ollama-save")?.addEventListener("click", async () => {
-        const ollamaUrl = document.getElementById("wfm-settings-ollama-url")?.value.trim() || "http://localhost:11434";
-        const ollamaModel = document.getElementById("wfm-settings-ollama-model")?.value || "";
-        try {
-            await saveServerSettings({ ollama_url: ollamaUrl, ollama_model: ollamaModel });
-            serverSettings.ollama_url = ollamaUrl;
-            serverSettings.ollama_model = ollamaModel;
-            showToast(t("ollamaSaved"), "success");
-        } catch (err) {
-            showToast(`${t("saveError")}: ${err.message}`, "error");
-        }
+    document.getElementById("wfm-settings-prompt-ai-save")?.addEventListener("click", () => {
+        const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
+        const url = promptAiUrlEl?.value.trim() || "";
+        const model = document.getElementById("wfm-settings-prompt-ai-model")?.value || "";
+        savePromptAiCfg({ backend, backendUrl: url, model });
+        showToast(t("ollamaSaved"), "success");
     });
 
     // CivitAI host select
