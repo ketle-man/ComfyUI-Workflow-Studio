@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.47-green)
+![Version](https://img.shields.io/badge/version-0.3.49-green)
 
 ## Screenshots
 
@@ -333,6 +333,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.49
+- **GenerateUI tab — A1111-style SPA-side wildcard expansion** — when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains `__name__` syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation
+- **Gallery tab — fix Export button missing label** — the bulk action bar's Export button had no text label because the `textContent` assignment was missing from `updateUITexts()`; fixed by adding the `galleryBulkExport` i18n key assignment alongside the existing Move/Delete entries
+- **Gallery tab — fix prompt search not matching images with no cached index** — `prompt_cache` was only built when an image was opened in the detail panel; A1111 images (or any images never opened) were invisible to prompt search; now when search is active and `prompt_cache` is empty, the image file is read on-demand and the cache is populated and persisted for future searches
+
+### v0.3.48
+- **Gallery tab — single image download** — hover over a detail-panel preview image to reveal a download overlay (⬇ icon); click to download the original file with its original filename preserved
+- **Gallery tab — bulk export to ZIP** — multiple selected images can be exported as a ZIP archive via the "Export" button in the bulk action bar; filename: `gallery_export_<timestamp>.zip`; backend: `POST /wfm/gallery/images/export-zip` with path-traversal protection
 
 ### v0.3.47
 - **Models tab — fix stale group state after file move** — when models were moved to a subdirectory via "Move To...", `state.modelGroups` in the JS client was not updated to reflect the new model paths; the group filter view would lose the moved models immediately after the operation. Now the client-side group membership is updated in sync with the server-side rename (mirrors the existing Python `move_models` logic). Generate tab Batch groups are unaffected as they always fetch fresh from the server.

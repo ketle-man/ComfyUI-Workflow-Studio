@@ -1194,6 +1194,82 @@ function initCheckpointBatch() {
 }
 
 // ============================================
+// SPA-side wildcard expansion (A1111-style __name__ syntax)
+// Applies to non-ImpactWildcard nodes only; ImpactWildcard* nodes expand server-side.
+// ============================================
+
+const _wcLineCache = new Map(); // filename → string[] | null
+
+async function _fetchWildcardLines(name) {
+    if (_wcLineCache.has(name)) return _wcLineCache.get(name);
+    try {
+        const res = await fetch(`/api/wfm/wildcards/content?filename=${encodeURIComponent(name + ".txt")}`);
+        if (!res.ok) { _wcLineCache.set(name, null); return null; }
+        const data = await res.json();
+        const lines = (data.content || "")
+            .split("\n")
+            .map(l => l.trim())
+            .filter(l => l && !l.startsWith("#"));
+        const result = lines.length > 0 ? lines : null;
+        _wcLineCache.set(name, result);
+        return result;
+    } catch {
+        _wcLineCache.set(name, null);
+        return null;
+    }
+}
+
+async function _expandWildcardText(text) {
+    for (let pass = 0; pass < 5; pass++) {
+        const matches = [...text.matchAll(/__([^_\s][^_]*)__/g)];
+        if (matches.length === 0) break;
+        let changed = false;
+        let offset = 0;
+        let result = text;
+        for (const match of matches) {
+            const lines = await _fetchWildcardLines(match[1]);
+            if (lines) {
+                const replacement = lines[Math.floor(Math.random() * lines.length)];
+                const pos = match.index + offset;
+                result = result.slice(0, pos) + replacement + result.slice(pos + match[0].length);
+                offset += replacement.length - match[0].length;
+                changed = true;
+            }
+        }
+        if (!changed) break;
+        text = result;
+    }
+    return text;
+}
+
+const _IMPACT_WC_TYPES = new Set(["ImpactWildcardEncode", "ImpactWildcardProcessor"]);
+
+async function _expandWildcardsInWorkflow(workflow) {
+    let hasWildcard = false;
+    outer: for (const node of Object.values(workflow)) {
+        if (_IMPACT_WC_TYPES.has(node.class_type)) continue;
+        for (const val of Object.values(node.inputs || {})) {
+            if (typeof val === "string" && /__[^_\s][^_]*__/.test(val)) {
+                hasWildcard = true;
+                break outer;
+            }
+        }
+    }
+    if (!hasWildcard) return workflow;
+
+    const expanded = JSON.parse(JSON.stringify(workflow));
+    for (const node of Object.values(expanded)) {
+        if (_IMPACT_WC_TYPES.has(node.class_type)) continue;
+        for (const [key, val] of Object.entries(node.inputs || {})) {
+            if (typeof val === "string" && /__[^_\s][^_]*__/.test(val)) {
+                node.inputs[key] = await _expandWildcardText(val);
+            }
+        }
+    }
+    return expanded;
+}
+
+// ============================================
 // Generation (core — throws on error)
 // ============================================
 
@@ -1209,8 +1285,9 @@ async function _coreGenerate(silent = false) {
     if (progressBar) progressBar.style.width = "0%";
     if (progressText) progressText.textContent = "Starting...";
 
+    const workflowForGenerate = await _expandWildcardsInWorkflow({ ...comfyUI.currentWorkflow });
     const { images, seed } = await comfyUI.generate(
-        { ...comfyUI.currentWorkflow },
+        workflowForGenerate,
         {
             seedMode,
             seedValue,

@@ -225,11 +225,26 @@ class GalleryService:
             # 検索フィルタ（ファイル名・メモ・タグ・キャッシュ済みプロンプト）
             if search:
                 s = search.lower()
+                prompt_cache = meta.get("prompt_cache", "")
+                # prompt_cache未構築の場合は画像から直接読み込んでキャッシュする
+                if not prompt_cache and ext in (".png", ".jpg", ".jpeg"):
+                    embedded = {}
+                    if ext == ".png":
+                        embedded = self._read_png_metadata(Path(abs_path))
+                    else:
+                        embedded = self._read_jpeg_metadata(Path(abs_path))
+                    if embedded:
+                        prompt_cache = " ".join(
+                            str(v) for k, v in embedded.items()
+                            if k != "workflow" and isinstance(v, str) and len(v) < 50_000
+                        ).strip()
+                        if prompt_cache:
+                            self.metadata_store.save(abs_path, {"prompt_cache": prompt_cache})
                 if not (
                     s in name.lower()
                     or s in item["memo"].lower()
                     or any(s in t.lower() for t in tags)
-                    or s in meta.get("prompt_cache", "").lower()
+                    or s in prompt_cache.lower()
                 ):
                     continue
 

@@ -1,5 +1,36 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-22: v0.3.49 — 生成UIタブ A1111風ワイルドカード展開・ギャラリータブ バグ修正2件
+
+**変更ファイル**: `static/js/generate-tab.js`, `static/js/app.js`, `py/services/gallery_service.py`, `static/js/i18n.js`, `templates/index.html`
+
+### 生成UIタブ — A1111風SPAサイドワイルドカード展開
+
+ImpactWildcardEncode/Processor以外のノード（CLIPTextEncodeなど）のテキスト入力に`__name__`構文が含まれる場合、ComfyUIへの送信前にSPA側でワイルドカードを展開する機能を追加。
+
+- `generate-tab.js` に `_fetchWildcardLines()`, `_expandWildcardText()`, `_expandWildcardsInWorkflow()` を追加
+- `_coreGenerate()` 内の `comfyUI.generate()` 呼び出し前にワイルドカード展開を実行
+- ワイルドカードファイルは既存の `/api/wfm/wildcards/content` API経由で取得（WFS wildcard フォルダ参照）
+- ファイル内容はセッション中キャッシュ（`_wcLineCache`）；ランダム選択は毎回独立して実行
+- ネスト展開対応（最大5パス）；見つからないワイルドカードはそのまま通過
+- ImpactWildcardEncode/ProcessorノードはスキップしてComfyUIサーバー側（Impact Pack）に委ねる
+- 単体生成・バッチ生成どちらも `_coreGenerate()` を経由するため両方で機能する
+- ヘルプ更新（EN/JA/ZH）: `helpGen16` を追加（`index.html`, `app.js`, `i18n.js` 3言語）
+
+### ギャラリータブ — エクスポートボタンのラベル欠落を修正
+
+`app.js` の `updateUITexts()` に `wfm-gallery-bulk-export` ボタンへの `textContent` 設定が抜けていた。`galleryBulkMove` と `galleryBulkDelete` の間に `galleryBulkExport` の設定を追加。
+
+### ギャラリータブ — プロンプト検索で未キャッシュ画像にヒットしない問題を修正
+
+`prompt_cache` は詳細パネルで一度開いた画像にのみ構築されていた。A1111など外部ツールで生成した画像をWFS外から追加した場合、一度も開かれていない画像はプロンプト検索にヒットしなかった。
+
+- `gallery_service.py` の `list_images()` で検索実行時、`prompt_cache` が空の画像をその場でメタデータ読み込み（`_read_png_metadata` / `_read_jpeg_metadata`）してキャッシュに保存してから検索対象に含める
+- A1111形式PNG（tEXtチャンク `parameters` キー）も正しく検索対象になる
+- 初回検索時のみ読み込みが発生；以降はキャッシュから即時検索
+
+---
+
 ## 2026-06-22: v0.3.48 — ギャラリータブ 画像ダウンロード・一括エクスポート機能追加
 
 **変更ファイル**: `templates/index.html`, `static/js/gallery-tab.js`, `static/css/gallery-tab.css`, `py/routes/gallery_routes.py`, `static/js/i18n.js`

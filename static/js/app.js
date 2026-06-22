@@ -215,6 +215,8 @@ function applyI18nToHtml() {
     if (galleryBulkUnfav) galleryBulkUnfav.textContent = t("galleryBulkUnfavAll");
     const galleryBulkMove = document.getElementById("wfm-gallery-bulk-move");
     if (galleryBulkMove) galleryBulkMove.textContent = t("galleryBulkMoveTo");
+    const galleryBulkExport = document.getElementById("wfm-gallery-bulk-export");
+    if (galleryBulkExport) galleryBulkExport.textContent = t("galleryBulkExport");
     const galleryBulkDelete = document.getElementById("wfm-gallery-bulk-delete");
     if (galleryBulkDelete) galleryBulkDelete.textContent = t("galleryBulkDelete");
     const galleryOpenTaggerBtn = document.getElementById("wfm-gallery-open-tagger-btn");
@@ -352,7 +354,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-8": "helpGen8", "wfm-help-gen-9": "helpGen9", "wfm-help-gen-10": "helpGen10",
         "wfm-help-gen-11": "helpGen11", "wfm-help-gen-12": "helpGen12",
         "wfm-help-gen-13": "helpGen13", "wfm-help-gen-14": "helpGen14",
-        "wfm-help-gen-15": "helpGen15",
+        "wfm-help-gen-15": "helpGen15", "wfm-help-gen-16": "helpGen16",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",
