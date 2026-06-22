@@ -478,7 +478,10 @@ const LANGUAGES = {
         galleryBulkUnfavAll: "☆ Unfavorite All",
         galleryBulkCompare: "Compare",
         galleryBulkMoveTo: "Move To...",
+        galleryBulkExport: "Export",
         galleryBulkDelete: "Delete File",
+        downloadStarted: "Download started",
+        exportCompleted: "Export completed. ZIP file is downloading.",
 
         tabAi: "AI TOOL",
         tabTagger: "Tagger",
@@ -1353,7 +1356,10 @@ const LANGUAGES = {
         galleryBulkUnfavAll: "☆ お気に入り解除（全件）",
         galleryBulkCompare: "比較",
         galleryBulkMoveTo: "移動先...",
+        galleryBulkExport: "エクスポート",
         galleryBulkDelete: "ファイル削除",
+        downloadStarted: "ダウンロード開始",
+        exportCompleted: "エクスポート完了。ZIPファイルをダウンロード中です。",
 
         tabAi: "AI TOOL",
         tabTagger: "Tagger",
@@ -2228,7 +2234,10 @@ const LANGUAGES = {
         galleryBulkUnfavAll: "☆ 全部取消收藏",
         galleryBulkCompare: "对比",
         galleryBulkMoveTo: "移动到...",
+        galleryBulkExport: "导出",
         galleryBulkDelete: "删除文件",
+        downloadStarted: "下载开始",
+        exportCompleted: "导出完成。正在下载 ZIP 文件。",
 
         tabAi: "AI TOOL",
         tabTagger: "Tagger",

@@ -70,6 +70,7 @@ def setup_routes(app: web.Application):
     app.router.add_delete("/wfm/gallery/folder", delete_folder_route)
     app.router.add_post("/wfm/gallery/images/delete", delete_images_route)
     app.router.add_post("/wfm/gallery/images/move", move_images_route)
+    app.router.add_post("/wfm/gallery/images/export-zip", export_images_zip)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -408,3 +409,37 @@ async def move_images_route(request: web.Request) -> web.Response:
         return web.json_response(result)
     except Exception as e:
         return web.json_response({"moved": [], "errors": [str(e)]}, status=500)
+
+
+async def export_images_zip(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/images/export-zip - 複数画像をZIPファイルにしてダウンロード"""
+    import zipfile
+    import io
+
+    try:
+        body = await request.json()
+        paths = body.get("paths", [])
+        if not paths:
+            return web.json_response({"error": "paths required"}, status=400)
+
+        # ZIPファイルをメモリ上に作成
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for path in paths:
+                file_path = Path(path)
+                # セキュリティ: 許可されたディレクトリ内のみ
+                if not _service._check_path_allowed(file_path):
+                    continue
+                if file_path.exists() and file_path.is_file():
+                    # ファイル名のみをアーカイブに入れる（パス情報は含めない）
+                    zf.write(file_path, arcname=file_path.name)
+
+        zip_buffer.seek(0)
+        return web.Response(
+            body=zip_buffer.getvalue(),
+            content_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=gallery_export.zip"}
+        )
+    except Exception as e:
+        logger.error("Error exporting images to ZIP: %s", e)
+        return web.json_response({"error": str(e)}, status=500)

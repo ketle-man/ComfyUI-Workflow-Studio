@@ -36,6 +36,7 @@ const API = {
     folderDelete:               `/wfm/gallery/folder`,
     imagesDelete:               `/wfm/gallery/images/delete`,
     imagesMove:                 `/wfm/gallery/images/move`,
+    imagesExportZip:            `/wfm/gallery/images/export-zip`,
 };
 
 export const FEEDER_GROUP = "__Feeder__";
@@ -90,6 +91,49 @@ async function openImageInMetadataTab(img) {
         const blob = await res.blob();
         const file = new File([blob], img.filename, { type: blob.type || "image/png" });
         await loadFileIntoMetadataTab(file);
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+    }
+}
+
+async function downloadImage(img) {
+    try {
+        const res = await fetch(API.serveImage(img.path));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = img.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(t("downloadStarted"), "success");
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+    }
+}
+
+async function exportSelectedImagesToZip(paths) {
+    if (paths.length === 0) return;
+    try {
+        const res = await fetch(API.imagesExportZip, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paths }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `gallery_export_${Date.now()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(t("exportCompleted"), "success");
     } catch (e) {
         showToast(t("errorWithMsg", e.message), "error");
     }
@@ -666,8 +710,16 @@ async function loadImageDetail(img) {
 
     // プレビュー
     const preview = document.getElementById("wfm-gallery-detail-preview");
-    preview.innerHTML = `<img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${escapeHtml(img.filename)}" title="Double-click to enlarge">`;
+    preview.innerHTML = `
+        <div class="wfm-gallery-preview-wrapper">
+            <img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${escapeHtml(img.filename)}" title="Double-click to enlarge">
+            <div class="wfm-gallery-preview-overlay">
+                <button class="wfm-gallery-download-btn" title="Download image">⬇</button>
+            </div>
+        </div>
+    `;
     preview.querySelector("img").addEventListener("dblclick", () => openLightbox(img));
+    preview.querySelector(".wfm-gallery-download-btn").addEventListener("click", () => downloadImage(img));
 
     // ファイル名
     document.getElementById("wfm-gallery-detail-filename").textContent = img.filename;
@@ -1553,6 +1605,11 @@ function bindEvents() {
     document.getElementById("wfm-gallery-bulk-move")?.addEventListener("click", () => {
         if (state.selectedImages.size === 0) return;
         openMoveModal([...state.selectedImages]);
+    });
+
+    document.getElementById("wfm-gallery-bulk-export")?.addEventListener("click", () => {
+        if (state.selectedImages.size === 0) return;
+        exportSelectedImagesToZip([...state.selectedImages]);
     });
 
     document.getElementById("wfm-gallery-bulk-delete")?.addEventListener("click", () => {
