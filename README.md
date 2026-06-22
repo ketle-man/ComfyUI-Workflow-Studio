@@ -151,8 +151,9 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
 - **Folder management** — create subfolders ("+ New") or delete the selected folder with all contents ("Del") from the folder tree header
-- **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To... and Delete File from the multi-select bar
-- **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations: select group → "Add to Group" / "Remove from Group"; Favorite All / Unfavorite All; Compare (2–4 images); Move To...; Delete File
+- **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To..., Export, and Delete File from the multi-select bar
+- **Download** — hover over the image preview in the detail panel to reveal a download icon (⬇); click to download the single image
+- **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations: select group → "Add to Group" / "Remove from Group"; Favorite All / Unfavorite All; Compare (2–4 images); Move To...; **Export** (downloads all selected images as a ZIP file); Delete File
 - **Image Compare** — select 2–4 images with Ctrl+click, then click "Compare" in the Bulk Bar to open a side-by-side lightbox; grid adapts to the number of selected images
 - **Prompt search** — text search covers filename, tags, memo, and prompt text (A1111 `parameters` field cached on first detail panel open)
 - **Server-side filtering** — filter by group, favorites, or tags with fast server-side set lookup (no full rescan)

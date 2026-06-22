@@ -1,5 +1,37 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-22: v0.3.48 — ギャラリータブ 画像ダウンロード・一括エクスポート機能追加
+
+**変更ファイル**: `templates/index.html`, `static/js/gallery-tab.js`, `static/css/gallery-tab.css`, `py/routes/gallery_routes.py`, `static/js/i18n.js`
+
+### 詳細パネルの画像プレビューにダウンロード機能を追加
+
+- プレビュー画像にマウスホバーでダウンロードアイコン（⬇）をオーバーレイ表示
+- クリックで単一画像をダウンロード（ファイル名はオリジナルを保持）
+- CSS: `.wfm-gallery-preview-wrapper`, `.wfm-gallery-preview-overlay`, `.wfm-gallery-download-btn` を追加
+
+### 複数選択バーに「エクスポート」ボタンを追加
+
+- 複数選択した画像をZIPファイルにしてダウンロード可能
+- ファイル名: `gallery_export_<タイムスタンプ>.zip`
+- Backend: `POST /wfm/gallery/images/export-zip` エンドポイント実装
+  - リクエスト: `{ "paths": [...] }` (画像パスリスト)
+  - レスポンス: ZIP ファイルをバイナリで返送
+  - セキュリティ: `_check_path_allowed()` でパストラバーサル防止
+
+### i18n対応
+
+- 英語: "Export" / "Download started" / "Export completed. ZIP file is downloading."
+- 日本語: "エクスポート" / "ダウンロード開始" / "エクスポート完了。ZIPファイルをダウンロード中です。"
+- 中国語: "导出" / "下载开始" / "导出完成。正在下载 ZIP 文件。"
+
+### ヘルプテキスト更新
+
+- ヘルプ wfm-help-gallery-6: 複数選択バー説明に "Export" を追加
+- ヘルプ wfm-help-gallery-7: 詳細パネル説明にダウンロードアイコンについての記述を追加
+
+---
+
 ## 2026-06-22: v0.3.47 — モデルタブ ファイル移動後グループ状態修正
 
 **変更ファイル**: `static/js/models-tab.js`
