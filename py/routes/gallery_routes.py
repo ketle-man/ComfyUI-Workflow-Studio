@@ -1,6 +1,7 @@
 """
 Gallery Routes - ギャラリータブ用APIエンドポイント
 """
+import asyncio
 import json
 import mimetypes
 import logging
@@ -105,7 +106,8 @@ async def list_images(request: web.Request) -> web.Response:
         return web.json_response({"error": "folder parameter required"}, status=400)
 
     try:
-        images = _service.list_images(
+        images = await asyncio.to_thread(
+            _service.list_images,
             folder,
             search=search,
             sort_by=sort_by,
@@ -113,6 +115,9 @@ async def list_images(request: web.Request) -> web.Response:
             tag_filter=tag_filter,
             group_filter=group_filter,
         )
+        # 検索なしのフォルダロード時にバックグラウンドインデックスを起動
+        if not search:
+            _service.start_background_index(folder)
         return web.json_response({"images": images, "total": len(images)})
     except Exception as e:
         logger.error("list_images error: %s", e)

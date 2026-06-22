@@ -1,5 +1,48 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-22: v0.3.50 — ギャラリータブ プロンプト検索負荷改善（バックグラウンドインデックス）
+
+**変更ファイル**: `py/services/gallery_service.py`, `py/routes/gallery_routes.py`
+
+### 問題
+
+v0.3.49で導入したプロンプト検索の未キャッシュ画像オンデマンド読み込みが、大量の画像フォルダで深刻な負荷問題を引き起こしていた。
+
+- `list_images()`が`asyncio.to_thread()`なしでaiohttpイベントループ上で同期実行されていたため、全未キャッシュ画像のファイルI/O+DB書き込みがComfyUIのイベントループをブロックし、ハングアップが発生していた。
+
+### 修正内容
+
+**`gallery_routes.py`**
+- `list_images`ルートで`_service.list_images()`を`asyncio.to_thread()`でスレッドプールに投げるよう変更（イベントループブロック解消）
+- 検索なしのフォルダロード時に`_service.start_background_index()`を呼び出してバックグラウンドインデックスを自動起動
+
+**`gallery_service.py`**
+- `import threading`を追加
+- `__init__`にバックグラウンドインデックス用キャンセルイベント（`_bg_cancel`）を追加
+- `list_images()`からオンデマンド読み込みを完全に削除（`prompt_cache`が空の場合の読み込み処理を除去）
+- `start_background_index(folder_path)`メソッドを追加：前回のスレッドをキャンセルして新しいdaemonスレッドを起動
+- `_bg_index_folder(folder_path, cancel)`メソッドを追加：
+  - 未キャッシュ画像のみを対象（`prompt_cache`が存在する画像はスキップ）
+  - 10枚処理するたびにバッチDB保存 + 50msスリープでメインスレッドへの影響を最小化
+  - キャンセルイベントで即座に中断可能（フォルダ切替時など）
+
+### 新しい動作フロー
+
+```
+フォルダ選択（検索なし）
+  → asyncio.to_thread で list_images() をスレッド実行（ノンブロッキング）
+  → 画像一覧を即返却
+  → バックグラウンドスレッドが自動起動
+      → 未キャッシュ画像を10枚ずつ処理、50msスリープを挟んで低負荷で順次インデックス
+      → インデックス完了後の検索でA1111画像等もヒットするようになる
+
+プロンプト検索
+  → asyncio.to_thread で list_images() をスレッド実行（ノンブロッキング）
+  → キャッシュ済み画像のみ検索（重いI/O処理なし）
+```
+
+---
+
 ## 2026-06-22: v0.3.49 — 生成UIタブ A1111風ワイルドカード展開・ギャラリータブ バグ修正2件
 
 **変更ファイル**: `static/js/generate-tab.js`, `static/js/app.js`, `py/services/gallery_service.py`, `static/js/i18n.js`, `templates/index.html`

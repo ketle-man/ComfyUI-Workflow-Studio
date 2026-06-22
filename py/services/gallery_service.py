@@ -8,6 +8,7 @@ import mimetypes
 import os
 import re
 import struct
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -73,11 +74,77 @@ class GalleryService:
         self.metadata_store = GalleryMetadataStore(data_dir / "gallery_metadata.json")
         self._allowed_root: Path | None = None
         self._folder_cache = _FolderCache()
+        self._bg_cancel = threading.Event()
+        self._bg_cancel.set()  # 初期状態: キャンセル済み
 
     def update_output_root(self, root_path: str) -> None:
         """許可するルートパスを更新する（Settings変更時に呼ぶ）"""
         p = Path(root_path).resolve() if root_path else None
         self._allowed_root = p
+
+    # ──────────────────────────────────────────────────────────────
+    # バックグラウンドインデックス
+    # ──────────────────────────────────────────────────────────────
+
+    def start_background_index(self, folder_path: str) -> None:
+        """フォルダ内の未キャッシュ画像をバックグラウンドでインデックスする。
+        フォルダロード時に呼び出す。前回のインデックス処理は自動キャンセル。"""
+        self._bg_cancel.set()  # 前のスレッドをキャンセル
+        cancel = threading.Event()
+        self._bg_cancel = cancel
+        t = threading.Thread(
+            target=self._bg_index_folder,
+            args=(folder_path, cancel),
+            daemon=True,
+        )
+        t.start()
+
+    def _bg_index_folder(self, folder_path: str, cancel: threading.Event) -> None:
+        """バックグラウンドスレッドで未キャッシュ画像のprompt_cacheを構築する。
+        10枚処理するたびに50msスリープしてメインスレッドへの影響を最小化。"""
+        try:
+            folder = Path(folder_path).resolve()
+            if not folder.is_dir() or not self._check_path_allowed(folder):
+                return
+            entries = self._scan_folder(folder)
+            batch: dict[str, dict] = {}
+            processed = 0
+            for name, abs_path, _, _ in entries:
+                if cancel.is_set():
+                    return
+                ext = Path(name).suffix.lower()
+                if ext not in (".png", ".jpg", ".jpeg"):
+                    continue
+                meta = self.metadata_store.get(abs_path)
+                if meta.get("prompt_cache"):
+                    continue
+                embedded: dict = {}
+                if ext == ".png":
+                    embedded = self._read_png_metadata(Path(abs_path))
+                else:
+                    embedded = self._read_jpeg_metadata(Path(abs_path))
+                if not embedded:
+                    continue
+                prompt_cache = " ".join(
+                    str(v) for k, v in embedded.items()
+                    if k != "workflow" and isinstance(v, str) and len(v) < 50_000
+                ).strip()
+                if not prompt_cache:
+                    continue
+                batch[abs_path] = {"prompt_cache": prompt_cache}
+                processed += 1
+                if len(batch) >= 10:
+                    for p, d in batch.items():
+                        self.metadata_store.save(p, d)
+                    batch = {}
+                    time.sleep(0.05)  # 50ms 他の処理に譲る
+            if batch and not cancel.is_set():
+                for p, d in batch.items():
+                    self.metadata_store.save(p, d)
+            if processed:
+                logger.debug("BG index done: %s (%d indexed)", folder_path, processed)
+        except Exception as e:
+            logger.debug("BG index error: %s", e)
 
     def _check_path_allowed(self, path: Path) -> bool:
         """パスが許可ルート配下かチェック（パストラバーサル防止）"""
@@ -225,26 +292,11 @@ class GalleryService:
             # 検索フィルタ（ファイル名・メモ・タグ・キャッシュ済みプロンプト）
             if search:
                 s = search.lower()
-                prompt_cache = meta.get("prompt_cache", "")
-                # prompt_cache未構築の場合は画像から直接読み込んでキャッシュする
-                if not prompt_cache and ext in (".png", ".jpg", ".jpeg"):
-                    embedded = {}
-                    if ext == ".png":
-                        embedded = self._read_png_metadata(Path(abs_path))
-                    else:
-                        embedded = self._read_jpeg_metadata(Path(abs_path))
-                    if embedded:
-                        prompt_cache = " ".join(
-                            str(v) for k, v in embedded.items()
-                            if k != "workflow" and isinstance(v, str) and len(v) < 50_000
-                        ).strip()
-                        if prompt_cache:
-                            self.metadata_store.save(abs_path, {"prompt_cache": prompt_cache})
                 if not (
                     s in name.lower()
                     or s in item["memo"].lower()
                     or any(s in t.lower() for t in tags)
-                    or s in prompt_cache.lower()
+                    or s in meta.get("prompt_cache", "").lower()
                 ):
                     continue
 

@@ -334,6 +334,9 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.3.50
+- **Gallery tab — fix prompt search causing ComfyUI hang under large folders** — the v0.3.49 on-demand metadata read ran synchronously on the aiohttp event loop, blocking ComfyUI when folders contained many uncached images; fixed by: (1) removing on-demand reads from `list_images()`; (2) wrapping `list_images()` in `asyncio.to_thread()` to keep the event loop free; (3) adding a background indexer (`start_background_index`) that automatically indexes uncached images after a folder is loaded — processes 10 images per batch with a 50 ms sleep between batches; cancellable on folder switch
+
 ### v0.3.49
 - **GenerateUI tab — A1111-style SPA-side wildcard expansion** — when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains `__name__` syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation
 - **Gallery tab — fix Export button missing label** — the bulk action bar's Export button had no text label because the `textContent` assignment was missing from `updateUITexts()`; fixed by adding the `galleryBulkExport` i18n key assignment alongside the existing Move/Delete entries
