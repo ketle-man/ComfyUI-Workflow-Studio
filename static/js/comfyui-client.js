@@ -90,10 +90,15 @@ export const comfyUI = {
                 if (info?.[cls]?.input?.required?.[inputKey]) {
                     const inputDef = info[cls].input.required[inputKey];
                     const first = inputDef[0];
+                    // V1: [["model1", "model2"], {}]
                     if (Array.isArray(first)) return first;
-                    // Newer ComfyUI format: ["COMBO", { "values": [...] }]
+                    // V2: ["COMBO", { "values": [...] }]
                     if (typeof first === "string" && Array.isArray(inputDef[1]?.values)) {
                         return inputDef[1].values;
+                    }
+                    // V3 ComfyNode: ["COMBO", { "options": [...] }]
+                    if (typeof first === "string" && Array.isArray(inputDef[1]?.options)) {
+                        return inputDef[1].options;
                     }
                 }
             } catch {}
@@ -155,7 +160,10 @@ export const comfyUI = {
                 const list = await res.json();
                 return Array.isArray(list) ? list : [];
             }
-        } catch {}
+            console.warn("[WFS] /embeddings returned", res.status);
+        } catch (e) {
+            console.error("[WFS] fetchEmbeddings error:", e);
+        }
         return [];
     },
 

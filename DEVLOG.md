@@ -1,5 +1,27 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-24: v0.3.50 — Hypernetwork/Embeddingモデル未表示バグ修正
+
+**変更ファイル**: `static/js/comfyui-client.js`
+
+### 原因
+
+`_fetchModelList` が ComfyUI V3ノード（`IO.ComfyNode`）の `object_info` レスポンス形式に未対応だった。
+
+- V1形式: `[["model1.pt", ...], {}]` → 配列チェックで対応済み
+- V2形式: `["COMBO", {"values": [...]}]` → `values`キーで対応済み
+- **V3形式**: `["COMBO", {"options": [...]}]` → **未対応** ← `HypernetworkLoader` がこの形式
+
+`HypernetworkLoader` は V3 `IO.ComfyNode` で実装されており、`options` キーを使う。`_fetchModelList` が `values` しか見ていなかったため、常に空配列を返してHypernetworkモデルが一切表示されなかった。
+
+### 修正内容
+
+**`comfyui-client.js`**
+- `_fetchModelList`: V3形式 `inputDef[1]?.options` の取得ケースを追加
+- `fetchEmbeddings`: `catch {}` の黙殺をやめ、`console.warn/error` でログ出力するよう変更（Embeddingが表示されない場合のデバッグ用）
+
+---
+
 ## 2026-06-24: v0.3.50 — ModelsタブサイドパネルにGenUI Modelボタン追加
 
 **変更ファイル**: `templates/index.html`, `static/js/models-tab.js`
