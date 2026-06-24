@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.49-green)
+![Version](https://img.shields.io/badge/version-0.3.51-green)
 
 ## Screenshots
 
@@ -70,8 +70,8 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 ### GenerateUI Tab (v0.3.5)
 - **5-tab layout** — Input / Model / Settings / Feeder / Batch tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API
-- **Input tab** — Prompt (top) and Image drag-and-drop (bottom) in the left column; Raw JSON (540px) in the right column
-- **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder selectors with filter; Raw JSON on the right
+- **Input tab** — Prompt and Image inner tabs (drag-and-drop upload); Prompt tab shows Positive Prompt and Negative Prompt textareas, plus an **Embeddings selector** at the bottom (Filter + Select + Weight input + Paste button); Paste inserts `(embedding:Name:weight)` at the cursor position of the last focused textarea (defaults to Positive when neither is focused); Raw JSON (540px) in the right column
+- **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder, **Hypernetwork** (with Strength field) selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
@@ -187,7 +187,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **CivitAI panel states** — three distinct states: not yet checked (fetch button), checked but not found on CivitAI (re-check button with notice), and found (full info display); clicking the CivitAI tab always refreshes to the latest state
 - **Batch CivitAI fetch** — one-click batch fetch using `POST /model-versions/by-hash` (up to 100 models per request) with SSE progress streaming; previews are auto-saved for models without one
 - **Detail modal** — preview image, CivitAI info, thumbnail change via file upload; **Delete** button permanently removes the model file and all associated sidecar files (preview images, `.json`, `.civitai.info`, `.metadata.json`, `.cm-info.json`)
-- **GenUI Model button** — apply the selected model directly to the corresponding node in GenerateUI's current workflow (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder)
+- **GenUI Model button** — apply the selected model directly to the corresponding node in GenerateUI's current workflow (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork); **Embedding** type shows **GenUI PP** / **GenUI NP** buttons instead — appends `(embedding:Name:1.0)` to the Positive or Negative prompt of the loaded workflow; also accessible from the side panel nav bar and the detail modal
 - **Group management** — create, rename, delete groups and assign/remove models; groups are scoped per model type (checkpoint groups only appear in the Checkpoint tab); Checkpoint and LoRA tabs include **B (Batch)** and **S (Stack)** quick-assign buttons per card/row for one-click group membership toggle without grid re-render
 - **Table view memo** — memo column displayed in table view for quick reference
 - **Preview images** — auto-detect `{model_stem}.preview.png` next to model files
@@ -333,6 +333,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.51
+- **Models tab — Embedding type: GenUI PP / GenUI NP buttons** — Embedding models now show two buttons ("GenUI PP" and "GenUI NP") in the side panel nav, detail side panel, and detail modal (replacing the single "GenUI Model" button); clicking either appends `(embedding:Name:1.0)` to the Positive or Negative prompt of the loaded workflow
+- **GenerateUI Prompt tab — Embeddings selector** — new section at the bottom of the Prompt tab: Filter input, model select dropdown, Weight input (default 1.0), and Paste button; Paste inserts `(embedding:Stem:weight)` at the cursor position of the last focused textarea (Positive or Negative); focus state is tracked on click/keyup/blur so the button works even after clicking away
+- **GenerateUI Model tab — Hypernetwork support** — Hypernetwork section added with model selector (filter) and Strength field; applies to `HypernetworkLoader` nodes in the workflow; GenUI Model button in Models tab also triggers Hypernetwork apply
+- **Models tab — fix Embedding and Hypernetwork models not shown** — `_fetchModelList` now handles the ComfyUI V3 node format (`options` key) in addition to V1/V2 formats; `fetchEmbeddings` switched from the `/embeddings` ComfyUI endpoint to the WFS backend API (`/api/wfm/models/files?type=embedding`) to avoid SPA URL routing conflicts
+- **Models tab — GenUI Model button in side panel nav** — "GenUI Model" button added to the tab navigation bar (Info / Group / CivitAI) of the side panel; appears for supported model types (Checkpoint, LoRA, VAE, etc.) and hides for unsupported types; Embedding type shows PP/NP nav buttons instead
 
 ### v0.3.50
 - **Gallery tab — fix prompt search causing ComfyUI hang under large folders** — the v0.3.49 on-demand metadata read ran synchronously on the aiohttp event loop, blocking ComfyUI when folders contained many uncached images; fixed by: (1) removing on-demand reads from `list_images()`; (2) wrapping `list_images()` in `asyncio.to_thread()` to keep the event loop free; (3) adding a background indexer (`start_background_index`) that automatically indexes uncached images after a folder is loaded — processes 10 images per batch with a 50 ms sleep between batches; cancellable on folder switch

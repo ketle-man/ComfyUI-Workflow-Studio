@@ -1,6 +1,6 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
-## 2026-06-24: v0.3.50 — Embedding GenUI PP/NP対応 + GenerateUIプロンプトタブEmbeddingセレクタ追加
+## 2026-06-24: v0.3.51 — Embedding GenUI PP/NP対応 + GenerateUIプロンプトタブEmbeddingセレクタ追加
 
 **変更ファイル**: `templates/index.html`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`
 
@@ -29,7 +29,7 @@
 
 ---
 
-## 2026-06-24: v0.3.50 — GenerateUIタブ Hypernetwork対応 + ModelsタブGenUI Modelボタン追加
+## 2026-06-24: v0.3.51 — GenerateUIタブ Hypernetwork対応 + ModelsタブGenUI Modelボタン追加
 
 **変更ファイル**: `static/js/comfyui-workflow.js`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`
 
@@ -45,7 +45,7 @@
 
 ---
 
-## 2026-06-24: v0.3.50 — Hypernetwork/Embeddingモデル未表示バグ修正
+## 2026-06-24: v0.3.51 — Hypernetwork/Embeddingモデル未表示バグ修正
 
 **変更ファイル**: `static/js/comfyui-client.js`
 
@@ -74,7 +74,7 @@
 
 ---
 
-## 2026-06-24: v0.3.50 — ModelsタブサイドパネルにGenUI Modelボタン追加
+## 2026-06-24: v0.3.51 — ModelsタブサイドパネルにGenUI Modelボタン追加
 
 **変更ファイル**: `templates/index.html`, `static/js/models-tab.js`
 
