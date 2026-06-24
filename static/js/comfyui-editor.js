@@ -191,7 +191,7 @@ export const comfyEditor = {
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-apply">Apply</button>
                 </div>
-                <textarea class="wfm-textarea" id="wfm-prompt-pos-text" rows="8">${positiveNodes[0]?.text || ""}</textarea>
+                <textarea class="wfm-textarea" id="wfm-prompt-pos-text" rows="6">${positiveNodes[0]?.text || ""}</textarea>
             </div>
             <div class="wfm-form-group">
                 <label>Negative Prompt</label>
