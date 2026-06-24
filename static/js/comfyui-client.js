@@ -153,14 +153,14 @@ export const comfyUI = {
     },
 
     async fetchEmbeddings() {
-        // ComfyUI exposes embeddings via /embeddings endpoint
+        // Use WFS backend API (reliable, goes through same aiohttp server)
         try {
-            const res = await fetch(`${this.baseUrl}/embeddings`);
+            const res = await fetch("/api/wfm/models/files?type=embedding");
             if (res.ok) {
                 const list = await res.json();
                 return Array.isArray(list) ? list : [];
             }
-            console.warn("[WFS] /embeddings returned", res.status);
+            console.warn("[WFS] /api/wfm/models/files?type=embedding returned", res.status);
         } catch (e) {
             console.error("[WFS] fetchEmbeddings error:", e);
         }

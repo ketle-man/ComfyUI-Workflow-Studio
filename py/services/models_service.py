@@ -23,6 +23,8 @@ _SIDECAR_EXTENSIONS = [
 
 _DISABLED_SUFFIX = ".disabled"
 
+_MODEL_EXTENSIONS = {".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".pt2"}
+
 # ComfyUI model type → folder_paths key mapping
 MODEL_TYPE_FOLDER_KEYS = {
     "checkpoint": "checkpoints",
@@ -128,6 +130,31 @@ class ModelsService:
                 except ValueError:
                     pass
         return names
+
+    def list_model_files(self, model_type: str) -> list:
+        """モデルタイプのモデルファイル名をソートして返す（拡張子付き、/区切り）。
+        プレビュー画像やサイドカーファイルを除外し、モデル拡張子のみを返す。"""
+        dirs = _get_model_dirs(model_type)
+        seen = set()
+        for d in dirs:
+            if not d.is_dir():
+                continue
+            for f in d.rglob("*"):
+                if not f.is_file():
+                    continue
+                name = f.name
+                if name.endswith(_DISABLED_SUFFIX):
+                    name = name[: -len(_DISABLED_SUFFIX)]
+                if Path(name).suffix.lower() not in _MODEL_EXTENSIONS:
+                    continue
+                try:
+                    rel = str(f.relative_to(d)).replace("\\", "/")
+                    if rel.endswith(_DISABLED_SUFFIX):
+                        rel = rel[: -len(_DISABLED_SUFFIX)]
+                    seen.add(rel)
+                except ValueError:
+                    pass
+        return sorted(seen)
 
     def get_model_groups(self, model_type=None):
         data = self._load_metadata()

@@ -18,7 +18,14 @@
 
 **`comfyui-client.js`**
 - `_fetchModelList`: V3形式 `inputDef[1]?.options` の取得ケースを追加
-- `fetchEmbeddings`: `catch {}` の黙殺をやめ、`console.warn/error` でログ出力するよう変更（Embeddingが表示されない場合のデバッグ用）
+- `fetchEmbeddings`: ComfyUIの `/embeddings` エンドポイントへの直接アクセスをやめ、WFSバックエンドAPI `/api/wfm/models/files?type=embedding` を使うよう変更（SPAのURLによっては `/embeddings` がHTMLを返す問題があったため）
+
+**`py/services/models_service.py`**
+- `_MODEL_EXTENSIONS` 定数を追加（`.safetensors`, `.ckpt`, `.pt`, `.pth`, `.bin`, `.gguf`, `.pt2`）
+- `list_model_files(model_type)` メソッドを追加: モデルファイルのみをフィルタリングしてソート済みリストを返す
+
+**`py/routes/models_routes.py`**
+- `GET /api/wfm/models/files?type=<type>` エンドポイントを追加
 
 ---
 

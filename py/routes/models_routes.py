@@ -33,6 +33,7 @@ def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/models/delete", handle_delete_models)
     app.router.add_get("/api/wfm/models/subdirs", handle_get_subdirs)
     app.router.add_post("/api/wfm/models/move", handle_move_models)
+    app.router.add_get("/api/wfm/models/files", handle_list_model_files)
 
 
 # ── Model Metadata ─────────────────────────────────────────
@@ -615,4 +616,24 @@ async def handle_move_models(request: web.Request) -> web.Response:
         return web.json_response(result)
     except Exception as e:
         logger.error("Error in move_models: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+# ── Model File List ───────────────────────────────────────
+
+
+async def handle_list_model_files(request: web.Request) -> web.Response:
+    """GET /api/wfm/models/files?type=<model_type>
+    Returns sorted list of model file names (with extension) for the given type.
+    Used as a fallback when ComfyUI's /embeddings endpoint is not accessible.
+    """
+    from ..services.models_service import MODEL_TYPE_FOLDER_KEYS
+    model_type = request.query.get("type", "")
+    if not model_type or model_type not in MODEL_TYPE_FOLDER_KEYS:
+        return web.json_response({"error": "invalid type"}, status=400)
+    try:
+        result = await asyncio.to_thread(_service.list_model_files, model_type)
+        return web.json_response(result)
+    except Exception as e:
+        logger.error("Error listing model files for %s: %s", model_type, e)
         return web.json_response({"error": str(e)}, status=500)
