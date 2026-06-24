@@ -10,6 +10,8 @@ import { syncJsonHighlight } from "./json-highlight.js";
 let _stackStrengths = {};
 // { modelFullPath: boolean } — true = active (default)
 let _stackActive = {};
+// { id: string|null, selStart: number, selEnd: number }
+let _lastPromptFocus = { id: null, selStart: 0, selEnd: 0 };
 
 function _loraBasename(fullPath) {
     const name = (fullPath || "").replace(/\\/g, "/").split("/").pop() || fullPath;
@@ -124,6 +126,7 @@ export const comfyEditor = {
         textEncoders: [],
         controlNets: [],
         hypernetworks: [],
+        embeddings: [],
         samplers: [],
         schedulers: [],
         lastError: null,
@@ -131,7 +134,7 @@ export const comfyEditor = {
 
     async loadModelLists() {
         try {
-            const [ckpt, vae, lora, diff, enc, cn, hn, samp, sched] = await Promise.all([
+            const [ckpt, vae, lora, diff, enc, cn, hn, emb, samp, sched] = await Promise.all([
                 comfyUI.fetchCheckpoints(),
                 comfyUI.fetchVaes(),
                 comfyUI.fetchLoras(),
@@ -139,6 +142,7 @@ export const comfyEditor = {
                 comfyUI.fetchTextEncoders(),
                 comfyUI.fetchControlNets(),
                 comfyUI.fetchHypernetworks(),
+                comfyUI.fetchEmbeddings(),
                 comfyUI.fetchSamplers(),
                 comfyUI.fetchSchedulers(),
             ]);
@@ -149,6 +153,7 @@ export const comfyEditor = {
             this.models.textEncoders = enc;
             this.models.controlNets = cn;
             this.models.hypernetworks = hn;
+            this.models.embeddings = emb;
             this.models.samplers = samp;
             this.models.schedulers = sched;
             this.models.lastError = null;
@@ -174,6 +179,7 @@ export const comfyEditor = {
         const positiveNodes = (analysis.prompt_nodes || []).filter((n) => n.role === "positive");
         const negativeNodes = (analysis.prompt_nodes || []).filter((n) => n.role === "negative");
         const nodeOpts = _nodeOptions(analysis.all_nodes);
+        const embeddings = this.models.embeddings || [];
 
         el.innerHTML = `
             <div class="wfm-form-group">
@@ -198,6 +204,18 @@ export const comfyEditor = {
                 </div>
                 <textarea class="wfm-textarea" id="wfm-prompt-neg-text" rows="6">${negativeNodes[0]?.text || ""}</textarea>
             </div>
+            <div class="wfm-form-group" style="border-top:1px solid var(--wfm-border);margin-top:12px;padding-top:12px;">
+                <label>Embeddings</label>
+                <input type="text" class="wfm-input" id="wfm-embedding-filter" placeholder="Filter..." style="margin-bottom:4px;">
+                <select class="wfm-select" id="wfm-embedding-select" style="margin-bottom:4px;">
+                    ${embeddings.map((m) => `<option value="${m}">${m}</option>`).join("")}
+                </select>
+                <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+                    <label style="font-size:12px;white-space:nowrap;color:var(--wfm-text-secondary);">Weight</label>
+                    <input type="number" class="wfm-input" id="wfm-embedding-weight" value="1.0" step="0.1" min="-10" max="10" style="width:70px;">
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-embedding-paste">Paste</button>
+                </div>
+            </div>
         `;
 
         document.getElementById("wfm-prompt-pos-apply")?.addEventListener("click", () => {
@@ -218,6 +236,63 @@ export const comfyEditor = {
                 const promptNode = (analysis.prompt_nodes || []).find(n => n.id === nodeId);
                 const textKey = promptNode?.textKey || "text";
                 comfyUI.currentWorkflow[nodeId].inputs[textKey] = text;
+                _syncRawJson();
+            }
+        });
+
+        // Track last focused prompt textarea for Paste button
+        ["wfm-prompt-pos-text", "wfm-prompt-neg-text"].forEach((taId) => {
+            const ta = document.getElementById(taId);
+            if (!ta) return;
+            ["click", "keyup", "blur"].forEach((evt) => {
+                ta.addEventListener(evt, () => {
+                    _lastPromptFocus = { id: taId, selStart: ta.selectionStart, selEnd: ta.selectionEnd };
+                });
+            });
+        });
+
+        // Embedding filter
+        document.getElementById("wfm-embedding-filter")?.addEventListener("input", (e) => {
+            const filter = e.target.value.toLowerCase();
+            const select = document.getElementById("wfm-embedding-select");
+            if (!select) return;
+            select.innerHTML = (this.models.embeddings || [])
+                .filter((m) => m.toLowerCase().includes(filter))
+                .map((m) => `<option value="${m}">${m}</option>`)
+                .join("");
+        });
+
+        // Embedding Paste button — inserts at cursor position of last focused prompt textarea
+        document.getElementById("wfm-embedding-paste")?.addEventListener("click", () => {
+            const select = document.getElementById("wfm-embedding-select");
+            if (!select?.value) return;
+            const rawWeight = parseFloat(document.getElementById("wfm-embedding-weight")?.value);
+            const weight = isNaN(rawWeight) ? 1.0 : rawWeight;
+            const stem = select.value.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+            const weightStr = Number.isInteger(weight) ? `${weight}.0` : String(weight);
+            const syntax = `(embedding:${stem}:${weightStr})`;
+
+            const targetId = _lastPromptFocus.id === "wfm-prompt-neg-text" ? "wfm-prompt-neg-text" : "wfm-prompt-pos-text";
+            const promptType = targetId === "wfm-prompt-neg-text" ? "negative" : "positive";
+            const ta = document.getElementById(targetId);
+            if (!ta) return;
+
+            const selStart = _lastPromptFocus.id === targetId ? _lastPromptFocus.selStart : ta.value.length;
+            const selEnd = _lastPromptFocus.id === targetId ? _lastPromptFocus.selEnd : ta.value.length;
+            const before = ta.value.substring(0, selStart);
+            const after = ta.value.substring(selEnd);
+            const sep = before && !/[,\s]$/.test(before) ? ", " : "";
+            const newText = before + sep + syntax + after;
+            ta.value = newText;
+
+            const newCursor = selStart + sep.length + syntax.length;
+            ta.focus();
+            ta.setSelectionRange(newCursor, newCursor);
+            _lastPromptFocus = { id: targetId, selStart: newCursor, selEnd: newCursor };
+
+            const wfNode = (comfyUI.currentAnalysis?.prompt_nodes || []).find((n) => n.role === promptType);
+            if (wfNode && comfyUI.currentWorkflow?.[wfNode.id]) {
+                comfyUI.currentWorkflow[wfNode.id].inputs[wfNode.textKey || "text"] = newText;
                 _syncRawJson();
             }
         });
@@ -939,6 +1014,32 @@ export const comfyEditor = {
             if (inM) inM.disabled = true;
             if (inC) inC.disabled = true;
         });
+    },
+
+    appendEmbeddingToPrompt(syntax, promptType) {
+        const promptNodes = (comfyUI.currentAnalysis?.prompt_nodes || []).filter((n) => n.role === promptType);
+        const textareaId = promptType === "positive" ? "wfm-prompt-pos-text" : "wfm-prompt-neg-text";
+        const textarea = document.getElementById(textareaId);
+
+        if (promptNodes.length > 0 && comfyUI.currentWorkflow) {
+            const node = promptNodes[0];
+            const wfNode = comfyUI.currentWorkflow[node.id];
+            if (wfNode) {
+                const textKey = node.textKey || "text";
+                const current = wfNode.inputs[textKey] || "";
+                const newText = current ? `${current}, ${syntax}` : syntax;
+                wfNode.inputs[textKey] = newText;
+                if (textarea) textarea.value = newText;
+                _syncRawJson();
+                return;
+            }
+        }
+
+        // Fallback: update textarea only
+        if (textarea) {
+            const current = textarea.value;
+            textarea.value = current ? `${current}, ${syntax}` : syntax;
+        }
     },
 
     switchLoraSingleTab() {

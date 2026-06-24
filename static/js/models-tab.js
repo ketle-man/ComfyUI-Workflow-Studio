@@ -189,6 +189,17 @@ function applyToGenUI(modelName, modelType) {
     showToast(`${TYPE_LABELS[modelType]}: ${modelName.split("/").pop().split("\\").pop()}`, "success");
 }
 
+function applyEmbeddingToPrompt(modelName, promptType) {
+    if (!comfyUI.currentWorkflow) {
+        showToast(t("modelsGenUINoWorkflow"), "warning");
+        return;
+    }
+    const stem = modelName.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+    const syntax = `(embedding:${stem}:1.0)`;
+    comfyEditor.appendEmbeddingToPrompt(syntax, promptType);
+    showToast(`Embedding → ${promptType === "positive" ? "PP" : "NP"}: ${stem}`, "success");
+}
+
 // User-defined badge colors (stored in metadata per model)
 // Global badge palette: label → color, stored in localStorage
 function getBadgePalette() {
@@ -1350,9 +1361,12 @@ function openDetailModal(modelName) {
                 </section>
                 <div class="wfm-modal-actions">
                     <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-modal-model-save">${t("modelsSave")}</button>
-                    ${GENUI_TYPE_MAP[state.activeModelType]
-                        ? `<button class="wfm-btn wfm-btn-sm" id="wfm-modal-genui-model" title="${t("modelsGenUITitle")}">${t("modelsGenUIBtn")}</button>`
-                        : ""}
+                    ${state.activeModelType === "embedding"
+                        ? `<button class="wfm-btn wfm-btn-sm" id="wfm-modal-genui-pp" title="Positive Promptにエンベッディング追加">GenUI PP</button>
+                           <button class="wfm-btn wfm-btn-sm" id="wfm-modal-genui-np" title="Negative Promptにエンベッディング追加">GenUI NP</button>`
+                        : (GENUI_TYPE_MAP[state.activeModelType]
+                            ? `<button class="wfm-btn wfm-btn-sm" id="wfm-modal-genui-model" title="${t("modelsGenUITitle")}">${t("modelsGenUIBtn")}</button>`
+                            : "")}
                     <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-modal-model-delete" style="margin-left:auto;">${t("modelsDelete")}</button>
                 </div>
             </div>
@@ -1403,9 +1417,15 @@ function openDetailModal(modelName) {
         renderModelGrid();
     });
 
-    // GenUI Model button
+    // GenUI Model / Embedding buttons
     document.getElementById("wfm-modal-genui-model")?.addEventListener("click", () => {
         applyToGenUI(modelName, state.activeModelType);
+    });
+    document.getElementById("wfm-modal-genui-pp")?.addEventListener("click", () => {
+        applyEmbeddingToPrompt(modelName, "positive");
+    });
+    document.getElementById("wfm-modal-genui-np")?.addEventListener("click", () => {
+        applyEmbeddingToPrompt(modelName, "negative");
     });
 
     // Delete model button
@@ -1501,14 +1521,26 @@ function showSidePanel(modelName) {
     const civitaiEl = document.getElementById("wfm-models-side-civitai");
     if (civitaiEl) civitaiEl.style.display = "block";
 
-    const genutNavBtn = document.getElementById("wfm-side-genui-nav-btn");
-    if (genutNavBtn) {
-        if (GENUI_TYPE_MAP[state.activeModelType]) {
-            genutNavBtn.textContent = t("modelsGenUIBtn");
-            genutNavBtn.title = t("modelsGenUITitle");
-            genutNavBtn.style.display = "";
+    const genuiNavBtn = document.getElementById("wfm-side-genui-nav-btn");
+    const genuiNpBtn = document.getElementById("wfm-side-genui-np-btn");
+    if (genuiNavBtn) {
+        if (state.activeModelType === "embedding") {
+            genuiNavBtn.textContent = "GenUI PP";
+            genuiNavBtn.title = "Positive Promptにエンベッディング追加";
+            genuiNavBtn.style.display = "";
+            if (genuiNpBtn) {
+                genuiNpBtn.textContent = "GenUI NP";
+                genuiNpBtn.title = "Negative Promptにエンベッディング追加";
+                genuiNpBtn.style.display = "";
+            }
+        } else if (GENUI_TYPE_MAP[state.activeModelType]) {
+            genuiNavBtn.textContent = t("modelsGenUIBtn");
+            genuiNavBtn.title = t("modelsGenUITitle");
+            genuiNavBtn.style.display = "";
+            if (genuiNpBtn) genuiNpBtn.style.display = "none";
         } else {
-            genutNavBtn.style.display = "none";
+            genuiNavBtn.style.display = "none";
+            if (genuiNpBtn) genuiNpBtn.style.display = "none";
         }
     }
 
@@ -1524,6 +1556,10 @@ function closeSidePanel() {
     document.querySelectorAll("#wfm-models-grid .wfm-card, #wfm-models-grid .wfm-models-table-row").forEach((el) => {
         el.classList.remove("wfm-card-selected");
     });
+    const npBtn = document.getElementById("wfm-side-genui-np-btn");
+    if (npBtn) npBtn.style.display = "none";
+    const ppBtn = document.getElementById("wfm-side-genui-nav-btn");
+    if (ppBtn) ppBtn.style.display = "none";
 }
 
 // ── Side Panel: Info Tab ──────────────────────────────────
@@ -1573,9 +1609,12 @@ function renderSideInfo(modelName) {
         </div>
         <div class="wfm-node-detail-section" style="display:flex;gap:6px;">
             <button id="wfm-models-side-save-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">${t("modelsSave")}</button>
-            ${GENUI_TYPE_MAP[state.activeModelType]
-                ? `<button id="wfm-models-side-genui-btn" class="wfm-btn wfm-btn-sm" title="${t("modelsGenUITitle")}">${t("modelsGenUIBtn")}</button>`
-                : ""}
+            ${state.activeModelType === "embedding"
+                ? `<button id="wfm-models-side-genui-pp-btn" class="wfm-btn wfm-btn-sm" title="Positive Promptにエンベッディング追加">GenUI PP</button>
+                   <button id="wfm-models-side-genui-np-btn" class="wfm-btn wfm-btn-sm" title="Negative Promptにエンベッディング追加">GenUI NP</button>`
+                : (GENUI_TYPE_MAP[state.activeModelType]
+                    ? `<button id="wfm-models-side-genui-btn" class="wfm-btn wfm-btn-sm" title="${t("modelsGenUITitle")}">${t("modelsGenUIBtn")}</button>`
+                    : "")}
         </div>`;
 
     // Load preview image
@@ -1630,9 +1669,15 @@ function renderSideInfo(modelName) {
         });
     });
 
-    // GenUI Model button
+    // GenUI Model / Embedding buttons
     el.querySelector("#wfm-models-side-genui-btn")?.addEventListener("click", () => {
         applyToGenUI(modelName, state.activeModelType);
+    });
+    el.querySelector("#wfm-models-side-genui-pp-btn")?.addEventListener("click", () => {
+        applyEmbeddingToPrompt(modelName, "positive");
+    });
+    el.querySelector("#wfm-models-side-genui-np-btn")?.addEventListener("click", () => {
+        applyEmbeddingToPrompt(modelName, "negative");
     });
 }
 
@@ -2390,9 +2435,17 @@ export function initModelsTab() {
         });
     });
 
-    // GenUI Model button in side tab nav
+    // GenUI Model / Embedding buttons in side tab nav
     document.getElementById("wfm-side-genui-nav-btn")?.addEventListener("click", () => {
-        if (state.selectedModel) applyToGenUI(state.selectedModel, state.activeModelType);
+        if (!state.selectedModel) return;
+        if (state.activeModelType === "embedding") {
+            applyEmbeddingToPrompt(state.selectedModel, "positive");
+        } else {
+            applyToGenUI(state.selectedModel, state.activeModelType);
+        }
+    });
+    document.getElementById("wfm-side-genui-np-btn")?.addEventListener("click", () => {
+        if (state.selectedModel) applyEmbeddingToPrompt(state.selectedModel, "negative");
     });
 
     // Initialize badge filter bar

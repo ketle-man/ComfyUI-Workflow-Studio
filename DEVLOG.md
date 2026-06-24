@@ -1,5 +1,34 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-24: v0.3.50 — Embedding GenUI PP/NP対応 + GenerateUIプロンプトタブEmbeddingセレクタ追加
+
+**変更ファイル**: `templates/index.html`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`
+
+### 変更内容
+
+**ModelsタブEmbeddingタイプにGenUI PP / GenUI NPボタンを追加**
+
+- `templates/index.html`: サイドパネルナビに `#wfm-side-genui-np-btn` を追加（Embeddingタイプ時のNP用ボタン）
+- `models-tab.js`:
+  - `applyEmbeddingToPrompt(modelName, promptType)` 関数を追加。モデルstemから `(embedding:Stem:1.0)` を生成し `comfyEditor.appendEmbeddingToPrompt()` を呼ぶ
+  - サイドパネルナビ: Embeddingタイプ時は "GenUI PP" / "GenUI NP" を表示、他タイプは従来の "GenUI Model" のみ表示
+  - `renderSideInfo()`: Embeddingタイプ時は PP/NP ボタンを表示
+  - `openDetailModal()`: Embeddingタイプ時は PP/NP ボタンを表示
+  - `closeSidePanel()`: ナビボタンをすべて非表示にする（タイプ切替時の残留防止）
+
+**GenerateUI PrompタブにEmbeddingセレクタ追加**
+
+- `comfyui-editor.js`:
+  - `models.embeddings: []` を追加、`loadModelLists()` に `fetchEmbeddings()` を追加
+  - `_lastPromptFocus` モジュール変数を追加（最後にフォーカスしたpromptテキストエリアのIDと選択位置を保持）
+  - `renderPromptTab()`: PromptタブのPositive/Negativeの下にEmbeddingsセクションを追加
+    - Filter入力 + Selectドロップダウン（埋め込みモデル一覧）+ Weight入力（デフォルト1.0） + Pasteボタン
+    - Pasteボタン: 最後にフォーカスしたテキストエリアのカーソル位置に `(embedding:Stem:weight)` を挿入
+    - テキストエリアにblur/click/keyupリスナーを追加してカーソル位置を追跡
+  - `appendEmbeddingToPrompt(syntax, promptType)` メソッドを追加: ワークフローの対応ノードとテキストエリア両方を更新してプロンプト末尾に追加
+
+---
+
 ## 2026-06-24: v0.3.50 — GenerateUIタブ Hypernetwork対応 + ModelsタブGenUI Modelボタン追加
 
 **変更ファイル**: `static/js/comfyui-workflow.js`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`
