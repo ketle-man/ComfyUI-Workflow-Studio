@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.51-green)
+![Version](https://img.shields.io/badge/version-0.3.52-green)
 
 ## Screenshots
 
@@ -333,6 +333,9 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.52
+- **GenerateUI Model tab — fix LoRA selection reset when switching subtabs** — applying a LoRA via "GenUI Model" button and then switching to another subTab (Prompt/Image/Settings) and back to Model caused the LoRA selector, syntax display, and trigger words to revert to the original workflow values; fixed by reading `currentVal` directly from `currentWorkflow` instead of the stale `currentAnalysis`, and by saving/restoring the Single tab's syntax and trigger words across re-renders
 
 ### v0.3.51
 - **Models tab — Embedding type: GenUI PP / GenUI NP buttons** — Embedding models now show two buttons ("GenUI PP" and "GenUI NP") in the side panel nav, detail side panel, and detail modal (replacing the single "GenUI Model" button); clicking either appends `(embedding:Name:1.0)` to the Positive or Negative prompt of the loaded workflow

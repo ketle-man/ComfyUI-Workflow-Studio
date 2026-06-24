@@ -1,5 +1,24 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-24: GenUI ModelでLoRA適用後、Modelサブタブ再表示時に値がリセットされるバグ修正
+
+**変更ファイル**: `static/js/comfyui-editor.js`
+
+### 問題
+
+ModelsタブのGenUI ModelボタンでLoRAをGenerate UIタブのLORA Singleに適用後、別サブタブ（Prompt/Image/Settings等）に移動してModelサブタブに戻ると、LoRAセレクトが元のワークフロー読み込み時の値にリセットされていた。
+
+### 原因
+
+`renderLoraPane()`はModelサブタブに切り替えるたびに`el.innerHTML`を完全再構築する（Stackグループ変更を反映するため）。その際に`currentVal`を`analysis.lora_nodes[0]?.lora_name`（ワークフロー読み込み時点の`currentAnalysis`の値）から取得していた。`applyToGenUI()`は`currentWorkflow`を更新するが`currentAnalysis`は更新しないため、再描画時に古い値が使われて元に戻っていた。syntax表示とtrigger wordsも`innerHTML`リセットで消えていた。
+
+### 修正
+
+- **currentVal取得ロジックを修正**: `analysis.lora_nodes[0]?.lora_name`の代わりに`comfyUI.currentWorkflow`から直接読み取る。標準LoraLoaderは`inputs.lora_name`、LoraManagerは`inputs.loras.__value__[0].name`からstemを取得してフルパスに復元。
+- **syntax/trigger wordsを再描画をまたいで保持**: `el.innerHTML`設定前に`wfm-lora-single-syntax`と`wfm-lora-single-triggers`の現在値を保存し、HTML再構築後に復元。
+
+---
+
 ## 2026-06-24: v0.3.51 — Embedding GenUI PP/NP対応 + GenerateUIプロンプトタブEmbeddingセレクタ追加
 
 **変更ファイル**: `templates/index.html`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`

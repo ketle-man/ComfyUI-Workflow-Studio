@@ -402,7 +402,23 @@ export const comfyEditor = {
         const stackTargetOpts = loraNodes
             .map((n) => `<option value="${n.id}" ${String(n.id) === String(defaultStackTarget) ? "selected" : ""}>ID:${n.id} (${n.title})</option>`)
             .join("");
-        const currentVal = loraNodes[0]?.lora_name || "";
+        // currentWorkflowから直接取得（applyToGenUIによる変更を正確に反映）
+        let currentVal = loraNodes[0]?.lora_name || "";
+        const _firstLoraNode = loraNodes[0];
+        if (_firstLoraNode && comfyUI.currentWorkflow?.[_firstLoraNode.id]) {
+            const _wfNode = comfyUI.currentWorkflow[_firstLoraNode.id];
+            if (!_firstLoraNode.is_lora_manager) {
+                currentVal = _wfNode.inputs?.lora_name || currentVal;
+            } else {
+                // LoraManager: loras.__value__[0].nameからフルパスを復元
+                const _wfLoras = _wfNode.inputs?.loras?.__value__;
+                if (Array.isArray(_wfLoras) && _wfLoras.length > 0) {
+                    const _stem = _wfLoras[0].name;
+                    const _found = (this.models.loras || []).find(m => _loraBasename(m) === _stem);
+                    currentVal = _found || _stem;
+                }
+            }
+        }
 
         // Fetch Stack group, metadata, CivitAI cache in parallel
         let stackModels = [];
@@ -459,6 +475,9 @@ export const comfyEditor = {
         }).join("");
 
         const _prevActiveTab = el.querySelector(".wfm-lora-tab-btn.active")?.dataset?.tab || "single";
+        // applyToGenUIで設定したSingle表示の状態を保存（再描画後に復元）
+        const _prevSingleSyntax = document.getElementById("wfm-lora-single-syntax")?.textContent || "";
+        const _prevSingleTriggers = document.getElementById("wfm-lora-single-triggers")?.innerHTML || "";
 
         el.innerHTML = `
             <div class="wfm-lora-tab-header">
@@ -537,6 +556,16 @@ export const comfyEditor = {
         // Fix: overwrite textContent to avoid HTML parsing of <lora:...> syntax
         const _synEl = document.getElementById("wfm-lora-stack-syntax");
         if (_synEl) _synEl.textContent = stackLoraSyntax || "—";
+
+        // Single: applyToGenUIで設定したsyntax/triggersを復元
+        if (_prevSingleSyntax && _prevSingleSyntax !== "—") {
+            const _sEl = document.getElementById("wfm-lora-single-syntax");
+            if (_sEl) _sEl.textContent = _prevSingleSyntax;
+        }
+        if (_prevSingleTriggers) {
+            const _tEl = document.getElementById("wfm-lora-single-triggers");
+            if (_tEl && !_prevSingleTriggers.includes(">—<")) _tEl.innerHTML = _prevSingleTriggers;
+        }
 
         // ── Tab switching ────────────────────────────────────
         el.querySelectorAll(".wfm-lora-tab-btn").forEach((btn) => {
