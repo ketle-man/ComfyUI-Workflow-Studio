@@ -1,5 +1,21 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-24: v0.3.50 — ModelsタブサイドパネルにGenUI Modelボタン追加
+
+**変更ファイル**: `templates/index.html`, `static/js/models-tab.js`
+
+### 変更内容
+
+モデルタブのサイドパネル（詳細パネル）のタブナビゲーション（Info / Group / CivitAI）に、CivitAIタブの右横へ **GenUI Model** ボタンを追加した。
+
+- `index.html`: `wfm-side-tab-nav` 内にボタン（`#wfm-side-genui-nav-btn`）を追加。`margin-left:auto` で右端寄せ、初期状態は非表示。
+- `models-tab.js` `showSidePanel()`: モデル選択時に `GENUI_TYPE_MAP` で対応タイプ（checkpoint / lora / vae 等）なら表示、非対応なら非表示に切り替え。ボタンテキストとtitleもi18nで設定。
+- `models-tab.js` init: ボタンクリックで `applyToGenUI(selectedModel, activeModelType)` を呼び出すイベントを追加。
+
+モーダル内の既存 GenUI Model ボタン（`#wfm-modal-genui-model`）はそのまま維持。
+
+---
+
 ## 2026-06-22: v0.3.50 — ギャラリータブ プロンプト検索負荷改善（バックグラウンドインデックス）
 
 **変更ファイル**: `py/services/gallery_service.py`, `py/routes/gallery_routes.py`

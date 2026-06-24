@@ -1500,6 +1500,17 @@ function showSidePanel(modelName) {
     const civitaiEl = document.getElementById("wfm-models-side-civitai");
     if (civitaiEl) civitaiEl.style.display = "block";
 
+    const genutNavBtn = document.getElementById("wfm-side-genui-nav-btn");
+    if (genutNavBtn) {
+        if (GENUI_TYPE_MAP[state.activeModelType]) {
+            genutNavBtn.textContent = t("modelsGenUIBtn");
+            genutNavBtn.title = t("modelsGenUITitle");
+            genutNavBtn.style.display = "";
+        } else {
+            genutNavBtn.style.display = "none";
+        }
+    }
+
     renderSideInfo(modelName);
     renderSideGroup(modelName);
     renderSideCivitai(modelName);
@@ -2376,6 +2387,11 @@ export function initModelsTab() {
             if (target) target.style.display = "block";
             if (tabId === "civitai" && state.selectedModel) renderSideCivitai(state.selectedModel);
         });
+    });
+
+    // GenUI Model button in side tab nav
+    document.getElementById("wfm-side-genui-nav-btn")?.addEventListener("click", () => {
+        if (state.selectedModel) applyToGenUI(state.selectedModel, state.activeModelType);
     });
 
     // Initialize badge filter bar
