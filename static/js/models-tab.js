@@ -77,12 +77,13 @@ const TYPE_LABELS = {
 
 // Mapping from models-tab type → comfyui-editor key + inputKey
 const GENUI_TYPE_MAP = {
-    checkpoint:  { key: "checkpoints",    inputKey: "ckpt_name" },
-    lora:        { key: "loras",          inputKey: "lora_name" },
-    vae:         { key: "vaes",           inputKey: "vae_name" },
-    controlnet:  { key: "controlNets",    inputKey: "control_net_name" },
-    unet:        { key: "diffusionModels",inputKey: "unet_name" },
-    textencoder: { key: "textEncoders",   inputKey: "clip_name1" },
+    checkpoint:   { key: "checkpoints",    inputKey: "ckpt_name" },
+    lora:         { key: "loras",          inputKey: "lora_name" },
+    vae:          { key: "vaes",           inputKey: "vae_name" },
+    controlnet:   { key: "controlNets",    inputKey: "control_net_name" },
+    unet:         { key: "diffusionModels",inputKey: "unet_name" },
+    textencoder:  { key: "textEncoders",   inputKey: "clip_name1" },
+    hypernetwork: { key: "hypernetworks",  inputKey: "hypernetwork_name" },
 };
 
 function applyToGenUI(modelName, modelType) {

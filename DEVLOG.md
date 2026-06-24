@@ -1,5 +1,21 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-24: v0.3.50 — GenerateUIタブ Hypernetwork対応 + ModelsタブGenUI Modelボタン追加
+
+**変更ファイル**: `static/js/comfyui-workflow.js`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`
+
+### 変更内容
+
+**GenerateUI → Model タブに Hypernetwork セクション追加**
+
+- `comfyui-workflow.js` `analyzeWorkflow()`: `hypernetwork_nodes: []` を追加。`HypernetworkLoader` ノードを検出し `hypernetwork_name` / `strength` を収集。
+- `comfyui-editor.js`:
+  - `models.hypernetworks: []` を追加、`loadModelLists()` に `fetchHypernetworks()` を追加
+  - `renderModelTab()` の `sections` 末尾に Hypernetwork を追加。`extras` プロパティで `strength`（数値フィールド）を表示・Apply 時に反映
+- `models-tab.js` `GENUI_TYPE_MAP`: `hypernetwork: { key: "hypernetworks", inputKey: "hypernetwork_name" }` を追加。これにより詳細パネル・モーダルの GenUI Model ボタンが Hypernetwork タイプでも有効になる。
+
+---
+
 ## 2026-06-24: v0.3.50 — Hypernetwork/Embeddingモデル未表示バグ修正
 
 **変更ファイル**: `static/js/comfyui-client.js`

@@ -490,6 +490,7 @@ export const comfyWorkflow = {
             text_encoder_nodes: [],
             diffusion_model_nodes: [],
             controlnet_nodes: [],
+            hypernetwork_nodes: [],
             all_nodes: [],
         };
 
@@ -813,6 +814,15 @@ export const comfyWorkflow = {
                 result.controlnet_nodes.push({
                     id, type: ct, title,
                     control_net_name: inputs.control_net_name,
+                });
+            }
+
+            // --- Hypernetwork loader nodes ---
+            if (ct === "HypernetworkLoader") {
+                result.hypernetwork_nodes.push({
+                    id, type: ct, title,
+                    hypernetwork_name: inputs.hypernetwork_name,
+                    strength: inputs.strength ?? 1.0,
                 });
             }
         }

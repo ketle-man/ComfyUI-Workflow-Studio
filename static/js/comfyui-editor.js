@@ -123,6 +123,7 @@ export const comfyEditor = {
         diffusionModels: [],
         textEncoders: [],
         controlNets: [],
+        hypernetworks: [],
         samplers: [],
         schedulers: [],
         lastError: null,
@@ -130,13 +131,14 @@ export const comfyEditor = {
 
     async loadModelLists() {
         try {
-            const [ckpt, vae, lora, diff, enc, cn, samp, sched] = await Promise.all([
+            const [ckpt, vae, lora, diff, enc, cn, hn, samp, sched] = await Promise.all([
                 comfyUI.fetchCheckpoints(),
                 comfyUI.fetchVaes(),
                 comfyUI.fetchLoras(),
                 comfyUI.fetchDiffusionModels(),
                 comfyUI.fetchTextEncoders(),
                 comfyUI.fetchControlNets(),
+                comfyUI.fetchHypernetworks(),
                 comfyUI.fetchSamplers(),
                 comfyUI.fetchSchedulers(),
             ]);
@@ -146,6 +148,7 @@ export const comfyEditor = {
             this.models.diffusionModels = diff;
             this.models.textEncoders = enc;
             this.models.controlNets = cn;
+            this.models.hypernetworks = hn;
             this.models.samplers = samp;
             this.models.schedulers = sched;
             this.models.lastError = null;
@@ -230,6 +233,10 @@ export const comfyEditor = {
             { label: "Diffusion Model", key: "diffusionModels", nodes: analysis.diffusion_model_nodes, inputKey: "unet_name" },
             { label: "Text Encoder", key: "textEncoders", nodes: analysis.text_encoder_nodes, inputKey: "clip_name1" },
             { label: "ControlNet", key: "controlNets", nodes: analysis.controlnet_nodes, inputKey: "control_net_name" },
+            {
+                label: "Hypernetwork", key: "hypernetworks", nodes: analysis.hypernetwork_nodes, inputKey: "hypernetwork_name",
+                extras: [{ label: "Strength", inputKey: "strength", type: "number", defaultVal: 1.0, step: 0.01, min: -10, max: 10 }],
+            },
         ];
 
         el.innerHTML = sections
@@ -239,6 +246,16 @@ export const comfyEditor = {
                 const targetOpts = s.nodes
                     .map((n) => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`)
                     .join("");
+                const extrasHtml = (s.extras || []).map((ex) => {
+                    const curVal = s.nodes?.[0]?.[ex.inputKey] ?? ex.defaultVal;
+                    return `<div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+                        <label style="font-size:12px;white-space:nowrap;color:var(--wfm-text-secondary);">${ex.label}</label>
+                        <input type="${ex.type}" class="wfm-input wfm-model-extra" id="wfm-model-${s.key}-${ex.inputKey}"
+                            data-key="${s.key}" data-input-key="${ex.inputKey}"
+                            value="${curVal}" step="${ex.step}" min="${ex.min}" max="${ex.max}"
+                            style="width:80px;">
+                    </div>`;
+                }).join("");
 
                 return `
                 <div class="wfm-form-group" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;">
@@ -247,7 +264,8 @@ export const comfyEditor = {
                     <select class="wfm-select" id="wfm-model-${s.key}" style="margin-bottom:4px;">
                         ${models.map((m) => `<option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>`).join("")}
                     </select>
-                    <div style="display:flex;gap:8px;align-items:center;">
+                    ${extrasHtml}
+                    <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
                         <select class="wfm-select" id="wfm-model-${s.key}-target" style="flex:1;">${targetOpts}</select>
                         <button class="wfm-btn wfm-btn-sm wfm-model-apply" data-key="${s.key}" data-input="${s.inputKey}">Apply</button>
                     </div>
@@ -284,6 +302,12 @@ export const comfyEditor = {
                 const nodeId = targetSelect.value;
                 if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
                     comfyUI.currentWorkflow[nodeId].inputs[inputKey] = value;
+                    // Apply extras (e.g. strength for Hypernetwork)
+                    el.querySelectorAll(`.wfm-model-extra[data-key="${key}"]`).forEach((ex) => {
+                        const exInputKey = ex.dataset.inputKey;
+                        const exVal = parseFloat(ex.value);
+                        if (!isNaN(exVal)) comfyUI.currentWorkflow[nodeId].inputs[exInputKey] = exVal;
+                    });
                     _syncRawJson();
                 }
             });
