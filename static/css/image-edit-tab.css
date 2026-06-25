@@ -189,6 +189,12 @@
     cursor: crosshair;
 }
 
+#ie-canvas-overlay {
+    z-index: 3;
+    cursor: default;
+    pointer-events: none; /* SelectTool.activate()でautoに変更 */
+}
+
 .ie-placeholder {
     position: absolute;
     inset: 0;

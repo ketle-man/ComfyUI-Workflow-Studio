@@ -2,9 +2,11 @@
 Gallery Routes - ギャラリータブ用APIエンドポイント
 """
 import asyncio
+import base64
 import json
 import mimetypes
 import logging
+import re
 from pathlib import Path
 from aiohttp import web
 
@@ -53,6 +55,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/image/serve", serve_image)
     app.router.add_get("/wfm/gallery/image/thumb", serve_thumb)
     app.router.add_post("/wfm/gallery/image/meta", save_image_meta)
+    app.router.add_post("/wfm/gallery/image/save", save_image_to_gallery)
     app.router.add_post("/wfm/gallery/image/favorite", toggle_favorite)
     app.router.add_get("/wfm/gallery/groups", list_groups)
     app.router.add_post("/wfm/gallery/groups", create_group)
@@ -254,6 +257,40 @@ async def toggle_favorite(request: web.Request) -> web.Response:
         new_val = _service.toggle_favorite(img_path)
         return web.json_response({"favorite": new_val})
     except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def save_image_to_gallery(request: web.Request) -> web.Response:
+    """Image Edit Tab からの PNG をギャラリーのルートフォルダに保存する。"""
+    try:
+        body = await request.json()
+        filename   = body.get("filename", "").strip()
+        image_data = body.get("imageData", "")
+
+        if not filename or not image_data:
+            return web.json_response({"error": "filename and imageData required"}, status=400)
+
+        if _service._allowed_root is None:
+            return web.json_response({"error": "Gallery root not configured. Open Gallery tab and set output folder first."}, status=500)
+
+        # ファイル名サニタイズ（OSで使えない文字を除去）
+        safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", filename)
+        if not safe.lower().endswith(".png"):
+            safe += ".png"
+
+        # base64 data URL をデコード
+        raw = image_data
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        image_bytes = base64.b64decode(raw)
+
+        save_path = _service._allowed_root / safe
+        save_path.write_bytes(image_bytes)
+
+        logger.info("save_image_to_gallery: saved %s (%d bytes)", save_path, len(image_bytes))
+        return web.json_response({"ok": True, "path": str(save_path)})
+    except Exception as e:
+        logger.error("save_image_to_gallery error: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
