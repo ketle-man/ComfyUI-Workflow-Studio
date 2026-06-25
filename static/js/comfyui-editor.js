@@ -5,6 +5,42 @@
 import { comfyUI } from "./comfyui-client.js";
 import { syncJsonHighlight } from "./json-highlight.js";
 
+// ── Latent Image preset state ─────────────────────────────
+const _LATENT_PRESET_KEY = "wfm_latent_presets";
+const _LATENT_DEFAULT_PRESETS = [
+    { w: 720,  h: 1280 }, { w: 768,  h: 1024 }, { w: 1152, h: 896  },
+    { w: 1344, h: 768  }, { w: 832,  h: 1216 }, { w: 832,  h: 1248 },
+    { w: 832,  h: 1280 }, { w: 1920, h: 1080 }, { w: 2560, h: 1440 },
+    { w: 3840, h: 2160 },
+];
+
+function _loadLatentPresets() {
+    try {
+        const raw = localStorage.getItem(_LATENT_PRESET_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+function _saveLatentPresets(list) {
+    localStorage.setItem(_LATENT_PRESET_KEY, JSON.stringify(list));
+}
+
+function _buildPresetOptions(customPresets) {
+    const customs = customPresets.map((p) =>
+        `<option value="${p.w}x${p.h}">${p.w}x${p.h}</option>`
+    ).join("");
+    const defaults = _LATENT_DEFAULT_PRESETS.map((p) =>
+        `<option value="${p.w}x${p.h}" data-default="1">${p.w}x${p.h}</option>`
+    ).join("");
+    return customs + defaults;
+}
+
+function _refreshPresetSelect(customPresets) {
+    const sel = document.getElementById("wfm-latent-preset-select");
+    if (!sel) return;
+    sel.innerHTML = _buildPresetOptions(customPresets);
+}
+
 // ── LoRA pane stack state ─────────────────────────────────
 // { modelFullPath: { m: number, c: number } }
 let _stackStrengths = {};
@@ -867,6 +903,25 @@ export const comfyEditor = {
                         <input type="number" class="wfm-input" id="wfm-settings-batch" value="${latent.batch_size ?? 1}" min="1" max="64">
                     </div>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-settings-latent-apply">Apply</button>
+                    <div style="margin-top:10px;border-top:1px solid var(--wfm-border);padding-top:10px;">
+                        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+                            ${[512, 768, 1024, 2048].map((s) => `<button class="wfm-btn wfm-btn-sm wfm-latent-sq-btn" data-size="${s}">${s}</button>`).join("")}
+                            <button class="wfm-btn wfm-btn-sm wfm-latent-sq-btn" data-size="1024">1K</button>
+                            <button class="wfm-btn wfm-btn-sm wfm-latent-sq-btn" data-size="2048">2K</button>
+                            <button class="wfm-btn wfm-btn-sm wfm-latent-sq-btn" data-size="4096">4K</button>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+                            <select id="wfm-latent-preset-select" style="flex:1;padding:4px 6px;font-size:12px;background:var(--wfm-surface);color:var(--wfm-text);border:1px solid var(--wfm-border);border-radius:4px;min-width:0;">
+                                ${_buildPresetOptions(_loadLatentPresets())}
+                            </select>
+                            <button class="wfm-btn wfm-btn-sm" id="wfm-latent-wh-set" title="Width→左、Height→右にセット">WHSet</button>
+                            <button class="wfm-btn wfm-btn-sm" id="wfm-latent-hw-set" title="Width→右、Height→左にセット">HWSet</button>
+                        </div>
+                        <div style="display:flex;gap:4px;">
+                            <button class="wfm-btn wfm-btn-sm" id="wfm-latent-preset-add" title="現在のWidth/Heightをプリセットに追加">+</button>
+                            <button class="wfm-btn wfm-btn-sm" id="wfm-latent-preset-del" title="選択中のカスタムプリセットを削除">−</button>
+                        </div>
+                    </div>
                     ` : "<p class='wfm-placeholder'>No EmptyLatentImage node found</p>"}
                 </div>
             </div>
@@ -895,6 +950,68 @@ export const comfyEditor = {
             inputs.height = parseInt(document.getElementById("wfm-settings-height")?.value) || 512;
             inputs.batch_size = parseInt(document.getElementById("wfm-settings-batch")?.value) || 1;
             _syncRawJson();
+        });
+
+        // 正方形プリセットボタン
+        document.querySelectorAll(".wfm-latent-sq-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const size = parseInt(btn.dataset.size);
+                const w = document.getElementById("wfm-settings-width");
+                const h = document.getElementById("wfm-settings-height");
+                if (w) w.value = size;
+                if (h) h.value = size;
+            });
+        });
+
+        // ドロップダウン WHSet / HWSet
+        document.getElementById("wfm-latent-wh-set")?.addEventListener("click", () => {
+            const val = document.getElementById("wfm-latent-preset-select")?.value;
+            if (!val) return;
+            const [pw, ph] = val.split("x").map(Number);
+            const w = document.getElementById("wfm-settings-width");
+            const h = document.getElementById("wfm-settings-height");
+            if (w) w.value = pw;
+            if (h) h.value = ph;
+        });
+
+        document.getElementById("wfm-latent-hw-set")?.addEventListener("click", () => {
+            const val = document.getElementById("wfm-latent-preset-select")?.value;
+            if (!val) return;
+            const [pw, ph] = val.split("x").map(Number);
+            const w = document.getElementById("wfm-settings-width");
+            const h = document.getElementById("wfm-settings-height");
+            if (w) w.value = ph;
+            if (h) h.value = pw;
+        });
+
+        // + ボタン: 現在のW/Hをカスタムプリセットの先頭に追加
+        document.getElementById("wfm-latent-preset-add")?.addEventListener("click", () => {
+            const wVal = parseInt(document.getElementById("wfm-settings-width")?.value);
+            const hVal = parseInt(document.getElementById("wfm-settings-height")?.value);
+            if (!wVal || !hVal) return;
+            const customs = _loadLatentPresets();
+            const key = `${wVal}x${hVal}`;
+            const isDefault = _LATENT_DEFAULT_PRESETS.some((p) => p.w === wVal && p.h === hVal);
+            const alreadyCustom = customs.some((p) => p.w === wVal && p.h === hVal);
+            if (isDefault || alreadyCustom) return;
+            customs.unshift({ w: wVal, h: hVal });
+            _saveLatentPresets(customs);
+            _refreshPresetSelect(customs);
+            // 追加した項目を選択状態にする
+            const sel = document.getElementById("wfm-latent-preset-select");
+            if (sel) sel.value = key;
+        });
+
+        // − ボタン: 選択中のカスタムプリセットを削除（デフォルトは削除不可）
+        document.getElementById("wfm-latent-preset-del")?.addEventListener("click", () => {
+            const sel = document.getElementById("wfm-latent-preset-select");
+            if (!sel) return;
+            const opt = sel.options[sel.selectedIndex];
+            if (!opt || opt.dataset.default === "1") return;
+            const [dw, dh] = sel.value.split("x").map(Number);
+            const customs = _loadLatentPresets().filter((p) => !(p.w === dw && p.h === dh));
+            _saveLatentPresets(customs);
+            _refreshPresetSelect(customs);
         });
     },
 
