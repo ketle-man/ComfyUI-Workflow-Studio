@@ -8,12 +8,14 @@ import { LayerManager, Layer } from "./image-edit/LayerManager.js";
 import { DrawTool }            from "./image-edit/DrawTool.js";
 import { TextTool, TEXT_FONTS } from "./image-edit/TextTool.js";
 import { SelectTool }          from "./image-edit/SelectTool.js";
+import { ShapeTool }           from "./image-edit/ShapeTool.js";
 import { showToast }           from "./app.js";
 
 const TOOL_DEFS = [
     { id: "select",   icon: "▲",  label: "Select",    ready: true  },
     { id: "draw",     icon: "✏",  label: "Draw",      ready: true  },
     { id: "text",     icon: "T",   label: "Text",      ready: true  },
+    { id: "shape",    icon: "□",   label: "Shape",     ready: true  },
     { id: "mask",     icon: "🎭",  label: "Mask",      ready: false },
     { id: "blur",     icon: "≈",   label: "Blur",      ready: false },
     { id: "filter",   icon: "★",   label: "Filter",    ready: false },
@@ -47,6 +49,7 @@ class ImageEditTab {
         this._compositeMode    = false;
         this._editingTextLayer = null; // テキスト再編集中のレイヤー参照
         this._initialized      = false;
+        this._shapeTool        = null;
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -77,6 +80,7 @@ class ImageEditTab {
         if (this._activeTool === "draw")   this._drawTool?.deactivate();
         if (this._activeTool === "text")   this._textTool?.deactivate();
         if (this._activeTool === "select") this._selectTool?.deactivate();
+        if (this._activeTool === "shape")  this._shapeTool?.deactivate();
 
         this._activeTool = toolId;
 
@@ -101,6 +105,10 @@ class ImageEditTab {
         } else if (this._activeTool === "select" && this._selectTool) {
             this._selectTool.setCanvas(overlayCanvas);
             this._selectTool.activate();
+        } else if (this._activeTool === "shape" && this._shapeTool) {
+            this._shapeTool.setCanvas(overlayCanvas);
+            this._shapeTool.activate();
+            if (overlayCanvas) overlayCanvas.style.cursor = "crosshair";
         }
     }
 
@@ -243,6 +251,105 @@ class ImageEditTab {
                 this._textTool.italic = !this._textTool.italic; this._renderToolOptions("text");
             });
             document.getElementById("ie-text-align")?.addEventListener("change", e => { this._textTool.align = e.target.value; });
+        } else if (toolId === "shape" && this._shapeTool) {
+            const t = this._shapeTool;
+            const isLineKind  = ["line", "freeline"].includes(t.shape);
+            const showRounded = ["rect", "ellipse"].includes(t.shape);
+            el.innerHTML = `
+                <div class="ie-opt-group">
+                    <label>Shape</label>
+                    <select id="ie-shape-kind" class="ie-opt-select">
+                        <option value="rect"     ${t.shape==="rect"     ?"selected":""}>Rect</option>
+                        <option value="ellipse"  ${t.shape==="ellipse"  ?"selected":""}>Ellipse</option>
+                        <option value="line"     ${t.shape==="line"     ?"selected":""}>Line</option>
+                        <option value="freeline" ${t.shape==="freeline" ?"selected":""}>FreeLine</option>
+                    </select>
+                </div>
+                <div class="ie-opt-group" id="ie-shape-rounded-wrap" style="display:${showRounded?"":"none"};">
+                    <label><input type="checkbox" id="ie-shape-rounded" ${t.rounded?"checked":""}> Rounded</label>
+                </div>
+                <div class="ie-opt-group" id="ie-shape-fill-wrap" style="display:${isLineKind?"none":""};">
+                    <label>Fill</label>
+                    <input type="checkbox" id="ie-shape-fill-none" ${t.fillNone?"checked":""}> <span style="font-size:11px;color:var(--wfm-text-secondary);">None</span>
+                    <input type="color" id="ie-shape-fill" value="${t.fillColor}" ${t.fillNone?"disabled":""}
+                        style="width:28px;height:24px;padding:0;border:1px solid var(--wfm-border);cursor:pointer;border-radius:3px;margin-left:2px;">
+                </div>
+                <div class="ie-opt-group">
+                    <label>Stroke</label>
+                    <div id="ie-shape-stroke-none-wrap" style="display:${isLineKind?"none":""};">
+                        <input type="checkbox" id="ie-shape-stroke-none" ${t.strokeNone?"checked":""}> <span style="font-size:11px;color:var(--wfm-text-secondary);">None</span>
+                    </div>
+                    <input type="color" id="ie-shape-stroke" value="${t.strokeColor}" ${(!isLineKind && t.strokeNone)?"disabled":""}
+                        style="width:28px;height:24px;padding:0;border:1px solid var(--wfm-border);cursor:pointer;border-radius:3px;margin-left:2px;">
+                    <input type="number" id="ie-shape-stroke-width" value="${t.strokeWidth}" min="1" max="200" ${(!isLineKind && t.strokeNone)?"disabled":""}
+                        style="width:44px;margin-left:2px;" class="ie-opt-input">
+                </div>
+                <div class="ie-opt-group">
+                    <label>Opacity</label>
+                    <input type="range" id="ie-shape-opacity" min="1" max="100" value="${Math.round(t.opacity*100)}" style="width:70px;">
+                    <span id="ie-shape-opacity-lbl">${Math.round(t.opacity*100)}%</span>
+                </div>
+                <div class="ie-opt-group" style="margin-left:8px;">
+                    <button class="wfm-btn wfm-btn-sm" id="ie-shape-undo-btn">↩ Undo</button>
+                </div>
+            `;
+
+            const _updateShapeVisibility = () => {
+                const kind       = document.getElementById("ie-shape-kind").value;
+                const lineKind   = ["line", "freeline"].includes(kind);
+                const rw  = document.getElementById("ie-shape-rounded-wrap");
+                const fw  = document.getElementById("ie-shape-fill-wrap");
+                const snw = document.getElementById("ie-shape-stroke-none-wrap");
+                if (rw)  rw.style.display  = ["rect", "ellipse"].includes(kind) ? "" : "none";
+                if (fw)  fw.style.display  = lineKind ? "none" : "";
+                if (snw) snw.style.display = lineKind ? "none" : "";
+                if (lineKind) {
+                    // fill は不要
+                    document.getElementById("ie-shape-fill-none").checked = true;
+                    document.getElementById("ie-shape-fill").disabled = true;
+                    t.fillNone = true;
+                    // stroke は常に有効
+                    document.getElementById("ie-shape-stroke").disabled       = false;
+                    document.getElementById("ie-shape-stroke-width").disabled = false;
+                } else {
+                    // rect / ellipse: strokeNone に従って再適用
+                    const sn = document.getElementById("ie-shape-stroke-none").checked;
+                    document.getElementById("ie-shape-stroke").disabled       = sn;
+                    document.getElementById("ie-shape-stroke-width").disabled = sn;
+                }
+            };
+
+            document.getElementById("ie-shape-kind")?.addEventListener("change", e => {
+                t.shape = e.target.value;
+                _updateShapeVisibility();
+            });
+            document.getElementById("ie-shape-rounded")?.addEventListener("change", e => {
+                t.rounded = e.target.checked;
+            });
+            document.getElementById("ie-shape-fill-none")?.addEventListener("change", e => {
+                t.fillNone = e.target.checked;
+                document.getElementById("ie-shape-fill").disabled = e.target.checked;
+            });
+            document.getElementById("ie-shape-fill")?.addEventListener("input", e => {
+                t.fillColor = e.target.value;
+            });
+            document.getElementById("ie-shape-stroke-none")?.addEventListener("change", e => {
+                t.strokeNone = e.target.checked;
+                document.getElementById("ie-shape-stroke").disabled       = e.target.checked;
+                document.getElementById("ie-shape-stroke-width").disabled = e.target.checked;
+            });
+            document.getElementById("ie-shape-stroke")?.addEventListener("input", e => {
+                t.strokeColor = e.target.value;
+            });
+            document.getElementById("ie-shape-stroke-width")?.addEventListener("input", e => {
+                t.strokeWidth = parseFloat(e.target.value) || 1;
+            });
+            document.getElementById("ie-shape-opacity")?.addEventListener("input", e => {
+                t.opacity = parseInt(e.target.value) / 100;
+                document.getElementById("ie-shape-opacity-lbl").textContent = e.target.value + "%";
+            });
+            document.getElementById("ie-shape-undo-btn")?.addEventListener("click", () => this._undo());
+
         } else {
             const def = TOOL_DEFS.find(d => d.id === toolId);
             el.innerHTML = `<span style="font-size:12px;color:var(--wfm-text-secondary);">${def?.label ?? toolId}: coming soon</span>`;
@@ -342,6 +449,9 @@ class ImageEditTab {
             this._loadActiveLayerToCanvas();
             this._drawTool.onMouseDown(pos.x, pos.y);
 
+        } else if (this._activeTool === "shape" && this._shapeTool) {
+            this._shapeTool.onMouseDown(pos.x, pos.y);
+
         } else if (this._activeTool === "text" && this._textTool) {
             // undo・drawCanvasリセットはテキスト確定時（onChange）で行う
             this._textTool.onMouseDown(pos.x, pos.y);
@@ -362,17 +472,20 @@ class ImageEditTab {
         if (!this._layerMgr) return;
         const pos = DrawTool.getCanvasPos(refCanvas, e);
         if (this._activeTool === "draw")   this._drawTool?.onMouseMove(pos.x, pos.y);
+        if (this._activeTool === "shape")  this._shapeTool?.onMouseMove(pos.x, pos.y);
         if (this._activeTool === "select") this._selectTool?.onMouseMove(pos.x, pos.y);
     }
 
     _onToolMouseUp(e) {
         if (!this._layerMgr || e.button !== 0) return;
         if (this._activeTool === "draw")   this._drawTool?.onMouseUp();
+        if (this._activeTool === "shape")  this._shapeTool?.onMouseUp();
         if (this._activeTool === "select") this._selectTool?.onMouseUp();
     }
 
     _onToolMouseLeave() {
         if (this._activeTool === "draw")   this._drawTool?.onMouseLeave();
+        if (this._activeTool === "shape")  this._shapeTool?.onMouseLeave();
         if (this._activeTool === "select") this._selectTool?.onMouseLeave();
     }
 
@@ -543,6 +656,21 @@ class ImageEditTab {
             this._layerMgr.setActive(textLayer.id);
             this._setActiveTool("select");
             this._selectTool?.setLayer(textLayer);
+            this._updateCompositeView();
+            this._refreshLayerList();
+        });
+
+        this._shapeTool = new ShapeTool();
+        this._shapeTool.onChange(shapeObj => {
+            this._saveUndo();
+            const layerName = `Shape ${this._layerMgr.layers.length + 1}`;
+            const layer = this._layerMgr.addLayer("draw", layerName, {
+                contentW: this._canvasW, contentH: this._canvasH,
+                displayW: this._canvasW, displayH: this._canvasH,
+                x: 0, y: 0,
+            });
+            ShapeTool.drawShape(layer.ctx, shapeObj);
+            this._layerMgr.setActive(layer.id);
             this._updateCompositeView();
             this._refreshLayerList();
         });
@@ -885,6 +1013,7 @@ class ImageEditTab {
                 if (e.key === "v") this._setActiveTool("select");
                 if (e.key === "b") this._setActiveTool("draw");
                 if (e.key === "t") this._setActiveTool("text");
+                if (e.key === "s") this._setActiveTool("shape");
                 // Delete/Backspaceで選択オブジェクト削除
                 if ((e.key === "Delete" || e.key === "Backspace") && this._activeTool === "select") {
                     const layer = this._selectTool?.getSelectedLayer();

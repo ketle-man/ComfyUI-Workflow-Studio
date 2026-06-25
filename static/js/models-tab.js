@@ -1075,17 +1075,19 @@ function renderThumbView(grid, models) {
 
         card.querySelector(".wfm-batch-btn")?.addEventListener("click", async (e) => {
             e.stopPropagation();
+            const btn = e.currentTarget;
             await toggleBatch(modelName);
             if (state.showBatchOnly) {
                 renderModelGrid();
             } else {
-                e.currentTarget.classList.toggle("active", isInBatch(modelName));
+                btn.classList.toggle("active", isInBatch(modelName));
             }
         });
         card.querySelector(".wfm-stack-btn")?.addEventListener("click", async (e) => {
             e.stopPropagation();
+            const btn = e.currentTarget;
             await toggleStack(modelName);
-            e.currentTarget.classList.toggle("active", isInStack(modelName));
+            btn.classList.toggle("active", isInStack(modelName));
         });
         card.querySelector(".wfm-fav-btn").addEventListener("click", (e) => {
             e.stopPropagation();

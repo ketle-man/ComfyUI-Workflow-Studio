@@ -1,5 +1,50 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-25: v0.3.54 — Image Edit Shape ツール追加・Models タブ overlay バグ修正
+
+**変更ファイル**: `static/js/image-edit/ShapeTool.js`（新規）, `static/js/image-edit-tab.js`, `templates/index.html`, `static/js/models-tab.js`
+
+### Image Edit Tab — Shape ツール（□ / S キー）
+
+Eagle Comic Creator の画像編集タブ形状描画機能を移植。
+
+**対応形状**
+- **Rect** — 矩形（Rounded チェックで角丸）
+- **Ellipse** — 楕円
+- **Line** — 直線（Stroke None 非表示 / 常にストローク有効）
+- **FreeLine** — フリーハンド曲線（旧 Curve。Stroke None 非表示 / 常にストローク有効）
+
+**Tool Options バー**
+- Shape ドロップダウン、Rounded チェック（Rect/Ellipse のみ表示）
+- Fill: None チェック + カラーピッカー（Line/FreeLine 時は非表示）
+- Stroke: None チェック + カラーピッカー + 幅入力（Line/FreeLine 時は None チェック非表示）
+- Opacity スライダー、↩ Undo ボタン
+
+**動作**
+- ドラッグ中: overlayCanvas に青い破線でプレビュー表示（FreeLine はリアルタイム描画）
+- ドラッグ離す: 確定 → 独立した draw レイヤーとして LayerManager に追加 → Undo 1操作で除去可
+- `ShapeTool.drawShape(ctx, shapeObj)` スタティックメソッドでレイヤー canvas に描画
+
+**実装ファイル**
+- `static/js/image-edit/ShapeTool.js`（新規）: ShapeTool クラス（プレビュー・確定・静的描画メソッド）
+- `image-edit-tab.js`: import・TOOL_DEFS 追加・`_setActiveTool`/`_activateCurrentTool`/`_renderToolOptions`/マウスハンドラー/`_initCanvases` を更新
+- `templates/index.html`: □ ツールボタン追加
+
+**ヘルプ更新**
+- Image Edit Tab Tools セクション: Shape ツールの説明を追加
+- Image Edit Keyboard Shortcuts: `S: Shape tool` を追記（ヘルプ内・グローバル Shortcuts ページ）
+- `image-edit-tab.js` キーボードハンドラーに `s` → `"shape"` を追加（ヘルプ記載と実装を一致）
+
+### Models タブ — overlay ボタン非更新バグ修正
+
+`async` イベントハンドラー内で `await` 後に `e.currentTarget` が `null` になる問題を 2箇所修正。
+
+- **B（Batch）ボタン** — 前回修正済み
+- **S（Stack）ボタン** — `await toggleStack()` 後に `e.currentTarget.classList.toggle()` を呼んでいたため `TypeError` が発生し黄色に変わらなかった → `const btn = e.currentTarget` を await 前に保存して修正
+- **⏸ enable/disable ボタン** — 非 async ハンドラーで `renderModelGrid()` 経由の再描画を使用しており問題なし（確認のみ）
+
+---
+
 ## 2026-06-25: v0.3.53 — Image Edit Tab 実装・レイヤーロック・ギャラリー保存
 
 **変更ファイル**: `static/js/image-edit-tab.js`, `static/js/image-edit/LayerManager.js`, `static/js/image-edit/SelectTool.js`, `static/js/image-edit/TextTool.js`, `static/css/image-edit-tab.css`, `templates/index.html`, `static/js/gallery-tab.js`, `py/routes/gallery_routes.py`

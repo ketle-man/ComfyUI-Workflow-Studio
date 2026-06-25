@@ -1269,6 +1269,7 @@
                                 <li><b>Select (V):</b> click to select a layer; drag to move; drag corner handles to resize; drag the circle above the top edge to rotate; double-click a text layer to re-edit its content; Tool Options bar shows Flip H / Flip V / Rotate field</li>
                                 <li><b>Draw (B):</b> freehand brush drawing onto the active draw layer; Tool Options: color, brush size, blend mode</li>
                                 <li><b>Text (T):</b> click on the canvas to place a text input overlay; configure font family, size, bold/italic, align, color in the Tool Options bar; click OK to place the text as an exact-size Text layer; double-click an existing text layer with the Select tool to re-edit</li>
+                                <li><b>Shape (S):</b> draw geometric shapes onto the canvas; each committed shape becomes an independent draw layer; Tool Options: <b>Shape</b> type (Rect / Ellipse / Line / FreeLine), <b>Rounded</b> checkbox (Rect / Ellipse only), <b>Fill</b> color + None toggle (hidden for Line / FreeLine), <b>Stroke</b> color + width + None toggle (None hidden for Line / FreeLine where stroke is always active), <b>Opacity</b> slider, <b>↩ Undo</b> button; drag to draw — a blue dashed outline previews the shape; release to commit</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1306,6 +1307,7 @@
                                 <li><b>V</b>: Select tool</li>
                                 <li><b>B</b>: Draw tool</li>
                                 <li><b>T</b>: Text tool</li>
+                                <li><b>S</b>: Shape tool</li>
                                 <li><b>Delete</b>: Delete selected layer (requires 2+ layers)</li>
                                 <li><b>Ctrl+Z / Ctrl+Y</b>: Undo / Redo</li>
                                 <li><b>Space + drag</b>: Pan canvas</li>
@@ -1331,6 +1333,7 @@
                                 <li>V: Select tool</li>
                                 <li>B: Draw tool</li>
                                 <li>T: Text tool</li>
+                                <li>S: Shape tool</li>
                                 <li>Delete: Delete selected layer (requires 2+ layers)</li>
                                 <li>Ctrl+Z / Ctrl+Y: Undo / Redo</li>
                                 <li>Space + drag: Pan canvas</li>
@@ -1528,6 +1531,7 @@
                     <button class="ie-tool-btn active" data-tool="select"   title="Select (V)">▲</button>
                     <button class="ie-tool-btn"        data-tool="draw"     title="Draw (B)">✏</button>
                     <button class="ie-tool-btn"        data-tool="text"     title="Text (T)">T</button>
+                    <button class="ie-tool-btn"        data-tool="shape"    title="Shape (S)">□</button>
                     <button class="ie-tool-btn ie-tool-placeholder" data-tool="mask"     title="Mask">🎭</button>
                     <button class="ie-tool-btn ie-tool-placeholder" data-tool="blur"     title="Blur">≈</button>
                     <button class="ie-tool-btn ie-tool-placeholder" data-tool="filter"   title="Filter">★</button>

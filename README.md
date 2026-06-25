@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.53-green)
+![Version](https://img.shields.io/badge/version-0.3.54-green)
 
 ## Screenshots
 
@@ -212,16 +212,17 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw types) and export the composite as PNG
 - **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
 - **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers
-- **Tools** — Select (V), Draw (B), Text (T); tool options bar updates per active tool
+- **Tools** — Select (V), Draw (B), Text (T), Shape (S); tool options bar updates per active tool
   - **Select** — click to select; drag to move; drag corner handles to resize; drag circle handle to rotate; Flip H / Flip V / Rotate angle in the options bar; double-click a text layer to re-edit its content
   - **Draw** — freehand brush; options: color, brush size, blend mode
   - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
+  - **Shape** — drag to draw geometric shapes (Rect / Ellipse / Line / FreeLine); options: shape type, Rounded toggle (Rect/Ellipse), Fill color, Stroke color + width, Opacity; each committed shape becomes an independent draw layer; Stroke None hidden for Line/FreeLine (stroke always active)
 - **Layer panel** — layer list with visibility (👁/🚫) and lock (🔒/🔓) toggles; opacity slider; type icons (🖼 image / T text / ✏ draw); Layer 1 is automatically locked on first image load
 - **Layer lock** — locked layers show an orange bounding box and 🔒 icon on the canvas; move/resize/rotate are disabled while locked; click the 🔓 button in the layer row to unlock
 - **Text quality** — text layers are rendered at their measured bounding-box size; resizing with the Select tool regenerates the canvas at the new display resolution so text stays sharp
 - **Export** — Save PNG (download composite locally); **Save to Gallery** (saves to Gallery root folder with a timestamped default name `wfs-image-YYYYMMDDHHmmss`); **Send to ComfyUI** (uploads to ComfyUI input folder for use in Load Image nodes)
 - **Canvas navigation** — scroll-wheel zoom, Space + drag to pan; zoom indicator in the bottom bar
-- **Undo / Redo** — Ctrl+Z / Ctrl+Y (or toolbar buttons); keyboard shortcuts: V (Select), B (Draw), T (Text), Delete (remove selected layer when 2+ exist)
+- **Undo / Redo** — Ctrl+Z / Ctrl+Y (or toolbar buttons); keyboard shortcuts: V (Select), B (Draw), T (Text), S (Shape), Delete (remove selected layer when 2+ exist)
 
 ### AI TOOL Tab (v0.3.14)
 - **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
@@ -348,6 +349,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.54
+- **Image Edit — Shape tool (S)** — new Shape tool added to the Image Edit toolbar; draw Rect, Ellipse, Line, and FreeLine shapes by dragging; each committed shape becomes an independent draw layer that can be undone in a single step; Tool Options: shape type selector, Rounded toggle (Rect/Ellipse only), Fill color + None toggle (hidden for Line/FreeLine), Stroke color + width (Stroke None hidden for Line/FreeLine where stroke is always active), Opacity slider, Undo button; blue dashed outline previews the shape during drag; keyboard shortcut **S** activates the tool
+- **Models tab — fix B/S overlay buttons not highlighting** — the Batch (B) and Stack (S) card overlay buttons failed to turn yellow after clicking because `e.currentTarget` is nulled by the browser after an `async` event handler yields at `await`; fixed by capturing `const btn = e.currentTarget` before the await in both handlers
 
 ### v0.3.53
 - **Image Edit Tab** — new layer-based image editing tab with Select / Draw / Text tools, multi-layer compositing, canvas zoom & pan, and Undo/Redo; text layers are sized to exact bounding-box dimensions and regenerated at display resolution on resize to prevent blurring; double-click a text layer to re-edit its content; Gallery tab gains an "Image Edit" toolbar button to send the selected image directly to the editor
