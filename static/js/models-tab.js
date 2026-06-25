@@ -451,7 +451,8 @@ async function bulkRemoveFromGroup(groupName) {
     const before = groups[groupName].length;
     groups[groupName] = groups[groupName].filter((m) => !state.selectedModels.has(m));
     const removed = before - groups[groupName].length;
-    if (groups[groupName].length === 0) delete groups[groupName];
+    // RESERVED_GROUPS (Batch / Stack) は空になってもキーを保持する
+    if (groups[groupName].length === 0 && !RESERVED_GROUPS.includes(groupName)) delete groups[groupName];
     await saveModelGroups(groups);
     showToast(`${removed} ${t("modelBulkRemoveDone")}`, "success");
     renderModelGrid();
@@ -651,9 +652,10 @@ async function toggleGroupEnable(groupName, enable) {
             throw new Error(err.error || "group toggle failed");
         }
         const data = await res.json();
-        const members = state.modelGroups[groupName] || [];
+        const okSet = new Set(data.ok || []);
         const s = state.disabledModels[state.activeModelType] || new Set();
-        members.forEach((m) => { if (enable) s.delete(m); else s.add(m); });
+        // 成功したメンバーのみ更新（部分失敗時のサーバー/クライアント乖離を防ぐ）
+        for (const m of okSet) { if (enable) s.delete(m); else s.add(m); }
         state.disabledModels[state.activeModelType] = s;
         const errCount = data.errors?.length || 0;
         if (errCount > 0) showToast(`${errCount} ${t("modelToggleError")}`, "warning");
@@ -946,6 +948,11 @@ function renderGroupFilter() {
 
     const groups = state.allModelGroups[state.activeModelType] || {};
     const names = Object.keys(groups).sort();
+
+    // 選択中のグループが削除された場合はフィルターをリセット
+    if (state.groupFilter && !groups[state.groupFilter]) {
+        state.groupFilter = "";
+    }
 
     const currentValue = state.groupFilter
         ? `${state.activeModelType}::${state.groupFilter}`

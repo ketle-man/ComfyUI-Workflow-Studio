@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.54-green)
+![Version](https://img.shields.io/badge/version-0.3.55-green)
 
 ## Screenshots
 
@@ -349,6 +349,19 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.55
+- **Group feature — fix data loss on Windows (backslash/slash mismatch)** — on Windows, ComfyUI returns model paths with backslashes (`sub\model.safetensors`) while the backend normalized to forward slashes; this caused all subdir group members to be flagged as missing and deleted on save; fixed by normalizing both stored and scanned paths to forward slashes in `get_model_groups` and `save_model_groups`
+- **Group feature — network drive protection** — if no model directories are accessible (e.g. external drive disconnected), the group cleanup step is now skipped entirely to prevent wiping all group memberships
+- **Group feature — scan cache** — `_scan_model_names` now caches results for 30 seconds to eliminate redundant full directory scans on startup (caused high CPU load / crash on large model sets)
+- **Group feature — RESERVED_GROUPS protection** — `bulkRemoveFromGroup` and `renderPmGroups` now prevent Batch/Stack reserved group keys from being deleted even when all members are removed
+- **Group feature — stale groupFilter reset** — after deleting a group, `state.groupFilter` is automatically cleared if it pointed to the now-deleted group (previously showed 0 models)
+- **Group feature — toggleGroupEnable partial failure** — only models listed in `data.ok` are updated client-side, preventing state divergence when some enable/disable calls fail
+- **GenerateUI batch groups — exclude reserved groups** — Batch and Stack reserved groups no longer appear in the batch group selection UI for Checkpoint/LoRA/Prompt/Workflow
+- **GenerateUI LoRA groups — path normalization** — backslash-to-slash normalization added after fetching LoRA groups from the API, matching the Checkpoint fix
+- **Batch complete toast — i18n** — replaced hardcoded English toast with `t("batchComplete", ...)` supporting all 3 languages
+- **Prompt tab migration — fix negText loss** — `migrateLocalStoragePresets` now correctly passes `negText` when calling `apiCreatePreset`, preventing negative prompts from being silently dropped during localStorage→API migration
+- **Help tab — Image Edit section i18n** — the Image Edit help page was hardcoded in English with no language switching support; all 6 sections (30 items + 7 headings) now have i18n IDs wired to English / Japanese / Chinese translations
 
 ### v0.3.54
 - **Image Edit — Shape tool (S)** — new Shape tool added to the Image Edit toolbar; draw Rect, Ellipse, Line, and FreeLine shapes by dragging; each committed shape becomes an independent draw layer that can be undone in a single step; Tool Options: shape type selector, Rounded toggle (Rect/Ellipse only), Fill color + None toggle (hidden for Line/FreeLine), Stroke color + width (Stroke None hidden for Line/FreeLine where stroke is always active), Opacity slider, Undo button; blue dashed outline previews the shape during drag; keyboard shortcut **S** activates the tool

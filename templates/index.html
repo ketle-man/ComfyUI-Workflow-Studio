@@ -1256,63 +1256,63 @@
 
                     <div class="wfm-help-page" id="wfm-help-page-imageedit">
                         <div class="wfm-help-card">
-                            <h3>Image Edit Tab</h3>
+                            <h3 id="wfm-help-imageedit-title">Image Edit Tab</h3>
                             <ul>
-                                <li>Layer-based image editor — compose images with multiple layers (Image, Text, Draw types) and export the composite</li>
-                                <li><b>Loading images:</b> drag &amp; drop onto the canvas, Upload button, or send from the Gallery tab via the <b>Image Edit</b> button in the Gallery toolbar; the first image becomes Layer 1 (auto-locked); subsequent images are added as new layers scaled to fit the canvas</li>
-                                <li><b>New</b> button: create a blank canvas — prompts for WxH size (e.g. 512x768); clears all existing layers</li>
+                                <li id="wfm-help-imageedit-1">Layer-based image editor — compose images with multiple layers (Image, Text, Draw types) and export the composite</li>
+                                <li id="wfm-help-imageedit-2">Loading images: drag &amp; drop onto the canvas, Upload button, or send from the Gallery tab via the Image Edit button in the Gallery toolbar; the first image becomes Layer 1 (auto-locked); subsequent images are added as new layers scaled to fit the canvas</li>
+                                <li id="wfm-help-imageedit-3">New button: create a blank canvas — prompts for WxH size (e.g. 512x768); clears all existing layers</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
-                            <h3>Tools</h3>
+                            <h3 id="wfm-help-imageedit-tools-title">Tools</h3>
                             <ul>
-                                <li><b>Select (V):</b> click to select a layer; drag to move; drag corner handles to resize; drag the circle above the top edge to rotate; double-click a text layer to re-edit its content; Tool Options bar shows Flip H / Flip V / Rotate field</li>
-                                <li><b>Draw (B):</b> freehand brush drawing onto the active draw layer; Tool Options: color, brush size, blend mode</li>
-                                <li><b>Text (T):</b> click on the canvas to place a text input overlay; configure font family, size, bold/italic, align, color in the Tool Options bar; click OK to place the text as an exact-size Text layer; double-click an existing text layer with the Select tool to re-edit</li>
-                                <li><b>Shape (S):</b> draw geometric shapes onto the canvas; each committed shape becomes an independent draw layer; Tool Options: <b>Shape</b> type (Rect / Ellipse / Line / FreeLine), <b>Rounded</b> checkbox (Rect / Ellipse only), <b>Fill</b> color + None toggle (hidden for Line / FreeLine), <b>Stroke</b> color + width + None toggle (None hidden for Line / FreeLine where stroke is always active), <b>Opacity</b> slider, <b>↩ Undo</b> button; drag to draw — a blue dashed outline previews the shape; release to commit</li>
+                                <li id="wfm-help-imageedit-4">Select (V): click to select a layer; drag to move; drag corner handles to resize; drag the circle above the top edge to rotate; double-click a text layer to re-edit its content; Tool Options bar shows Flip H / Flip V / Rotate field</li>
+                                <li id="wfm-help-imageedit-5">Draw (B): freehand brush drawing onto the active draw layer; Tool Options: color, brush size, blend mode</li>
+                                <li id="wfm-help-imageedit-6">Text (T): click on the canvas to place a text input overlay; configure font family, size, bold/italic, align, color in the Tool Options bar; click OK to place the text as an exact-size Text layer; double-click an existing text layer with the Select tool to re-edit</li>
+                                <li id="wfm-help-imageedit-7">Shape (S): draw geometric shapes onto the canvas; each committed shape becomes an independent draw layer; Tool Options: Shape type (Rect / Ellipse / Line / FreeLine), Rounded checkbox (Rect / Ellipse only), Fill color + None toggle (hidden for Line / FreeLine), Stroke color + width + None toggle (None hidden for Line / FreeLine where stroke is always active), Opacity slider, ↩ Undo button; drag to draw — a blue dashed outline previews the shape; release to commit</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
-                            <h3>Layer Panel</h3>
+                            <h3 id="wfm-help-imageedit-layer-title">Layer Panel</h3>
                             <ul>
-                                <li>Layers are listed from front (top) to back (bottom); click a layer row to make it active</li>
-                                <li><b>👁 / 🚫</b> button: toggle layer visibility</li>
-                                <li><b>🔒 / 🔓</b> button: toggle layer lock — a locked layer cannot be moved, resized, or rotated (orange bounding box is shown); Layer 1 is locked automatically when the first image is loaded to prevent accidental moves</li>
-                                <li>Opacity slider at the bottom adjusts the active layer's transparency</li>
-                                <li>Type icons: 🖼 = image layer, T = text layer, ✏ = draw layer</li>
-                                <li>Delete key: removes the selected layer (only when 2+ layers exist)</li>
+                                <li id="wfm-help-imageedit-8">Layers are listed from front (top) to back (bottom); click a layer row to make it active</li>
+                                <li id="wfm-help-imageedit-9">👁 / 🚫 button: toggle layer visibility</li>
+                                <li id="wfm-help-imageedit-10">🔒 / 🔓 button: toggle layer lock — a locked layer cannot be moved, resized, or rotated (orange bounding box is shown); Layer 1 is locked automatically when the first image is loaded to prevent accidental moves</li>
+                                <li id="wfm-help-imageedit-11">Opacity slider at the bottom adjusts the active layer's transparency</li>
+                                <li id="wfm-help-imageedit-12">Type icons: 🖼 = image layer, T = text layer, ✏ = draw layer</li>
+                                <li id="wfm-help-imageedit-13">Delete key: removes the selected layer (only when 2+ layers exist)</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
-                            <h3>Text Object Quality</h3>
+                            <h3 id="wfm-help-imageedit-text-title">Text Object Quality</h3>
                             <ul>
-                                <li>Text layers are sized exactly to the measured text bounding box — no extra whitespace</li>
-                                <li>When a text layer is resized with the Select tool, the canvas is regenerated at the new display size so the text remains sharp (no blurring)</li>
-                                <li>Re-editing a text layer (double-click) resets it to native size; re-scale afterward if needed</li>
+                                <li id="wfm-help-imageedit-14">Text layers are sized exactly to the measured text bounding box — no extra whitespace</li>
+                                <li id="wfm-help-imageedit-15">When a text layer is resized with the Select tool, the canvas is regenerated at the new display size so the text remains sharp (no blurring)</li>
+                                <li id="wfm-help-imageedit-16">Re-editing a text layer (double-click) resets it to native size; re-scale afterward if needed</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
-                            <h3>Export &amp; Navigation</h3>
+                            <h3 id="wfm-help-imageedit-export-title">Export &amp; Navigation</h3>
                             <ul>
-                                <li><b>Save PNG:</b> composites all visible layers and downloads the result as a PNG file</li>
-                                <li><b>Save to Gallery:</b> prompts for a filename (default: <code>wfs-image-YYYYMMDDHHmmss</code>) and saves the composite PNG directly to the Gallery root folder (configured in Settings &gt; Gallery Output Folder); requires the Gallery tab to have been opened at least once to set the root</li>
-                                <li><b>Send to ComfyUI:</b> uploads the composite PNG to ComfyUI's input folder via <code>/upload/image</code>, making it selectable in Load Image nodes</li>
-                                <li><b>Canvas navigation:</b> scroll wheel to zoom, Space + drag to pan</li>
-                                <li><b>Undo / Redo:</b> Ctrl+Z / Ctrl+Y (or toolbar buttons ↩ ↪)</li>
+                                <li id="wfm-help-imageedit-17">Save PNG: composites all visible layers and downloads the result as a PNG file</li>
+                                <li id="wfm-help-imageedit-18">Save to Gallery: prompts for a filename (default: wfs-image-YYYYMMDDHHmmss) and saves the composite PNG directly to the Gallery root folder (configured in Settings &gt; Gallery Output Folder); requires the Gallery tab to have been opened at least once to set the root</li>
+                                <li id="wfm-help-imageedit-19">Send to ComfyUI: uploads the composite PNG to ComfyUI's input folder via /upload/image, making it selectable in Load Image nodes</li>
+                                <li id="wfm-help-imageedit-20">Canvas navigation: scroll wheel to zoom, Space + drag to pan</li>
+                                <li id="wfm-help-imageedit-21">Undo / Redo: Ctrl+Z / Ctrl+Y (or toolbar buttons ↩ ↪)</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
-                            <h3>Image Edit Keyboard Shortcuts</h3>
+                            <h3 id="wfm-help-imageedit-kbd-title">Image Edit Keyboard Shortcuts</h3>
                             <ul>
-                                <li><b>V</b>: Select tool</li>
-                                <li><b>B</b>: Draw tool</li>
-                                <li><b>T</b>: Text tool</li>
-                                <li><b>S</b>: Shape tool</li>
-                                <li><b>Delete</b>: Delete selected layer (requires 2+ layers)</li>
-                                <li><b>Ctrl+Z / Ctrl+Y</b>: Undo / Redo</li>
-                                <li><b>Space + drag</b>: Pan canvas</li>
-                                <li><b>Mouse wheel</b>: Zoom in / out</li>
-                                <li><b>Double-click</b> (Select tool on text layer): Re-edit text</li>
+                                <li id="wfm-help-imageedit-22">V: Select tool</li>
+                                <li id="wfm-help-imageedit-23">B: Draw tool</li>
+                                <li id="wfm-help-imageedit-24">T: Text tool</li>
+                                <li id="wfm-help-imageedit-25">S: Shape tool</li>
+                                <li id="wfm-help-imageedit-26">Delete: Delete selected layer (requires 2+ layers)</li>
+                                <li id="wfm-help-imageedit-27">Ctrl+Z / Ctrl+Y: Undo / Redo</li>
+                                <li id="wfm-help-imageedit-28">Space + drag: Pan canvas</li>
+                                <li id="wfm-help-imageedit-29">Mouse wheel: Zoom in / out</li>
+                                <li id="wfm-help-imageedit-30">Double-click (Select tool on text layer): Re-edit text</li>
                             </ul>
                         </div>
                     </div>
@@ -1328,16 +1328,16 @@
                             </ul>
                         </div>
                         <div class="wfm-help-card">
-                            <h3>Image Edit Tab Shortcuts</h3>
+                            <h3 id="wfm-help-imageedit-tabkbd-title">Image Edit Tab Shortcuts</h3>
                             <ul>
-                                <li>V: Select tool</li>
-                                <li>B: Draw tool</li>
-                                <li>T: Text tool</li>
-                                <li>S: Shape tool</li>
-                                <li>Delete: Delete selected layer (requires 2+ layers)</li>
-                                <li>Ctrl+Z / Ctrl+Y: Undo / Redo</li>
-                                <li>Space + drag: Pan canvas</li>
-                                <li>Mouse wheel: Zoom in / out</li>
+                                <li id="wfm-help-imageedit-tabkbd-1">V: Select tool</li>
+                                <li id="wfm-help-imageedit-tabkbd-2">B: Draw tool</li>
+                                <li id="wfm-help-imageedit-tabkbd-3">T: Text tool</li>
+                                <li id="wfm-help-imageedit-tabkbd-4">S: Shape tool</li>
+                                <li id="wfm-help-imageedit-tabkbd-5">Delete: Delete selected layer (requires 2+ layers)</li>
+                                <li id="wfm-help-imageedit-tabkbd-6">Ctrl+Z / Ctrl+Y: Undo / Redo</li>
+                                <li id="wfm-help-imageedit-tabkbd-7">Space + drag: Pan canvas</li>
+                                <li id="wfm-help-imageedit-tabkbd-8">Mouse wheel: Zoom in / out</li>
                             </ul>
                         </div>
                     </div>

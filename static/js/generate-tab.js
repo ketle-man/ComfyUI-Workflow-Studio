@@ -647,7 +647,9 @@ function _renderBatchGroupList() {
     const el = document.getElementById("wfm-batch-group-list");
     if (!el) return;
     const groups = _batchGroupState.groups;
-    const names = Object.keys(groups).sort();
+    // Batch / Stack はモデルタブ専用の予約グループ — バッチ実行選択UIには表示しない
+    const RESERVED = new Set(["Batch", "Stack"]);
+    const names = Object.keys(groups).filter((n) => !RESERVED.has(n)).sort();
 
     if (names.length === 0) {
         el.innerHTML = `<p class="wfm-placeholder" style="font-size:12px;padding:16px;">No groups defined.<br>Create groups in the Models tab.</p>`;
@@ -881,8 +883,15 @@ function _renderAnyGroupList(listEl, groupsData, selectedGroups, partialSelectio
 async function _loadBatchLoraGroups() {
     try {
         const res = await fetch("/api/wfm/models/groups?type=lora");
-        if (res.ok) _batchGroupState.loraGroups = await res.json();
-        else _batchGroupState.loraGroups = {};
+        if (res.ok) {
+            const raw = await res.json();
+            // Normalize backslashes (Windows ComfyUI paths) to forward slashes
+            const normalized = {};
+            for (const [g, members] of Object.entries(raw)) {
+                normalized[g] = members.map((m) => m.replace(/\\/g, "/"));
+            }
+            _batchGroupState.loraGroups = normalized;
+        } else { _batchGroupState.loraGroups = {}; }
     } catch { _batchGroupState.loraGroups = {}; }
 
     const currentNames = new Set(Object.keys(_batchGroupState.loraGroups));
@@ -899,9 +908,14 @@ async function _loadBatchLoraGroups() {
 
 function _renderBatchLoraGroupList() {
     const el = document.getElementById("wfm-batch-lora-group-list");
+    // Batch / Stack はモデルタブ専用 — バッチ実行UIには表示しない
+    const RESERVED = new Set(["Batch", "Stack"]);
+    const filtered = Object.fromEntries(
+        Object.entries(_batchGroupState.loraGroups).filter(([k]) => !RESERVED.has(k))
+    );
     _renderAnyGroupList(
         el,
-        _batchGroupState.loraGroups,
+        filtered,
         _batchGroupState.loraSelectedGroups,
         _batchGroupState.loraPartialSelections,
         (m) => m.replace(/\\/g, "/").split("/").pop(),
@@ -939,9 +953,13 @@ async function _loadPromptGroupsForBatch() {
 function _renderBatchPromptGroupList() {
     const el = document.getElementById("wfm-batch-prompt-group-list");
     const presetsMap = new Map(_batchGroupState.promptPresets.map((p) => [p.id, p]));
+    // "Batch" はPromptタブ専用の予約グループ — バッチ実行UIには表示しない
+    const filtered = Object.fromEntries(
+        Object.entries(_batchGroupState.promptGroups).filter(([k]) => k !== "Batch")
+    );
     _renderAnyGroupList(
         el,
-        _batchGroupState.promptGroups,
+        filtered,
         _batchGroupState.promptSelectedGroups,
         _batchGroupState.promptPartialSelections,
         (id) => presetsMap.get(id)?.name || id,
@@ -969,9 +987,13 @@ function _loadWorkflowGroupsForBatch() {
 
 function _renderBatchWfGroupList() {
     const el = document.getElementById("wfm-batch-wf-group-list");
+    // "Batch" はWorkflowタブ専用の予約グループ — バッチ実行UIには表示しない
+    const filtered = Object.fromEntries(
+        Object.entries(_batchGroupState.wfGroups).filter(([k]) => k !== "Batch")
+    );
     _renderAnyGroupList(
         el,
-        _batchGroupState.wfGroups,
+        filtered,
         _batchGroupState.wfSelectedGroups,
         _batchGroupState.wfPartialSelections,
         (f) => f.replace(/\.json$/i, "").replace(/\\/g, "/").split("/").pop(),
@@ -1409,10 +1431,7 @@ async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x)) {
     if (_ckptBatch.aborted) {
         showToast(t("batchStopped", completed, failed), "info");
     } else {
-        showToast(
-            `Batch complete: ${completed}/${items.length}${failed > 0 ? ` (${failed} failed)` : ""}`,
-            failed > 0 ? "error" : "success"
-        );
+        showToast(t("batchComplete", completed, items.length, failed), failed > 0 ? "error" : "success");
     }
 }
 

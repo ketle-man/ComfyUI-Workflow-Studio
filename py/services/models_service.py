@@ -3,12 +3,15 @@
 import json
 import logging
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import MODEL_METADATA_FILE
 
 logger = logging.getLogger(__name__)
+
+_SCAN_CACHE_TTL = 30  # seconds — reuse scan result within this window
 
 # Preview image extensions to search for (in priority order)
 _PREVIEW_EXTENSIONS = [".preview.png", ".preview.jpg", ".preview.jpeg", ".preview.webp",
@@ -71,6 +74,7 @@ class ModelsService:
 
     def __init__(self):
         self.metadata_file = MODEL_METADATA_FILE
+        self._scan_cache: dict = {}  # model_type -> (timestamp, frozenset)
 
     def _now_iso(self):
         return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -113,7 +117,15 @@ class ModelsService:
         return entry
 
     def _scan_model_names(self, model_type: str) -> set:
-        """モデルタイプの全ファイル名をスキャンして返す（相対パス、/区切り、.disabled除く）"""
+        """モデルタイプの全ファイル名をスキャンして返す（相対パス、/区切り、.disabled除く）。
+        結果は30秒キャッシュされ、起動時の多重スキャンによる高負荷を防ぐ。"""
+        now = time.monotonic()
+        cached = self._scan_cache.get(model_type)
+        if cached is not None:
+            ts, names = cached
+            if now - ts < _SCAN_CACHE_TTL:
+                return names
+
         dirs = _get_model_dirs(model_type)
         names = set()
         for d in dirs:
@@ -129,6 +141,8 @@ class ModelsService:
                     names.add(rel)
                 except ValueError:
                     pass
+
+        self._scan_cache[model_type] = (now, names)
         return names
 
     def list_model_files(self, model_type: str) -> list:
@@ -170,17 +184,36 @@ class ModelsService:
 
         if model_type:
             groups = raw.get(model_type, {})
+
+            # Guard: if no model directories are accessible (e.g. network drive disconnected),
+            # skip cleanup entirely to prevent mass-deletion of group members.
+            accessible_dirs = [d for d in _get_model_dirs(model_type) if d.is_dir()]
+            if not accessible_dirs:
+                configured_dirs = _get_model_dirs(model_type)
+                if configured_dirs:
+                    logger.warning(
+                        "No accessible directories for model_type=%s — skipping group cleanup "
+                        "to avoid data loss (drives may be disconnected)", model_type
+                    )
+                    return {g: [m.replace("\\", "/") for m in members]
+                            for g, members in groups.items()}
+                # No directories configured at all — return as-is (nothing to validate against)
+                return {g: [m.replace("\\", "/") for m in members] for g, members in groups.items()}
+
             valid_names = self._scan_model_names(model_type)
             cleaned = {}
             dirty = False
             for g_name, members in groups.items():
-                filtered = [m for m in members if m in valid_names]
+                # Normalize backslashes (Windows ComfyUI paths) to forward slashes
+                normalized = [m.replace("\\", "/") for m in members]
+                filtered = [m for m in normalized if m in valid_names]
                 cleaned[g_name] = filtered
-                if len(filtered) != len(members):
+                if len(filtered) != len(members) or normalized != list(members):
                     dirty = True
             if dirty:
                 removed = sum(len(groups[g]) - len(cleaned[g]) for g in groups)
-                logger.info("Cleaned up %d stale group entries for model_type=%s", removed, model_type)
+                if removed > 0:
+                    logger.info("Cleaned up %d stale group entries for model_type=%s", removed, model_type)
                 if not isinstance(data.get("_groups"), dict):
                     data["_groups"] = {}
                 data["_groups"][model_type] = cleaned
@@ -189,12 +222,16 @@ class ModelsService:
         return raw
 
     def save_model_groups(self, groups, model_type):
+        # Normalize all member names to forward slashes (ComfyUI on Windows uses backslashes)
+        normalized = {g: [m.replace("\\", "/") for m in members] for g, members in groups.items()}
         data = self._load_metadata()
         if not isinstance(data.get("_groups"), dict):
             data["_groups"] = {}
-        data["_groups"][model_type] = groups
+        data["_groups"][model_type] = normalized
         self._save_metadata(data)
-        return groups
+        # Also invalidate scan cache so next get_model_groups sees the fresh data
+        self._scan_cache.pop(model_type, None)
+        return normalized
 
     def find_model_file(self, model_type, model_name):
         """Find a model file, checking both enabled and disabled states.

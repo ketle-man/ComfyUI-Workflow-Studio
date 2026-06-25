@@ -1,5 +1,54 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-25: v0.3.55 — グループ機能バグ修正（全タブ）
+
+**変更ファイル**: `py/services/models_service.py`, `static/js/models-tab.js`, `static/js/generate-tab.js`, `static/js/prompt-tab.js`, `static/js/i18n.js`
+
+### 根本原因（データ消失）: パス区切り文字の不一致
+
+Windows 環境で ComfyUI が返す Checkpoint/LoRA 名はバックスラッシュ区切り（例: `Illustrious\\model.safetensors`）だが、バックエンドの `_scan_model_names` はフォワードスラッシュで正規化するため、グループ保存時にサブディレクトリ内モデルが「存在しない」と判定され全件削除・上書き保存されていた。
+
+**修正箇所**
+
+#### `py/services/models_service.py`
+
+- **パス正規化**: `get_model_groups` でメンバー名を比較前にバックスラッシュ→フォワードスラッシュへ正規化。`save_model_groups` でも保存時に正規化し、以後バックスラッシュが混入しない
+- **ネットワークドライブ保護**: モデルディレクトリが1つもアクセスできない場合（外付けHDD切断・ネットワークドライブ未接続等）はクリーンアップをスキップし、グループ全消去を防止
+- **スキャンキャッシュ**: `_scan_model_names` に 30秒 TTL キャッシュを追加。起動時の多重スキャン（モデルタブ + 生成UIタブ）による高負荷を軽減
+
+#### `static/js/models-tab.js`
+
+- **`bulkRemoveFromGroup`**: RESERVED_GROUPS（Batch/Stack）の最後のメンバーを削除しても、キーごと消えないよう保護
+- **`renderGroupFilter`**: グループ削除後に `state.groupFilter` が削除済みグループを指したままモデルが全件非表示になるバグを修正（削除検出時に自動リセット）
+- **`toggleGroupEnable`**: グループ一括 enable/disable の部分失敗時、失敗したモデルもクライアント側で成功扱いになりサーバーと状態が乖離していた → `data.ok` リストのモデルのみ更新
+
+#### `static/js/generate-tab.js`
+
+- **Checkpoint/LoRA/Prompt/Workflow 全バッチグループ**: 予約グループ（Batch/Stack）が各バッチ実行選択UIに表示されていたのを除外
+- **LoRA グループ**: API取得後にバックスラッシュ→フォワードスラッシュ正規化を追加（Checkpoint 修正と同等）
+- **`batchComplete` トースト**: 英語ハードコード文字列を削除し `t("batchComplete", ...)` に変更
+
+#### `static/js/prompt-tab.js`
+
+- **`migrateLocalStoragePresets`**: localStorage→API 移行時に `negText`（ネガティブプロンプト）が完全消失していたバグを修正
+- **`renderPmGroups`**: グループビューでメンバーを全削除したとき、Batch 予約グループがキーごと消失していたのを保護
+
+#### `static/js/i18n.js`
+
+- `batchComplete` キーを英語・日本語・中国語に追加
+
+#### ヘルプタブ — Image Edit i18n 対応
+
+**変更ファイル**: `templates/index.html`, `static/js/app.js`, `static/js/i18n.js`
+
+- Image Edit ヘルプページ（`wfm-help-page-imageedit`）の全要素が英語ハードコードのままで、言語切替に追従していなかった問題を修正
+- 6セクション（Image Edit Tab / Tools / Layer Panel / Text Object Quality / Export & Navigation / Keyboard Shortcuts）の見出し6件・本文30件すべてに `id` 属性を付与
+- Shortcuts ページの Image Edit Tab Shortcuts セクションにも `id` 属性を付与（本文はキーを再利用）
+- `static/js/app.js` の `helpIdMap` に `wfm-help-imageedit-*` → `helpImageEdit*` の45エントリを追加
+- `static/js/i18n.js` に英語・日本語・中国語の3言語で37キー（タイトル7 + 本文30）を追加
+
+---
+
 ## 2026-06-25: v0.3.54 — Image Edit Shape ツール追加・Models タブ overlay バグ修正
 
 **変更ファイル**: `static/js/image-edit/ShapeTool.js`（新規）, `static/js/image-edit-tab.js`, `templates/index.html`, `static/js/models-tab.js`

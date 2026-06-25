@@ -93,15 +93,11 @@ async function migrateLocalStoragePresets() {
             await apiCreatePreset({
                 name: p.name || "Untitled",
                 text: p.posText || p.text || "",
+                negText: p.negText || "",
                 category: "",
                 tags: [],
                 favorite: false,
             });
-            // Note: negText is stored separately - we combine it
-            if (p.negText) {
-                // Create a separate entry for negative prompt reference
-                // or store in the text field with marker
-            }
         }
         localStorage.removeItem(PRESETS_KEY);
     } catch { /* ignore migration errors */ }
@@ -364,7 +360,8 @@ function renderPmGroups(container) {
             removeBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 pmGroups[groupName] = pmGroups[groupName].filter(id => id !== p.id);
-                if (pmGroups[groupName].length === 0) delete pmGroups[groupName];
+                // 予約グループ (Batch) は空になってもキーを保持する
+                if (pmGroups[groupName].length === 0 && !PROMPT_RESERVED_GROUPS.includes(groupName)) delete pmGroups[groupName];
                 saveGroups();
                 renderPresetManager();
             });
