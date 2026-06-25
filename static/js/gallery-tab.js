@@ -1457,6 +1457,20 @@ function bindEvents() {
         loadImages();
     });
 
+    // 選択画像を Image Edit タブへ送信
+    document.getElementById("wfm-gallery-send-image-edit-btn")?.addEventListener("click", () => {
+        if (!state.selectedImage) {
+            showToast("Please select an image first", "info");
+            return;
+        }
+        const url  = API.serveImage(state.selectedImage.path);
+        const name = (state.selectedImage.filename || "gallery-image").replace(/\.[^.]+$/, "");
+        if (window._wfmImageEditTab) {
+            document.querySelector('[data-tab="image-edit"]')?.click();
+            window._wfmImageEditTab.loadFromUrl(url, name);
+        }
+    });
+
     // 検索
     document.getElementById("wfm-gallery-search")?.addEventListener("input", (e) => {
         state.search = e.target.value;

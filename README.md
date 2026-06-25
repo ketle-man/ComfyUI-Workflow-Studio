@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.52-green)
+![Version](https://img.shields.io/badge/version-0.3.53-green)
 
 ## Screenshots
 
@@ -208,6 +208,21 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **DB tab** — searchable SQLite database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records
 - **Dependencies** — install into ComfyUI's embedded Python: `python_embedded\python.exe -m pip install -r requirements.txt`; for GPU inference use `onnxruntime-gpu`; TensorFlow (DeepDanbooru) is optional and commented out in `requirements.txt`
 
+### Image Edit Tab (v0.3.53)
+- **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw types) and export the composite as PNG
+- **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
+- **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers
+- **Tools** — Select (V), Draw (B), Text (T); tool options bar updates per active tool
+  - **Select** — click to select; drag to move; drag corner handles to resize; drag circle handle to rotate; Flip H / Flip V / Rotate angle in the options bar; double-click a text layer to re-edit its content
+  - **Draw** — freehand brush; options: color, brush size, blend mode
+  - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
+- **Layer panel** — layer list with visibility (👁/🚫) and lock (🔒/🔓) toggles; opacity slider; type icons (🖼 image / T text / ✏ draw); Layer 1 is automatically locked on first image load
+- **Layer lock** — locked layers show an orange bounding box and 🔒 icon on the canvas; move/resize/rotate are disabled while locked; click the 🔓 button in the layer row to unlock
+- **Text quality** — text layers are rendered at their measured bounding-box size; resizing with the Select tool regenerates the canvas at the new display resolution so text stays sharp
+- **Export** — Save PNG (download composite locally); **Save to Gallery** (saves to Gallery root folder with a timestamped default name `wfs-image-YYYYMMDDHHmmss`); **Send to ComfyUI** (uploads to ComfyUI input folder for use in Load Image nodes)
+- **Canvas navigation** — scroll-wheel zoom, Space + drag to pan; zoom indicator in the bottom bar
+- **Undo / Redo** — Ctrl+Z / Ctrl+Y (or toolbar buttons); keyboard shortcuts: V (Select), B (Draw), T (Text), Delete (remove selected layer when 2+ exist)
+
 ### AI TOOL Tab (v0.3.14)
 - **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
 - **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
@@ -242,7 +257,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **⚙ Theme settings** — customize panel background, sub-header background, text, border, and secondary text colors; saved to localStorage and applied on every open
 
 ### Help & Support Tab (v0.1.3)
-- **Sidebar navigation** — 2-column layout: left sidebar (14 topics) + right content pane; click any topic to switch the displayed content
+- **Sidebar navigation** — 2-column layout: left sidebar (15 topics) + right content pane; click any topic to switch the displayed content
 - **Support** — fixed at the bottom of the sidebar; shows GitHub and Ko-fi links in the right pane
 - **Feature list** — overview of all features organized by tab
 - **Keyboard Shortcuts** and **Troubleshooting** sections included
@@ -333,6 +348,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.53
+- **Image Edit Tab** — new layer-based image editing tab with Select / Draw / Text tools, multi-layer compositing, canvas zoom & pan, and Undo/Redo; text layers are sized to exact bounding-box dimensions and regenerated at display resolution on resize to prevent blurring; double-click a text layer to re-edit its content; Gallery tab gains an "Image Edit" toolbar button to send the selected image directly to the editor
+- **Image Edit — Layer lock** — lock icon (🔒/🔓) on each layer row; locked layers display an orange bounding box and ignore all Select-tool transforms; Layer 1 is auto-locked when the first image is loaded to prevent accidental moves
+- **Image Edit — Save to Gallery** — "Save to Gallery" button (next to Save PNG) saves the composite image to the Gallery root folder; filename defaults to `wfs-image-YYYYMMDDHHmmss`; backed by new `POST /wfm/gallery/image/save` API endpoint
+- **Help tab — Image Edit page** — new dedicated help page covering tools, layer panel, text quality, export options, and keyboard shortcuts
 
 ### v0.3.52
 - **GenerateUI Model tab — fix LoRA selection reset when switching subtabs** — applying a LoRA via "GenUI Model" button and then switching to another subTab (Prompt/Image/Settings) and back to Model caused the LoRA selector, syntax display, and trigger words to revert to the original workflow values; fixed by reading `currentVal` directly from `currentWorkflow` instead of the stale `currentAnalysis`, and by saving/restoring the Single tab's syntax and trigger words across re-renders

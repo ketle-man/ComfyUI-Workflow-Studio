@@ -1,5 +1,62 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-25: v0.3.53 — Image Edit Tab 実装・レイヤーロック・ギャラリー保存
+
+**変更ファイル**: `static/js/image-edit-tab.js`, `static/js/image-edit/LayerManager.js`, `static/js/image-edit/SelectTool.js`, `static/js/image-edit/TextTool.js`, `static/css/image-edit-tab.css`, `templates/index.html`, `static/js/gallery-tab.js`, `py/routes/gallery_routes.py`
+
+### Image Edit Tab（新規タブ）
+
+レイヤー合成ベースの画像編集タブを追加。
+
+**ツール**
+- **Select (V)** — クリック選択、ドラッグ移動、コーナーハンドルでリサイズ、上辺ハンドルで回転、Flip H / Flip V / Rotate 角度入力
+- **Draw (B)** — フリーハンドブラシ。色・サイズ・ブレンドモード設定
+- **Text (T)** — クリック位置にテキスト入力オーバーレイを表示。フォント・サイズ・スタイル・カラー・アライン設定。確定後はテキストのバウンディングボックスサイズのレイヤーとして配置
+
+**レイヤー管理**
+- レイヤーパネル（右側）: 可視トグル（👁/🚫）、ロックトグル（🔒/🔓）、不透明度スライダー
+- アクティブレイヤーのみ描画 vs 全レイヤー合成 を `_compositeMode` フラグで制御
+- Undo / Redo（Ctrl+Z / Ctrl+Y、上限 30 ステップ）
+
+**画像ロード**
+- ドラッグ＆ドロップ、Upload ボタン、Gallery タブ「Image Edit」ボタンで送信
+- レイヤーなし → Layer 1 として配置（自動ロック）、レイヤーあり → fitToCanvas でスケールして追加レイヤーとして追加
+- New ボタン: WxH プロンプトで新規キャンバス作成
+
+**テキストオブジェクト品質改善**
+- `measureText()` でバウンディングボックスサイズのオフスクリーン canvas を生成し、レイヤーの `contentW/H` に設定（余白ゼロ）
+- リサイズ後（`transformEnd`）に `_rerenderTextLayer()` を呼び `canvas.width = displayW` で再描画 → 拡大時のぼやけを防止
+- `layer.textProps` にテキストプロパティを保存。ダブルクリックで再編集ダイアログを開き、OK で既存レイヤーを上書き更新
+- 回転ハンドル位置バグ修正: `_getRotateHandle()` の x 座標計算が `cx - sinR * dist` (符号逆) だったのを `cx + sinR * dist` に修正
+
+### レイヤーロック機能
+
+- `Layer.locked` プロパティ追加（`toJSON/fromJSON` 対応）
+- `LayerManager.toggleLocked(id)` メソッド追加
+- SelectTool: ロック中はドラッグ開始を禁止（選択・オーバーレイ表示は維持）
+- SelectTool `_drawOverlay()`: ロック中はオレンジ破線バウンディングボックス + 中央🔒表示、ハンドル非表示
+- Layer 1 読み込み時に `layer1.locked = true` で自動ロック（誤操作防止）
+- レイヤーリストに🔒/🔓ボタン追加
+
+### ギャラリーへ保存
+
+- Image Edit タブアクションバーに「Save to Gallery」ボタンを追加（Save PNG 右隣）
+- `_saveToGallery()`: `prompt()` でファイル名確認（デフォルト `wfs-image-YYYYMMDDHHmmss`）→ base64 PNG を `POST /wfm/gallery/image/save` へ送信
+- `gallery_routes.py`: `save_image_to_gallery()` を追加 — base64 デコード → `_service._allowed_root` 直下に保存。ファイル名サニタイズ・`.png` 自動付与
+
+### Gallery タブ連携
+
+- Gallery ツールバーの Refresh ボタン右隣に「Image Edit」ボタンを追加
+- 選択画像を Image Edit タブへ送信（レイヤーあり → 追加レイヤー、なし → Layer 1）
+
+### ヘルプ更新
+
+- Help タブナビに「Image Edit Tab」ページを追加（5カード構成: 概要・ツール・レイヤーパネル・テキスト品質・エクスポート＆ナビ＋ショートカット）
+- Keyboard Shortcuts ページに Image Edit ショートカット（V/B/T/Delete/Ctrl+Z/Y/Space+ドラッグ/ホイール）を追記
+- Gallery Tab ヘルプに「Image Edit ボタン」の説明を追記
+
+---
+
 ## 2026-06-25: GenUI設定タブ LATENT IMAGE にプリセット機能を追加
 
 **変更ファイル**: `static/js/comfyui-editor.js`
