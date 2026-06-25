@@ -485,6 +485,7 @@ const LANGUAGES = {
 
         tabAi: "AI TOOL",
         tabTagger: "Tagger",
+        tabImageEdit: "Image Edit",
 
         // -- Tagger Tab --
         taggerSingleTab: "Single",
@@ -1364,6 +1365,7 @@ const LANGUAGES = {
 
         tabAi: "AI TOOL",
         tabTagger: "Tagger",
+        tabImageEdit: "Image Edit",
 
         // -- Tagger Tab --
         taggerSingleTab: "シングル",
@@ -2243,6 +2245,7 @@ const LANGUAGES = {
 
         tabAi: "AI TOOL",
         tabTagger: "Tagger",
+        tabImageEdit: "Image Edit",
 
         // -- Tagger Tab --
         taggerSingleTab: "单张",

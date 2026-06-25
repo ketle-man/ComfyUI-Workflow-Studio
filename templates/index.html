@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/wfm_static/css/main.css">
     <link rel="stylesheet" href="/wfm_static/css/gallery-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/tagger-tab.css">
+    <link rel="stylesheet" href="/wfm_static/css/image-edit-tab.css">
 </head>
 <body>
     <!-- Header -->
@@ -23,6 +24,7 @@
             <button class="wfm-tab" data-tab="prompt">Prompt</button>
             <button class="wfm-tab" data-tab="metadata">Metadata</button>
             <button class="wfm-tab" data-tab="gallery">Gallery</button>
+            <button class="wfm-tab" data-tab="image-edit">Image Edit</button>
             <button class="wfm-tab" data-tab="tagger">Tagger</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
@@ -1437,6 +1439,79 @@
                     <!-- Group タブ -->
                     <div id="wfm-gallery-detail-group" class="wfm-gallery-detail-tab-content" style="display:none;overflow-y:auto;">
                         <!-- JS動的生成: renderDetailGroup() -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Image Edit Tab -->
+        <section id="wfm-tab-image-edit" class="wfm-tab-content">
+            <div class="ie-editor">
+                <!-- Left Toolbar -->
+                <div class="ie-toolbar">
+                    <button class="ie-tool-btn active" data-tool="draw"     title="Draw (B)">✏</button>
+                    <button class="ie-tool-btn"        data-tool="text"     title="Text (T)">T</button>
+                    <button class="ie-tool-btn ie-tool-placeholder" data-tool="mask"     title="Mask">🎭</button>
+                    <button class="ie-tool-btn ie-tool-placeholder" data-tool="blur"     title="Blur">≈</button>
+                    <button class="ie-tool-btn ie-tool-placeholder" data-tool="filter"   title="Filter">★</button>
+                    <button class="ie-tool-btn ie-tool-placeholder" data-tool="bgremove" title="BG Remove">⬚</button>
+                </div>
+
+                <!-- Center -->
+                <div class="ie-center">
+                    <!-- Action bar -->
+                    <div class="ie-action-bar">
+                        <label class="wfm-btn wfm-btn-sm" style="cursor:pointer;">
+                            Upload
+                            <input type="file" id="ie-upload-input" accept="image/*" style="display:none;">
+                        </label>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-from-gallery-btn">From Gallery</button>
+                        <span style="flex:1;"></span>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-undo-btn" title="Undo (Ctrl+Z)">↩</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-redo-btn" title="Redo (Ctrl+Y)">↪</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-save-btn">Save PNG</button>
+                        <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="ie-upload-comfy-btn">Send to ComfyUI</button>
+                    </div>
+
+                    <!-- Tool options -->
+                    <div class="ie-tool-options" id="ie-tool-options"></div>
+
+                    <!-- Canvas wrap -->
+                    <div class="ie-canvas-wrap" id="ie-canvas-wrap">
+                        <div class="ie-canvas-container" id="ie-canvas-container" style="width:512px;height:512px;">
+                            <canvas id="ie-canvas-bg"   width="512" height="512"></canvas>
+                            <canvas id="ie-canvas-draw" width="512" height="512"></canvas>
+                        </div>
+                        <div class="ie-placeholder" id="ie-placeholder">
+                            <span class="ie-placeholder-icon">🖼</span>
+                            <span>Upload an image or drop it here</span>
+                            <span style="font-size:11px;opacity:0.6;">Drag &amp; drop · Upload · From Gallery</span>
+                        </div>
+                    </div>
+
+                    <!-- Zoom bar -->
+                    <div class="ie-zoom-bar">
+                        <button class="wfm-btn wfm-btn-sm" id="ie-zoom-fit">Fit</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-zoom-100">100%</button>
+                        <span style="flex:1;"></span>
+                        <span id="ie-zoom-label">100%</span>
+                    </div>
+                </div>
+
+                <!-- Right Panel (Layers) -->
+                <div class="ie-right-panel">
+                    <div class="ie-layers-header">
+                        <span>Layers</span>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-add-layer-btn"  title="Add layer">+</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-del-layer-btn"  title="Delete layer">−</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-layer-up-btn"   title="Move up">↑</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-layer-down-btn" title="Move down">↓</button>
+                    </div>
+                    <div class="ie-layer-list" id="ie-layer-list"></div>
+                    <div class="ie-opacity-row">
+                        <label>Opacity</label>
+                        <input type="range" id="ie-layer-opacity" min="0" max="100" value="100">
+                        <span id="ie-layer-opacity-label">100%</span>
                     </div>
                 </div>
             </div>
