@@ -357,7 +357,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Group feature — RESERVED_GROUPS protection** — `bulkRemoveFromGroup` and `renderPmGroups` now prevent Batch/Stack reserved group keys from being deleted even when all members are removed
 - **Group feature — stale groupFilter reset** — after deleting a group, `state.groupFilter` is automatically cleared if it pointed to the now-deleted group (previously showed 0 models)
 - **Group feature — toggleGroupEnable partial failure** — only models listed in `data.ok` are updated client-side, preventing state divergence when some enable/disable calls fail
-- **GenerateUI batch groups — exclude reserved groups** — Batch and Stack reserved groups no longer appear in the batch group selection UI for Checkpoint/LoRA/Prompt/Workflow
+- **GenerateUI batch groups — restore Batch/Stack visibility** — reverts an incorrect filter that hid Batch and Stack groups from the batch group selection UI; these groups are now selectable for batch execution as intended
 - **GenerateUI LoRA groups — path normalization** — backslash-to-slash normalization added after fetching LoRA groups from the API, matching the Checkpoint fix
 - **Batch complete toast — i18n** — replaced hardcoded English toast with `t("batchComplete", ...)` supporting all 3 languages
 - **Prompt tab migration — fix negText loss** — `migrateLocalStoragePresets` now correctly passes `negText` when calling `apiCreatePreset`, preventing negative prompts from being silently dropped during localStorage→API migration

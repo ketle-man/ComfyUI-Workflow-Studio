@@ -647,9 +647,7 @@ function _renderBatchGroupList() {
     const el = document.getElementById("wfm-batch-group-list");
     if (!el) return;
     const groups = _batchGroupState.groups;
-    // Batch / Stack はモデルタブ専用の予約グループ — バッチ実行選択UIには表示しない
-    const RESERVED = new Set(["Batch", "Stack"]);
-    const names = Object.keys(groups).filter((n) => !RESERVED.has(n)).sort();
+    const names = Object.keys(groups).sort();
 
     if (names.length === 0) {
         el.innerHTML = `<p class="wfm-placeholder" style="font-size:12px;padding:16px;">No groups defined.<br>Create groups in the Models tab.</p>`;
@@ -908,14 +906,9 @@ async function _loadBatchLoraGroups() {
 
 function _renderBatchLoraGroupList() {
     const el = document.getElementById("wfm-batch-lora-group-list");
-    // Batch / Stack はモデルタブ専用 — バッチ実行UIには表示しない
-    const RESERVED = new Set(["Batch", "Stack"]);
-    const filtered = Object.fromEntries(
-        Object.entries(_batchGroupState.loraGroups).filter(([k]) => !RESERVED.has(k))
-    );
     _renderAnyGroupList(
         el,
-        filtered,
+        _batchGroupState.loraGroups,
         _batchGroupState.loraSelectedGroups,
         _batchGroupState.loraPartialSelections,
         (m) => m.replace(/\\/g, "/").split("/").pop(),
@@ -953,13 +946,9 @@ async function _loadPromptGroupsForBatch() {
 function _renderBatchPromptGroupList() {
     const el = document.getElementById("wfm-batch-prompt-group-list");
     const presetsMap = new Map(_batchGroupState.promptPresets.map((p) => [p.id, p]));
-    // "Batch" はPromptタブ専用の予約グループ — バッチ実行UIには表示しない
-    const filtered = Object.fromEntries(
-        Object.entries(_batchGroupState.promptGroups).filter(([k]) => k !== "Batch")
-    );
     _renderAnyGroupList(
         el,
-        filtered,
+        _batchGroupState.promptGroups,
         _batchGroupState.promptSelectedGroups,
         _batchGroupState.promptPartialSelections,
         (id) => presetsMap.get(id)?.name || id,
@@ -987,13 +976,9 @@ function _loadWorkflowGroupsForBatch() {
 
 function _renderBatchWfGroupList() {
     const el = document.getElementById("wfm-batch-wf-group-list");
-    // "Batch" はWorkflowタブ専用の予約グループ — バッチ実行UIには表示しない
-    const filtered = Object.fromEntries(
-        Object.entries(_batchGroupState.wfGroups).filter(([k]) => k !== "Batch")
-    );
     _renderAnyGroupList(
         el,
-        filtered,
+        _batchGroupState.wfGroups,
         _batchGroupState.wfSelectedGroups,
         _batchGroupState.wfPartialSelections,
         (f) => f.replace(/\.json$/i, "").replace(/\\/g, "/").split("/").pop(),
