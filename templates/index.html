@@ -1292,6 +1292,8 @@
                                 <li id="wfm-help-imageedit-5">Draw (B): freehand brush drawing onto the active draw layer; Tool Options: color, brush size, blend mode</li>
                                 <li id="wfm-help-imageedit-6">Text (T): click on the canvas to place a text input overlay; configure font family, size, bold/italic, align, color in the Tool Options bar; click OK to place the text as an exact-size Text layer; double-click an existing text layer with the Select tool to re-edit</li>
                                 <li id="wfm-help-imageedit-7">Shape (S): draw geometric shapes onto the canvas; each committed shape becomes an independent draw layer; Tool Options: Shape type (Rect / Ellipse / Line / FreeLine), Rounded checkbox (Rect / Ellipse only), Fill color + None toggle (hidden for Line / FreeLine), Stroke color + width + None toggle (None hidden for Line / FreeLine where stroke is always active), Opacity slider, ↩ Undo button; drag to draw — a blue dashed outline previews the shape; release to commit</li>
+                                <li id="wfm-help-imageedit-7b">Blur (≈): apply Gaussian blur or mosaic to the active layer — whole-layer or region-based (drag a rectangle); see the Blur Tool card below for details</li>
+                                <li id="wfm-help-imageedit-7c">BG Remove (⬚): remove the background from the active layer using Lightweight (@imgly, runs in browser) or BiRefNet (Python backend, coming soon); see the BG Remove Tool card below for details</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1303,6 +1305,27 @@
                                 <li id="wfm-help-imageedit-11">Opacity slider at the bottom adjusts the active layer's transparency</li>
                                 <li id="wfm-help-imageedit-12">Type icons: 🖼 = image layer, T = text layer, ✏ = draw layer</li>
                                 <li id="wfm-help-imageedit-13">Delete key: removes the selected layer (only when 2+ layers exist)</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-imageedit-blur-title">Blur Tool (≈)</h3>
+                            <ul>
+                                <li id="wfm-help-imageedit-blur-1">Whole Blur: applies a Gaussian blur to the entire active layer — adjust the intensity slider (1–50 px) and click Apply</li>
+                                <li id="wfm-help-imageedit-blur-2">Whole Mosaic: applies a pixelation mosaic to the entire active layer — adjust the block size slider (5–100 px) and click Apply</li>
+                                <li id="wfm-help-imageedit-blur-3">Rect Blur: click the toggle to enter rect mode (button turns blue), then drag on the canvas to draw a rectangle — the selected region is blurred on release; adjust intensity before or after enabling the mode</li>
+                                <li id="wfm-help-imageedit-blur-4">Rect Mosaic: same as Rect Blur but applies mosaic; preview outline is orange; adjust block size with the slider</li>
+                                <li id="wfm-help-imageedit-blur-5">Rect Blur and Rect Mosaic are mutually exclusive — enabling one disables the other; click the active toggle again to exit rect mode</li>
+                                <li id="wfm-help-imageedit-blur-6">All operations support Undo (Ctrl+Z)</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-imageedit-bgremove-title">BG Remove Tool (⬚)</h3>
+                            <ul>
+                                <li id="wfm-help-imageedit-bgremove-1">Model — Lightweight (@imgly): runs entirely in the browser using the @imgly/background-removal library loaded from CDN; no server required; first use downloads the model (~40 MB) and caches it for the session</li>
+                                <li id="wfm-help-imageedit-bgremove-2">Model — BiRefNet: high-quality background removal using the BiRefNet model via the Workflow Studio Python backend; requires birefnet.safetensors placed in ComfyUI/models/background_removal/ (coming soon)</li>
+                                <li id="wfm-help-imageedit-bgremove-3">New Layer (checked by default): the result is added as a new layer above the active layer at the same position and display size — the original layer is preserved</li>
+                                <li id="wfm-help-imageedit-bgremove-4">When New Layer is unchecked, the active layer's canvas is replaced in-place with the background-removed result</li>
+                                <li id="wfm-help-imageedit-bgremove-5">Click Remove BG to start processing; status text shows Loading model → Processing → Done; supports Undo (Ctrl+Z)</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1555,9 +1578,9 @@
                     <button class="ie-tool-btn"        data-tool="text"     title="Text (T)">T</button>
                     <button class="ie-tool-btn"        data-tool="shape"    title="Shape (S)">□</button>
                     <button class="ie-tool-btn ie-tool-placeholder" data-tool="mask"     title="Mask">🎭</button>
-                    <button class="ie-tool-btn ie-tool-placeholder" data-tool="blur"     title="Blur">≈</button>
+                    <button class="ie-tool-btn"                    data-tool="blur"     title="Blur">≈</button>
                     <button class="ie-tool-btn ie-tool-placeholder" data-tool="filter"   title="Filter">★</button>
-                    <button class="ie-tool-btn ie-tool-placeholder" data-tool="bgremove" title="BG Remove">⬚</button>
+                    <button class="ie-tool-btn"                    data-tool="bgremove" title="BG Remove">⬚</button>
                 </div>
 
                 <!-- Center -->

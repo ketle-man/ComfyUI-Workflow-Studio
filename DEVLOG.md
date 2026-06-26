@@ -1,5 +1,93 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-26: v0.3.57 — Image Edit Blur Tool / BG Remove Tool 追加
+
+**変更ファイル**: `templates/index.html`, `static/js/image-edit-tab.js`, `static/js/app.js`, `static/js/i18n.js`
+
+### 概要
+
+Image Edit タブに **Blur ツール** と **BG Remove ツール** を追加。両ツールはサイドバーから選択でき、`ie-tool-placeholder` を除去してアイコンを通常の白色で表示するよう修正した。ヘルプの Blur / BG Remove セクションを新規追加し、英語・日本語・中国語の i18n に対応。
+
+---
+
+### Blur ツール（`static/js/image-edit-tab.js`）
+
+#### TOOL_DEFS
+- `{ id: "blur", icon: "≈", label: "Blur", ready: true }` — `ready: false` → `true` に変更
+
+#### クラスプロパティ（constructor）
+- `_blurRectMode` — アクティブな矩形モード（`"blur"` / `"mosaic"` / `null`）
+- `_blurDragging`, `_blurDragStart`, `_blurDragCur` — 矩形ドラッグ状態
+
+#### ツールオプション UI（`_renderToolOptions("blur")`）
+- **Whole Blur** — 強度スライダー（1〜50 px）+ Apply ボタン
+- **Whole Mosaic** — ブロックサイズスライダー（5〜100 px）+ Apply ボタン
+- **Rect Blur** — トグルボタン（青色）でドラッグ矩形モードに入り、マウスアップ時に選択範囲をぼかす
+- **Rect Mosaic** — トグルボタン（橙色）で同様の矩形モザイク；Rect Blur と排他
+
+#### マウスイベント
+- `_onToolMouseDown/Move/Up/Leave` に `case "blur"` を追加してドラッグ座標を追跡
+- `_activateCurrentTool` — `_blurRectMode` が有効な場合はキャンバスカーソルを `crosshair` に変更
+
+#### 新規メソッド
+| メソッド | 概要 |
+|---|---|
+| `_applyWholeBlur(intensity)` | `ctx.filter = "blur(Xpx)"` でオフスクリーンキャンバスに描画し `layer.canvas` を更新 |
+| `_applyWholeMosaic(size)` | `_applyMosaicToRegion` でレイヤーキャンバス全体をピクセル化 |
+| `_canvasToLayerCoords(layer, canvasX, canvasY)` | `applyTransform` の逆変換：中心移動 → 逆回転 → スケール除算 → flip → レイヤーキャンバス座標に変換 |
+| `_drawBlurPreview(start, cur)` | オーバーレイキャンバスにプレビュー矩形を描画（Blur=青、Mosaic=橙） |
+| `_applyRectEffect(start, cur)` | `_canvasToLayerCoords` でレイヤー座標に変換し、ぼかし or `_applyMosaicToRegion` を適用 |
+
+#### モジュールレベル関数
+```js
+function _applyMosaicToRegion(ctx, x, y, w, h, size)
+```
+`ImageData` のピクセルブロックを左上ピクセルの色で塗りつぶすことでモザイクを実現。
+
+---
+
+### BG Remove ツール（`static/js/image-edit-tab.js`）
+
+#### TOOL_DEFS
+- `{ id: "bgremove", icon: "⬚", label: "BG Remove", ready: true }` — `ready: false` → `true` に変更
+
+#### ツールオプション UI（`_renderToolOptions("bgremove")`）
+- **Model セレクト** — `lightweight` (@imgly) / `birefnet` (coming soon)
+- **New Layer チェックボックス** — ON: 結果を新規レイヤーとして追加 / OFF: アクティブレイヤーを上書き
+- **Remove BG ボタン** — 処理開始；ステータステキストで進捗を表示
+
+#### 新規メソッド
+| メソッド | 概要 |
+|---|---|
+| `_bgRemoveImgly(imageDataUrl)` | `@imgly/background-removal@1.5.7`（esm.sh CDN）を動的 `import()` で読み込み、Blob URL を返す |
+| `_bgRemoveBiRefNet(imageDataUrl)` | `POST /api/wfm/bg-remove` を呼び出す stub（BiRefNet 実装予定） |
+| `_applyBgRemove()` | アクティブレイヤーを PNG に変換 → モデル呼び出し → `Image` に展開 → New Layer or 上書き適用 → Undo スタックに push |
+
+---
+
+### サイドバーアイコン修正（`templates/index.html`）
+
+- `blur` ボタンと `bgremove` ボタンから `ie-tool-placeholder` クラスを除去
+- `filter` と `mask` は未実装のため `ie-tool-placeholder` のまま維持（opacity: 0.38）
+
+---
+
+### ヘルプ更新（`templates/index.html` / `static/js/app.js` / `static/js/i18n.js`）
+
+**追加カード**
+- **Blur Tool (≈)** — Whole Blur / Whole Mosaic / Rect Blur / Rect Mosaic の操作説明（6項目）
+- **BG Remove Tool (⬚)** — モデル説明・New Layer 動作・処理フロー（5項目）
+
+**Tools リストに追記**
+- `helpImageEdit7b` — Blur ツールの概要
+- `helpImageEdit7c` — BG Remove ツールの概要
+
+**i18n**
+- `app.js`: 14 エントリの ID→キーマッピングを追加
+- `i18n.js`: 英語・日本語・中国語に各 14 キーを追加
+
+---
+
 ## 2026-06-26: v0.3.56 — Style機能追加（GenerateUI ツールバー & Batchタブ）
 
 **変更ファイル**: `py/routes/settings_routes.py`, `static/js/generate-tab.js`, `templates/index.html`, `README.md`

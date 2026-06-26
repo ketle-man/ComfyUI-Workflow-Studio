@@ -17,12 +17,31 @@ const TOOL_DEFS = [
     { id: "text",     icon: "T",   label: "Text",      ready: true  },
     { id: "shape",    icon: "□",   label: "Shape",     ready: true  },
     { id: "mask",     icon: "🎭",  label: "Mask",      ready: false },
-    { id: "blur",     icon: "≈",   label: "Blur",      ready: false },
+    { id: "blur",     icon: "≈",   label: "Blur",      ready: true  },
     { id: "filter",   icon: "★",   label: "Filter",    ready: false },
-    { id: "bgremove", icon: "⬚",   label: "BG Remove", ready: false },
+    { id: "bgremove", icon: "⬚",   label: "BG Remove", ready: true  },
 ];
 
 const UNDO_LIMIT = 20;
+
+function _applyMosaicToRegion(ctx, x, y, w, h, size) {
+    if (w <= 0 || h <= 0 || size < 1) return;
+    const imgData = ctx.getImageData(x, y, w, h);
+    const d = imgData.data;
+    for (let py = 0; py < h; py += size) {
+        for (let px = 0; px < w; px += size) {
+            const i = (py * w + px) * 4;
+            const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
+            for (let by = py; by < Math.min(py + size, h); by++) {
+                for (let bx = px; bx < Math.min(px + size, w); bx++) {
+                    const j = (by * w + bx) * 4;
+                    d[j] = r; d[j + 1] = g; d[j + 2] = b; d[j + 3] = a;
+                }
+            }
+        }
+    }
+    ctx.putImageData(imgData, x, y);
+}
 
 function fitToCanvas(imgW, imgH, canvasW, canvasH) {
     const scale = Math.min(1, canvasW / imgW, canvasH / imgH);
@@ -50,6 +69,11 @@ class ImageEditTab {
         this._editingTextLayer = null; // テキスト再編集中のレイヤー参照
         this._initialized      = false;
         this._shapeTool        = null;
+        // Blur ツール
+        this._blurRectMode  = null;   // null | 'blur' | 'mosaic'
+        this._blurDragging  = false;
+        this._blurDragStart = null;
+        this._blurDragCur   = null;
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -81,6 +105,15 @@ class ImageEditTab {
         if (this._activeTool === "text")   this._textTool?.deactivate();
         if (this._activeTool === "select") this._selectTool?.deactivate();
         if (this._activeTool === "shape")  this._shapeTool?.deactivate();
+        if (this._activeTool === "blur") {
+            this._blurRectMode = null;
+            this._blurDragging = false;
+            const overlay = document.getElementById("ie-canvas-overlay");
+            if (overlay) {
+                overlay.style.cursor = "";
+                overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
+            }
+        }
 
         this._activeTool = toolId;
 
@@ -109,6 +142,8 @@ class ImageEditTab {
             this._shapeTool.setCanvas(overlayCanvas);
             this._shapeTool.activate();
             if (overlayCanvas) overlayCanvas.style.cursor = "crosshair";
+        } else if (this._activeTool === "blur") {
+            if (overlayCanvas) overlayCanvas.style.cursor = this._blurRectMode ? "crosshair" : "default";
         }
     }
 
@@ -350,6 +385,98 @@ class ImageEditTab {
             });
             document.getElementById("ie-shape-undo-btn")?.addEventListener("click", () => this._undo());
 
+        } else if (toolId === "blur") {
+            const blurOn   = this._blurRectMode === "blur";
+            const mosaicOn = this._blurRectMode === "mosaic";
+            el.innerHTML = `
+                <div class="ie-opt-group">
+                    <span style="font-size:11px;color:var(--wfm-text-secondary);">Whole:</span>
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;">Blur</label>
+                    <input type="range" id="ie-whole-blur" min="1" max="50" value="10" style="width:70px;">
+                    <span id="ie-whole-blur-val" style="font-size:11px;min-width:22px;">10</span>px
+                    <button class="wfm-btn wfm-btn-sm" id="ie-whole-blur-apply">Apply</button>
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;">Mosaic</label>
+                    <input type="range" id="ie-whole-mosaic" min="5" max="100" value="20" style="width:70px;">
+                    <span id="ie-whole-mosaic-val" style="font-size:11px;min-width:22px;">20</span>px
+                    <button class="wfm-btn wfm-btn-sm" id="ie-whole-mosaic-apply">Apply</button>
+                </div>
+                <div style="width:1px;height:22px;background:var(--wfm-border);margin:0 6px;flex-shrink:0;"></div>
+                <div class="ie-opt-group">
+                    <span style="font-size:11px;color:var(--wfm-text-secondary);">Rect:</span>
+                </div>
+                <div class="ie-opt-group">
+                    <button class="wfm-btn wfm-btn-sm${blurOn ? " ie-opt-active" : ""}" id="ie-rect-blur-toggle"
+                        style="${blurOn ? "background:var(--wfm-accent,#4682e6);color:#fff;" : ""}">
+                        Rect Blur: ${blurOn ? "ON" : "OFF"}
+                    </button>
+                    <input type="range" id="ie-rect-blur" min="1" max="50" value="10" style="width:70px;">
+                    <span id="ie-rect-blur-val" style="font-size:11px;min-width:22px;">10</span>px
+                </div>
+                <div class="ie-opt-group">
+                    <button class="wfm-btn wfm-btn-sm${mosaicOn ? " ie-opt-active" : ""}" id="ie-rect-mosaic-toggle"
+                        style="${mosaicOn ? "background:var(--wfm-accent,#4682e6);color:#fff;" : ""}">
+                        Rect Mosaic: ${mosaicOn ? "ON" : "OFF"}
+                    </button>
+                    <input type="range" id="ie-rect-mosaic" min="5" max="50" value="15" style="width:70px;">
+                    <span id="ie-rect-mosaic-val" style="font-size:11px;min-width:22px;">15</span>px
+                </div>
+            `;
+            document.getElementById("ie-whole-blur")?.addEventListener("input", e => {
+                document.getElementById("ie-whole-blur-val").textContent = e.target.value;
+            });
+            document.getElementById("ie-whole-mosaic")?.addEventListener("input", e => {
+                document.getElementById("ie-whole-mosaic-val").textContent = e.target.value;
+            });
+            document.getElementById("ie-whole-blur-apply")?.addEventListener("click", () => {
+                this._applyWholeBlur(parseInt(document.getElementById("ie-whole-blur").value));
+            });
+            document.getElementById("ie-whole-mosaic-apply")?.addEventListener("click", () => {
+                this._applyWholeMosaic(parseInt(document.getElementById("ie-whole-mosaic").value));
+            });
+            document.getElementById("ie-rect-blur-toggle")?.addEventListener("click", () => {
+                this._blurRectMode = this._blurRectMode === "blur" ? null : "blur";
+                this._renderToolOptions("blur");
+                const ov = document.getElementById("ie-canvas-overlay");
+                if (ov) ov.style.cursor = this._blurRectMode ? "crosshair" : "default";
+            });
+            document.getElementById("ie-rect-mosaic-toggle")?.addEventListener("click", () => {
+                this._blurRectMode = this._blurRectMode === "mosaic" ? null : "mosaic";
+                this._renderToolOptions("blur");
+                const ov = document.getElementById("ie-canvas-overlay");
+                if (ov) ov.style.cursor = this._blurRectMode ? "crosshair" : "default";
+            });
+            document.getElementById("ie-rect-blur")?.addEventListener("input", e => {
+                document.getElementById("ie-rect-blur-val").textContent = e.target.value;
+            });
+            document.getElementById("ie-rect-mosaic")?.addEventListener("input", e => {
+                document.getElementById("ie-rect-mosaic-val").textContent = e.target.value;
+            });
+
+        } else if (toolId === "bgremove") {
+            el.innerHTML = `
+                <div class="ie-opt-group">
+                    <label>Model</label>
+                    <select id="ie-bgremove-model" class="ie-opt-select">
+                        <option value="imgly">Lightweight (@imgly)</option>
+                        <option value="birefnet" disabled>BiRefNet (coming soon)</option>
+                    </select>
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;cursor:pointer;">
+                        <input type="checkbox" id="ie-bgremove-new-layer" checked> New Layer
+                    </label>
+                </div>
+                <div class="ie-opt-group">
+                    <button class="wfm-btn wfm-btn-sm" id="ie-bgremove-btn">Remove BG</button>
+                </div>
+                <span id="ie-bgremove-status" style="font-size:11px;color:var(--wfm-text-secondary);margin-left:4px;"></span>
+            `;
+            document.getElementById("ie-bgremove-btn")?.addEventListener("click", () => this._applyBgRemove());
+
         } else {
             const def = TOOL_DEFS.find(d => d.id === toolId);
             el.innerHTML = `<span style="font-size:12px;color:var(--wfm-text-secondary);">${def?.label ?? toolId}: coming soon</span>`;
@@ -465,6 +592,10 @@ class ImageEditTab {
                 // move / resize / rotate → undo を事前に保存
                 this._saveUndo();
             }
+        } else if (this._activeTool === "blur" && this._blurRectMode) {
+            this._blurDragging  = true;
+            this._blurDragStart = { x: pos.x, y: pos.y };
+            this._blurDragCur   = { x: pos.x, y: pos.y };
         }
     }
 
@@ -474,6 +605,10 @@ class ImageEditTab {
         if (this._activeTool === "draw")   this._drawTool?.onMouseMove(pos.x, pos.y);
         if (this._activeTool === "shape")  this._shapeTool?.onMouseMove(pos.x, pos.y);
         if (this._activeTool === "select") this._selectTool?.onMouseMove(pos.x, pos.y);
+        if (this._activeTool === "blur" && this._blurDragging) {
+            this._blurDragCur = pos;
+            this._drawBlurPreview();
+        }
     }
 
     _onToolMouseUp(e) {
@@ -481,12 +616,23 @@ class ImageEditTab {
         if (this._activeTool === "draw")   this._drawTool?.onMouseUp();
         if (this._activeTool === "shape")  this._shapeTool?.onMouseUp();
         if (this._activeTool === "select") this._selectTool?.onMouseUp();
+        if (this._activeTool === "blur" && this._blurDragging) {
+            this._blurDragging = false;
+            this._applyRectEffect();
+            const overlay = document.getElementById("ie-canvas-overlay");
+            if (overlay) overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
+        }
     }
 
     _onToolMouseLeave() {
         if (this._activeTool === "draw")   this._drawTool?.onMouseLeave();
         if (this._activeTool === "shape")  this._shapeTool?.onMouseLeave();
         if (this._activeTool === "select") this._selectTool?.onMouseLeave();
+        if (this._activeTool === "blur" && this._blurDragging) {
+            this._blurDragging = false;
+            const overlay = document.getElementById("ie-canvas-overlay");
+            if (overlay) overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
+        }
     }
 
     // ── 画像ロード ────────────────────────────────
@@ -1109,6 +1255,195 @@ class ImageEditTab {
             ctx.fillText(line, drawX, pad + i * lineH);
         });
         ctx.restore();
+    }
+
+    // ── ぼかし / モザイク ─────────────────────────
+
+    _applyWholeBlur(amount) {
+        if (!this._layerMgr) return;
+        const layer = this._layerMgr.activeLayer;
+        if (!layer) { showToast("No active layer", "error"); return; }
+        this._saveUndo();
+        const w = layer.canvas.width, h = layer.canvas.height;
+        const tmp = document.createElement("canvas");
+        tmp.width = w; tmp.height = h;
+        const tc = tmp.getContext("2d");
+        tc.filter = `blur(${amount}px)`;
+        tc.drawImage(layer.canvas, 0, 0);
+        layer.ctx.clearRect(0, 0, w, h);
+        layer.ctx.drawImage(tmp, 0, 0);
+        this._updateCompositeView();
+        this._refreshLayerList();
+    }
+
+    _applyWholeMosaic(size) {
+        if (!this._layerMgr) return;
+        const layer = this._layerMgr.activeLayer;
+        if (!layer) { showToast("No active layer", "error"); return; }
+        this._saveUndo();
+        _applyMosaicToRegion(layer.ctx, 0, 0, layer.canvas.width, layer.canvas.height, size);
+        this._updateCompositeView();
+        this._refreshLayerList();
+    }
+
+    // canvas座標 (cx,cy) → layer.canvas 座標への逆変換
+    _canvasToLayerCoords(layer, cx, cy) {
+        const centerX = layer.x + layer.displayW / 2;
+        const centerY = layer.y + layer.displayH / 2;
+        const dx = cx - centerX, dy = cy - centerY;
+        const angle = -(layer.rotation || 0) * Math.PI / 180;
+        const rdx = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const rdy = dx * Math.sin(angle) + dy * Math.cos(angle);
+        const scaleX = layer.displayW / layer.canvas.width;
+        const scaleY = layer.displayH / layer.canvas.height;
+        let lx = rdx / scaleX + layer.canvas.width  / 2;
+        let ly = rdy / scaleY + layer.canvas.height / 2;
+        if (layer.flipX) lx = layer.canvas.width  - lx;
+        if (layer.flipY) ly = layer.canvas.height - ly;
+        return { x: lx, y: ly };
+    }
+
+    _drawBlurPreview() {
+        const overlay = document.getElementById("ie-canvas-overlay");
+        if (!overlay) return;
+        const ctx = overlay.getContext("2d");
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        const s = this._blurDragStart, c = this._blurDragCur;
+        if (!s || !c) return;
+        const x = Math.min(s.x, c.x), y = Math.min(s.y, c.y);
+        const w = Math.abs(c.x - s.x), h = Math.abs(c.y - s.y);
+        ctx.strokeStyle = this._blurRectMode === "blur" ? "#4af" : "#fa4";
+        ctx.lineWidth   = 1 / this._zoom;
+        ctx.setLineDash([4 / this._zoom, 2 / this._zoom]);
+        ctx.strokeRect(x, y, w, h);
+        ctx.setLineDash([]);
+    }
+
+    _applyRectEffect() {
+        const layer = this._layerMgr?.activeLayer;
+        if (!layer || !this._blurDragStart || !this._blurDragCur) return;
+        const s = this._blurDragStart, c = this._blurDragCur;
+        if (Math.abs(c.x - s.x) < 3 || Math.abs(c.y - s.y) < 3) return;
+
+        const minX = Math.min(s.x, c.x), minY = Math.min(s.y, c.y);
+        const maxX = Math.max(s.x, c.x), maxY = Math.max(s.y, c.y);
+        const p1 = this._canvasToLayerCoords(layer, minX, minY);
+        const p2 = this._canvasToLayerCoords(layer, maxX, maxY);
+
+        const lx = Math.round(Math.max(0, Math.min(p1.x, p2.x)));
+        const ly = Math.round(Math.max(0, Math.min(p1.y, p2.y)));
+        const lw = Math.round(Math.min(layer.canvas.width  - lx, Math.abs(p2.x - p1.x)));
+        const lh = Math.round(Math.min(layer.canvas.height - ly, Math.abs(p2.y - p1.y)));
+        if (lw <= 0 || lh <= 0) return;
+
+        this._saveUndo();
+
+        if (this._blurRectMode === "blur") {
+            const amount = parseInt(document.getElementById("ie-rect-blur")?.value ?? "10");
+            const tmp = document.createElement("canvas");
+            tmp.width = layer.canvas.width; tmp.height = layer.canvas.height;
+            const tc = tmp.getContext("2d");
+            tc.filter = `blur(${amount}px)`;
+            tc.drawImage(layer.canvas, 0, 0);
+            layer.ctx.drawImage(tmp, lx, ly, lw, lh, lx, ly, lw, lh);
+        } else {
+            const size = parseInt(document.getElementById("ie-rect-mosaic")?.value ?? "15");
+            _applyMosaicToRegion(layer.ctx, lx, ly, lw, lh, size);
+        }
+
+        this._updateCompositeView();
+        this._refreshLayerList();
+    }
+
+    // ── 背景除去 ─────────────────────────────────
+
+    async _bgRemoveImgly(dataUrl, onStatus) {
+        if (!window._wfmImglyRemoveBg) {
+            onStatus("Loading model...");
+            const mod = await import("https://esm.sh/@imgly/background-removal@1.5.7?bundle&target=es2022");
+            window._wfmImglyRemoveBg = mod.removeBackground;
+        }
+        onStatus("Processing...");
+        const res  = await fetch(dataUrl);
+        const blob = await res.blob();
+        const resultBlob = await window._wfmImglyRemoveBg(blob, {
+            publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.5.7/dist/",
+        });
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(resultBlob);
+        });
+    }
+
+    async _bgRemoveBiRefNet(dataUrl, onStatus) {
+        // TODO: POST /api/wfm/bg-remove — Python backend using comfy.bg_removal_model
+        // Returns RGBA PNG data-URL with background removed
+        throw new Error("BiRefNet not yet implemented");
+    }
+
+    async _applyBgRemove() {
+        if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
+        const layer = this._layerMgr.activeLayer;
+        if (!layer)  { showToast("No active layer", "error"); return; }
+
+        const model    = document.getElementById("ie-bgremove-model")?.value ?? "imgly";
+        const asNew    = document.getElementById("ie-bgremove-new-layer")?.checked ?? true;
+        const statusEl = document.getElementById("ie-bgremove-status");
+        const btn      = document.getElementById("ie-bgremove-btn");
+        const setStatus = msg => { if (statusEl) statusEl.textContent = msg; };
+
+        if (btn) btn.disabled = true;
+        setStatus("Starting...");
+
+        try {
+            const dataUrl = layer.canvas.toDataURL("image/png");
+
+            let resultDataUrl;
+            if (model === "imgly") {
+                resultDataUrl = await this._bgRemoveImgly(dataUrl, setStatus);
+            } else {
+                resultDataUrl = await this._bgRemoveBiRefNet(dataUrl, setStatus);
+            }
+
+            const img = await new Promise((resolve, reject) => {
+                const i = new Image();
+                i.onload  = () => resolve(i);
+                i.onerror = () => reject(new Error("Result image load failed"));
+                i.src = resultDataUrl;
+            });
+
+            this._saveUndo();
+
+            if (asNew) {
+                const newL = this._layerMgr.addLayer("image", layer.name + " (no bg)", {
+                    contentW: img.width,    contentH: img.height,
+                    displayW: layer.displayW, displayH: layer.displayH,
+                    x: layer.x,            y: layer.y,
+                });
+                newL.ctx.drawImage(img, 0, 0);
+                this._layerMgr.setActive(newL.id);
+                if (this._activeTool === "select") this._selectTool?.setLayer(newL);
+            } else {
+                layer.canvas.width  = img.width;
+                layer.canvas.height = img.height;
+                layer.ctx = layer.canvas.getContext("2d");
+                layer.ctx.drawImage(img, 0, 0);
+            }
+
+            this._updateCompositeView();
+            this._refreshLayerList();
+            setStatus("Done!");
+            setTimeout(() => setStatus(""), 3000);
+            showToast("Background removed", "success");
+
+        } catch (err) {
+            setStatus("Error: " + err.message);
+            showToast("BG remove failed: " + err.message, "error");
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 }
 

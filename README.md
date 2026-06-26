@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.56-green)
+![Version](https://img.shields.io/badge/version-0.3.57-green)
 
 ## Screenshots
 
@@ -213,11 +213,13 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw types) and export the composite as PNG
 - **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
 - **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers
-- **Tools** — Select (V), Draw (B), Text (T), Shape (S); tool options bar updates per active tool
+- **Tools** — Select (V), Draw (B), Text (T), Shape (S), Blur (≈), BG Remove (⬚); tool options bar updates per active tool
   - **Select** — click to select; drag to move; drag corner handles to resize; drag circle handle to rotate; Flip H / Flip V / Rotate angle in the options bar; double-click a text layer to re-edit its content
   - **Draw** — freehand brush; options: color, brush size, blend mode
   - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
   - **Shape** — drag to draw geometric shapes (Rect / Ellipse / Line / FreeLine); options: shape type, Rounded toggle (Rect/Ellipse), Fill color, Stroke color + width, Opacity; each committed shape becomes an independent draw layer; Stroke None hidden for Line/FreeLine (stroke always active)
+  - **Blur** — **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: enable the toggle then drag a rectangle on the canvas to apply blur or mosaic to that region only (blue preview for blur, orange for mosaic); Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo
+  - **BG Remove** — remove the background from the active layer; **Lightweight (@imgly)**: runs entirely in the browser via CDN (no server required; ~40 MB model downloaded on first use); **BiRefNet**: high-quality removal via the Python backend (coming soon); **New Layer** option (default on) adds the result as a new layer above the original; when off, replaces the active layer in-place
 - **Layer panel** — layer list with visibility (👁/🚫) and lock (🔒/🔓) toggles; opacity slider; type icons (🖼 image / T text / ✏ draw); Layer 1 is automatically locked on first image load
 - **Layer lock** — locked layers show an orange bounding box and 🔒 icon on the canvas; move/resize/rotate are disabled while locked; click the 🔓 button in the layer row to unlock
 - **Text quality** — text layers are rendered at their measured bounding-box size; resizing with the Select tool regenerates the canvas at the new display resolution so text stays sharp
@@ -350,6 +352,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.57
+- **Image Edit — Blur tool** — new Blur tool (≈) in the Image Edit sidebar; **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: toggle to enter rect-draw mode then drag to select a region — blur or mosaic is applied on mouse release; Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo (Ctrl+Z)
+- **Image Edit — BG Remove tool** — new BG Remove tool (⬚); **Lightweight (@imgly)**: background removal running entirely in the browser via CDN (~40 MB model cached after first load); **BiRefNet**: stub wired to a future Python backend endpoint (coming soon); **New Layer** checkbox (default on) adds the result as a new layer above the original — uncheck to replace the active layer in-place; supports Undo
+- **Image Edit — sidebar icons** — removed `ie-tool-placeholder` dimming from Blur and BG Remove buttons; both now display at full brightness matching other active tools
+- **Help — Blur / BG Remove sections** — added two new help cards (Blur Tool and BG Remove Tool) with full i18n support (English / Japanese / Chinese); Tools list updated with Blur and BG Remove overview items
 
 ### v0.3.56
 - **GenerateUI — Style selector** — new checkbox and dropdown next to the Reset Workflow button; when enabled, a Fooocus-style JSON style is applied to positive and negative prompts at generation time; style files (`*.json`) are read from `user/default/Workflow-Studio/style/`; multiple files are merged into a single list sorted by filename; the style's `{prompt}` placeholder is replaced with the original prompt text, otherwise the style text is appended; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation workflow copy and never modify the loaded workflow
