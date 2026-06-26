@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.55-green)
+![Version](https://img.shields.io/badge/version-0.3.56-green)
 
 ## Screenshots
 
@@ -76,11 +76,12 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
-- **Batch type selector** — check one of the column header checkboxes in the Batch Queue pane (Checkpoint / Lora / Prompt / Workflow) to activate that batch type; only one type can be active at a time; the Batch panel below Generate shows the active type, progress, and Pause/Resume/Stop controls
+- **Style selector** — checkbox and dropdown next to the Reset Workflow button; enable to apply a Fooocus-style JSON to positive and negative prompts at generation time; style files (`*.json`) are loaded from `user/default/Workflow-Studio/style/`; the style's `{prompt}` placeholder is replaced with the original prompt text, or the style is appended if no placeholder exists; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation copy and do not modify the loaded workflow
+- **Batch type selector** — check one of the column header checkboxes in the Batch Queue pane (Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler / Style) to activate that batch type; only one type can be active at a time; the Batch panel below Generate shows the active type, progress, and Pause/Resume/Stop controls
 - **Batch tab** (v0.3.18) — dedicated 3-pane layout for assembling the batch queue:
-  - **Left pane** — file-tree checkpoint selection; Filter input to search; All / None buttons; initial state is all unchecked
+  - **Left pane** — 4 tabs: **Checkpoints** (file-tree; Filter / All / None), **Sampler** (KSampler sampler list), **Scheduler** (KSampler scheduler list), **Style** (flat list of all styles from `Workflow-Studio/style/`; All / None buttons)
   - **Center pane** — group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint/Lora groups come from the Models tab, Prompt groups from the Prompt tab, Workflow groups from the Workflow tab — check a group to add all its members, expand ▶ to select individually
-  - **Right pane (Batch Queue)** — shows items queued for each batch type; column headers (Checkpoint / Lora / Prompt / Workflow) each have a checkbox — check one to activate that batch type (radio behavior: only one at a time); count shown at top
+  - **Right pane (Batch Queue)** — 7 columns: Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler / **Style**; each column header has an enable checkbox (radio behavior: only one at a time); count shown per column; Style batch applies each selected style sequentially to a workflow copy
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and more
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
@@ -349,6 +350,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.56
+- **GenerateUI — Style selector** — new checkbox and dropdown next to the Reset Workflow button; when enabled, a Fooocus-style JSON style is applied to positive and negative prompts at generation time; style files (`*.json`) are read from `user/default/Workflow-Studio/style/`; multiple files are merged into a single list sorted by filename; the style's `{prompt}` placeholder is replaced with the original prompt text, otherwise the style text is appended; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation workflow copy and never modify the loaded workflow
+- **Batch tab — Style batch** — new **Style** tab in the Batch left pane lists all styles loaded from the style directory (flat list with All / None buttons); select any combination, enable the **Style** column in Batch Queue, then Generate to run each selected style sequentially; Batch Queue expanded from 6 to 7 columns (Style added as the rightmost column)
 
 ### v0.3.55
 - **Group feature — fix data loss on Windows (backslash/slash mismatch)** — on Windows, ComfyUI returns model paths with backslashes (`sub\model.safetensors`) while the backend normalized to forward slashes; this caused all subdir group members to be flagged as missing and deleted on save; fixed by normalizing both stored and scanned paths to forward slashes in `get_model_groups` and `save_model_groups`
@@ -839,3 +844,4 @@ MIT License
 - [Pillow (PIL Fork)](https://python-pillow.org/) — server-side thumbnail generation (`data/thumb_cache/`)
 - [ComfyUI-Gallery](https://github.com/PanicTitan/ComfyUI-Gallery) by PanicTitan — thumbnail grid UX reference
 - [infinite-image-browsing](https://github.com/zanllp/sd-webui-infinite-image-browsing) by zanllp — thumbnail caching and index strategy reference
+- [Fooocus](https://github.com/lllyasviel/Fooocus) by lllyasviel — style preset JSON format reference

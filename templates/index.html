@@ -260,6 +260,11 @@
                     <button id="wfm-gen-connect-btn" class="wfm-btn wfm-btn-sm">Connect</button>
                     <button id="wfm-gen-model-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh Models</button>
                     <button id="wfm-gen-reset-workflow-btn" class="wfm-btn wfm-btn-sm">Reset Workflow</button>
+                    <label id="wfm-style-label" style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;">
+                        <input type="checkbox" id="wfm-style-enabled" style="cursor:pointer;">
+                        Style
+                    </label>
+                    <select id="wfm-style-select" class="wfm-input" style="font-size:12px;padding:2px 6px;height:26px;min-width:120px;max-width:220px;"></select>
                 </div>
                 <div class="wfm-toolbar-right" style="display:flex;align-items:center;gap:8px;">
                     <span id="wfm-gen-wf-name" style="color:var(--wfm-text-secondary);font-size:13px;">No workflow loaded</span>
@@ -344,6 +349,7 @@
                                     <button class="wfm-batch-left-tab active" data-left-tab="checkpoint">Checkpoints</button>
                                     <button class="wfm-batch-left-tab" data-left-tab="sampler">Sampler</button>
                                     <button class="wfm-batch-left-tab" data-left-tab="scheduler">Scheduler</button>
+                                    <button class="wfm-batch-left-tab" data-left-tab="style">Style</button>
                                 </div>
                                 <div id="wfm-batch-left-checkpoint" class="wfm-batch-left-content active">
                                     <div class="wfm-batch-toolbar">
@@ -366,6 +372,13 @@
                                         <button type="button" id="wfm-scheduler-deselect-all" class="wfm-btn wfm-btn-sm">None</button>
                                     </div>
                                     <div id="wfm-scheduler-list" class="wfm-batch-list"></div>
+                                </div>
+                                <div id="wfm-batch-left-style" class="wfm-batch-left-content">
+                                    <div class="wfm-batch-toolbar">
+                                        <button type="button" id="wfm-style-batch-select-all" class="wfm-btn wfm-btn-sm">All</button>
+                                        <button type="button" id="wfm-style-batch-deselect-all" class="wfm-btn wfm-btn-sm">None</button>
+                                    </div>
+                                    <div id="wfm-batch-style-list" class="wfm-batch-list"></div>
                                 </div>
                             </div>
 
@@ -446,6 +459,14 @@
                                         </div>
                                         <div id="wfm-batch-scheduler-count" class="wfm-batch-count"></div>
                                         <div id="wfm-batch-scheduler-list" class="wfm-batch-preview-list"></div>
+                                    </div>
+                                    <div class="wfm-batch-queue-col">
+                                        <div class="wfm-batch-queue-col-header">
+                                            <span>Style</span>
+                                            <input type="checkbox" class="wfm-batch-type-cb" data-batch-type="style" title="Style batch を有効にする">
+                                        </div>
+                                        <div id="wfm-batch-style-count" class="wfm-batch-count"></div>
+                                        <div id="wfm-batch-style-preview-list" class="wfm-batch-preview-list"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1037,7 +1058,7 @@
                             <h3>GenerateUI Tab</h3>
                             <ul>
                                 <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
-                                <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported); Reset Workflow button re-reads the current workflow file from disk and reloads the editor; <b>Save</b> button (right end of the tab bar) saves the current workflow — including any edits made in the editor — as a new .json file to the Workflow tab; a filename dialog appears with the current workflow name as the default</li>
+                                <li id="wfm-help-gen-2">Load workflows from Workflow tab (App format .app.json not supported); Reset Workflow button re-reads the current workflow file from disk and reloads the editor; <b>Save</b> button (right end of the tab bar) saves the current workflow — including any edits made in the editor — as a new .json file to the Workflow tab; a filename dialog appears with the current workflow name as the default; <b>Style</b> checkbox and dropdown (next to Reset Workflow): enable to apply a Fooocus-style JSON style to the positive and negative prompts at generation time — style files are loaded from <code>user/default/Workflow-Studio/style/*.json</code>; the style's <code>{prompt}</code> placeholder is replaced with the original prompt, or the style text is appended if no placeholder exists</li>
                                 <li id="wfm-help-gen-3">5-tab layout — Input (Prompt + Image), Model, Settings, Feeder, Batch — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
                                 <li id="wfm-help-gen-4">Input tab: inner tabs — <b>Prompt</b> and <b>Image</b> (drag-and-drop upload); Prompt tab has Positive Prompt, Negative Prompt, and an <b>Embeddings</b> selector at the bottom — select a model, set Weight (default 1.0), then click <b>Paste</b> to insert <code>(embedding:Name:weight)</code> at the cursor position of the last focused textarea (defaults to Positive if neither is focused)</li>
                                 <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder, <b>Hypernetwork</b> (with Strength field) selectors with filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones</li>
@@ -1047,10 +1068,11 @@
                                 <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
                                 <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle</li>
                                 <li id="wfm-help-gen-11">Batch tab — enable one batch type at a time by checking the checkbox in the Batch Queue column header; Generate then runs through all queued items sequentially with Pause/Resume and Stop controls</li>
-                                <li id="wfm-help-gen-12">Batch tab — Left pane has 3 tabs: <b>Checkpoints</b> (folder tree with Filter/All/None; (root) header checkbox selects all), <b>Sampler</b> (KSampler sampler_name list with (root) checkbox), <b>Scheduler</b> (KSampler scheduler list with (root) checkbox); All/None toolbar buttons also available for each tab</li>
+                                <li id="wfm-help-gen-12">Batch tab — Left pane has 4 tabs: <b>Checkpoints</b> (folder tree with Filter/All/None; (root) header checkbox selects all), <b>Sampler</b> (KSampler sampler_name list with (root) checkbox), <b>Scheduler</b> (KSampler scheduler list with (root) checkbox), <b>Style</b> (flat list of all styles loaded from <code>Workflow-Studio/style/</code> with All/None buttons); All/None toolbar buttons available for each tab</li>
                                 <li id="wfm-help-gen-13">Batch tab — Center pane: group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint tab shows groups defined in the Models tab — check a group header to select all its members, or expand ▶ to check individual models; group membership always reflects the current Models tab state</li>
-                                <li id="wfm-help-gen-14">Batch tab — Right pane (Batch Queue): 6 columns — Checkpoint, Lora, Prompt, Workflow, Sampler, Scheduler; each column has an enable checkbox; only one type active at a time; count shown per column</li>
+                                <li id="wfm-help-gen-14">Batch tab — Right pane (Batch Queue): 7 columns — Checkpoint, Lora, Prompt, Workflow, Sampler, Scheduler, <b>Style</b>; each column has an enable checkbox; only one type active at a time; count shown per column</li>
                                 <li id="wfm-help-gen-15">Sampler/Scheduler batch: select one or more samplers or schedulers from the left pane, enable the column in Batch Queue, then Generate to run each value through the KSampler node sequentially; sampler/scheduler lists are fetched from ComfyUI (requires connection)</li>
+                                <li id="wfm-help-gen-17">Style batch: select styles in the left pane Style tab, enable the Style column in Batch Queue, then Generate — each selected style is applied in sequence to the positive and negative prompts; styles are applied to workflow copies so the loaded workflow is not modified; style files are re-read each time the page loads from <code>user/default/Workflow-Studio/style/*.json</code></li>
                                 <li id="wfm-help-gen-16">SPA-side wildcard expansion (A1111-style): when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains __name__ syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation</li>
                             </ul>
                         </div>

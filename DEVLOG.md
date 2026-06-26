@@ -1,5 +1,106 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-26: v0.3.56 — Style機能追加（GenerateUI ツールバー & Batchタブ）
+
+**変更ファイル**: `py/routes/settings_routes.py`, `static/js/generate-tab.js`, `templates/index.html`, `README.md`
+
+### 概要
+
+Fooocus形式（`{name, prompt, negative_prompt}`）のスタイルJSONを生成時に自動適用する機能を追加。`user/default/Workflow-Studio/style/` に置いた `*.json` ファイルをすべて読み込んでドロップダウンに表示し、ポジティブ/ネガティブプロンプトへ適用する。ワークフロー本体は変更せず生成ごとのコピーにのみ適用される。
+
+---
+
+### バックエンド
+
+#### `py/routes/settings_routes.py`
+
+- **`GET /api/wfm/styles`** を追加
+  - `DATA_DIR/style/*.json` をファイル名順に読み込み、各ファイルの配列を結合して返す
+  - ファイル読み込みに失敗した場合はその1ファイルをスキップしてログを出力（全体のエラーにはしない）
+
+---
+
+### フロントエンド
+
+#### `static/js/generate-tab.js`
+
+**スタイル管理**
+
+- `_stylesData` — ロードしたスタイルオブジェクト配列（`{name, prompt?, negative_prompt?}`）
+- `_batchStyleSelected` — Batchタブで選択中のスタイル名 Set
+- `_batchStyleOverride` — Styleバッチ実行中に適用スタイルを一時的に上書きする変数（`null` のとき通常モード）
+
+**追加関数**
+
+| 関数 | 概要 |
+|---|---|
+| `_loadStyles()` | `/api/wfm/styles` を取得しドロップダウンとバッチリストを更新 |
+| `_renderStyleDropdown()` | ツールバーの `#wfm-style-select` をスタイル名で再描画 |
+| `_rebuildStyleList()` | `_buildSimpleGroupList` を使って左ペインのスタイル一覧を描画 |
+| `_applyNamedStyle(workflow, style)` | プロンプトノードにスタイルを適用したワークフローのコピーを返す共通ロジック |
+| `_applyStyleToWorkflow(workflow)` | バッチ上書きがあればそれを優先、なければツールバー設定を参照して `_applyNamedStyle` を呼ぶ |
+
+**適用ロジック（`_applyNamedStyle`）**
+
+- ポジティブノード: `style.prompt` に `{prompt}` が含まれる場合は置換、含まれない場合は `元のプロンプト, スタイルプロンプト` で連結
+- ネガティブノード: `style.negative_prompt` を元のネガティブプロンプトの末尾に `, ` で連結
+- ワークフローコピー（`JSON.parse(JSON.stringify(workflow))`）に対して操作するため、`comfyUI.currentWorkflow` は変更されない
+
+**既存関数の変更**
+
+- `_coreGenerate()`: ワイルドカード展開後に `_applyStyleToWorkflow()` を呼ぶよう変更（変数名 `workflowForGenerate` → `workflowExpanded` → `workflowForGenerate` の2段階に分割）
+- `_updateBatchTypeLabel()`: `labels` マップに `style: "Style"` を追加
+- `_renderBatchPreview()`: Style列の更新を追加（`wfm-batch-style-count` / `wfm-batch-style-preview-list`）
+- `initBatchTab()`: Styleタブ切り替え時に `_rebuildStyleList()` を呼ぶよう追加、All/Noneボタン（`wfm-style-batch-select-all` / `wfm-style-batch-deselect-all`）のイベントリスナーを追加、Batchタブ表示時に `_rebuildStyleList()` を追加
+- `initGenerateTab()`: 初期化時に `await _loadStyles()` を追加
+- `_runBatchGenerate()`: `case "style"` を追加 — 選択スタイルを `_batchStyleOverride` にセットして `_runBatchLoop` を実行、finally で `_batchStyleOverride = null` にリセット
+
+---
+
+#### `templates/index.html`
+
+**ツールバー（Styleセレクター）**
+
+Reset Workflow ボタンの右隣に以下を追加：
+- `<label id="wfm-style-label">` + `<input type="checkbox" id="wfm-style-enabled">` — Style の有効/無効チェックボックス
+- `<select id="wfm-style-select">` — スタイルドロップダウン（`min-width:120px / max-width:220px`）
+
+**Batchタブ左ペイン**
+
+- `wfm-batch-left-tab-nav` に `<button data-left-tab="style">Style</button>` を追加
+- `wfm-batch-left-style` コンテンツを追加（All/Noneボタン + `wfm-batch-style-list`）
+
+**Batchタブ Batch Queue（右ペイン）**
+
+- Style 列を追加（`wfm-batch-style-count` / `wfm-batch-style-preview-list` / `data-batch-type="style"` チェックボックス）
+
+**ヘルプ**
+
+- `wfm-help-gen-2`: ツールバーへのStyle追加とスタイルファイルパス・適用ロジックを追記
+- `wfm-help-gen-12`: 左ペインのタブ数 3→4、Styleタブの説明を追記
+- `wfm-help-gen-14`: Batch Queue の列数 6→7 に更新
+- `wfm-help-gen-17`（新規）: Styleバッチ専用の説明を追加
+
+---
+
+### スタイルファイル仕様
+
+`user/default/Workflow-Studio/style/` 配下の任意の `*.json`（複数可）を配置する。各ファイルはオブジェクトの配列形式で、以下のフィールドを持つ：
+
+```json
+[
+  {
+    "name": "スタイル名",
+    "prompt": "スタイルプロンプト（{prompt} プレースホルダー使用可）",
+    "negative_prompt": "ネガティブプロンプト"
+  }
+]
+```
+
+`prompt` / `negative_prompt` はいずれも省略可能。Fooocusの `sdxl_styles_*.json` 形式をそのまま使用できる。
+
+---
+
 ## 2026-06-25: v0.3.55 — グループ機能バグ修正（全タブ）
 
 **変更ファイル**: `py/services/models_service.py`, `static/js/models-tab.js`, `static/js/generate-tab.js`, `static/js/prompt-tab.js`, `static/js/i18n.js`

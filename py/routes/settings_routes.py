@@ -36,6 +36,7 @@ def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/settings/output-dir", handle_set_output_dir)
     app.router.add_get("/api/wfm/settings/export", handle_export)
     app.router.add_post("/api/wfm/settings/import", handle_import)
+    app.router.add_get("/api/wfm/styles", handle_get_styles)
 
 
 async def handle_get(request: web.Request) -> web.Response:
@@ -240,4 +241,31 @@ async def handle_import(request: web.Request) -> web.Response:
         return web.json_response({"status": "ok", **summary})
     except Exception as e:
         logger.error("Error importing data: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+def _load_styles() -> list:
+    """Load all style JSON files from DATA_DIR/style/ directory."""
+    style_dir = DATA_DIR / "style"
+    styles = []
+    if not style_dir.is_dir():
+        return styles
+    for json_file in sorted(style_dir.glob("*.json")):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                styles.extend(data)
+        except Exception as e:
+            logger.warning("Failed to load style file %s: %s", json_file.name, e)
+    return styles
+
+
+async def handle_get_styles(request: web.Request) -> web.Response:
+    """GET /api/wfm/styles - Get all styles from style directory."""
+    try:
+        styles = await asyncio.to_thread(_load_styles)
+        return web.json_response(styles)
+    except Exception as e:
+        logger.error("Error loading styles: %s", e)
         return web.json_response({"error": str(e)}, status=500)

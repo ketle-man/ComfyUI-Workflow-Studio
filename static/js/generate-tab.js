@@ -287,7 +287,7 @@ function _setPauseBtnState(paused) {
 function _updateBatchTypeLabel(running = false) {
     const el = document.getElementById("wfm-batch-type-label");
     if (!el) return;
-    const labels = { checkpoint: "Checkpoint", lora: "Lora", prompt: "Prompt", workflow: "Workflow", sampler: "Sampler", scheduler: "Scheduler" };
+    const labels = { checkpoint: "Checkpoint", lora: "Lora", prompt: "Prompt", workflow: "Workflow", sampler: "Sampler", scheduler: "Scheduler", style: "Style" };
     if (_activeBatchType) {
         el.textContent = labels[_activeBatchType];
         el.style.color = running ? "var(--wfm-primary)" : "";
@@ -456,6 +456,14 @@ function _renderBatchPreview() {
         [..._schedulerSelected].sort(),
         (s) => s,
         "scheduler", "schedulers"
+    );
+    // Style
+    const styleList = _stylesData.filter((s) => _batchStyleSelected.has(s.name)).map((s) => s.name);
+    _renderQueueColumn(
+        "wfm-batch-style-count", "wfm-batch-style-preview-list",
+        styleList,
+        (s) => s,
+        "style", "styles"
     );
 }
 
@@ -1098,6 +1106,7 @@ function initBatchTab() {
             document.getElementById(`wfm-batch-left-${tabId}`)?.classList.add("active");
             if (tabId === "sampler") _rebuildSamplerList();
             else if (tabId === "scheduler") _rebuildSchedulerList();
+            else if (tabId === "style") _rebuildStyleList();
         });
     });
 
@@ -1157,6 +1166,18 @@ function initBatchTab() {
         _renderBatchPreview();
     });
 
+    // 全選択 / 全解除（左ペイン Style）
+    document.getElementById("wfm-style-batch-select-all")?.addEventListener("click", () => {
+        _stylesData.forEach((s) => _batchStyleSelected.add(s.name));
+        _rebuildStyleList();
+        _renderBatchPreview();
+    });
+    document.getElementById("wfm-style-batch-deselect-all")?.addEventListener("click", () => {
+        _batchStyleSelected.clear();
+        _rebuildStyleList();
+        _renderBatchPreview();
+    });
+
     // Batch タブが表示されたときに全グループを読み込む
     document.querySelector('[data-subtab="batch"]')?.addEventListener("click", () => {
         _rebuildCkptList();
@@ -1164,6 +1185,7 @@ function initBatchTab() {
         _loadBatchLoraGroups();
         _loadPromptGroupsForBatch();
         _loadWorkflowGroupsForBatch();
+        _rebuildStyleList();
         _renderBatchPreview();
     });
 }
@@ -1198,6 +1220,101 @@ function initCheckpointBatch() {
             }
         }
     });
+}
+
+// ============================================
+// Style (Fooocus-style JSON from DATA_DIR/style/)
+// ============================================
+
+let _stylesData = [];
+const _batchStyleSelected = new Set();
+let _batchStyleOverride = null; // Style バッチ実行中に一時的にセット
+
+async function _loadStyles() {
+    try {
+        const res = await fetch("/api/wfm/styles");
+        if (res.ok) _stylesData = await res.json();
+        else _stylesData = [];
+    } catch { _stylesData = []; }
+    _renderStyleDropdown();
+    _rebuildStyleList();
+}
+
+function _renderStyleDropdown() {
+    const sel = document.getElementById("wfm-style-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    if (_stylesData.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No styles";
+        sel.appendChild(opt);
+        return;
+    }
+    for (const s of _stylesData) {
+        const opt = document.createElement("option");
+        opt.value = s.name;
+        opt.textContent = s.name;
+        sel.appendChild(opt);
+    }
+}
+
+function _rebuildStyleList() {
+    _buildSimpleGroupList(
+        document.getElementById("wfm-batch-style-list"),
+        _stylesData.map((s) => s.name),
+        _batchStyleSelected,
+        "No styles (place JSON files in Workflow-Studio/style/)"
+    );
+}
+
+function _applyNamedStyle(workflow, style) {
+    if (!style) return workflow;
+    const analysis = comfyUI.currentAnalysis;
+    if (!analysis) return workflow;
+
+    const positiveNodes = (analysis.prompt_nodes || []).filter((n) => n.role === "positive");
+    const negativeNodes = (analysis.prompt_nodes || []).filter((n) => n.role === "negative");
+
+    const result = JSON.parse(JSON.stringify(workflow));
+
+    if (style.prompt) {
+        for (const node of positiveNodes) {
+            const nodeData = result[node.id];
+            if (!nodeData) continue;
+            const key = node.textKey || "text";
+            const original = nodeData.inputs[key] || "";
+            nodeData.inputs[key] = style.prompt.includes("{prompt}")
+                ? style.prompt.replace("{prompt}", original)
+                : original ? `${original}, ${style.prompt}` : style.prompt;
+        }
+    }
+
+    if (style.negative_prompt) {
+        for (const node of negativeNodes) {
+            const nodeData = result[node.id];
+            if (!nodeData) continue;
+            const key = node.textKey || "text";
+            const original = nodeData.inputs[key] || "";
+            nodeData.inputs[key] = original
+                ? `${original}, ${style.negative_prompt}`
+                : style.negative_prompt;
+        }
+    }
+
+    return result;
+}
+
+function _applyStyleToWorkflow(workflow) {
+    // バッチ実行中は上書きスタイルを優先
+    if (_batchStyleOverride !== null) return _applyNamedStyle(workflow, _batchStyleOverride);
+
+    const enabled = document.getElementById("wfm-style-enabled")?.checked;
+    if (!enabled) return workflow;
+    const selectedName = document.getElementById("wfm-style-select")?.value;
+    if (!selectedName) return workflow;
+    const style = _stylesData.find((s) => s.name === selectedName);
+    return _applyNamedStyle(workflow, style || null);
 }
 
 // ============================================
@@ -1292,7 +1409,8 @@ async function _coreGenerate(silent = false) {
     if (progressBar) progressBar.style.width = "0%";
     if (progressText) progressText.textContent = "Starting...";
 
-    const workflowForGenerate = await _expandWildcardsInWorkflow({ ...comfyUI.currentWorkflow });
+    const workflowExpanded = await _expandWildcardsInWorkflow({ ...comfyUI.currentWorkflow });
+    const workflowForGenerate = _applyStyleToWorkflow(workflowExpanded);
     const { images, seed } = await comfyUI.generate(
         workflowForGenerate,
         {
@@ -1521,6 +1639,18 @@ async function _runBatchGenerate() {
                         comfyUI.currentWorkflow[node.id].inputs.scheduler = schedulerName;
                 }
             });
+            break;
+        }
+        case "style": {
+            const list = _stylesData.filter((s) => _batchStyleSelected.has(s.name));
+            if (list.length === 0) { showToast(t("batchNoneSelected", "styles"), "error"); return; }
+            try {
+                await _runBatchLoop(list, (style) => {
+                    _batchStyleOverride = style;
+                }, (s) => s.name);
+            } finally {
+                _batchStyleOverride = null;
+            }
             break;
         }
     }
@@ -1838,6 +1968,9 @@ export async function initGenerateTab() {
 
     // Feeder tab
     await initFeederTab();
+
+    // Style dropdown
+    await _loadStyles();
 
     // Auto-connect on init
     const connected = await comfyUI.checkConnection();
