@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.57-green)
+![Version](https://img.shields.io/badge/version-0.3.58-green)
 
 ## Screenshots
 
@@ -71,7 +71,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **5-tab layout** — Input / Model / Settings / Feeder / Batch tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API
 - **Input tab** — Prompt and Image inner tabs (drag-and-drop upload); Prompt tab shows Positive Prompt and Negative Prompt textareas, plus an **Embeddings selector** at the bottom (Filter + Select + Weight input + Paste button); Paste inserts `(embedding:Name:weight)` at the cursor position of the last focused textarea (defaults to Positive when neither is focused); Raw JSON (540px) in the right column
-- **Model tab** — Checkpoint, VAE, LoRA, ControlNet, UNET, TextEncoder, **Hypernetwork** (with Strength field) selectors with filter; Raw JSON on the right
+- **Model tab** — Checkpoint, VAE, LoRA, ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — single clip: type + device; dual clip: two clip selectors + type + device), **Hypernetwork** (with Strength field) selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
@@ -352,6 +352,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.58
+- **GenerateUI Model tab — Diffusion Model GGUF support** — `LoaderGGUF` and `LoaderGGUFAdvanced` nodes are now recognized alongside `UNETLoader` / `UnetLoaderGGUF`; the correct input key (`gguf_name` vs `unet_name`) is selected automatically on Apply; the Models tab "GenUI Model" button also applies correctly to `LoaderGGUF` workflows
+- **GenerateUI Model tab — Text Encoder expanded (CLIPLoader / DualCLIPLoader / GGUF variants)** — the Text Encoder section now renders a node-type-aware UI: **single CLIP** (`CLIPLoader` / `ClipLoaderGGUF`) shows one clip selector + **type** dropdown + **device** (GGUF only); **Dual CLIP** (`DualCLIPLoader` / `DualClipLoaderGGUF`) shows two clip selectors (clip_name1 / clip_name2) + **type** dropdown + **device** (GGUF only); type options are fetched dynamically from `/object_info`; filter applies to the first selector only
 
 ### v0.3.57
 - **Image Edit — Blur tool** — new Blur tool (≈) in the Image Edit sidebar; **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: toggle to enter rect-draw mode then drag to select a region — blur or mosaic is applied on mouse release; Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo (Ctrl+Z)

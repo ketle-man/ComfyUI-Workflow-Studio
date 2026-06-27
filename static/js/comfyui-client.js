@@ -132,17 +132,19 @@ export const comfyUI = {
     },
 
     async fetchDiffusionModels() {
-        return this._fetchModelList(
-            ["UNETLoader", "UnetLoaderGGUF"],
-            "unet_name"
-        );
+        const [standard, gguf] = await Promise.all([
+            this._fetchModelList(["UNETLoader", "UnetLoaderGGUF"], "unet_name"),
+            this._fetchModelList(["LoaderGGUF", "LoaderGGUFAdvanced"], "gguf_name"),
+        ]);
+        return [...new Set([...standard, ...gguf])];
     },
 
     async fetchTextEncoders() {
-        return this._fetchModelList(
-            ["DualCLIPLoader", "CLIPLoader"],
-            "clip_name1"
-        );
+        const [dual, single] = await Promise.all([
+            this._fetchModelList(["DualCLIPLoader", "DualClipLoaderGGUF"], "clip_name1"),
+            this._fetchModelList(["CLIPLoader", "ClipLoaderGGUF"], "clip_name"),
+        ]);
+        return [...new Set([...dual, ...single])];
     },
 
     async fetchHypernetworks() {

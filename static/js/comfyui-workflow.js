@@ -794,18 +794,25 @@ export const comfyWorkflow = {
             }
 
             // --- Text encoder (CLIP) nodes ---
-            if (ct === "DualCLIPLoader" || ct === "CLIPLoader") {
+            if (ct === "DualCLIPLoader" || ct === "CLIPLoader" || ct === "ClipLoaderGGUF" || ct === "DualClipLoaderGGUF") {
                 result.text_encoder_nodes.push({
                     id, type: ct, title,
                     clip_name1: inputs.clip_name1 || inputs.clip_name,
                     clip_name2: inputs.clip_name2,
+                    clip_type: inputs.type,
+                    device: inputs.device,
                 });
             }
 
             // --- Diffusion model nodes ---
             if (ct === "UNETLoader" || ct === "UnetLoaderGGUF") {
                 result.diffusion_model_nodes.push({
-                    id, type: ct, title, unet_name: inputs.unet_name,
+                    id, type: ct, title, unet_name: inputs.unet_name, inputKey: "unet_name",
+                });
+            }
+            if (ct === "LoaderGGUF" || ct === "LoaderGGUFAdvanced") {
+                result.diffusion_model_nodes.push({
+                    id, type: ct, title, unet_name: inputs.gguf_name, inputKey: "gguf_name",
                 });
             }
 
@@ -879,9 +886,13 @@ function _getWidgetMapping(nodeType) {
         SaveImage: ["filename_prefix"],
         LoadImage: ["image", "upload"],
         UNETLoader: ["unet_name", "weight_dtype"],
+        LoaderGGUF: ["gguf_name"],
+        LoaderGGUFAdvanced: ["gguf_name", "dequant_dtype", "patch_dtype", "patch_on_device"],
         ResolutionSelector: ["aspect_ratio", "megapixels"],
         EmptySD3LatentImage: ["width", "height", "batch_size"],
         CLIPLoader: ["clip_name", "type", "device"],
+        ClipLoaderGGUF: ["clip_name", "type"],
+        DualClipLoaderGGUF: ["clip_name1", "clip_name2", "type"],
         FluxGuidance: ["guidance"],
         CFGNorm: ["strength"],
         // Impact Pack wildcard nodes — only map wildcard_text (index 0); remaining widgets

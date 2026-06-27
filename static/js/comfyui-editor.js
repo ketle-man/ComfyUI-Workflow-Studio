@@ -342,7 +342,6 @@ export const comfyEditor = {
             { label: "Checkpoint", key: "checkpoints", nodes: analysis.checkpoint_nodes, inputKey: "ckpt_name" },
             { label: "VAE", key: "vaes", nodes: analysis.vae_nodes, inputKey: "vae_name" },
             { label: "Diffusion Model", key: "diffusionModels", nodes: analysis.diffusion_model_nodes, inputKey: "unet_name" },
-            { label: "Text Encoder", key: "textEncoders", nodes: analysis.text_encoder_nodes, inputKey: "clip_name1" },
             { label: "ControlNet", key: "controlNets", nodes: analysis.controlnet_nodes, inputKey: "control_net_name" },
             {
                 label: "Hypernetwork", key: "hypernetworks", nodes: analysis.hypernetwork_nodes, inputKey: "hypernetwork_name",
@@ -383,7 +382,7 @@ export const comfyEditor = {
                 </div>
             `;
             })
-            .join("");
+            .join("") + '<div class="wfm-form-group" id="wfm-te-section" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;"><label>Text Encoder</label></div>';
 
         // Filter inputs
         el.querySelectorAll(".wfm-model-filter").forEach((input) => {
@@ -405,13 +404,18 @@ export const comfyEditor = {
         el.querySelectorAll(".wfm-model-apply").forEach((btn) => {
             btn.addEventListener("click", () => {
                 const key = btn.dataset.key;
-                const inputKey = btn.dataset.input;
+                let inputKey = btn.dataset.input;
                 const select = document.getElementById(`wfm-model-${key}`);
                 const targetSelect = document.getElementById(`wfm-model-${key}-target`);
                 if (!select || !targetSelect) return;
                 const value = select.value;
                 const nodeId = targetSelect.value;
                 if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
+                    // LoaderGGUF ノードは gguf_name キーを使う
+                    const ct = comfyUI.currentWorkflow[nodeId].class_type;
+                    if (key === "diffusionModels" && (ct === "LoaderGGUF" || ct === "LoaderGGUFAdvanced")) {
+                        inputKey = "gguf_name";
+                    }
                     comfyUI.currentWorkflow[nodeId].inputs[inputKey] = value;
                     // Apply extras (e.g. strength for Hypernetwork)
                     el.querySelectorAll(`.wfm-model-extra[data-key="${key}"]`).forEach((ex) => {
@@ -423,6 +427,9 @@ export const comfyEditor = {
                 }
             });
         });
+
+        // Text Encoder セクションの非同期初期化
+        _initTextEncoderSection(analysis, this.models.textEncoders || [], el).catch(() => {});
     },
 
     async renderLoraPane(analysis, containerId) {
@@ -1206,4 +1213,101 @@ function _nodeOptions(nodes) {
     return nodes
         .map((n) => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`)
         .join("");
+}
+
+async function _initTextEncoderSection(analysis, textEncoders, containerEl) {
+    const section = containerEl.querySelector("#wfm-te-section");
+    if (!section) return;
+
+    const nodes = analysis.text_encoder_nodes || [];
+    if (nodes.length === 0) {
+        section.innerHTML = `<label>Text Encoder</label><p class="wfm-placeholder">No text encoder node found</p>`;
+        return;
+    }
+
+    const firstNode = nodes[0];
+    const ct = firstNode.type;
+    const isDual = ct === "DualCLIPLoader" || ct === "DualClipLoaderGGUF";
+    const hasDevice = ct === "ClipLoaderGGUF" || ct === "DualClipLoaderGGUF";
+    // CLIPLoader は clip_name、DualCLIPLoader は clip_name1 キーを使う
+    const clip1Key = (ct === "CLIPLoader" || ct === "ClipLoaderGGUF") ? "clip_name" : "clip_name1";
+
+    // object_info から type 選択肢を取得
+    let typeOptions = [];
+    try {
+        const info = await comfyUI.fetchObjectInfo(ct);
+        const typeSpec = info?.[ct]?.input?.required?.type;
+        if (typeSpec) {
+            const first = typeSpec[0];
+            if (Array.isArray(first)) typeOptions = first;
+            else if (Array.isArray(typeSpec[1]?.values)) typeOptions = typeSpec[1].values;
+            else if (Array.isArray(typeSpec[1]?.options)) typeOptions = typeSpec[1].options;
+        }
+    } catch {}
+
+    const currentClip1 = firstNode.clip_name1 || "";
+    const currentClip2 = firstNode.clip_name2 || "";
+    const currentType = firstNode.clip_type || typeOptions[0] || "";
+    const currentDevice = firstNode.device || "default";
+
+    const targetOpts = nodes.map(n => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`).join("");
+    const clip1Opts = textEncoders.map(m => `<option value="${m}" ${m === currentClip1 ? "selected" : ""}>${m}</option>`).join("");
+    const clip2Opts = textEncoders.map(m => `<option value="${m}" ${m === currentClip2 ? "selected" : ""}>${m}</option>`).join("");
+    const typeOpts = typeOptions.map(t => `<option value="${t}" ${t === currentType ? "selected" : ""}>${t}</option>`).join("");
+    const deviceOpts = ["default", "cpu"].map(d => `<option value="${d}" ${d === currentDevice ? "selected" : ""}>${d}</option>`).join("");
+
+    section.innerHTML = `
+        <label>Text Encoder</label>
+        <input type="text" class="wfm-input" id="wfm-te-filter" placeholder="Filter..." style="margin-bottom:4px;">
+        <select class="wfm-select" id="wfm-te-clip1" style="margin-bottom:4px;">${clip1Opts}</select>
+        ${isDual ? `<select class="wfm-select" id="wfm-te-clip2" style="margin-bottom:4px;">${clip2Opts}</select>` : ""}
+        ${typeOptions.length > 0 ? `
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+            <label style="font-size:12px;white-space:nowrap;color:var(--wfm-text-secondary);width:50px;">Type</label>
+            <select class="wfm-select" id="wfm-te-type">${typeOpts}</select>
+        </div>` : ""}
+        ${hasDevice ? `
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+            <label style="font-size:12px;white-space:nowrap;color:var(--wfm-text-secondary);width:50px;">Device</label>
+            <select class="wfm-select" id="wfm-te-device">${deviceOpts}</select>
+        </div>` : ""}
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+            <select class="wfm-select" id="wfm-te-target" style="flex:1;">${targetOpts}</select>
+            <button class="wfm-btn wfm-btn-sm" id="wfm-te-apply">Apply</button>
+        </div>
+    `;
+
+    // フィルター（clip1 のみ）
+    document.getElementById("wfm-te-filter")?.addEventListener("input", (e) => {
+        const filter = e.target.value.toLowerCase();
+        const sel = document.getElementById("wfm-te-clip1");
+        if (!sel) return;
+        const filtered = textEncoders.filter(m => m.toLowerCase().includes(filter));
+        sel.innerHTML = filtered.map(m => `<option value="${m}">${m}</option>`).join("");
+    });
+
+    // Apply
+    document.getElementById("wfm-te-apply")?.addEventListener("click", () => {
+        const nodeId = document.getElementById("wfm-te-target")?.value;
+        if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
+        const inputs = comfyUI.currentWorkflow[nodeId].inputs;
+
+        const clip1Val = document.getElementById("wfm-te-clip1")?.value;
+        if (clip1Val) inputs[clip1Key] = clip1Val;
+
+        if (isDual) {
+            const clip2Val = document.getElementById("wfm-te-clip2")?.value;
+            if (clip2Val) inputs.clip_name2 = clip2Val;
+        }
+
+        const typeVal = document.getElementById("wfm-te-type")?.value;
+        if (typeVal) inputs.type = typeVal;
+
+        if (hasDevice) {
+            const deviceVal = document.getElementById("wfm-te-device")?.value;
+            if (deviceVal) inputs.device = deviceVal;
+        }
+
+        _syncRawJson();
+    });
 }

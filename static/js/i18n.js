@@ -604,7 +604,7 @@ const LANGUAGES = {
         helpGen2: "Load workflows from Workflow tab (App format .app.json not supported); Reset Workflow button re-reads the current workflow file from disk and reloads the editor; Save button (right end of the tab bar) saves the current workflow — including any edits made in the editor — as a new .json file to the Workflow tab; a filename dialog appears with the current workflow name as the default",
         helpGen3: "5-tab layout — Input (Prompt + Image), Model, Settings, Feeder, Batch — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing",
         helpGen4: "Input tab: inner tabs — Prompt and Image (drag-and-drop upload); Prompt tab has Positive Prompt, Negative Prompt, and an Embeddings selector at the bottom — select a model, set Weight (default 1.0), then click Paste to insert (embedding:Name:weight) at the cursor position of the last focused textarea (defaults to Positive if neither is focused)",
-        helpGen5: "Model tab: Checkpoint, VAE, LoRA (Single/Stack tabs), ControlNet, UNET, TextEncoder, Hypernetwork (with Strength field) selectors with filter",
+        helpGen5: "Model tab: Checkpoint, VAE, LoRA (Single/Stack tabs), ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors), Hypernetwork (with Strength field) selectors with filter",
         helpGen6: "Settings tab: KSampler and Latent Image side by side, each at 50% width",
         helpGen7: "Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow",
         helpGen8: "Seed control: random, fixed, increment, decrement",
@@ -616,6 +616,7 @@ const LANGUAGES = {
         helpGen14: "Batch tab — Right pane (Batch Queue): 6 columns — Checkpoint, Lora, Prompt, Workflow, Sampler, Scheduler; each column has an enable checkbox (radio behavior: only one at a time); count shown per column",
         helpGen15: "Sampler/Scheduler batch: select samplers or schedulers in the left pane, enable the column in Batch Queue, then Generate to iterate through each value on the KSampler node; lists are fetched from ComfyUI (connection required)",
         helpGen16: "SPA-side wildcard expansion (A1111-style): when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains __name__ syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation",
+        helpGen17: "Style batch: select styles from the Style tab in the left pane, enable the Style column in Batch Queue, then Generate — each selected style is applied in sequence to the positive and negative prompts; applied to workflow copies so the loaded workflow is not modified; style files are re-read on each page load from user/default/Workflow-Studio/style/*.json",
         helpFeederTitle: "GenerateUI Tab — Feeder subtab",
         helpFeederDesc: "Two modes switchable via the [Image Loop] / [Gallery] toggle at the top of the left pane.",
         helpFeederImgloopTitle: "Image Loop mode",
@@ -693,6 +694,8 @@ const LANGUAGES = {
         helpGallery12: "Metadata button (green, in the detail panel tab bar): opens the selected image in the Metadata tab for full embedded-data inspection; Alt+click on any image thumbnail has the same effect",
         helpGallery13: "Load GenUI button (blue, in the detail panel tab bar): loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab and switches to it; shows a warning toast if no workflow is embedded or the format is not supported",
         helpGallery14: "Tagger button (purple, in the detail panel action row): opens the selected image directly in the Tagger tab's Single mode for instant tagging",
+        helpGallery15: "F button (cyan overlay, top-left of each thumbnail): toggle the image in/out of the __Feeder__ group with a single click; cyan and always visible when in group, visible on hover only when not; quickly queue images for the Feeder tab Gallery mode",
+        helpGallery16: "Image Edit button (toolbar, next to Refresh): sends the currently selected image to the Image Edit tab; if layers already exist the image is added as a new layer scaled to fit the canvas, otherwise it becomes Layer 1",
 
         // -- Tagger Tab --
         helpTaggerTitle: "Tagger Tab",
@@ -1537,7 +1540,7 @@ const LANGUAGES = {
         helpGen2: "Workflowタブからワークフローを読み込み（App形式 .app.json は非対応）。Reset Workflowボタンは現在のワークフローファイルをディスクから再読込してエディタをリロード。Saveボタン（タブバー右端）はエディタでの編集を含む現在のワークフローを新しい.jsonファイルとしてWorkflowタブに保存（現在のワークフロー名を初期値としたファイル名ダイアログを表示）",
         helpGen3: "5タブ構成 — Input（プロンプト＋画像）、Model、Settings、Feeder、Batch — Input/Model/SettingsタブにはRaw JSON列を常時表示",
         helpGen4: "Inputタブ：Prompt・Imageの内部タブ切り替え；PromptタブにはPositive Prompt・Negative Promptに加え最下部にEmbeddingsセレクタを表示（Filter＋セレクト＋Weight入力＋Pasteボタン）— Pasteは最後にフォーカスしたテキストエリアのカーソル位置に(embedding:Name:weight)を挿入（未フォーカス時はPositiveに追加）",
-        helpGen5: "Modelタブ：Checkpoint/VAE/LoRA（Single/Stackタブ）/ControlNet/UNET/TextEncoder/Hypernetwork（Strength入力付き）のセレクタ（フィルタ検索付き）",
+        helpGen5: "Modelタブ：Checkpoint/VAE/LoRA（Single/Stackタブ）/ControlNet/Diffusion Model（UNETLoader / UnetLoaderGGUF / LoaderGGUF対応）/Text Encoder（CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF対応 — typeおよびdevice選択付き、DualCLIPは2段モデル選択）/Hypernetwork（Strength入力付き）のセレクタ（フィルタ検索付き）",
         helpGen6: "Settingsタブ：KSamplerとLatent Imageを横並び（各50%幅）",
         helpGen7: "Raw JSONを各タブの右列に常時表示 — 直接編集してApplyでワークフロー即時反映",
         helpGen8: "シード管理：ランダム / 固定 / 増加 / 減少",
@@ -1549,6 +1552,7 @@ const LANGUAGES = {
         helpGen14: "Batchタブ — 右ペイン（バッチキュー）：6列構成 — Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler；各列にチェックボックスがあり1種類のみ有効化可能（ラジオ動作）；各列に件数を表示",
         helpGen15: "Sampler/Schedulerバッチ：左ペインでサンプラーまたはスケジューラーを選択し、バッチキューの対応列を有効化してGenerateを実行；選択した値を順番にKSamplerノードに適用して生成；リストはComfyUIから取得（要接続）",
         helpGen16: "SPAサイドのワイルドカード展開（A1111スタイル）：ImpactWildcard系以外のノード（CLIPTextEncodeなど）のプロンプトに__name__構文が含まれる場合、生成時にSPA側がWFSワイルドカードフォルダの対応ファイルからランダムに1行選んで展開；ネストしたワイルドカードは最大5パスまで再展開；見つからないワイルドカードはそのまま送信；ImpactWildcardEncode/ProcessorノードはスキップしてComfyUIサーバー側（Impact Pack）が処理；単体生成・バッチ生成どちらでも機能",
+        helpGen17: "スタイルバッチ：左ペインのStyleタブでスタイルを選択し、バッチキューのStyle列を有効化してGenerateを実行 — 選択した各スタイルをPositiveおよびNegativeプロンプトに順番に適用；ワークフローコピーに適用されるため読み込み済みワークフローは変更されない；スタイルファイルはページロードのたびに user/default/Workflow-Studio/style/*.json から再読み込み",
         helpFeederTitle: "GenerateUI Tab — Feeder サブタブ",
         helpFeederDesc: "左ペイン上部の [Image Loop] / [Gallery] トグルで2つのモードを切り替えられます。",
         helpFeederImgloopTitle: "Image Loop モード",
@@ -1626,6 +1630,8 @@ const LANGUAGES = {
         helpGallery12: "Metadataボタン（緑、詳細パネルのタブバー内）：選択画像をMetadataタブで開いて埋め込みデータを詳細確認。画像サムネイルのAlt+クリックでも同じ操作が可能",
         helpGallery13: "Load GenUIボタン（青、詳細パネルのタブバー内）：選択画像に埋め込まれたComfyUIワークフローをGenerateUIタブへ直接読み込んで切り替え。ワークフローが埋め込まれていない場合や非対応形式の場合は警告トーストを表示",
         helpGallery14: "Taggerボタン（紫、詳細パネルのアクション行）：選択画像をTaggerタブのSingleモードで直接開き、即座にタグ付けを開始できる",
+        helpGallery15: "Fボタン（シアン色オーバーレイ、各サムネイル左上）：クリック一つで画像を __Feeder__ グループに追加／削除；グループ内の場合は常にシアン色で表示、非グループ時はホバー時のみ表示；FeederタブのGalleryモードへ素早く画像を追加できる",
+        helpGallery16: "Image Editボタン（ツールバー、Refreshボタン横）：選択中の画像をImage Editタブに送信；既にレイヤーが存在する場合はキャンバスに合わせてスケールして新規レイヤーとして追加、存在しない場合はLayer 1になる",
 
         // -- Tagger Tab --
         helpTaggerTitle: "Taggerタブ",
@@ -2470,7 +2476,7 @@ const LANGUAGES = {
         helpGen2: "从工作流标签页加载工作流（不支持App格式.app.json）。Reset Workflow按钮从磁盘重新读取当前工作流文件并重新加载编辑器。Save按钮（标签栏右端）将当前工作流（包括在编辑器中所做的编辑）保存为新的.json文件到工作流标签页；会显示以当前工作流名称为默认值的文件名对话框",
         helpGen3: "5标签布局 — Input（提示词＋图像）、Model、Settings、Feeder、Batch — Input/Model/Settings各含实时预览和直接编辑的Raw JSON列",
         helpGen4: "Input标签：含Prompt和Image子标签（拖放上传）；Prompt标签显示Positive Prompt、Negative Prompt，以及底部的Embeddings选择器（过滤＋下拉＋权重＋Paste按钮）— Paste将(embedding:Name:weight)插入最后聚焦文本框的光标位置（未聚焦时默认追加到Positive）",
-        helpGen5: "Model标签：Checkpoint/VAE/LoRA（Single/Stack标签）/ControlNet/UNET/TextEncoder/Hypernetwork（带Strength输入）选择器（含筛选）",
+        helpGen5: "Model标签：Checkpoint/VAE/LoRA（Single/Stack标签）/ControlNet/Diffusion Model（支持UNETLoader / UnetLoaderGGUF / LoaderGGUF）/Text Encoder（支持CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — 含type和device选择器，DualCLIP显示两段模型选择）/Hypernetwork（带Strength输入）选择器（含筛选）",
         helpGen6: "Settings标签：KSampler与Latent Image并排显示（各占50%宽度）",
         helpGen7: "Raw JSON在每个标签右列常驻显示 — 直接编辑并Apply即时重载工作流",
         helpGen8: "种子管理：随机/固定/递增/递减",
@@ -2482,6 +2488,7 @@ const LANGUAGES = {
         helpGen14: "Batch标签 — 右窗格（批量队列）：6列 — Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler；每列有启用复选框（单选行为，每次仅一种）；每列显示数量",
         helpGen15: "Sampler/Scheduler批次：在左窗格选择采样器或调度器，启用批次队列对应列后点击Generate；依次将每个值应用到KSampler节点逐一生成；列表从ComfyUI获取（需已连接）",
         helpGen16: "SPA端通配符展开（A1111风格）：当非ImpactWildcard系节点（如CLIPTextEncode）的提示词中含有__name__语法时，SPA在生成时从WFS通配符文件夹的对应文件中随机选取一行展开；嵌套通配符最多重复展开5次；未找到的通配符原样传递；ImpactWildcardEncode/Processor节点跳过（由ComfyUI服务端Impact Pack处理）；单次生成和批量生成均有效",
+        helpGen17: "样式批处理：在左窗格Style标签中选择样式，启用批次队列Style列后点击Generate — 每个选中样式依次应用到正向和负向提示词；样式应用于工作流副本，不会修改已加载的工作流；每次页面加载时从 user/default/Workflow-Studio/style/*.json 重新读取样式文件",
         helpFeederTitle: "GenerateUI Tab — Feeder 子标签",
         helpFeederDesc: "通过左侧面板顶部的 [图片循环] / [图库] 切换按钮可在两种模式间切换。",
         helpFeederImgloopTitle: "图片循环模式",
@@ -2559,6 +2566,8 @@ const LANGUAGES = {
         helpGallery12: "Metadata按钮（绿色，位于详情面板标签栏）：在Metadata标签中打开所选图像以全面查看嵌入数据；Alt+点击任意图像缩略图效果相同",
         helpGallery13: "Load GenUI按钮（蓝色，位于详情面板标签栏）：将所选图像中嵌入的ComfyUI工作流直接加载到GenerateUI标签并切换过去；如果没有嵌入工作流或格式不受支持，则显示警告提示",
         helpGallery14: "Tagger按钮（紫色，位于详情面板操作行）：将所选图像直接在Tagger标签的Single模式中打开，即可立即进行标注",
+        helpGallery15: "F按钮（青色悬浮按钮，每个缩略图左上角）：单击即可将图像添加到/从__Feeder__组中移除；图像在组中时始终显示青色，不在组中时仅悬停时可见；可快速为Feeder标签Gallery模式添加队列图像",
+        helpGallery16: "Image Edit按钮（工具栏，Refresh按钮旁）：将当前选中的图像发送到Image Edit标签；如果已有图层则按比例缩放添加为新图层，否则将成为Layer 1",
 
         // -- Tagger Tab --
         helpTaggerTitle: "Tagger标签",

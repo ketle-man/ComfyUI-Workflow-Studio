@@ -157,17 +157,26 @@ function applyToGenUI(modelName, modelType) {
     } else {
         const { key, inputKey } = mapping;
 
-        const nodeId = Object.keys(comfyUI.currentWorkflow).find((id) => {
-            const node = comfyUI.currentWorkflow[id];
-            return node.inputs && inputKey in node.inputs;
-        });
+        // unet タイプは LoaderGGUF (gguf_name)、textencoder タイプは CLIPLoader (clip_name) も対応
+        const searchKeys = modelType === "unet" ? [inputKey, "gguf_name"]
+                         : modelType === "textencoder" ? [inputKey, "clip_name"]
+                         : [inputKey];
+        let nodeId = null;
+        let actualInputKey = inputKey;
+        for (const ik of searchKeys) {
+            nodeId = Object.keys(comfyUI.currentWorkflow).find((id) => {
+                const node = comfyUI.currentWorkflow[id];
+                return node.inputs && ik in node.inputs;
+            });
+            if (nodeId) { actualInputKey = ik; break; }
+        }
 
         if (!nodeId) {
             showToast(t("modelsGenUINoNode", TYPE_LABELS[modelType] || modelType), "warning");
             return;
         }
 
-        comfyUI.currentWorkflow[nodeId].inputs[inputKey] = modelName;
+        comfyUI.currentWorkflow[nodeId].inputs[actualInputKey] = modelName;
         selectEl = document.getElementById(`wfm-model-${key}`);
     }
 

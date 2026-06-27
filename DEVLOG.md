@@ -1,5 +1,59 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-27: v0.3.58 — GenerateUI Model タブ GGUF対応拡張（Diffusion Model / Text Encoder）
+
+**変更ファイル**: `static/js/comfyui-workflow.js`, `static/js/comfyui-client.js`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`, `templates/index.html`, `static/js/i18n.js`
+
+### 概要
+
+GenerateUI の Model タブで、Diffusion Model セクション（UNET）と Text Encoder セクションを GGUF カスタムノードおよび CLIP バリアント全種に対応させた。
+
+---
+
+### Diffusion Model — GGUF 対応
+
+#### analyzeWorkflow（`comfyui-workflow.js`）
+- `LoaderGGUF` / `LoaderGGUFAdvanced` を `diffusion_model_nodes` に追加
+- ノードオブジェクトに `inputKey: "gguf_name"` を明示記録（`UNETLoader` 系は `"unet_name"`）
+- `_getWidgetMapping` に `LoaderGGUF: ["gguf_name"]`、`LoaderGGUFAdvanced: ["gguf_name", ...]` を追加
+
+#### fetchDiffusionModels（`comfyui-client.js`）
+- `_fetchModelList(["UNETLoader", "UnetLoaderGGUF"], "unet_name")` と `_fetchModelList(["LoaderGGUF", "LoaderGGUFAdvanced"], "gguf_name")` を `Promise.all` で並列フェッチし重複除去してマージ
+
+#### renderModelTab / Apply（`comfyui-editor.js`）
+- Apply 時にノードの `class_type` が `LoaderGGUF` / `LoaderGGUFAdvanced` であれば `inputKey` を自動的に `"gguf_name"` に切り替え
+
+#### applyToGenUI（`models-tab.js`）
+- `unet` タイプの検索キーに `"gguf_name"` を追加（`["unet_name", "gguf_name"]` 順で検索）
+
+---
+
+### Text Encoder — CLIPLoader / DualCLIPLoader / GGUF 対応
+
+#### analyzeWorkflow（`comfyui-workflow.js`）
+- 認識ノードに `ClipLoaderGGUF`、`DualClipLoaderGGUF` を追加
+- ノードオブジェクトに `clip_type`（= `inputs.type`）、`device`（= `inputs.device`）フィールドを追加
+- `_getWidgetMapping` に `ClipLoaderGGUF: ["clip_name", "type"]`、`DualClipLoaderGGUF: ["clip_name1", "clip_name2", "type"]` を追加
+
+#### fetchTextEncoders（`comfyui-client.js`）
+- `DualCLIPLoader` / `DualClipLoaderGGUF`（`clip_name1` キー）と `CLIPLoader` / `ClipLoaderGGUF`（`clip_name` キー）を並列フェッチしてマージ
+
+#### renderModelTab（`comfyui-editor.js`）
+- Text Encoder セクションを `sections` 汎用処理から分離し `#wfm-te-section` プレースホルダーに非同期初期化関数 `_initTextEncoderSection` で描画
+- **単体 CLIP**（CLIPLoader / ClipLoaderGGUF）: clip_name 1段 + type ドロップダウン + device（GGUF のみ）
+- **Dual CLIP**（DualCLIPLoader / DualClipLoaderGGUF）: clip_name1 + clip_name2 の 2 段 + type ドロップダウン + device（GGUF のみ）
+- type 選択肢はノードの `/object_info` から動的取得
+- フィルター入力は 1 段目（clip_name1）のみ対応
+
+#### applyToGenUI（`models-tab.js`）
+- `textencoder` タイプの検索キーに `"clip_name"` を追加（CLIPLoader 系対応）
+
+### ヘルプ更新（3点セット）
+- `templates/index.html` — `wfm-help-gen-5` 初期テキスト更新
+- `static/js/i18n.js` — 英語・日本語・中国語 `helpGen5` を更新（Diffusion Model / Text Encoder の詳細ノード種別を追記）
+
+---
+
 ## 2026-06-26: v0.3.57 — Image Edit Blur Tool / BG Remove Tool 追加
 
 **変更ファイル**: `templates/index.html`, `static/js/image-edit-tab.js`, `static/js/app.js`, `static/js/i18n.js`
