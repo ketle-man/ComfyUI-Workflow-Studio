@@ -23,6 +23,7 @@ _DATA_FILES = [
     "prompts.json",
     "model_metadata.json",
     "gallery_metadata.json",
+    "tagger_settings.json",
 ]
 
 

@@ -1,5 +1,19 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-27: データ管理バグ修正 — tagger_settings.json をエクスポート対象に追加
+
+**変更ファイル**: `py/routes/settings_routes.py`
+
+### 概要
+
+設定タブのデータエクスポート/インポート機能（`_DATA_FILES`リスト）に `tagger_settings.json` が漏れていたバグを修正。
+
+`config.py` で定義されている全JSONデータファイルと `_DATA_FILES` を照合したところ、Taggerの設定ファイル（カスタムモデルディレクトリ・タグ閾値など）がバックアップ対象から除外されていた。`settings_routes.py` の `_DATA_FILES` リストに `"tagger_settings.json"` を追加して修正。
+
+`tagger.db`（SQLite）と `wildcard/`（ディレクトリ）はJSONバンドルに含められないため除外のまま。
+
+---
+
 ## 2026-06-27: v0.3.61 — G'MIC バグ修正・セキュリティ・Draw/Mask ブラシ操作性改善
 
 **変更ファイル**: `py/routes/gmic_routes.py`, `static/js/image-edit-tab.js`, `static/js/image-edit/DrawTool.js`, `static/js/image-edit/MaskTool.js`, `static/js/settings-tab.js`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`
