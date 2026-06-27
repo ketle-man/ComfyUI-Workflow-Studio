@@ -738,6 +738,24 @@ export async function initSettingsTab() {
             </div>
         </details>
 
+        <!-- G'MIC Integration -->
+        <details class="wfm-settings-section">
+            <summary class="wfm-settings-summary">G'MIC-Qt Integration</summary>
+            <div class="wfm-form-group">
+                <label>G'MIC-Qt Executable Path</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" class="wfm-input" id="wfm-settings-gmic-path"
+                        value="${serverSettings.gmic_qt_path || "C:\\\\Users\\\\statsu-11\\\\gmic-3.6.5-qt-win64\\\\gmic_qt.exe"}"
+                        placeholder="C:\\\\Users\\\\statsu-11\\\\gmic-3.6.5-qt-win64\\\\gmic_qt.exe"
+                        style="flex:1;">
+                    <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-gmic-path-save">
+                        Save
+                    </button>
+                </div>
+                <div id="wfm-settings-gmic-path-status" style="font-size:12px;margin-top:4px;"></div>
+            </div>
+        </details>
+
         <!-- Data Management -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">${t("dataManagement")}</summary>
@@ -1414,5 +1432,29 @@ export async function initSettingsTab() {
         }
         // Reset file input so same file can be re-selected
         e.target.value = "";
+    });
+
+    // Save G'MIC path setting
+    document.getElementById("wfm-settings-gmic-path-save")?.addEventListener("click", async () => {
+        const path = document.getElementById("wfm-settings-gmic-path")?.value.trim() || "";
+        const statusEl = document.getElementById("wfm-settings-gmic-path-status");
+        if (statusEl) {
+            statusEl.textContent = "Saving...";
+            statusEl.style.color = "var(--wfm-text-secondary)";
+        }
+        try {
+            await saveServerSettings({ gmic_qt_path: path });
+            serverSettings.gmic_qt_path = path;
+            showToast("G'MIC path saved successfully", "success");
+            if (statusEl) {
+                statusEl.textContent = "Saved successfully!";
+                statusEl.style.color = "var(--wfm-success)";
+            }
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = "Error: " + err.message;
+                statusEl.style.color = "var(--wfm-danger)";
+            }
+        }
     });
 }

@@ -19,7 +19,7 @@ const TOOL_DEFS = [
     { id: "shape",    icon: "□",   label: "Shape",     ready: true  },
     { id: "mask",     icon: "🎭",  label: "Mask",      ready: true  },
     { id: "blur",     icon: "≈",   label: "Blur",      ready: true  },
-    { id: "filter",   icon: "★",   label: "Filter",    ready: false },
+    { id: "filter",   icon: "★",   label: "Filter",    ready: true },
     { id: "bgremove", icon: "⬚",   label: "BG Remove", ready: true  },
 ];
 
@@ -81,6 +81,12 @@ class ImageEditTab {
         this._maskInverted     = false;
         this._maskOverlayColor = "#ff0000";
         this._maskBlur         = 0;
+        // G'MIC tool state
+        this._gmicState = {
+            lastResultJobId: null,
+            processing: false,
+            aborted: false
+        };
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -113,6 +119,9 @@ class ImageEditTab {
         if (this._activeTool === "select") this._selectTool?.deactivate();
         if (this._activeTool === "shape")  this._shapeTool?.deactivate();
         if (this._activeTool === "mask")   this._maskTool?.deactivate();
+        if (this._activeTool === "filter") {
+            this._gmicAbort();
+        }
         if (this._activeTool === "blur") {
             this._blurRectMode = null;
             this._blurDragging = false;
@@ -539,6 +548,24 @@ class ImageEditTab {
             `;
             document.getElementById("ie-bgremove-btn")?.addEventListener("click", () => this._applyBgRemove());
 
+        } else if (toolId === "filter") {
+            const openBtnDisabled = this._gmicState.processing ? "disabled" : "";
+            const applyBtnDisabled = (!this._gmicState.lastResultJobId || this._gmicState.processing) ? "disabled" : "";
+            const progressStyle = this._gmicState.processing ? "display:flex" : "display:none";
+            
+            el.innerHTML = `
+                <div class="ie-opt-group">
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="ie-gmic-open-btn" ${openBtnDisabled}>G'MIC GUIで編集</button>
+                    <button class="wfm-btn wfm-btn-sm" id="ie-gmic-apply-btn" ${applyBtnDisabled}>結果を反映</button>
+                </div>
+                <div class="ie-opt-group" id="ie-gmic-progress-area" style="${progressStyle}; align-items:center; gap:6px;">
+                    <span id="ie-gmic-progress-lbl" style="font-size:11px; color:var(--wfm-text-secondary);">G'MIC GUIを起動中...</span>
+                    <button class="wfm-btn wfm-btn-sm" id="ie-gmic-abort-btn" style="background:#ea4335;color:#fff;">中断</button>
+                </div>
+            `;
+            document.getElementById("ie-gmic-open-btn")?.addEventListener("click", () => this._gmicOpenGui());
+            document.getElementById("ie-gmic-apply-btn")?.addEventListener("click", () => this._gmicApplyResult());
+            document.getElementById("ie-gmic-abort-btn")?.addEventListener("click", () => this._gmicAbort());
         } else {
             const def = TOOL_DEFS.find(d => d.id === toolId);
             el.innerHTML = `<span style="font-size:12px;color:var(--wfm-text-secondary);">${def?.label ?? toolId}: coming soon</span>`;
@@ -1746,6 +1773,156 @@ class ImageEditTab {
             showToast("BG remove failed: " + err.message, "error");
         } finally {
             if (btn) btn.disabled = false;
+        }
+    }
+
+    // ── G'MIC Integration ──────────────────────────
+
+    async _gmicOpenGui() {
+        if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
+        const layer = this._layerMgr.activeLayer;
+        if (!layer)  { showToast("No active layer", "error"); return; }
+        this._syncActiveLayerFromCanvas();
+
+        if (this._gmicState.processing) return;
+
+        const dataUrl = layer.canvas.toDataURL("image/png");
+
+        this._gmicState.processing = true;
+        const openBtn      = document.getElementById("ie-gmic-open-btn");
+        const progressArea = document.getElementById("ie-gmic-progress-area");
+        const progressLbl  = document.getElementById("ie-gmic-progress-lbl");
+        const applyBtn     = document.getElementById("ie-gmic-apply-btn");
+
+        if (openBtn) openBtn.disabled = true;
+        if (applyBtn) applyBtn.disabled = true;
+        if (progressArea) progressArea.style.display = "flex";
+        if (progressLbl) progressLbl.textContent = "画像をサーバーへ送信中...";
+
+        try {
+            const res = await fetch("/api/wfm/gmic/open", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image_b64: dataUrl })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            this._gmicState.lastResultJobId = data.job_id;
+            if (progressLbl) progressLbl.textContent = "G'MIC GUIで編集中... フィルターを選択して「OK」を押すと適用可能になります";
+            await this._gmicWaitForJob(data.job_id);
+        } catch (e) {
+            if (e.message !== "__aborted__") {
+                showToast("G'MIC Error: " + e.message, "error");
+            }
+            this._gmicState.processing = false;
+            this._gmicState.aborted = false;
+            if (openBtn) openBtn.disabled = false;
+            if (progressArea) progressArea.style.display = "none";
+        }
+    }
+
+    _gmicAbort() {
+        this._gmicState.aborted = true;
+        this._gmicState.processing = false;
+        const openBtn      = document.getElementById("ie-gmic-open-btn");
+        const progressArea = document.getElementById("ie-gmic-progress-area");
+        if (progressArea) progressArea.style.display = "none";
+        if (openBtn) openBtn.disabled = false;
+    }
+
+    async _gmicWaitForJob(jobId) {
+        const progressLbl = document.getElementById("ie-gmic-progress-lbl");
+        const applyBtn    = document.getElementById("ie-gmic-apply-btn");
+        const maxWait = 600, interval = 2000;
+        const start = Date.now();
+        this._gmicState.aborted = false;
+
+        while (true) {
+            if (this._gmicState.aborted) throw new Error("__aborted__");
+            if ((Date.now() - start) / 1000 > maxWait) throw new Error("Timeout");
+            await new Promise(r => setTimeout(r, interval));
+            if (this._gmicState.aborted) throw new Error("__aborted__");
+            try {
+                const res = await fetch(`/api/wfm/gmic/status/${jobId}`);
+                if (res.status === 404) throw new Error("__aborted__");
+                if (!res.ok) continue;
+                const status = await res.json();
+                if (status.status === "completed") {
+                    this._gmicState.lastResultJobId = jobId;
+                    if (applyBtn) applyBtn.disabled = false;
+                    if (progressLbl) progressLbl.textContent = "処理完了 → 「結果を反映」で画像に適用";
+                    this._gmicState.processing = false;
+                    showToast("G'MIC filtering complete. Click Apply to insert result.", "success");
+                    return;
+                }
+                if (status.status === "failed") {
+                    if (progressLbl) progressLbl.textContent = status.error || "G'MIC GUIがキャンセルされました";
+                    throw new Error("__aborted__");
+                }
+                if (progressLbl) progressLbl.textContent = status.message || "G'MIC GUIで編集中...";
+            } catch (e) {
+                if (e.message === "__aborted__" || e.message.includes("Timeout")) throw e;
+            }
+        }
+    }
+
+    async _gmicApplyResult() {
+        if (!this._gmicState.lastResultJobId) {
+            showToast("No G'MIC result to apply", "error");
+            return;
+        }
+        const applyBtn = document.getElementById("ie-gmic-apply-btn");
+        const openBtn  = document.getElementById("ie-gmic-open-btn");
+        const progressArea = document.getElementById("ie-gmic-progress-area");
+        if (applyBtn) applyBtn.disabled = true;
+
+        try {
+            const statusRes = await fetch(`/api/wfm/gmic/status/${this._gmicState.lastResultJobId}`);
+            if (!statusRes.ok) throw new Error(`HTTP ${statusRes.status}`);
+            const statusData = await statusRes.json();
+            if (!statusData.result_path) throw new Error("No result path found");
+
+            const b64res = await fetch("/api/wfm/gmic/result", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ result_path: statusData.result_path })
+            });
+            if (!b64res.ok) throw new Error(`HTTP ${b64res.status}`);
+            const { image_b64: dataUrl } = await b64res.json();
+
+            const img = await new Promise((resolve, reject) => {
+                const i = new Image();
+                i.onload  = () => resolve(i);
+                i.onerror = () => reject(new Error("Failed to load result image"));
+                i.src = dataUrl;
+            });
+
+            this._saveUndo();
+
+            const layer = this._layerMgr.activeLayer;
+            if (!layer) throw new Error("No active layer");
+
+            layer.canvas.width  = img.width;
+            layer.canvas.height = img.height;
+            layer.ctx = layer.canvas.getContext("2d");
+            layer.ctx.drawImage(img, 0, 0);
+
+            this._updateCompositeView();
+            this._refreshLayerList();
+            showToast("G'MIC filter applied successfully", "success");
+
+            // Reset G'MIC status
+            this._gmicState.lastResultJobId = null;
+            this._gmicState.processing = false;
+            if (openBtn) openBtn.disabled = false;
+            if (progressArea) progressArea.style.display = "none";
+            this._renderToolOptions("filter");
+        } catch (err) {
+            showToast("Failed to apply G'MIC result: " + err.message, "error");
+            if (applyBtn) applyBtn.disabled = false;
         }
     }
 }

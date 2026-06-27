@@ -1,5 +1,83 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-27: v0.3.60 — Image Edit Filter Tool (G'MIC-Qt 連携) 実装
+
+**変更ファイル**: `py/routes/gmic_routes.py`（新規）, `py/wfm.py`, `templates/index.html`, `static/js/image-edit-tab.js`, `static/js/settings-tab.js`
+
+### 概要
+
+Image Edit タブの「★ Filter」ツール（これまで非アクティブ）に G'MIC-Qt GUI 連携機能を実装。アクティブレイヤーの画像を G'MIC-Qt で開き、フィルター適用後の結果をレイヤーに反映できる。処理中は進行状況を表示し、Undo/Redo にも対応。
+
+---
+
+### バックエンド
+
+#### `py/routes/gmic_routes.py`（新規）
+
+G'MIC-Qt 連携用の API ルートを新規作成。
+
+| エンドポイント | 概要 |
+|---|---|
+| `POST /api/wfm/gmic/open` | base64 画像を受け取り一時 PNG に保存→ `gmic_qt.exe -o <out> <in>` をバックグラウンドスレッドで起動。`job_id` を返す |
+| `GET /api/wfm/gmic/status/{job_id}` | ジョブの進行状況（`pending` / `processing` / `completed` / `failed`）を返す |
+| `POST /api/wfm/gmic/result` | `result_path` を受け取り、処理済み画像を base64 エンコードして返す |
+
+- G'MIC-Qt の実行パスは Settings に保存された `gmic_qt_path` を参照。未設定の場合はデフォルトパス `C:\Users\statsu-11\gmic-3.6.5-qt-win64\gmic_qt.exe` にフォールバック。
+- プロセスは `subprocess.Popen` + `CREATE_NEW_CONSOLE` でノンブロッキングに起動し、スレッド内でポーリングして完了を検出。
+
+#### `py/wfm.py`
+
+`gmic_routes` を import し、`gmic_routes.setup_routes(app)` をルート登録リストに追加。
+
+---
+
+### フロントエンド
+
+#### `templates/index.html`
+
+左サイドバーの「★ Filter」ボタンから `ie-tool-placeholder` クラスを削除し、クリック可能な通常ボタンに変更。
+
+#### `static/js/image-edit-tab.js`
+
+- `TOOL_DEFS` の `filter` を `ready: false` → `ready: true` に変更
+- コンストラクタに `this._gmicState`（`lastResultJobId` / `processing` / `aborted`）を追加
+- `_setActiveTool("filter")` → 他ツールへ切り替えた際に `_gmicAbort()` を呼ぶ
+- `_renderToolOptions("filter")` — 以下の UI を生成:
+  - **「G'MIC GUI で編集」ボタン** — 処理中は disabled
+  - **「結果を反映」ボタン** — 処理完了後に有効化
+  - **進行状況テキスト** — サーバーからのステータスメッセージを表示
+  - **「中断」ボタン** — 赤色。クリックでポーリングを停止し UI をリセット
+
+| 新規メソッド | 概要 |
+|---|---|
+| `_gmicOpenGui()` | アクティブレイヤーを PNG (base64) に変換→ `/api/wfm/gmic/open` で起動 |
+| `_gmicWaitForJob(jobId)` | 2 秒間隔でステータスをポーリング（最大 10 分）。完了で「結果を反映」を有効化 |
+| `_gmicApplyResult()` | `result_path` 経由で処理済み画像を取得→ `_saveUndo()` → アクティブレイヤーに上書き描画 |
+| `_gmicAbort()` | `_gmicState.aborted = true` でポーリングを中断し UI をリセット |
+
+#### `static/js/settings-tab.js`
+
+Settings タブに「**G'MIC-Qt Integration**」セクション（`<details>`）を追加。
+
+- G'MIC-Qt 実行ファイルパス入力フィールド（`id="wfm-settings-gmic-path"`）と「Save」ボタン
+- Save クリックで `saveServerSettings({ gmic_qt_path: path })` を呼び出し `settings.json` に永続化
+- 保存結果を下部ステータステキストで通知
+
+---
+
+### 使用フロー
+
+1. Settings タブ → 「G'MIC-Qt Integration」セクションで `gmic_qt.exe` のパスを設定・保存
+2. Image Edit タブで画像をロードし、左サイドバーの「**★ Filter**」ツールを選択
+3. 上部ツールオプションバーの「**G'MIC GUI で編集**」をクリック
+4. G'MIC-Qt ウィンドウが起動し、アクティブレイヤーの画像が表示される
+5. フィルターを選択し「OK」をクリック
+6. WFS が完了を検出し「**結果を反映**」ボタンが有効化される
+7. 「結果を反映」をクリックするとアクティブレイヤーに処理済み画像が適用される
+8. **Ctrl+Z** でフィルター適用前の状態に戻すことも可能
+
+---
+
 ## 2026-06-27: v0.3.59 — Image Edit Mask Tool 実装・Draw/Mask 描画バグ修正・クリッピング保存対応
 
 **変更ファイル**: `static/js/image-edit-tab.js`, `static/js/image-edit/MaskTool.js`, `static/js/image-edit/DrawTool.js`, `static/js/image-edit/LayerManager.js`, `templates/index.html`, `static/css/image-edit-tab.css`, `static/js/i18n.js`, `static/js/app.js`
