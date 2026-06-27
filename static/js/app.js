@@ -400,6 +400,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-11": "helpGallery11", "wfm-help-gallery-12": "helpGallery12",
         "wfm-help-gallery-13": "helpGallery13", "wfm-help-gallery-14": "helpGallery14",
         "wfm-help-gallery-15": "helpGallery15", "wfm-help-gallery-16": "helpGallery16",
+        "wfm-help-gallery-17": "helpGallery17",
         "wfm-help-tagger-title": "helpTaggerTitle",
         "wfm-help-tagger-1": "helpTagger1", "wfm-help-tagger-2": "helpTagger2",
         "wfm-help-tagger-3": "helpTagger3", "wfm-help-tagger-4": "helpTagger4",

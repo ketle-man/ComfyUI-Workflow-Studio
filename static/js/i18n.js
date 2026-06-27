@@ -698,6 +698,7 @@ const LANGUAGES = {
         helpGallery14: "Tagger button (purple, in the detail panel action row): opens the selected image directly in the Tagger tab's Single mode for instant tagging",
         helpGallery15: "F button (cyan overlay, top-left of each thumbnail): toggle the image in/out of the __Feeder__ group with a single click; cyan and always visible when in group, visible on hover only when not; quickly queue images for the Feeder tab Gallery mode",
         helpGallery16: "Image Edit button (toolbar, next to Refresh): sends the currently selected image to the Image Edit tab; if layers already exist the image is added as a new layer scaled to fit the canvas, otherwise it becomes Layer 1",
+        helpGallery17: "Send GenUI Image button (toolbar, next to Image Edit): uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded first",
 
         // -- Tagger Tab --
         helpTaggerTitle: "Tagger Tab",
@@ -1654,6 +1655,7 @@ const LANGUAGES = {
         helpGallery14: "Taggerボタン（紫、詳細パネルのアクション行）：選択画像をTaggerタブのSingleモードで直接開き、即座にタグ付けを開始できる",
         helpGallery15: "Fボタン（シアン色オーバーレイ、各サムネイル左上）：クリック一つで画像を __Feeder__ グループに追加／削除；グループ内の場合は常にシアン色で表示、非グループ時はホバー時のみ表示；FeederタブのGalleryモードへ素早く画像を追加できる",
         helpGallery16: "Image Editボタン（ツールバー、Refreshボタン横）：選択中の画像をImage Editタブに送信；既にレイヤーが存在する場合はキャンバスに合わせてスケールして新規レイヤーとして追加、存在しない場合はLayer 1になる",
+        helpGallery17: "Send GenUI Imageボタン（ツールバー、Image Editボタン横）：選択画像をComfyUIにアップロードし、GenerateUIタブの最初のLoadImageノードへ入力として設定；GenerateUI → Input → Imageへ自動切り替え；事前にLoadImageノードを含むワークフローの読み込みが必要",
 
         // -- Tagger Tab --
         helpTaggerTitle: "Taggerタブ",
@@ -2609,6 +2611,7 @@ const LANGUAGES = {
         helpGallery14: "Tagger按钮（紫色，位于详情面板操作行）：将所选图像直接在Tagger标签的Single模式中打开，即可立即进行标注",
         helpGallery15: "F按钮（青色悬浮按钮，每个缩略图左上角）：单击即可将图像添加到/从__Feeder__组中移除；图像在组中时始终显示青色，不在组中时仅悬停时可见；可快速为Feeder标签Gallery模式添加队列图像",
         helpGallery16: "Image Edit按钮（工具栏，Refresh按钮旁）：将当前选中的图像发送到Image Edit标签；如果已有图层则按比例缩放添加为新图层，否则将成为Layer 1",
+        helpGallery17: "Send GenUI Image按钮（工具栏，Image Edit按钮旁）：将选中图像上传至ComfyUI并设置为GenerateUI标签中第一个LoadImage节点的输入；自动切换至GenerateUI → Input → Image；需要预先加载包含至少一个LoadImage节点的工作流",
 
         // -- Tagger Tab --
         helpTaggerTitle: "Tagger标签",
