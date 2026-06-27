@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.61-green)
+![Version](https://img.shields.io/badge/version-0.3.62-green)
 
 ## Screenshots
 
@@ -41,6 +41,10 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 | WS Library | Library Information |
 |:---:|:---:|
 | ![WS Library](docs/6_ws_library.png) | ![Library Information](docs/7_library_Infomation.png) |
+
+| Tagger Tab | Image Edit Tab |
+|:---:|:---:|
+| ![Tagger Tab](docs/12_Tagger.png) | ![Image Edit Tab](docs/13_ImageEdit.png) |
 
 | Customize | |
 |:---:|:---:|
@@ -165,6 +169,8 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel
 - **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab; **Copy & Send Canvas** button copies the JSON to the clipboard and sends the workflow directly to the ComfyUI canvas (UI and API formats both supported)
 - **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
+- **Image Edit button** — toolbar button; sends the selected image directly to the Image Edit tab as the base layer
+- **Send GenUI Image button** — toolbar button (next to Image Edit); uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
 - **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
@@ -355,6 +361,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.62
+- **Gallery tab — Send GenUI Image button** — new toolbar button (next to Image Edit); uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; `comfyEditor.applyImageToSlot(file, slotIndex)` added to `comfyui-editor.js` for reusable image-slot injection
+- **Bug fix: tagger_settings.json missing from data export** — `tagger_settings.json` was absent from `_DATA_FILES` in `settings_routes.py`; Tagger model directory and threshold settings were silently excluded from Settings → Data Management export/import; fixed by adding the file to the export list
+- **Help — Send GenUI Image** — new help card (`helpGallery17`) added in EN/JA/ZH; registered in `helpIdMap`
+- **Screenshots — Tagger and Image Edit tabs** — `docs/12_Tagger.png` and `docs/13_ImageEdit.png` added to the README screenshots section
 
 ### v0.3.61
 - **Image Edit — Draw / Mask brush cursor** — cursor replaced with a size-accurate circle overlay matching the current brush size; the circle scales correctly with canvas zoom so the visible area matches exactly what will be painted

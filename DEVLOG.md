@@ -1,5 +1,48 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-27: v0.3.62 — Send GenUI Image ボタン追加・tagger_settings.json バグ修正・README 更新
+
+**変更ファイル**: `static/js/gallery-tab.js`, `static/js/comfyui-editor.js`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`, `py/routes/settings_routes.py`, `README.md`
+
+### 概要
+
+ギャラリータブのツールバーに **Send GenUI Image** ボタンを追加。選択画像を GenerateUI タブの Input → Image スロット 0 へ自動適用できるようになった。データエクスポートのバグ修正（tagger_settings.json 漏れ）も同梱。
+
+---
+
+### Send GenUI Image ボタン（Gallery タブ）
+
+#### 実装内容
+
+- `templates/index.html` — ギャラリーツールバーの Image Edit ボタン右隣に `#wfm-gallery-send-genui-image-btn` を追加
+- `static/js/comfyui-editor.js` — `comfyEditor.applyImageToSlot(file, slotIndex)` メソッドを追加:
+  - `comfyUI.currentAnalysis.load_image_nodes[slotIndex]` でターゲットノードを特定
+  - `comfyUI.uploadImage()` で ComfyUI input フォルダへアップロード
+  - `currentWorkflow[node.id].inputs.image` を更新してワークフローへ即時反映
+  - GenerateUI の Input > Image スロット UI（プレビュー・ファイル名・ステータス）を即時更新
+- `static/js/gallery-tab.js` — ボタンクリックハンドラを追加:
+  - 選択画像の blob を fetch → File オブジェクト化
+  - DOM クリックチェーン（main tab → subtab → inner tab）で GenerateUI Input Image タブへ自動遷移
+  - `comfyEditor.applyImageToSlot(file, 0)` 呼び出し後にサクセストーストを表示
+- `static/js/i18n.js` — `galleryNoLoadImageNode` / `gallerySentGenUI` / `helpGallery17` を EN/JA/ZH で追加
+- `static/js/app.js` — `helpIdMap` に `"wfm-help-gallery-17": "helpGallery17"` を追加
+- `templates/index.html` — ヘルプ `#wfm-help-gallery-17` を追加
+
+#### 動作条件
+
+- ワークフローが GenerateUI に読み込まれており、LoadImage ノードが 1 つ以上存在すること
+- 画像が Gallery で選択されていること
+
+---
+
+### データ管理バグ修正 — tagger_settings.json をエクスポート対象に追加
+
+- `py/routes/settings_routes.py` の `_DATA_FILES` リストに `"tagger_settings.json"` を追加
+- Tagger のカスタムモデルディレクトリ・閾値設定がエクスポート/インポートされない問題を修正
+- `tagger.db`（SQLite）と `wildcard/`（ディレクトリ）は JSON バンドル非対応のため除外継続
+
+---
+
 ## 2026-06-27: データ管理バグ修正 — tagger_settings.json をエクスポート対象に追加
 
 **変更ファイル**: `py/routes/settings_routes.py`
