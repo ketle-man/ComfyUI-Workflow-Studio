@@ -1131,6 +1131,36 @@ export const comfyEditor = {
         });
     },
 
+    async applyImageToSlot(file, slotIndex = 0) {
+        const loadNodes = comfyUI.currentAnalysis?.load_image_nodes || [];
+        const node = loadNodes[slotIndex];
+        if (!node) throw new Error("No LoadImage node at slot " + slotIndex);
+
+        const result = await comfyUI.uploadImage(file, file.name);
+        if (!result.name) throw new Error("Upload returned no filename");
+
+        if (comfyUI.currentWorkflow?.[node.id]) {
+            comfyUI.currentWorkflow[node.id].inputs.image = result.name;
+        }
+
+        const previewWrap = document.getElementById(`wfm-i2i-preview-wrap-${slotIndex}`);
+        const previewImg  = document.getElementById(`wfm-i2i-preview-${slotIndex}`);
+        const filenameEl  = document.getElementById(`wfm-i2i-filename-${slotIndex}`);
+        const statusEl    = document.getElementById(`wfm-i2i-status-${slotIndex}`);
+        const applyBtn    = document.querySelector(`.wfm-i2i-apply[data-slot="${slotIndex}"]`);
+
+        if (previewImg) {
+            previewImg.src = `/view?filename=${encodeURIComponent(result.name)}&type=input`;
+            if (previewWrap) previewWrap.style.display = "";
+        }
+        if (filenameEl) filenameEl.textContent = result.name;
+        if (statusEl)   { statusEl.textContent = `✓ ${result.name}`; statusEl.style.color = "var(--wfm-success)"; }
+        if (applyBtn)   applyBtn.disabled = true;
+
+        _syncRawJson();
+        return result.name;
+    },
+
     syncToWorkflow() {
         // Sync prompt texts before generation
         const posSelect = document.getElementById("wfm-prompt-pos-target");

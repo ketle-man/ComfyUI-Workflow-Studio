@@ -9,6 +9,8 @@ import { loadFileIntoMetadataTab } from "./metadata-tab.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
 import { escapeHtml } from "./util.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
+import { comfyUI } from "./comfyui-client.js";
+import { comfyEditor } from "./comfyui-editor.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -1468,6 +1470,39 @@ function bindEvents() {
         if (window._wfmImageEditTab) {
             document.querySelector('[data-tab="image-edit"]')?.click();
             window._wfmImageEditTab.loadFromUrl(url, name);
+        }
+    });
+
+    // 選択画像を GenerateUI Image タブへ送信
+    document.getElementById("wfm-gallery-send-genui-image-btn")?.addEventListener("click", async () => {
+        if (!state.selectedImage) {
+            showToast(t("gallerySelectImageFirst"), "info");
+            return;
+        }
+        if (!comfyUI.currentAnalysis) {
+            showToast(t("noWorkflowLoaded"), "info");
+            return;
+        }
+        const loadNodes = comfyUI.currentAnalysis.load_image_nodes || [];
+        if (loadNodes.length === 0) {
+            showToast(t("galleryNoLoadImageNode"), "info");
+            return;
+        }
+        try {
+            const res = await fetch(API.serveImage(state.selectedImage.path));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            const file = new File([blob], state.selectedImage.filename, { type: blob.type || "image/png" });
+
+            // GenerateUI → Input subtab → Image inner tab へ切り替え
+            document.querySelector('[data-tab="generate"]')?.click();
+            document.querySelector('.wfm-gen-subtab-btn[data-subtab="input"]')?.click();
+            document.querySelector('.wfm-input-inner-tab[data-input-tab="image"]')?.click();
+
+            await comfyEditor.applyImageToSlot(file, 0);
+            showToast(t("gallerySentGenUI"), "success");
+        } catch (e) {
+            showToast(t("errorWithMsg", e.message), "error");
         }
     });
 
