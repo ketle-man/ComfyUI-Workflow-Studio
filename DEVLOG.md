@@ -1,5 +1,82 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-27: v0.3.59 — Image Edit Mask Tool 実装・Draw/Mask 描画バグ修正・クリッピング保存対応
+
+**変更ファイル**: `static/js/image-edit-tab.js`, `static/js/image-edit/MaskTool.js`, `static/js/image-edit/DrawTool.js`, `static/js/image-edit/LayerManager.js`, `templates/index.html`, `static/css/image-edit-tab.css`, `static/js/i18n.js`, `static/js/app.js`
+
+### 概要
+
+Image Edit タブに Mask Tool (🎭) を追加した。マスクレイヤーへの白描画・消去・クリッピングマスク機能を実装。併せて Draw / Mask 描画中に他レイヤーが消えるバグ、およびクリッピング有効時に保存へ反映されないバグを修正した。
+
+---
+
+### Mask Tool 新規実装
+
+#### MaskTool.js（新規）
+- 白ペイント / destination-out 消去の soft round brush
+- DrawTool と同アーキテクチャ（stamp キャッシュ・`_paintLine` 補間）
+- paint モード: 白ラジアルグラデーション stamp
+- erase モード: 黒 stamp + `destination-out` globalCompositeOperation
+
+#### image-edit-tab.js
+- `TOOL_DEFS` の mask エントリを `ready: true` に変更しツールを有効化
+- `_maskSubtool`, `_maskInverted`, `_maskOverlayColor`, `_maskBlur` を状態として保持
+- **ツールオプションバー（mask）**: Paint ボタン、Invert チェックボックス、Overlay カラーピッカー、Blur スライダー
+- **プロパティペイン** (`ie-props-pane`): Mask ツール選択時に表示；Size・Hardness・Mode（Add/Erase ボタン）
+- `_renderMaskLayerOverlay()`: overlayColor fill → `destination-in`/`destination-out` でマスクを適用 → 半透明合成
+- `ie-add-mask-btn` ハンドラ: マスクレイヤー追加 → Mask ツール自動切り替え
+- レイヤーリストでマスクレイヤーをクリックすると自動的に Mask ツールに切り替え
+
+#### templates/index.html
+- `ie-props-pane` ペイン追加（レイヤーパネル左隣）
+- レイヤーヘッダーに "M" ボタン追加
+
+#### image-edit-tab.css
+- `.ie-props-pane` / `.ie-props-header` / `.ie-props-body` / `.ie-props-row` スタイル追加
+- マスクレイヤー行の ⬚ アイコンを赤で強調
+
+---
+
+### クリッピングマスク機能
+
+#### LayerManager.js
+- `Layer` クラスに `maskApply` プロパティ追加（`toJSON` / `fromJSON` 対応）
+- `LayerManager.toggleMaskApply(id)` メソッド追加
+
+#### image-edit-tab.js
+- レイヤーリストのマスクレイヤー行に ✂ ボタン追加（`data-action="mask-apply"`）；有効時は青色
+- `_updateCompositeView`: `maskApply=true` のマスクレイヤー直下（back 側、配列 `i+1`）のレイヤーを tmp canvas でクリッピング合成
+- `_renderMaskedLayer(ctx, canvas, maskLayer, targetLayer, showOverlay)` 新メソッド
+- `_buildCompositeCanvas`: `LayerManager.composite()` から `_compositeForExport()` に変更
+- `_compositeForExport()` 新メソッド: クリッピングを適用しつつマスクオーバーレイは除外して保存用合成を行う
+
+#### image-edit-tab.css
+- レイヤーパネル幅 190px → 220px（✂ ボタン追加による見切れを解消）
+
+---
+
+### Draw / Mask 描画バグ修正
+
+**問題**: DrawTool / MaskTool が `drawCanvas` に描いていたため `_loadActiveLayerToCanvas()` がコンポジット表示を上書きし、描画中に他レイヤーが消えていた。
+
+**修正**:
+- DrawTool / MaskTool を `layer.canvas` に直接描画するよう変更
+- `_onToolMouseDown`（draw/mask）: `_loadActiveLayerToCanvas()` を除去し `setCanvas(activeLayer.canvas)` + `_updateCompositeView()` に変更
+- `_onToolMouseMove`（draw/mask）: `_drawing` フラグが立っている間 `_updateCompositeView()` を都度呼び出し、全レイヤーを常時合成表示
+- DrawTool / MaskTool の `onChange`: `_syncActiveLayerFromCanvas()` を除去（layer.canvas 直接描画のため不要）
+- `_activateCurrentTool`（draw/mask）: `setCanvas(activeLayer.canvas)` を呼ぶよう変更
+- DrawTool.js: constructor / `activate()` / `deactivate()` に null ガード追加（`canvas=null` 初期化に対応）
+
+---
+
+### ヘルプ更新（3点セット）
+
+- `templates/index.html`: Mask Tool カード追加（mask-title/1〜5）、`helpImageEdit1`（Mask 追記）、`helpImageEdit7d`・`8b`・`12`（⬚ アイコン）追加
+- `static/js/i18n.js`: EN/JA/ZH 全3言語に上記キーを追加；`helpImageEditMask4`（Add/Erase ボタン）・`helpImageEditMask5`（✂ ボタン説明）を更新
+- `static/js/app.js`: helpIdMap に `7d`・`8b`・`mask-title`・`mask-1〜5` を追加
+
+---
+
 ## 2026-06-27: v0.3.58 — GenerateUI Model タブ GGUF対応拡張（Diffusion Model / Text Encoder）
 
 **変更ファイル**: `static/js/comfyui-workflow.js`, `static/js/comfyui-client.js`, `static/js/comfyui-editor.js`, `static/js/models-tab.js`, `templates/index.html`, `static/js/i18n.js`

@@ -233,11 +233,74 @@
 }
 
 /* =============================================
+   Properties Pane (left of Layers panel)
+   ============================================= */
+
+.ie-props-pane {
+    width: 160px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--wfm-border);
+    background: var(--wfm-surface);
+    overflow: hidden;
+}
+
+.ie-props-header {
+    display: flex;
+    align-items: center;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--wfm-border);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--wfm-text-secondary);
+    flex-shrink: 0;
+}
+
+.ie-props-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ie-props-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+}
+
+.ie-props-row label {
+    color: var(--wfm-text-secondary);
+    white-space: nowrap;
+}
+
+.ie-props-row input[type="range"] {
+    width: 100%;
+}
+
+.ie-props-row span {
+    font-size: 11px;
+    color: var(--wfm-text);
+    text-align: right;
+}
+
+/* Mask layer item highlight */
+.ie-layer-item[data-type="mask"] .ie-layer-type-icon {
+    color: #e25252;
+}
+
+/* =============================================
    Right Panel (Layers)
    ============================================= */
 
 .ie-right-panel {
-    width: 190px;
+    width: 220px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;

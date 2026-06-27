@@ -1280,7 +1280,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-imageedit-title">Image Edit Tab</h3>
                             <ul>
-                                <li id="wfm-help-imageedit-1">Layer-based image editor — compose images with multiple layers (Image, Text, Draw types) and export the composite</li>
+                                <li id="wfm-help-imageedit-1">Layer-based image editor — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite</li>
                                 <li id="wfm-help-imageedit-2">Loading images: drag &amp; drop onto the canvas, Upload button, or send from the Gallery tab via the Image Edit button in the Gallery toolbar; the first image becomes Layer 1 (auto-locked); subsequent images are added as new layers scaled to fit the canvas</li>
                                 <li id="wfm-help-imageedit-3">New button: create a blank canvas — prompts for WxH size (e.g. 512x768); clears all existing layers</li>
                             </ul>
@@ -1294,16 +1294,18 @@
                                 <li id="wfm-help-imageedit-7">Shape (S): draw geometric shapes onto the canvas; each committed shape becomes an independent draw layer; Tool Options: Shape type (Rect / Ellipse / Line / FreeLine), Rounded checkbox (Rect / Ellipse only), Fill color + None toggle (hidden for Line / FreeLine), Stroke color + width + None toggle (None hidden for Line / FreeLine where stroke is always active), Opacity slider, ↩ Undo button; drag to draw — a blue dashed outline previews the shape; release to commit</li>
                                 <li id="wfm-help-imageedit-7b">Blur (≈): apply Gaussian blur or mosaic to the active layer — whole-layer or region-based (drag a rectangle); see the Blur Tool card below for details</li>
                                 <li id="wfm-help-imageedit-7c">BG Remove (⬚): remove the background from the active layer using Lightweight (@imgly, runs in browser) or BiRefNet (Python backend, coming soon); see the BG Remove Tool card below for details</li>
+                                <li id="wfm-help-imageedit-7d">Mask (🎭): paint a white mask on the canvas; click "M" in the Layers header to add a mask layer — the Mask tool activates automatically; the mask is shown as a colored semi-transparent overlay; the Properties pane (left of the Layers panel) shows Paint controls; see the Mask Tool card below for details</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-imageedit-layer-title">Layer Panel</h3>
                             <ul>
                                 <li id="wfm-help-imageedit-8">Layers are listed from front (top) to back (bottom); click a layer row to make it active</li>
+                                <li id="wfm-help-imageedit-8b">"M" button in the Layers header: adds a new mask layer above the current layer and automatically switches to the Mask tool</li>
                                 <li id="wfm-help-imageedit-9">👁 / 🚫 button: toggle layer visibility</li>
                                 <li id="wfm-help-imageedit-10">🔒 / 🔓 button: toggle layer lock — a locked layer cannot be moved, resized, or rotated (orange bounding box is shown); Layer 1 is locked automatically when the first image is loaded to prevent accidental moves</li>
                                 <li id="wfm-help-imageedit-11">Opacity slider at the bottom adjusts the active layer's transparency</li>
-                                <li id="wfm-help-imageedit-12">Type icons: 🖼 = image layer, T = text layer, ✏ = draw layer</li>
+                                <li id="wfm-help-imageedit-12">Type icons: 🖼 = image layer, T = text layer, ✏ = draw layer, ⬚ = mask layer</li>
                                 <li id="wfm-help-imageedit-13">Delete key: removes the selected layer (only when 2+ layers exist)</li>
                             </ul>
                         </div>
@@ -1326,6 +1328,16 @@
                                 <li id="wfm-help-imageedit-bgremove-3">New Layer (checked by default): the result is added as a new layer above the active layer at the same position and display size — the original layer is preserved</li>
                                 <li id="wfm-help-imageedit-bgremove-4">When New Layer is unchecked, the active layer's canvas is replaced in-place with the background-removed result</li>
                                 <li id="wfm-help-imageedit-bgremove-5">Click Remove BG to start processing; status text shows Loading model → Processing → Done; supports Undo (Ctrl+Z)</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-imageedit-mask-title">Mask Tool (🎭)</h3>
+                            <ul>
+                                <li id="wfm-help-imageedit-mask-1">Add a mask layer: click the "M" button in the Layers panel header; the new mask layer is inserted above the active layer and the Mask tool activates automatically</li>
+                                <li id="wfm-help-imageedit-mask-2">Clicking a mask layer in the layer list automatically switches to the Mask tool</li>
+                                <li id="wfm-help-imageedit-mask-3">Tool Options bar (Paint / Invert / Overlay / Blur): Paint button toggles the Paint sub-tool; Invert checkbox inverts the overlay preview (shows color where mask is absent); Overlay color picker changes the preview color (default red); Blur slider (0–50 px) softens the overlay edge</li>
+                                <li id="wfm-help-imageedit-mask-4">Properties pane (left of the Layers panel, visible when Mask tool is active): Size (1–200 px), Hardness (0–100%), Mode — Add button draws white (mask present) / Erase button removes to transparent (mask absent); the active mode is highlighted in blue</li>
+                                <li id="wfm-help-imageedit-mask-5">✂ button on a mask layer row: toggles the layer as a clipping mask — when enabled (blue), the mask clips the layer directly below it so only the painted area is visible; clipping is applied when saving PNG / Gallery / ComfyUI</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1577,7 +1589,7 @@
                     <button class="ie-tool-btn"        data-tool="draw"     title="Draw (B)">✏</button>
                     <button class="ie-tool-btn"        data-tool="text"     title="Text (T)">T</button>
                     <button class="ie-tool-btn"        data-tool="shape"    title="Shape (S)">□</button>
-                    <button class="ie-tool-btn ie-tool-placeholder" data-tool="mask"     title="Mask">🎭</button>
+                    <button class="ie-tool-btn" data-tool="mask" title="Mask">🎭</button>
                     <button class="ie-tool-btn"                    data-tool="blur"     title="Blur">≈</button>
                     <button class="ie-tool-btn ie-tool-placeholder" data-tool="filter"   title="Filter">★</button>
                     <button class="ie-tool-btn"                    data-tool="bgremove" title="BG Remove">⬚</button>
@@ -1626,11 +1638,20 @@
                     </div>
                 </div>
 
+                <!-- Properties Pane (mask tool etc.) -->
+                <div class="ie-props-pane" id="ie-props-pane" style="display:none;">
+                    <div class="ie-props-header">
+                        <span id="ie-props-title">Properties</span>
+                    </div>
+                    <div class="ie-props-body" id="ie-props-body"></div>
+                </div>
+
                 <!-- Right Panel (Layers) -->
                 <div class="ie-right-panel">
                     <div class="ie-layers-header">
                         <span>Layers</span>
                         <button class="wfm-btn wfm-btn-sm" id="ie-add-layer-btn"  title="Add layer">+</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-add-mask-btn"   title="Add mask layer" style="font-weight:700;color:var(--wfm-accent,#4682e6);">M</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-del-layer-btn"  title="Delete layer">−</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-layer-up-btn"   title="Move up">↑</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-layer-down-btn" title="Move down">↓</button>

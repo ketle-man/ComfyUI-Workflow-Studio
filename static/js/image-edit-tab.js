@@ -9,6 +9,7 @@ import { DrawTool }            from "./image-edit/DrawTool.js";
 import { TextTool, TEXT_FONTS } from "./image-edit/TextTool.js";
 import { SelectTool }          from "./image-edit/SelectTool.js";
 import { ShapeTool }           from "./image-edit/ShapeTool.js";
+import { MaskTool }            from "./image-edit/MaskTool.js";
 import { showToast }           from "./app.js";
 
 const TOOL_DEFS = [
@@ -16,7 +17,7 @@ const TOOL_DEFS = [
     { id: "draw",     icon: "✏",  label: "Draw",      ready: true  },
     { id: "text",     icon: "T",   label: "Text",      ready: true  },
     { id: "shape",    icon: "□",   label: "Shape",     ready: true  },
-    { id: "mask",     icon: "🎭",  label: "Mask",      ready: false },
+    { id: "mask",     icon: "🎭",  label: "Mask",      ready: true  },
     { id: "blur",     icon: "≈",   label: "Blur",      ready: true  },
     { id: "filter",   icon: "★",   label: "Filter",    ready: false },
     { id: "bgremove", icon: "⬚",   label: "BG Remove", ready: true  },
@@ -74,6 +75,12 @@ class ImageEditTab {
         this._blurDragging  = false;
         this._blurDragStart = null;
         this._blurDragCur   = null;
+        // Mask ツール
+        this._maskTool         = null;
+        this._maskSubtool      = "paint";
+        this._maskInverted     = false;
+        this._maskOverlayColor = "#ff0000";
+        this._maskBlur         = 0;
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -105,6 +112,7 @@ class ImageEditTab {
         if (this._activeTool === "text")   this._textTool?.deactivate();
         if (this._activeTool === "select") this._selectTool?.deactivate();
         if (this._activeTool === "shape")  this._shapeTool?.deactivate();
+        if (this._activeTool === "mask")   this._maskTool?.deactivate();
         if (this._activeTool === "blur") {
             this._blurRectMode = null;
             this._blurDragging = false;
@@ -113,6 +121,11 @@ class ImageEditTab {
                 overlay.style.cursor = "";
                 overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
             }
+        }
+        // マスク以外に切り替えたらプロパティペインを非表示
+        if (toolId !== "mask") {
+            const pane = document.getElementById("ie-props-pane");
+            if (pane) pane.style.display = "none";
         }
 
         this._activeTool = toolId;
@@ -130,7 +143,8 @@ class ImageEditTab {
         if (!drawCanvas || !this._layerMgr) return;
 
         if (this._activeTool === "draw" && this._drawTool) {
-            this._drawTool.setCanvas(drawCanvas);
+            const activeLayer = this._layerMgr?.activeLayer;
+            if (activeLayer) this._drawTool.setCanvas(activeLayer.canvas);
             this._drawTool.activate();
         } else if (this._activeTool === "text" && this._textTool) {
             this._textTool.setCanvas(drawCanvas);
@@ -142,6 +156,12 @@ class ImageEditTab {
             this._shapeTool.setCanvas(overlayCanvas);
             this._shapeTool.activate();
             if (overlayCanvas) overlayCanvas.style.cursor = "crosshair";
+        } else if (this._activeTool === "mask" && this._maskTool) {
+            const activeLayer = this._layerMgr?.activeLayer;
+            if (activeLayer?.type === "mask") {
+                this._maskTool.setCanvas(activeLayer.canvas);
+            }
+            this._maskTool.activate();
         } else if (this._activeTool === "blur") {
             if (overlayCanvas) overlayCanvas.style.cursor = this._blurRectMode ? "crosshair" : "default";
         }
@@ -385,6 +405,48 @@ class ImageEditTab {
             });
             document.getElementById("ie-shape-undo-btn")?.addEventListener("click", () => this._undo());
 
+        } else if (toolId === "mask") {
+            const sub = this._maskSubtool ?? "paint";
+            el.innerHTML = `
+                <div class="ie-opt-group">
+                    <button class="wfm-btn wfm-btn-sm${sub === "paint" ? " ie-opt-active" : ""}" id="ie-mask-paint-btn">Paint</button>
+                </div>
+                <div style="width:1px;height:22px;background:var(--wfm-border);margin:0 4px;flex-shrink:0;"></div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;cursor:pointer;color:var(--wfm-text-secondary);">
+                        <input type="checkbox" id="ie-mask-invert" ${this._maskInverted ? "checked" : ""}> Invert
+                    </label>
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;color:var(--wfm-text-secondary);">Overlay</label>
+                    <input type="color" id="ie-mask-overlay-color" value="${this._maskOverlayColor}"
+                        style="width:28px;height:22px;padding:0;border:1px solid var(--wfm-border);cursor:pointer;border-radius:3px;">
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;color:var(--wfm-text-secondary);">Blur</label>
+                    <input type="range" id="ie-mask-blur" min="0" max="50" value="${this._maskBlur}" style="width:70px;">
+                    <span id="ie-mask-blur-val" style="font-size:11px;min-width:22px;">${this._maskBlur}</span>px
+                </div>
+            `;
+            document.getElementById("ie-mask-paint-btn")?.addEventListener("click", () => {
+                this._maskSubtool = "paint";
+                this._renderToolOptions("mask");
+            });
+            document.getElementById("ie-mask-invert")?.addEventListener("change", e => {
+                this._maskInverted = e.target.checked;
+                this._updateCompositeView();
+            });
+            document.getElementById("ie-mask-overlay-color")?.addEventListener("input", e => {
+                this._maskOverlayColor = e.target.value;
+                this._updateCompositeView();
+            });
+            document.getElementById("ie-mask-blur")?.addEventListener("input", e => {
+                this._maskBlur = parseInt(e.target.value);
+                document.getElementById("ie-mask-blur-val").textContent = e.target.value;
+                this._updateCompositeView();
+            });
+            this._renderMaskProps(sub);
+
         } else if (toolId === "blur") {
             const blurOn   = this._blurRectMode === "blur";
             const mosaicOn = this._blurRectMode === "mosaic";
@@ -483,6 +545,88 @@ class ImageEditTab {
         }
     }
 
+    _renderMaskProps(sub) {
+        const pane  = document.getElementById("ie-props-pane");
+        const body  = document.getElementById("ie-props-body");
+        const title = document.getElementById("ie-props-title");
+        if (!pane || !body) return;
+        pane.style.display = "flex";
+        if (title) title.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
+
+        if (sub === "paint" && this._maskTool) {
+            const t = this._maskTool;
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label>Mode</label>
+                    <div style="display:flex;gap:4px;">
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "paint" ? " ie-opt-active" : ""}" id="ie-mask-mode-add" style="flex:1;">Add</button>
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-mask-mode-erase" style="flex:1;">Erase</button>
+                    </div>
+                </div>
+                <div class="ie-props-row">
+                    <label>Size</label>
+                    <input type="range" id="ie-mask-size" min="1" max="200" value="${t.brushSize}">
+                    <span id="ie-mask-size-lbl">${t.brushSize}px</span>
+                </div>
+                <div class="ie-props-row">
+                    <label>Hardness</label>
+                    <input type="range" id="ie-mask-hard" min="0" max="100" value="${Math.round(t.hardness * 100)}">
+                    <span id="ie-mask-hard-lbl">${Math.round(t.hardness * 100)}%</span>
+                </div>
+            `;
+            document.getElementById("ie-mask-mode-add")?.addEventListener("click", () => {
+                this._maskTool.mode = "paint";
+                this._maskTool._stamp = null;
+                this._renderMaskProps("paint");
+            });
+            document.getElementById("ie-mask-mode-erase")?.addEventListener("click", () => {
+                this._maskTool.mode = "erase";
+                this._maskTool._stamp = null;
+                this._renderMaskProps("paint");
+            });
+            document.getElementById("ie-mask-size")?.addEventListener("input", e => {
+                this._maskTool.brushSize = parseInt(e.target.value);
+                document.getElementById("ie-mask-size-lbl").textContent = e.target.value + "px";
+                this._maskTool._stamp = null;
+            });
+            document.getElementById("ie-mask-hard")?.addEventListener("input", e => {
+                this._maskTool.hardness = parseInt(e.target.value) / 100;
+                document.getElementById("ie-mask-hard-lbl").textContent = e.target.value + "%";
+                this._maskTool._stamp = null;
+            });
+        } else {
+            body.innerHTML = `<span style="font-size:11px;color:var(--wfm-text-secondary);">No options</span>`;
+        }
+    }
+
+    _renderMaskLayerOverlay(ctx, maskLayer) {
+        const overlayColor = this._maskOverlayColor;
+        const blurPx       = this._maskBlur;
+        const inverted     = this._maskInverted;
+
+        const mw = maskLayer.canvas.width;
+        const mh = maskLayer.canvas.height;
+
+        const tmp = document.createElement("canvas");
+        tmp.width  = mw;
+        tmp.height = mh;
+        const tc = tmp.getContext("2d");
+
+        tc.fillStyle = overlayColor;
+        tc.fillRect(0, 0, mw, mh);
+        tc.globalCompositeOperation = inverted ? "destination-out" : "destination-in";
+        tc.drawImage(maskLayer.canvas, 0, 0);
+        tc.globalCompositeOperation = "source-over";
+
+        ctx.save();
+        ctx.globalAlpha = 0.55 * maskLayer.opacity;
+        if (blurPx > 0) ctx.filter = `blur(${blurPx}px)`;
+        Layer.applyTransform(ctx, maskLayer);
+        ctx.drawImage(tmp, -mw / 2, -mh / 2);
+        ctx.restore();
+        if (blurPx > 0) ctx.filter = "none";
+    }
+
     // ── アクションバー ─────────────────────────────
 
     _setupActionBar() {
@@ -572,9 +716,23 @@ class ImageEditTab {
         const pos = DrawTool.getCanvasPos(refCanvas, e);
 
         if (this._activeTool === "draw" && this._drawTool) {
+            const activeLayer = this._layerMgr.activeLayer;
+            if (!activeLayer) return;
             this._saveUndo();
-            this._loadActiveLayerToCanvas();
+            this._drawTool.setCanvas(activeLayer.canvas);
             this._drawTool.onMouseDown(pos.x, pos.y);
+            this._updateCompositeView();
+
+        } else if (this._activeTool === "mask" && this._maskTool) {
+            const activeLayer = this._layerMgr.activeLayer;
+            if (!activeLayer || activeLayer.type !== "mask") {
+                showToast("Select a mask layer first", "info");
+                return;
+            }
+            this._saveUndo();
+            this._maskTool.setCanvas(activeLayer.canvas);
+            this._maskTool.onMouseDown(pos.x, pos.y);
+            this._updateCompositeView();
 
         } else if (this._activeTool === "shape" && this._shapeTool) {
             this._shapeTool.onMouseDown(pos.x, pos.y);
@@ -602,7 +760,14 @@ class ImageEditTab {
     _onToolMouseMove(e, refCanvas) {
         if (!this._layerMgr) return;
         const pos = DrawTool.getCanvasPos(refCanvas, e);
-        if (this._activeTool === "draw")   this._drawTool?.onMouseMove(pos.x, pos.y);
+        if (this._activeTool === "draw") {
+            this._drawTool?.onMouseMove(pos.x, pos.y);
+            if (this._drawTool?._drawing) this._updateCompositeView();
+        }
+        if (this._activeTool === "mask") {
+            this._maskTool?.onMouseMove(pos.x, pos.y);
+            if (this._maskTool?._drawing) this._updateCompositeView();
+        }
         if (this._activeTool === "shape")  this._shapeTool?.onMouseMove(pos.x, pos.y);
         if (this._activeTool === "select") this._selectTool?.onMouseMove(pos.x, pos.y);
         if (this._activeTool === "blur" && this._blurDragging) {
@@ -614,6 +779,7 @@ class ImageEditTab {
     _onToolMouseUp(e) {
         if (!this._layerMgr || e.button !== 0) return;
         if (this._activeTool === "draw")   this._drawTool?.onMouseUp();
+        if (this._activeTool === "mask")   this._maskTool?.onMouseUp();
         if (this._activeTool === "shape")  this._shapeTool?.onMouseUp();
         if (this._activeTool === "select") this._selectTool?.onMouseUp();
         if (this._activeTool === "blur" && this._blurDragging) {
@@ -626,6 +792,7 @@ class ImageEditTab {
 
     _onToolMouseLeave() {
         if (this._activeTool === "draw")   this._drawTool?.onMouseLeave();
+        if (this._activeTool === "mask")   this._maskTool?.onMouseLeave();
         if (this._activeTool === "shape")  this._shapeTool?.onMouseLeave();
         if (this._activeTool === "select") this._selectTool?.onMouseLeave();
         if (this._activeTool === "blur" && this._blurDragging) {
@@ -746,9 +913,9 @@ class ImageEditTab {
         this._layerMgr = new LayerManager(this._canvasW, this._canvasH);
         this._layerMgr.on("change", () => this._refreshLayerList());
 
-        this._drawTool = new DrawTool(drawCanvas);
+        this._drawTool = new DrawTool(null);
         this._drawTool.onChange(() => {
-            this._syncActiveLayerFromCanvas();
+            // layer.canvas に直接描くため sync 不要
             this._updateCompositeView();
             this._refreshLayerList();
         });
@@ -835,6 +1002,13 @@ class ImageEditTab {
             this._updateCompositeView();
         });
 
+        this._maskTool = new MaskTool(null);
+        this._maskTool.onChange(() => {
+            // layer.canvas に直接描くため sync 不要
+            this._updateCompositeView();
+            this._refreshLayerList();
+        });
+
         this._compositeMode = false;
     }
 
@@ -876,17 +1050,72 @@ class ImageEditTab {
         if (!drawCanvas || !this._layerMgr) return;
         const ctx = drawCanvas.getContext("2d");
         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-        for (let i = this._layerMgr.layers.length - 1; i >= 0; i--) {
-            const layer = this._layerMgr.layers[i];
+
+        const layers = this._layerMgr.layers;
+        // maskApply=true のマスクの直下（back側、i+1）レイヤーはマスク処理でまとめて描画
+        // layers[0]=front … layers[n-1]=back、走査は back→front (i=n-1→0)
+        const maskedIndices = new Set();
+        for (let i = 0; i < layers.length; i++) {
+            if (layers[i].type === "mask" && layers[i].maskApply && layers[i].visible && i + 1 < layers.length) {
+                maskedIndices.add(i + 1); // 直下のレイヤーを先にスキップ
+            }
+        }
+
+        for (let i = layers.length - 1; i >= 0; i--) {
+            const layer = layers[i];
             if (!layer.visible) continue;
-            ctx.save();
-            ctx.globalAlpha = layer.opacity;
-            ctx.globalCompositeOperation = layer.blendMode;
-            Layer.applyTransform(ctx, layer);
-            ctx.drawImage(layer.canvas, -layer.canvas.width / 2, -layer.canvas.height / 2);
-            ctx.restore();
+            if (maskedIndices.has(i)) continue; // マスク処理でまとめて描画するのでスキップ
+
+            if (layer.type === "mask") {
+                if (layer.maskApply && i + 1 < layers.length) {
+                    // 直下（back側、i+1）のレイヤーをクリッピングマスクとして合成
+                    this._renderMaskedLayer(ctx, drawCanvas, layer, layers[i + 1]);
+                } else {
+                    // maskApply=false のときはオーバーレイ表示のみ
+                    this._renderMaskLayerOverlay(ctx, layer);
+                }
+            } else {
+                ctx.save();
+                ctx.globalAlpha = layer.opacity;
+                ctx.globalCompositeOperation = layer.blendMode;
+                Layer.applyTransform(ctx, layer);
+                ctx.drawImage(layer.canvas, -layer.canvas.width / 2, -layer.canvas.height / 2);
+                ctx.restore();
+            }
         }
         this._compositeMode = true;
+    }
+
+    _renderMaskedLayer(ctx, drawCanvas, maskLayer, targetLayer, showOverlay = true) {
+        const W = drawCanvas.width;
+        const H = drawCanvas.height;
+        const tmp = document.createElement("canvas");
+        tmp.width  = W;
+        tmp.height = H;
+        const tc = tmp.getContext("2d");
+
+        if (targetLayer.visible) {
+            tc.save();
+            tc.globalAlpha = targetLayer.opacity;
+            tc.globalCompositeOperation = targetLayer.blendMode;
+            Layer.applyTransform(tc, targetLayer);
+            tc.drawImage(targetLayer.canvas, -targetLayer.canvas.width / 2, -targetLayer.canvas.height / 2);
+            tc.restore();
+        }
+
+        tc.save();
+        tc.globalCompositeOperation = this._maskInverted ? "destination-out" : "destination-in";
+        Layer.applyTransform(tc, maskLayer);
+        tc.drawImage(maskLayer.canvas, -maskLayer.canvas.width / 2, -maskLayer.canvas.height / 2);
+        tc.restore();
+
+        ctx.save();
+        ctx.drawImage(tmp, 0, 0);
+        ctx.restore();
+
+        if (showOverlay) {
+            this._renderMaskLayerOverlay(ctx, maskLayer);
+        }
     }
 
     // ── ズーム・パン ──────────────────────────────
@@ -931,6 +1160,25 @@ class ImageEditTab {
             this._activateCurrentTool();
         });
 
+        document.getElementById("ie-add-mask-btn")?.addEventListener("click", () => {
+            if (!this._layerMgr) { showToast("Open an image first", "info"); return; }
+            this._syncActiveLayerFromCanvas();
+            this._saveUndo();
+            const maskCount = this._layerMgr.layers.filter(l => l.type === "mask").length + 1;
+            const layer = this._layerMgr.addLayer("mask", `Mask ${maskCount}`);
+            layer.displayW = this._canvasW;
+            layer.displayH = this._canvasH;
+            layer.x = 0;
+            layer.y = 0;
+            this._layerMgr.setActive(layer.id);
+            this._setActiveTool("mask");
+            this._loadActiveLayerToCanvas();
+            this._updateCompositeView();
+            this._refreshLayerList();
+            document.getElementById("ie-placeholder").style.display = "none";
+            showToast("Mask layer added", "success");
+        });
+
         document.getElementById("ie-del-layer-btn")?.addEventListener("click", () => {
             if (!this._layerMgr || this._layerMgr.layers.length <= 1) return;
             this._saveUndo();
@@ -971,14 +1219,23 @@ class ImageEditTab {
 
         el.innerHTML = this._layerMgr.layers.map((layer, i) => {
             const isActive = i === this._layerMgr.activeIndex;
-            const typeIcon = layer.type === "image" ? "🖼" : layer.type === "text" ? "T" : "✏";
+            const typeIcon = layer.type === "image" ? "🖼"
+                : layer.type === "text" ? "T"
+                : layer.type === "mask" ? "⬚"
+                : "✏";
+            const maskApplyBtn = layer.type === "mask"
+                ? `<button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="mask-apply"
+                        title="${layer.maskApply ? "Disable clipping mask" : "Enable as clipping mask"}"
+                        style="color:${layer.maskApply ? "var(--wfm-primary,#4682e6)" : "inherit"};font-size:11px;">✂</button>`
+                : "";
             return `
-                <div class="ie-layer-item ${isActive ? "active" : ""}" data-id="${layer.id}" data-action="select">
+                <div class="ie-layer-item ${isActive ? "active" : ""}" data-id="${layer.id}" data-action="select" data-type="${layer.type}">
                     <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="vis"
                         title="${layer.visible ? "Hide" : "Show"}">${layer.visible ? "👁" : "🚫"}</button>
                     <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="lock"
                         title="${layer.locked ? "Unlock" : "Lock"}"
                         style="color:${layer.locked ? "#e2a04a" : "inherit"}">${layer.locked ? "🔒" : "🔓"}</button>
+                    ${maskApplyBtn}
                     <img class="ie-layer-thumb" src="${layer.getThumbnailDataURL()}" draggable="false">
                     <span class="ie-layer-type-icon" style="font-size:10px;opacity:0.7;flex-shrink:0;">${typeIcon}</span>
                     <span class="ie-layer-name">${layer.name}</span>
@@ -994,6 +1251,10 @@ class ImageEditTab {
                 if (action === "vis") {
                     this._layerMgr.toggleVisible(id);
                     this._updateCompositeView();
+                } else if (action === "mask-apply") {
+                    this._layerMgr.toggleMaskApply(id);
+                    this._updateCompositeView();
+                    this._refreshLayerList();
                 } else if (action === "lock") {
                     this._layerMgr.toggleLocked(id);
                     // ロック変更はSelectToolのオーバーレイを再描画
@@ -1004,10 +1265,21 @@ class ImageEditTab {
                     this._syncActiveLayerFromCanvas();
                     this._layerMgr.setActive(id);
                     const layer = this._layerMgr.activeLayer;
-                    if (this._activeTool === "select" && layer) {
+                    if (layer?.type === "mask") {
+                        if (this._activeTool !== "mask") {
+                            this._setActiveTool("mask");
+                        } else {
+                            // すでにマスクツール選択中 → canvas だけ切り替え
+                            this._maskTool?.setCanvas(layer.canvas);
+                            this._maskTool?.activate();
+                        }
+                        this._updateCompositeView();
+                    } else if (this._activeTool === "draw" && layer) {
+                        this._drawTool?.setCanvas(layer.canvas);
+                        this._updateCompositeView();
+                    } else if (this._activeTool === "select" && layer) {
                         this._selectTool?.setLayer(layer);
                     } else {
-                        this._loadActiveLayerToCanvas();
                         this._updateCompositeView();
                     }
                     this._refreshLayerList();
@@ -1062,9 +1334,40 @@ class ImageEditTab {
         const canvas = document.createElement("canvas");
         canvas.width  = this._canvasW;
         canvas.height = this._canvasH;
-        this._syncActiveLayerFromCanvas();
-        if (this._layerMgr) this._layerMgr.composite(canvas);
+        if (!this._layerMgr) return canvas;
+        this._compositeForExport(canvas);
         return canvas;
+    }
+
+    // 保存用合成: maskApply=true のクリッピングを適用、マスクオーバーレイは除外
+    _compositeForExport(target) {
+        const ctx = target.getContext("2d");
+        ctx.clearRect(0, 0, target.width, target.height);
+        const layers = this._layerMgr.layers;
+        const maskedIndices = new Set();
+        for (let i = 0; i < layers.length; i++) {
+            if (layers[i].type === "mask" && layers[i].maskApply && layers[i].visible && i + 1 < layers.length) {
+                maskedIndices.add(i + 1);
+            }
+        }
+        for (let i = layers.length - 1; i >= 0; i--) {
+            const layer = layers[i];
+            if (!layer.visible) continue;
+            if (maskedIndices.has(i)) continue;
+            if (layer.type === "mask") {
+                if (layer.maskApply && i + 1 < layers.length) {
+                    this._renderMaskedLayer(ctx, target, layer, layers[i + 1], false);
+                }
+                // maskApply=false のマスクはエクスポートに含めない
+            } else {
+                ctx.save();
+                ctx.globalAlpha = layer.opacity;
+                ctx.globalCompositeOperation = layer.blendMode;
+                Layer.applyTransform(ctx, layer);
+                ctx.drawImage(layer.canvas, -layer.canvas.width / 2, -layer.canvas.height / 2);
+                ctx.restore();
+            }
+        }
     }
 
     _savePng() {

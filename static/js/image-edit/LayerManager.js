@@ -25,8 +25,9 @@ export class Layer {
         this.rotation  = 0;            // 度
         this.flipX     = false;
         this.flipY     = false;
-        this.textProps = null;         // テキストレイヤー用プロパティ（再編集・再描画に使用）
-        this.locked    = false;        // ロック中は SelectTool の変形を禁止
+        this.textProps  = null;        // テキストレイヤー用プロパティ（再編集・再描画に使用）
+        this.locked     = false;       // ロック中は SelectTool の変形を禁止
+        this.maskApply  = false;       // マスクレイヤー: true=クリッピングマスクとして機能
     }
 
     clear() {
@@ -55,8 +56,9 @@ export class Layer {
             visible: this.visible, opacity: this.opacity, blendMode: this.blendMode,
             x: this.x, y: this.y, displayW: this.displayW, displayH: this.displayH,
             rotation: this.rotation, flipX: this.flipX, flipY: this.flipY,
-            textProps: this.textProps ?? null,
-            locked:    this.locked    ?? false,
+            textProps:  this.textProps  ?? null,
+            locked:     this.locked     ?? false,
+            maskApply:  this.maskApply  ?? false,
         };
     }
 
@@ -75,8 +77,9 @@ export class Layer {
         layer.rotation  = json.rotation  ?? 0;
         layer.flipX     = json.flipX     ?? false;
         layer.flipY     = json.flipY     ?? false;
-        layer.textProps = json.textProps ?? null;
-        layer.locked    = json.locked    ?? false;
+        layer.textProps  = json.textProps  ?? null;
+        layer.locked     = json.locked     ?? false;
+        layer.maskApply  = json.maskApply  ?? false;
 
         if (json.imageData) {
             return new Promise(resolve => {
@@ -172,6 +175,11 @@ export class LayerManager {
     toggleLocked(id) {
         const layer = this.layers.find(l => l.id === id);
         if (layer) { layer.locked = !layer.locked; this._emit("change"); }
+    }
+
+    toggleMaskApply(id) {
+        const layer = this.layers.find(l => l.id === id);
+        if (layer && layer.type === "mask") { layer.maskApply = !layer.maskApply; this._emit("change"); }
     }
 
     setOpacity(id, opacity) {

@@ -1,28 +1,26 @@
 /**
- * Image Edit Tab - Draw Tool
- * Inspired by comfyui-mask-editor-one PaintTool.js
- * Supports color drawing and erasing with a soft round brush.
+ * Image Edit Tab - Mask Tool
+ * White-paint / erase brush for mask layers.
+ * paint mode: draws white (opaque) = mask present
+ * erase mode: destination-out (transparent) = mask absent
  */
 
-export class DrawTool {
+export class MaskTool {
     constructor(canvas) {
         this.canvas      = canvas;
-        this.ctx         = canvas?.getContext("2d") ?? null;
-        this.brushSize   = 20;
-        this.hardness    = 0.8;   // 0.0 = very soft, 1.0 = hard edge
-        this.opacity     = 1.0;
-        this.color       = "#ff0000";
-        this.mode        = "draw"; // "draw" | "erase"
+        this.ctx         = canvas?.getContext("2d");
+        this.brushSize   = 30;
+        this.hardness    = 0.85;
+        this.mode        = "paint"; // "paint" | "erase"
 
         this._drawing    = false;
         this._lastX      = 0;
         this._lastY      = 0;
 
-        // Cached stamp canvas
         this._stamp      = null;
         this._stampSize  = 0;
         this._stampHard  = 0;
-        this._stampColor = null;
+        this._stampMode  = null;
 
         this._onChange   = null;
     }
@@ -46,8 +44,8 @@ export class DrawTool {
 
     onMouseDown(x, y) {
         this._drawing = true;
-        this._lastX = x;
-        this._lastY = y;
+        this._lastX   = x;
+        this._lastY   = y;
         this._paint(x, y);
     }
 
@@ -72,31 +70,34 @@ export class DrawTool {
     _getStamp() {
         if (
             this._stamp &&
-            this._stampSize  === this.brushSize &&
-            this._stampHard  === this.hardness &&
-            this._stampColor === this.color
+            this._stampSize === this.brushSize &&
+            this._stampHard === this.hardness &&
+            this._stampMode === this.mode
         ) return this._stamp;
 
-        const size = Math.max(1, Math.round(this.brushSize));
-        const sc   = document.createElement("canvas");
-        sc.width   = size;
-        sc.height  = size;
-        const sctx = sc.getContext("2d");
+        const size  = Math.max(1, Math.round(this.brushSize));
+        const sc    = document.createElement("canvas");
+        sc.width    = size;
+        sc.height   = size;
+        const sctx  = sc.getContext("2d");
         const cx = size / 2, cy = size / 2, r = size / 2;
+
+        const color      = this.mode === "paint" ? "#ffffff" : "#000000";
+        const colorAlpha = this.mode === "paint" ? "rgba(255,255,255,0)" : "rgba(0,0,0,0)";
 
         const innerR = r * (1 - Math.min(this.hardness, 0.99)) * 0.95;
         const grd = sctx.createRadialGradient(cx, cy, innerR, cx, cy, r);
-        grd.addColorStop(0, this.color);
-        grd.addColorStop(1, this.color + "00");
+        grd.addColorStop(0, color);
+        grd.addColorStop(1, colorAlpha);
         sctx.fillStyle = grd;
         sctx.beginPath();
         sctx.arc(cx, cy, r, 0, Math.PI * 2);
         sctx.fill();
 
-        this._stamp      = sc;
-        this._stampSize  = size;
-        this._stampHard  = this.hardness;
-        this._stampColor = this.color;
+        this._stamp     = sc;
+        this._stampSize = size;
+        this._stampHard = this.hardness;
+        this._stampMode = this.mode;
         return sc;
     }
 
@@ -104,7 +105,6 @@ export class DrawTool {
         const stamp = this._getStamp();
         const s     = stamp.width;
         this.ctx.save();
-        this.ctx.globalAlpha = this.opacity;
         if (this.mode === "erase") {
             this.ctx.globalCompositeOperation = "destination-out";
         }
@@ -120,15 +120,5 @@ export class DrawTool {
             const t = i / steps;
             this._paint(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
         }
-    }
-
-    static getCanvasPos(canvas, event) {
-        const rect   = canvas.getBoundingClientRect();
-        const scaleX = canvas.width  / rect.width;
-        const scaleY = canvas.height / rect.height;
-        return {
-            x: (event.clientX - rect.left) * scaleX,
-            y: (event.clientY - rect.top)  * scaleY,
-        };
     }
 }

@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.58-green)
+![Version](https://img.shields.io/badge/version-0.3.59-green)
 
 ## Screenshots
 
@@ -209,18 +209,19 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **DB tab** — searchable SQLite database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records
 - **Dependencies** — install into ComfyUI's embedded Python: `python_embedded\python.exe -m pip install -r requirements.txt`; for GPU inference use `onnxruntime-gpu`; TensorFlow (DeepDanbooru) is optional and commented out in `requirements.txt`
 
-### Image Edit Tab (v0.3.53)
-- **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw types) and export the composite as PNG
+### Image Edit Tab (v0.3.59)
+- **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG
 - **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
 - **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers
-- **Tools** — Select (V), Draw (B), Text (T), Shape (S), Blur (≈), BG Remove (⬚); tool options bar updates per active tool
+- **Tools** — Select (V), Draw (B), Text (T), Shape (S), Mask (🎭), Blur (≈), BG Remove (⬚); tool options bar updates per active tool
   - **Select** — click to select; drag to move; drag corner handles to resize; drag circle handle to rotate; Flip H / Flip V / Rotate angle in the options bar; double-click a text layer to re-edit its content
-  - **Draw** — freehand brush; options: color, brush size, blend mode
+  - **Draw** — freehand brush; options: color, brush size, blend mode; paints directly onto the active draw layer while all other layers remain visible
   - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
   - **Shape** — drag to draw geometric shapes (Rect / Ellipse / Line / FreeLine); options: shape type, Rounded toggle (Rect/Ellipse), Fill color, Stroke color + width, Opacity; each committed shape becomes an independent draw layer; Stroke None hidden for Line/FreeLine (stroke always active)
+  - **Mask** — paint a white mask onto a dedicated mask layer; click **M** in the Layers header to add a mask layer (Mask tool activates automatically); clicking a mask layer in the list also switches to the Mask tool; **Tool Options bar**: Paint sub-tool button, Invert checkbox, Overlay color picker (default red), Blur slider (0–50 px); **Properties pane** (left of the Layers panel): Size (1–200 px), Hardness (0–100%), Mode — **Add** (draw white = mask present) / **Erase** (erase to transparent = mask absent); **✂ button** on the layer row enables/disables the mask as a clipping mask — when enabled (blue), the layer directly below is clipped to the painted area and the result is applied when exporting
   - **Blur** — **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: enable the toggle then drag a rectangle on the canvas to apply blur or mosaic to that region only (blue preview for blur, orange for mosaic); Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo
   - **BG Remove** — remove the background from the active layer; **Lightweight (@imgly)**: runs entirely in the browser via CDN (no server required; ~40 MB model downloaded on first use); **BiRefNet**: high-quality removal via the Python backend (coming soon); **New Layer** option (default on) adds the result as a new layer above the original; when off, replaces the active layer in-place
-- **Layer panel** — layer list with visibility (👁/🚫) and lock (🔒/🔓) toggles; opacity slider; type icons (🖼 image / T text / ✏ draw); Layer 1 is automatically locked on first image load
+- **Layer panel** — layer list with visibility (👁/🚫), lock (🔒/🔓), and clipping-mask (✂) toggles; opacity slider; type icons (🖼 image / T text / ✏ draw / ⬚ mask); Layer 1 is automatically locked on first image load
 - **Layer lock** — locked layers show an orange bounding box and 🔒 icon on the canvas; move/resize/rotate are disabled while locked; click the 🔓 button in the layer row to unlock
 - **Text quality** — text layers are rendered at their measured bounding-box size; resizing with the Select tool regenerates the canvas at the new display resolution so text stays sharp
 - **Export** — Save PNG (download composite locally); **Save to Gallery** (saves to Gallery root folder with a timestamped default name `wfs-image-YYYYMMDDHHmmss`); **Send to ComfyUI** (uploads to ComfyUI input folder for use in Load Image nodes)
@@ -352,6 +353,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.59
+- **Image Edit — Mask Tool** — new Mask tool (🎭) in the Image Edit sidebar; click **M** in the Layers header to add a mask layer (Mask tool activates automatically); clicking a mask layer in the layer list also switches to the Mask tool; **Tool Options bar**: Paint button, Invert checkbox (inverts overlay preview), Overlay color picker (default red), Blur slider (0–50 px) for overlay edge softening; **Properties pane** (left of the Layers panel, shown when Mask tool is active): Size (1–200 px), Hardness (0–100%), Mode — **Add** / **Erase** toggle buttons (active mode highlighted in blue)
+- **Image Edit — Clipping mask (✂ button)** — each mask layer row shows a ✂ toggle; when enabled (blue), the mask clips the layer directly below it so only the painted area is visible; clipping is applied to PNG save / Save to Gallery / Send to ComfyUI exports
+- **Image Edit — Draw & Mask paint bugfix** — Draw and Mask tools now paint directly onto `layer.canvas`; all other layers remain fully visible during brush strokes (previously the composite view was replaced by the active layer only while painting)
+- **Image Edit — Layer panel width** — increased from 190 px to 220 px to accommodate the additional ✂ button on mask layer rows
+- **Help — Mask Tool section** — added Mask Tool card with full i18n support (English / Japanese / Chinese); updated Tools list, layer type icon list, and Layer panel "M button" description
 
 ### v0.3.58
 - **GenerateUI Model tab — Diffusion Model GGUF support** — `LoaderGGUF` and `LoaderGGUFAdvanced` nodes are now recognized alongside `UNETLoader` / `UnetLoaderGGUF`; the correct input key (`gguf_name` vs `unet_name`) is selected automatically on Apply; the Models tab "GenUI Model" button also applies correctly to `LoaderGGUF` workflows
