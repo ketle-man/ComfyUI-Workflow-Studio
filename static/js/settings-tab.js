@@ -745,8 +745,8 @@ export async function initSettingsTab() {
                 <label>G'MIC-Qt Executable Path</label>
                 <div style="display:flex;gap:8px;">
                     <input type="text" class="wfm-input" id="wfm-settings-gmic-path"
-                        value="${serverSettings.gmic_qt_path || "C:\\\\Users\\\\statsu-11\\\\gmic-3.6.5-qt-win64\\\\gmic_qt.exe"}"
-                        placeholder="C:\\\\Users\\\\statsu-11\\\\gmic-3.6.5-qt-win64\\\\gmic_qt.exe"
+                        value="${serverSettings.gmic_qt_path || ""}"
+                        placeholder="C:\\path\\to\\gmic_qt.exe"
                         style="flex:1;">
                     <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-gmic-path-save">
                         Save

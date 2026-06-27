@@ -99,6 +99,52 @@ class ImageEditTab {
         this._setupCanvasEvents();
         this._setupLayerPanel();
         this._setupKeyboard();
+        this._initBrushCursor();
+    }
+
+    // ── ブラシカーソル ────────────────────────────
+
+    _initBrushCursor() {
+        const el = document.createElement("div");
+        el.id = "ie-brush-cursor";
+        Object.assign(el.style, {
+            position:      "fixed",
+            pointerEvents: "none",
+            border:        "1.5px solid rgba(255,255,255,0.85)",
+            boxShadow:     "0 0 0 1px rgba(0,0,0,0.6)",
+            borderRadius:  "50%",
+            display:       "none",
+            transform:     "translate(-50%,-50%)",
+            zIndex:        "99999",
+        });
+        document.body.appendChild(el);
+        this._brushCursorEl = el;
+    }
+
+    _updateBrushCursor(e) {
+        const el = this._brushCursorEl;
+        if (!el) return;
+        const tool = this._activeTool;
+        const size = tool === "draw"
+            ? this._drawTool?.brushSize
+            : tool === "mask" ? this._maskTool?.brushSize : null;
+        if (size == null) { el.style.display = "none"; return; }
+
+        const refCanvas = document.getElementById("ie-canvas-draw");
+        if (!refCanvas) { el.style.display = "none"; return; }
+        const rect  = refCanvas.getBoundingClientRect();
+        const scale = rect.width / refCanvas.width;
+        const px    = Math.max(2, size * scale);
+
+        el.style.width   = px + "px";
+        el.style.height  = px + "px";
+        el.style.left    = e.clientX + "px";
+        el.style.top     = e.clientY + "px";
+        el.style.display = "block";
+    }
+
+    _hideBrushCursor() {
+        if (this._brushCursorEl) this._brushCursorEl.style.display = "none";
     }
 
     // ── ツールボタン ──────────────────────────────
@@ -114,6 +160,7 @@ class ImageEditTab {
     }
 
     _setActiveTool(toolId) {
+        this._hideBrushCursor();
         if (this._activeTool === "draw")   this._drawTool?.deactivate();
         if (this._activeTool === "text")   this._textTool?.deactivate();
         if (this._activeTool === "select") this._selectTool?.deactivate();
@@ -702,18 +749,48 @@ class ImageEditTab {
                 this._panning  = true;
                 this._panStart = { x: e.clientX - this._panOffset.x, y: e.clientY - this._panOffset.y };
                 wrap.style.cursor = "grabbing";
+                return;
             }
+            // Draw/Mask: allow starting a stroke from the canvas margin area
+            if (e.button !== 0) return;
+            const tool = this._activeTool;
+            if (tool !== "draw" && tool !== "mask") return;
+            const drawCanvas   = document.getElementById("ie-canvas-draw");
+            const overlayCanvas = document.getElementById("ie-canvas-overlay");
+            // Skip if the event target is already a canvas — existing handlers cover that
+            if (e.target === drawCanvas || e.target === overlayCanvas) return;
+            if (!this._layerMgr || !drawCanvas) return;
+            this._onToolMouseDown(e, drawCanvas);
         });
         window.addEventListener("mousemove", e => {
-            if (!this._panning) return;
-            this._panOffset.x = e.clientX - this._panStart.x;
-            this._panOffset.y = e.clientY - this._panStart.y;
-            this._applyTransform();
+            if (this._panning) {
+                this._panOffset.x = e.clientX - this._panStart.x;
+                this._panOffset.y = e.clientY - this._panStart.y;
+                this._applyTransform();
+            }
+            // Draw/Mask: update brush cursor and continue stroke outside canvas
+            const tool = this._activeTool;
+            if (tool === "draw" || tool === "mask") {
+                this._updateBrushCursor(e);
+                const isDrawing = tool === "draw"
+                    ? this._drawTool?._drawing
+                    : this._maskTool?._drawing;
+                if (isDrawing) {
+                    const refCanvas = document.getElementById("ie-canvas-draw");
+                    if (refCanvas) this._onToolMouseMove(e, refCanvas);
+                }
+            }
         });
         window.addEventListener("mouseup", e => {
             if (this._panning && (e.button === 1 || e.button === 0)) {
                 this._panning = false;
                 wrap.style.cursor = this._spaceDown ? "grab" : "";
+            }
+            // Draw/Mask: end stroke from anywhere (including outside canvas)
+            if (e.button === 0) {
+                const tool = this._activeTool;
+                if (tool === "draw" && this._drawTool?._drawing) this._drawTool.onMouseUp();
+                if (tool === "mask" && this._maskTool?._drawing) this._maskTool.onMouseUp();
             }
         });
 
@@ -818,8 +895,8 @@ class ImageEditTab {
     }
 
     _onToolMouseLeave() {
-        if (this._activeTool === "draw")   this._drawTool?.onMouseLeave();
-        if (this._activeTool === "mask")   this._maskTool?.onMouseLeave();
+        // Draw/Mask: do NOT stop the stroke — window mousemove/mouseup continue tracking
+        this._hideBrushCursor();
         if (this._activeTool === "shape")  this._shapeTool?.onMouseLeave();
         if (this._activeTool === "select") this._selectTool?.onMouseLeave();
         if (this._activeTool === "blur" && this._blurDragging) {

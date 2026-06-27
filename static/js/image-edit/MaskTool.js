@@ -34,7 +34,7 @@ export class MaskTool {
     onChange(fn) { this._onChange = fn; }
 
     activate() {
-        if (this.canvas) this.canvas.style.cursor = "crosshair";
+        if (this.canvas) this.canvas.style.cursor = "none";
     }
 
     deactivate() {

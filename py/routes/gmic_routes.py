@@ -26,26 +26,30 @@ _gmic_jobs = {}
 _gmic_jobs_lock = threading.Lock()
 
 def _gmic_run_gui(job_id: str, input_path: str, output_path: str, gmic_exe: str):
-    """Run gmic_qt.exe in a background process/thread and wait for completion."""
+    """Run gmic_qt.exe in a background process/thread and wait for completion.
+
+    G'MIC-Qt Standalone argument order: -o <output> <input>
+    After OK the "filter output" window appears; closing it saves to output_path.
+    """
     args = [gmic_exe, "-o", output_path, input_path]
     logger.info("[gmic] Launching: %s", " ".join(args))
     try:
         with _gmic_jobs_lock:
             _gmic_jobs[job_id]["status"] = "processing"
             _gmic_jobs[job_id]["message"] = "G'MIC GUIで編集中..."
-        
-        # On Windows, creationflags=subprocess.CREATE_NEW_CONSOLE keeps it separate
+
+        import time
+
         kwargs = {}
-        if os.name == 'nt':
-            kwargs['creationflags'] = subprocess.CREATE_NEW_CONSOLE
+        if os.name == "nt":
+            # Required on Windows to show the GUI window from a background process
+            kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
 
         proc = subprocess.Popen(args, **kwargs)
         proc.wait()
-        
-        # Give OS a moment to write the output file
-        import time
+
         time.sleep(0.5)
-        
+
         if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             with _gmic_jobs_lock:
                 _gmic_jobs[job_id]["status"] = "completed"
@@ -77,7 +81,7 @@ async def handle_open(request: web.Request) -> web.Response:
 
         # Retrieve setting for gmic path
         data = _settings.load()
-        gmic_exe = data.get("gmic_qt_path", r"C:\Users\statsu-11\gmic-3.6.5-qt-win64\gmic_qt.exe")
+        gmic_exe = data.get("gmic_qt_path", "")
         if not os.path.exists(gmic_exe):
             return web.json_response({
                 "error": f"G'MIC executable not found at: {gmic_exe}. Please configure the path in settings."
@@ -151,6 +155,13 @@ async def handle_result(request: web.Request) -> web.Response:
         result_path = body.get("result_path", "")
         if not result_path or not os.path.exists(result_path):
             return web.json_response({"error": f"Result file not found: {result_path}"}, status=404)
+
+        # Path traversal guard: only allow files inside gmic_temp
+        allowed_dir = (Path(DATA_DIR) / "gmic_temp").resolve()
+        try:
+            Path(result_path).resolve().relative_to(allowed_dir)
+        except ValueError:
+            return web.json_response({"error": "Access denied: path outside gmic_temp"}, status=403)
 
         with open(result_path, "rb") as f:
             img_bytes = f.read()

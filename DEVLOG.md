@@ -1,5 +1,70 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-27: v0.3.61 — G'MIC バグ修正・セキュリティ・Draw/Mask ブラシ操作性改善
+
+**変更ファイル**: `py/routes/gmic_routes.py`, `static/js/image-edit-tab.js`, `static/js/image-edit/DrawTool.js`, `static/js/image-edit/MaskTool.js`, `static/js/settings-tab.js`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`
+
+### 概要
+
+v0.3.60 で実装した G'MIC-Qt 連携の動作修正・セキュリティ強化と、Draw / Mask ツールのブラシ操作性を大幅に改善した。
+
+---
+
+### G'MIC バグ修正
+
+#### 引数順序の修正
+`gmic_qt.exe` の起動引数を正しい順序 `-o <output> <input>` に修正。以前の順序（`<input> -o <output>`）では G'MIC-Qt Standalone が即時終了してGUIが開かなかった。
+
+#### `CREATE_NEW_CONSOLE` フラグ追加
+Windows でバックグラウンドプロセス（ComfyUI）からGUIウィンドウを表示するために必須のフラグ。一度削除したが eagle_comic_creater_web の参考実装を確認して再追加した。
+
+#### 設定パスのプレースホルダー修正
+`settings-tab.js` の G'MIC-Qt パス入力フィールドのデフォルト値とプレースホルダーからユーザー固有のパス（`statsu-11`）を削除し、汎用的な `C:\path\to\gmic_qt.exe` に変更。`gmic_routes.py` のフォールバック値も同様に空文字に変更。
+
+---
+
+### セキュリティ修正
+
+#### `handle_result` パストラバーサル対策
+`POST /api/wfm/gmic/result` の `result_path` は以前リクエストボディから直接 `open()` に渡していた。`Path.resolve().relative_to(gmic_temp)` による検証を追加し、`gmic_temp` ディレクトリ外のパスは 403 を返すように変更。eagle_comic_creater_web の同等実装と同じパターン。
+
+---
+
+### ヘルプ更新（3点セット）
+
+`templates/index.html` / `static/js/i18n.js`（EN/JA/ZH）/ `static/js/app.js`（helpIdMap）を同時更新。
+
+追加したヘルプカード（Mask Tool カードの直後）：
+
+| カード | 内容 |
+|---|---|
+| **G'MIC Filter** | Edit with G'MIC ボタンの使い方、OKから「filter output」ウィンドウを閉じるまでのフロー |
+| **G'MIC-Qt Installation** | `gmic.eu/download.html` からのダウンロード手順、解凍先、設定タブへのパス設定方法 |
+
+---
+
+### Draw / Mask ツール改善
+
+#### ブラシカーソルを円に変更
+
+- `DrawTool.activate()` / `MaskTool.activate()` のカーソルを `"crosshair"` → `"none"` に変更
+- `image-edit-tab.js` に `_initBrushCursor()` / `_updateBrushCursor(e)` / `_hideBrushCursor()` を追加
+- `<body>` に固定配置の `#ie-brush-cursor` div を動的生成（白枠 + 黒シャドウで背景色に依存しない表示）
+- `window.mousemove` でキャンバスの `getBoundingClientRect().width / canvas.width` を用いてブラシサイズ（canvas 座標）を CSS px に変換し、円サイズを毎フレーム更新
+- ツール切り替え・mouseleave 時に非表示
+
+#### キャンバス外からのドラッグ開始
+
+`ie-canvas-wrap`（キャンバスを囲む余白エリア）の `mousedown` に draw / mask 用の処理を追加。`e.target` が `drawCanvas` / `overlayCanvas` の場合は既存ハンドラに委譲し、余白部分のクリックは `DrawTool.getCanvasPos(drawCanvas, e)` でキャンバス相対座標に変換して描画を開始。
+
+#### キャンバス外でのストローク継続
+
+- `window.mousemove` に draw / mask の描画継続ロジックを追加（`_drawing` フラグが true の間はキャンバス外でも `_onToolMouseMove` を呼ぶ）
+- `window.mouseup` に描画終了ロジックを追加（キャンバス外でボタンを離した場合も正常終了）
+- `_onToolMouseLeave()` から draw / mask の `onMouseLeave()` 呼び出しを削除（`mouseleave` で描画が中断されなくなった）
+
+---
+
 ## 2026-06-27: v0.3.60 — Image Edit Filter Tool (G'MIC-Qt 連携) 実装
 
 **変更ファイル**: `py/routes/gmic_routes.py`（新規）, `py/wfm.py`, `templates/index.html`, `static/js/image-edit-tab.js`, `static/js/settings-tab.js`
