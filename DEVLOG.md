@@ -1,5 +1,45 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-27: WFS_PromptText の GenerateUI 対応・ドロップ時 title 固定
+
+**変更ファイル**: `static/js/comfyui-workflow.js`, `web/comfyui/node_sets_menu.js`
+
+### 概要
+
+`WFS_PromptText` ノードを含むワークフローを GenerateUI タブで読み込んだ際に、Prompt タブの Positive/Negative テキストエリアへ正しく反映されるよう対応。あわせてサイドバーのプロンプトプリセットをキャンバスにドロップしたときのノード title をプリセット名から「Wfs Prompt」固定に変更し、ワークフローの再利用性を向上。
+
+---
+
+### WFS_PromptText → GenerateUI Prompt タブ対応
+
+#### 変更内容（`static/js/comfyui-workflow.js`）
+
+- **`analyzeWorkflow` Pass2** に `WFS_PromptText` 検出を追加
+  - `inputs.positive` が文字列 → `role: "positive"`, `textKey: "positive"` で `prompt_nodes` に登録
+  - `inputs.negative` が文字列 → `role: "negative"`, `textKey: "negative"` で `prompt_nodes` に登録
+  - 同一ノードが positive/negative の両ロールを持つため（CLIPTextEncode 経由の伝播で両参照される）、`getRole()` に依存せず固定ロールで登録
+- **`_getWidgetMapping`** に `WFS_PromptText: ["positive", "negative"]` を追加
+  - UI 形式 → API 形式変換時のフォールバック: `widgets_values[0]` → `inputs.positive`、`[1]` → `inputs.negative`
+
+#### 動作
+
+| 手順 | 内容 |
+|------|------|
+| UI 形式読み込み | `convertUiToApi` が `widgets_values` を `inputs.positive/negative` にマップ |
+| 解析 | `analyzeWorkflow` が `WFS_PromptText` を positive/negative 2 つの `prompt_node` として認識 |
+| 表示 | Prompt タブのセレクトに `ID:X Wfs Prompt [positive]` / `[negative]` が表示される |
+| Apply | `textKey: "positive"/"negative"` でワークフローへ書き戻し |
+
+---
+
+### ドロップ時 title 固定（`web/comfyui/node_sets_menu.js`）
+
+- `placePromptNode` 内の `if (promptName) node.title = promptName;` を `node.title = "Wfs Prompt";` に変更
+- サイドバーの Prompts タブからどのプリセットをドロップしても title が「Wfs Prompt」固定になる
+- プリセット内容（positive/negative テキスト）はウィジェット値として保存されるため変わらない
+
+---
+
 ## 2026-06-27: v0.3.62 — Send GenUI Image ボタン追加・tagger_settings.json バグ修正・README 更新
 
 **変更ファイル**: `static/js/gallery-tab.js`, `static/js/comfyui-editor.js`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`, `py/routes/settings_routes.py`, `README.md`

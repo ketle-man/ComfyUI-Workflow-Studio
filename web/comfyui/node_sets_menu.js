@@ -408,7 +408,7 @@ const placePromptNode = (posText, negText, promptName, pos) => {
     }
 
     node.pos = pos || [100, 100];
-    if (promptName) node.title = promptName;
+    node.title = "Wfs Prompt";
 
     graph.add(node);
 

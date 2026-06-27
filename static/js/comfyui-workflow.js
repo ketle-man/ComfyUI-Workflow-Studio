@@ -713,6 +713,22 @@ export const comfyWorkflow = {
                 }
             }
 
+            // WFS_PromptText — 2出力ノード。output[0]=positive / output[1]=negative
+            if (ct === "WFS_PromptText") {
+                if (typeof inputs.positive === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [positive]`, role: "positive",
+                        text: inputs.positive, textKey: "positive",
+                    });
+                }
+                if (typeof inputs.negative === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [negative]`, role: "negative",
+                        text: inputs.negative, textKey: "negative",
+                    });
+                }
+            }
+
             // PrimitiveStringMultiline / PrimitiveString — when feeding a prompt node
             if ((ct === "PrimitiveStringMultiline" || ct === "PrimitiveString") && (isPos || isNeg)) {
                 result.prompt_nodes.push({
@@ -899,6 +915,7 @@ function _getWidgetMapping(nodeType) {
         // vary between versions and include frontend-only extras, so we leave them unmapped.
         ImpactWildcardProcessor: ["wildcard_text"],
         ImpactWildcardEncode: ["wildcard_text"],
+        WFS_PromptText: ["positive", "negative"],
     };
     return mappings[nodeType] || null;
 }
