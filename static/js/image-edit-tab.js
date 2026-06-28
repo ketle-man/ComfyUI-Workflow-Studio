@@ -53,9 +53,9 @@ class ImageEditTab {
     constructor() {
         this._layerMgr      = null;
         this._activeTool    = "select";
-        this._drawTool      = null;
-        this._textTool      = null;
-        this._selectTool    = null;
+        this._drawTool      = new DrawTool(null);
+        this._textTool      = new TextTool(null);
+        this._selectTool    = new SelectTool();
         this._zoom          = 1.0;
         this._panOffset     = { x: 0, y: 0 };
         this._canvasW       = 512;
@@ -67,9 +67,9 @@ class ImageEditTab {
         this._panStart      = null;
         this._spaceDown     = false;
         this._compositeMode    = false;
-        this._editingTextLayer = null; // テキスト再編集中のレイヤー参照
+        this._editingTextLayer = null;
         this._initialized      = false;
-        this._shapeTool        = null;
+        this._shapeTool        = new ShapeTool();
         // Blur ツール
         this._blurRectMode  = null;   // null | 'blur' | 'mosaic'
         this._blurDragging  = false;
