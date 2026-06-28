@@ -5,7 +5,7 @@
 import { showToast } from "./app.js";
 import { comfyUI } from "./comfyui-client.js";
 import { t } from "./i18n.js";
-import { escapeHtml } from "./util.js";
+import { escapeHtml, setupSearchClearBtn } from "./util.js";
 
 // ── State ─────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ const state = {
     activeSubView: "browser",
     loaded: false,
     currentPage: 0,
+    selectedNodes: new Set(),
+    lastSelectionIndex: -1,
 };
 
 // ── Helpers ───────────────────────────────────────────────
@@ -273,6 +275,9 @@ function createNodeCard(node) {
     if (state.selectedNode && state.selectedNode.name === node.name) {
         card.classList.add("wfm-card-selected");
     }
+    if (state.selectedNodes.has(node.name)) {
+        card.classList.add("multi-selected");
+    }
     card.dataset.nodeName = node.name;
     card.style.borderLeft = `3px solid ${packageColor(node.package)}`;
 
@@ -294,7 +299,32 @@ function createNodeCard(node) {
         e.stopPropagation();
         toggleFavorite(node.name, e.currentTarget);
     });
-    card.addEventListener("click", () => showNodeSidePanel(node));
+    card.addEventListener("click", (e) => {
+        const filtered = filterNodes();
+        const idx = filtered.findIndex(n => n.name === node.name);
+        if (e.shiftKey && state.lastSelectionIndex !== -1) {
+            const from = Math.min(state.lastSelectionIndex, idx);
+            const to = Math.max(state.lastSelectionIndex, idx);
+            for (let i = from; i <= to; i++) {
+                state.selectedNodes.add(filtered[i].name);
+            }
+            _applyNodeSelectionToDOM();
+            updateNodeBulkBar();
+        } else if (e.ctrlKey || e.metaKey) {
+            if (state.selectedNodes.has(node.name)) {
+                state.selectedNodes.delete(node.name);
+                card.classList.remove("multi-selected");
+            } else {
+                state.selectedNodes.add(node.name);
+                card.classList.add("multi-selected");
+            }
+            state.lastSelectionIndex = idx;
+            updateNodeBulkBar();
+        } else {
+            state.lastSelectionIndex = idx;
+            showNodeSidePanel(node);
+        }
+    });
     return card;
 }
 
@@ -319,6 +349,9 @@ function renderNodeTableView(grid, filtered) {
         if (state.selectedNode && state.selectedNode.name === node.name) {
             tr.classList.add("wfm-card-selected");
         }
+        if (state.selectedNodes.has(node.name)) {
+            tr.classList.add("multi-selected");
+        }
         const inputCount = Object.keys(node.input.required || {}).length +
                            Object.keys(node.input.optional || {}).length;
         const outputCount = (node.output || []).length;
@@ -332,7 +365,31 @@ function renderNodeTableView(grid, filtered) {
             e.stopPropagation();
             toggleFavorite(node.name, e.currentTarget);
         });
-        tr.addEventListener("click", () => showNodeSidePanel(node));
+        tr.addEventListener("click", (e) => {
+            const idx = filtered.findIndex(n => n.name === node.name);
+            if (e.shiftKey && state.lastSelectionIndex !== -1) {
+                const from = Math.min(state.lastSelectionIndex, idx);
+                const to = Math.max(state.lastSelectionIndex, idx);
+                for (let i = from; i <= to; i++) {
+                    state.selectedNodes.add(filtered[i].name);
+                }
+                _applyNodeSelectionToDOM();
+                updateNodeBulkBar();
+            } else if (e.ctrlKey || e.metaKey) {
+                if (state.selectedNodes.has(node.name)) {
+                    state.selectedNodes.delete(node.name);
+                    tr.classList.remove("multi-selected");
+                } else {
+                    state.selectedNodes.add(node.name);
+                    tr.classList.add("multi-selected");
+                }
+                state.lastSelectionIndex = idx;
+                updateNodeBulkBar();
+            } else {
+                state.lastSelectionIndex = idx;
+                showNodeSidePanel(node);
+            }
+        });
         tbody.appendChild(tr);
     });
     table.appendChild(tbody);
@@ -349,6 +406,100 @@ async function toggleFavorite(nodeName, btnEl) {
     state.nodeMetadata[nodeName].favorite = newFav;
     btnEl.textContent = newFav ? "\u2605" : "\u2606";
     btnEl.classList.toggle("active", newFav);
+}
+
+// ── 複数選択ユーティリティ ─────────────────────────────────
+
+function _applyNodeSelectionToDOM() {
+    const grid = document.getElementById("wfm-nodes-grid");
+    if (!grid) return;
+    grid.querySelectorAll("[data-node-name]").forEach(el => {
+        el.classList.toggle("multi-selected", state.selectedNodes.has(el.dataset.nodeName));
+    });
+}
+
+function updateNodeBulkBar() {
+    const bar = document.getElementById("wfm-nodes-bulk-bar");
+    const countEl = document.getElementById("wfm-nodes-bulk-count");
+    if (!bar) return;
+    const count = state.selectedNodes.size;
+    if (count > 0) {
+        bar.style.display = "";
+        if (countEl) countEl.textContent = `${count} ${t("nodesBulkSelected")}`;
+    } else {
+        bar.style.display = "none";
+    }
+    const groupSel = document.getElementById("wfm-nodes-bulk-group-select");
+    if (groupSel) {
+        const current = groupSel.value;
+        const grpNames = Object.keys(state.nodeGroups).sort();
+        groupSel.innerHTML = `<option value="">${t("nodesBulkAddToGroup")}</option>` +
+            grpNames.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
+        if (grpNames.includes(current)) groupSel.value = current;
+    }
+}
+
+// ── 一括操作 ──────────────────────────────────────────────
+
+async function bulkNodeAddToGroup(groupName) {
+    if (!groupName || state.selectedNodes.size === 0) return;
+    const nodeNames = [...state.selectedNodes];
+    if (!state.nodeGroups[groupName]) state.nodeGroups[groupName] = [];
+    let added = 0;
+    nodeNames.forEach(name => {
+        if (!state.nodeGroups[groupName].includes(name)) {
+            state.nodeGroups[groupName].push(name);
+            added++;
+        }
+    });
+    await saveNodeGroups(state.nodeGroups);
+    renderFilters();
+    if (state.selectedNode) renderSideGroups(state.selectedNode);
+    showToast(t("addedNImagesToGroup", added, groupName), "success");
+}
+
+async function bulkNodeRemoveFromGroup(groupName) {
+    if (!groupName || state.selectedNodes.size === 0) return;
+    if (!state.nodeGroups[groupName]) return;
+    const nodeNames = new Set(state.selectedNodes);
+    const before = state.nodeGroups[groupName].length;
+    state.nodeGroups[groupName] = state.nodeGroups[groupName].filter(n => !nodeNames.has(n));
+    const removed = before - state.nodeGroups[groupName].length;
+    if (state.nodeGroups[groupName].length === 0) delete state.nodeGroups[groupName];
+    await saveNodeGroups(state.nodeGroups);
+    renderFilters();
+    if (state.selectedNode) renderSideGroups(state.selectedNode);
+    showToast(t("removedNImagesFromGroup", removed, groupName), "success");
+}
+
+async function bulkNodeCreateAndAddToGroup(name) {
+    if (!name || state.selectedNodes.size === 0) return;
+    if (state.nodeGroups[name] !== undefined) {
+        showToast(t("groupExists"), "warning");
+        return;
+    }
+    state.nodeGroups[name] = [...state.selectedNodes];
+    await saveNodeGroups(state.nodeGroups);
+    renderFilters();
+    if (state.selectedNode) renderSideGroups(state.selectedNode);
+    updateNodeBulkBar();
+    showToast(t("groupCreated", name), "success");
+}
+
+async function bulkNodeSetFavorite(value) {
+    if (state.selectedNodes.size === 0) return;
+    const nodeNames = [...state.selectedNodes].filter(name => {
+        const meta = state.nodeMetadata[name];
+        return (meta?.favorite ?? false) !== value;
+    });
+    if (nodeNames.length === 0) return;
+    await Promise.all(nodeNames.map(name => saveNodeMetadata(name, { favorite: value })));
+    nodeNames.forEach(name => {
+        if (!state.nodeMetadata[name]) state.nodeMetadata[name] = {};
+        state.nodeMetadata[name].favorite = value;
+    });
+    renderNodeGrid();
+    showToast(value ? t("favoritedNImages", nodeNames.length) : t("unfavoritedNImages", nodeNames.length), "success");
 }
 
 // ── Side Panel ────────────────────────────────────────────
@@ -1044,6 +1195,11 @@ export function initNodesTab() {
             renderNodeGrid();
         });
     }
+    setupSearchClearBtn("wfm-nodes-search", "wfm-nodes-search-clear-btn", () => {
+        state.searchText = "";
+        state.currentPage = 0;
+        renderNodeGrid();
+    });
 
     // Filters
     document.getElementById("wfm-nodes-category-filter")?.addEventListener("change", e => {
@@ -1109,8 +1265,87 @@ export function initNodesTab() {
         });
     });
 
+    // 一括操作バー: テキストをi18nで設定
+    const bulkDeselBtn = document.getElementById("wfm-nodes-bulk-deselect");
+    if (bulkDeselBtn) bulkDeselBtn.textContent = t("nodesBulkDeselect");
+    const bulkGroupAddBtn = document.getElementById("wfm-nodes-bulk-group-add");
+    if (bulkGroupAddBtn) bulkGroupAddBtn.textContent = t("nodesBulkGroupAdd");
+    const bulkGroupRemBtn = document.getElementById("wfm-nodes-bulk-group-remove");
+    if (bulkGroupRemBtn) bulkGroupRemBtn.textContent = t("nodesBulkGroupRemove");
+    const bulkCreateAddBtn = document.getElementById("wfm-nodes-bulk-create-add");
+    if (bulkCreateAddBtn) bulkCreateAddBtn.textContent = t("nodesBulkCreateAdd");
+    const bulkFavBtn = document.getElementById("wfm-nodes-bulk-fav");
+    if (bulkFavBtn) bulkFavBtn.textContent = t("nodesBulkFavAll");
+    const bulkUnfavBtn = document.getElementById("wfm-nodes-bulk-unfav");
+    if (bulkUnfavBtn) bulkUnfavBtn.textContent = t("nodesBulkUnfavAll");
+    const bulkNewGroupInput = document.getElementById("wfm-nodes-bulk-new-group");
+    if (bulkNewGroupInput) bulkNewGroupInput.placeholder = t("nodesBulkNewGroup");
+
+    document.getElementById("wfm-nodes-bulk-deselect")?.addEventListener("click", () => {
+        state.selectedNodes.clear();
+        state.lastSelectionIndex = -1;
+        updateNodeBulkBar();
+        document.querySelectorAll("#wfm-nodes-grid .multi-selected").forEach(el => el.classList.remove("multi-selected"));
+    });
+
+    document.getElementById("wfm-nodes-bulk-group-add")?.addEventListener("click", () => {
+        const sel = document.getElementById("wfm-nodes-bulk-group-select");
+        if (sel?.value) {
+            bulkNodeAddToGroup(sel.value);
+        } else {
+            showToast(t("selectGroupFirst"), "error");
+        }
+    });
+
+    document.getElementById("wfm-nodes-bulk-group-remove")?.addEventListener("click", () => {
+        const sel = document.getElementById("wfm-nodes-bulk-group-select");
+        if (sel?.value) {
+            bulkNodeRemoveFromGroup(sel.value);
+        } else {
+            showToast(t("selectGroupFirst"), "error");
+        }
+    });
+
+    document.getElementById("wfm-nodes-bulk-create-add")?.addEventListener("click", () => {
+        const input = document.getElementById("wfm-nodes-bulk-new-group");
+        const name = input?.value?.trim();
+        if (!name) return;
+        bulkNodeCreateAndAddToGroup(name).then(() => { if (input) input.value = ""; });
+    });
+
+    document.getElementById("wfm-nodes-bulk-fav")?.addEventListener("click", () => bulkNodeSetFavorite(true));
+    document.getElementById("wfm-nodes-bulk-unfav")?.addEventListener("click", () => bulkNodeSetFavorite(false));
+
     // Create node set button
     document.getElementById("wfm-node-set-create-btn")?.addEventListener("click", showCreateSetModal);
+
+    // Clear filters button
+    const nodesClearBtn = document.getElementById("wfm-nodes-clear-filters-btn");
+    if (nodesClearBtn) {
+        nodesClearBtn.textContent = t("clearFilters");
+        nodesClearBtn.addEventListener("click", () => {
+            state.searchText = "";
+            state.categoryFilter = "";
+            state.packageFilter = "";
+            state.tagFilter = "";
+            state.groupFilter = "";
+            state.showFavoritesOnly = false;
+            state.currentPage = 0;
+            const searchInput = document.getElementById("wfm-nodes-search");
+            if (searchInput) searchInput.value = "";
+            const catFilter = document.getElementById("wfm-nodes-category-filter");
+            if (catFilter) catFilter.value = "";
+            const pkgFilter = document.getElementById("wfm-nodes-package-filter");
+            if (pkgFilter) pkgFilter.value = "";
+            const tagFilter = document.getElementById("wfm-nodes-tag-filter");
+            if (tagFilter) tagFilter.value = "";
+            const grpFilter = document.getElementById("wfm-nodes-group-filter");
+            if (grpFilter) grpFilter.value = "";
+            const favBtn = document.getElementById("wfm-nodes-fav-btn");
+            if (favBtn) favBtn.classList.remove("active");
+            renderNodeGrid();
+        });
+    }
 
     // Lazy load on first tab click
     document.querySelector('[data-tab="nodes"]')?.addEventListener("click", () => {

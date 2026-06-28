@@ -217,6 +217,39 @@ body {
    Search
    ============================================ */
 
+.wfm-search-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.wfm-search-clear-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    padding: 2px 3px;
+    line-height: 1;
+    border-radius: 50%;
+    display: none;
+    opacity: 0.7;
+}
+
+.wfm-search-clear-btn:hover {
+    color: var(--wfm-text-primary);
+    background: rgba(255,255,255,0.1);
+    opacity: 1;
+}
+
+.wfm-search-wrap .wfm-search-input {
+    padding-right: 22px;
+}
+
 .wfm-search-input {
     padding: 6px 12px;
     border: 1px solid var(--wfm-border);
@@ -1577,6 +1610,17 @@ body {
     border-color: var(--wfm-primary);
     box-shadow: 0 0 0 2px var(--wfm-primary);
     background: color-mix(in srgb, var(--wfm-primary) 10%, var(--wfm-surface));
+}
+
+.wfm-card.multi-selected {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 2px #f59e0b !important;
+    background: color-mix(in srgb, #f59e0b 10%, var(--wfm-surface));
+}
+
+.wfm-nodes-table-row.multi-selected {
+    background: rgba(245, 158, 11, 0.15);
+    outline: 1px solid #f59e0b;
 }
 
 /* ============================================

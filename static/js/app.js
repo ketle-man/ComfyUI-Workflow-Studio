@@ -385,6 +385,7 @@ function applyI18nToHtml() {
         "wfm-help-nodes-1": "helpNodes1", "wfm-help-nodes-2": "helpNodes2",
         "wfm-help-nodes-3": "helpNodes3", "wfm-help-nodes-4": "helpNodes4",
         "wfm-help-nodes-5": "helpNodes5", "wfm-help-nodes-6": "helpNodes6",
+        "wfm-help-nodes-7": "helpNodes7",
         "wfm-help-models-1": "helpModels1", "wfm-help-models-2": "helpModels2",
         "wfm-help-models-3": "helpModels3", "wfm-help-models-4": "helpModels4",
         "wfm-help-models-5": "helpModels5", "wfm-help-models-6": "helpModels6",

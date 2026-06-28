@@ -7,7 +7,7 @@ import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { loadFileIntoMetadataTab } from "./metadata-tab.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
-import { escapeHtml } from "./util.js";
+import { escapeHtml, setupSearchClearBtn } from "./util.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
@@ -1511,6 +1511,10 @@ function bindEvents() {
         state.search = e.target.value;
         loadImages();
     });
+    setupSearchClearBtn("wfm-gallery-search", "wfm-gallery-search-clear-btn", () => {
+        state.search = "";
+        loadImages();
+    });
 
     // ソート
     document.getElementById("wfm-gallery-sort")?.addEventListener("change", (e) => {
@@ -1739,4 +1743,25 @@ function bindEvents() {
             document.querySelectorAll(".wfm-gallery-lightbox").forEach(el => el.remove());
         }
     });
+
+    // Clear filters button
+    const galleryClearBtn = document.getElementById("wfm-gallery-clear-filters-btn");
+    if (galleryClearBtn) {
+        galleryClearBtn.textContent = t("clearFilters");
+        galleryClearBtn.addEventListener("click", () => {
+            state.search = "";
+            state.favoriteOnly = false;
+            state.tagFilter = "";
+            state.groupFilter = "";
+            const searchInput = document.getElementById("wfm-gallery-search");
+            if (searchInput) searchInput.value = "";
+            const tagFilter = document.getElementById("wfm-gallery-tag-filter");
+            if (tagFilter) tagFilter.value = "";
+            const groupFilter = document.getElementById("wfm-gallery-group-filter");
+            if (groupFilter) groupFilter.value = "";
+            const favBtn = document.getElementById("wfm-gallery-fav-btn");
+            if (favBtn) favBtn.classList.remove("active");
+            loadImages();
+        });
+    }
 }

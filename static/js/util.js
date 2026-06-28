@@ -26,3 +26,30 @@ export function readJsonStorage(key, fallback = {}) {
 export function getSettings() {
     return readJsonStorage("wfm_settings");
 }
+
+/**
+ * 検索inputにオーバーレイXボタンを設定する。
+ * @param {string} inputId - 検索inputのID
+ * @param {string} clearBtnId - クリアボタンのID
+ * @param {Function} onClear - クリア時に呼び出すコールバック（inputは既に空になった後で呼ばれる）
+ */
+export function setupSearchClearBtn(inputId, clearBtnId, onClear) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(clearBtnId);
+    if (!input || !btn) return;
+
+    const sync = () => {
+        btn.style.display = input.value ? "flex" : "none";
+    };
+
+    input.addEventListener("input", sync);
+    btn.addEventListener("click", () => {
+        input.value = "";
+        btn.style.display = "none";
+        input.focus();
+        onClear();
+    });
+
+    // 初期値が入っている場合に備えて同期
+    sync();
+}

@@ -1,5 +1,83 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+## 2026-06-28: v0.3.63 — ノードタブ複数選択・全タブフィルタークリア・検索Xボタン
+
+**変更ファイル**: `static/js/nodes-tab.js`, `static/js/workflow-tab.js`, `static/js/models-tab.js`, `static/js/gallery-tab.js`, `static/js/util.js`, `static/js/i18n.js`, `static/css/main.css`, `templates/index.html`
+
+### 概要
+
+ノードタブにギャラリー同様の複数選択＋一括グループ・お気に入り操作を追加。ワークフロー/ノード/モデル/ギャラリーの4タブ全てに「✕ クリア」ボタンと検索入力オーバーレイXボタンを追加。
+
+---
+
+### ノードタブ: 複数選択バルクメニュー
+
+#### 操作方法
+
+| 操作 | 動作 |
+|------|------|
+| Ctrl+クリック | 個別選択/解除トグル |
+| Shift+クリック | アンカーから範囲一括選択 |
+| カードビュー・テーブルビュー | 両対応 |
+
+#### 一括操作バー（選択時に自動表示）
+
+- **グループに追加** — 既存グループに選択ノードを一括追加
+- **グループから削除** — 既存グループから選択ノードを一括削除
+- **作成して追加** — 新規グループを作成して一括追加
+- **★ お気に入り追加（全件）** — 選択ノードを全件お気に入り登録
+- **☆ お気に入り解除（全件）** — 選択ノードを全件お気に入り解除
+- **選択解除** — 選択状態をリセット
+
+#### 実装詳細
+
+- `state.selectedNodes`（Set）と `state.lastSelectionIndex` を追加
+- `_applyNodeSelectionToDOM()` — 再レンダリング後に選択状態を DOM に同期
+- `updateNodeBulkBar()` — バー表示/非表示とグループセレクト更新
+- バルクバーを `wfm-workflow-area`（flex コンテナ）の**外**に配置（レイアウト崩れ防止）
+- `.wfm-card.multi-selected` スタイルを `main.css` に追加（オレンジ `#f59e0b` でギャラリーと統一）
+
+---
+
+### 全タブ: フィルタークリアボタン（✕ クリア）
+
+各タブのツールバー最右端に「✕ クリア」ボタンを追加。クリックで全フィルターを一括リセット。
+
+| タブ | リセット対象 |
+|------|-------------|
+| ワークフロー | 検索テキスト・グループ・バッジフィルタ（ALL に戻す）・バッチ表示フラグ |
+| ノード | 検索テキスト・カテゴリ・パッケージ・タグ・グループ・お気に入りフラグ |
+| モデル | 検索テキスト・タグ・フォルダ・グループ・ステータス・お気に入り・バッチフラグ |
+| ギャラリー | 検索テキスト・タグ・グループ・お気に入りフラグ（ソート順は維持） |
+
+---
+
+### 全タブ: 検索入力オーバーレイ X ボタン
+
+検索テキストボックス右端に `✕` ボタンをオーバーレイ表示。
+
+- 入力が**空のときは非表示**、文字を入力すると自動表示
+- クリックで入力をクリアしてフォーカスを戻し、即時フィルタリング更新
+- 汎用関数 `setupSearchClearBtn(inputId, clearBtnId, onClear)` を `util.js` に追加し4タブで共通使用
+- `.wfm-search-wrap` / `.wfm-search-clear-btn` スタイルを `main.css` に追加
+
+#### 対象
+
+- ワークフロータブ: `wfm-search`
+- ノードタブ: `wfm-nodes-search`
+- モデルタブ: `wfm-models-search`
+- ギャラリータブ: `wfm-gallery-search`
+
+---
+
+### バグ修正
+
+- **ノードバルクバーレイアウト崩れ** — バルクバーを `wfm-nodes-browser`（`display:flex` コンテナ）内から外側に移動
+- **検索Xボタン非表示** — `btn.style.display = ""` がCSS `display:none` を復元してしまうバグを `"flex"` 明示指定に修正
+- **ノードカード multi-selected 未適用** — `.wfm-card.multi-selected` が `main.css` になく視覚変化なしだったため追加
+
+---
+
 ## 2026-06-27: WFS_PromptText の GenerateUI 対応・ドロップ時 title 固定
 
 **変更ファイル**: `static/js/comfyui-workflow.js`, `web/comfyui/node_sets_menu.js`

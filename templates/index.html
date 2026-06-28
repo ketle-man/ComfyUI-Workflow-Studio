@@ -46,7 +46,10 @@
                 </div>
                 <!-- Row 2: Search, group filter, actions -->
                 <div class="wfm-toolbar-row">
-                    <input type="text" id="wfm-search" class="wfm-search-input" placeholder="Search...">
+                    <div class="wfm-search-wrap">
+                        <input type="text" id="wfm-search" class="wfm-search-input" placeholder="Search...">
+                        <button class="wfm-search-clear-btn" id="wfm-search-clear-btn" title="Clear search">✕</button>
+                    </div>
                     <select id="wfm-group-filter" class="wfm-select wfm-toolbar-select">
                         <option value="">All Groups</option>
                     </select>
@@ -67,6 +70,7 @@
                         <div id="wfm-badge-settings-panel" class="wfm-badge-settings-panel" style="display:none;"></div>
                     </div>
                     <button id="wfm-wf-batch-clear-btn" class="wfm-btn wfm-btn-sm" title="Clear all batch workflows">BC</button>
+                    <button id="wfm-wf-clear-filters-btn" class="wfm-btn wfm-btn-sm" title="Clear all filters"></button>
                 </div>
             </div>
             <div class="wfm-workflow-area">
@@ -124,7 +128,10 @@
                 <!-- Browser toolbar -->
                 <div id="wfm-nodes-browser-toolbar" class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;">
                     <button class="wfm-filter-btn" id="wfm-nodes-fav-btn" title="Favorites">&#9733;</button>
-                    <input type="text" id="wfm-nodes-search" class="wfm-search-input" placeholder="Search nodes...">
+                    <div class="wfm-search-wrap">
+                        <input type="text" id="wfm-nodes-search" class="wfm-search-input" placeholder="Search nodes...">
+                        <button class="wfm-search-clear-btn" id="wfm-nodes-search-clear-btn" title="Clear search">✕</button>
+                    </div>
                     <select id="wfm-nodes-category-filter" class="wfm-select wfm-toolbar-select"><option value="">All Categories</option></select>
                     <select id="wfm-nodes-package-filter" class="wfm-select wfm-toolbar-select"><option value="">All Packages</option></select>
                     <select id="wfm-nodes-tag-filter" class="wfm-select wfm-toolbar-select"><option value="">All Tags</option></select>
@@ -135,7 +142,24 @@
                     </div>
                     <span id="wfm-nodes-count" class="wfm-nodes-count"></span>
                     <button id="wfm-nodes-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                    <button id="wfm-nodes-clear-filters-btn" class="wfm-btn wfm-btn-sm" title="Clear all filters"></button>
                 </div>
+            </div>
+
+            <!-- 複数選択時の一括操作バー（ブラウザエリア外に配置） -->
+            <div id="wfm-nodes-bulk-bar" class="wfm-gallery-bulk-bar" style="display:none;">
+                <span id="wfm-nodes-bulk-count" class="wfm-gallery-bulk-count"></span>
+                <button id="wfm-nodes-bulk-deselect" class="wfm-btn wfm-btn-sm"></button>
+                <span style="border-left:1px solid var(--wfm-border);height:18px;margin:0 2px;"></span>
+                <select id="wfm-nodes-bulk-group-select" class="wfm-select" style="font-size:12px;padding:2px 4px;max-width:140px;"></select>
+                <button id="wfm-nodes-bulk-group-add" class="wfm-btn wfm-btn-sm"></button>
+                <button id="wfm-nodes-bulk-group-remove" class="wfm-btn wfm-btn-sm"></button>
+                <span style="border-left:1px solid var(--wfm-border);height:18px;margin:0 2px;"></span>
+                <input type="text" id="wfm-nodes-bulk-new-group" class="wfm-input" style="font-size:12px;padding:2px 6px;width:130px;">
+                <button id="wfm-nodes-bulk-create-add" class="wfm-btn wfm-btn-sm"></button>
+                <span style="border-left:1px solid var(--wfm-border);height:18px;margin:0 2px;"></span>
+                <button id="wfm-nodes-bulk-fav" class="wfm-btn wfm-btn-sm"></button>
+                <button id="wfm-nodes-bulk-unfav" class="wfm-btn wfm-btn-sm"></button>
             </div>
 
             <!-- Browser sub-view -->
@@ -195,7 +219,10 @@
                 <div id="wfm-models-toolbar" class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;">
                     <button class="wfm-filter-btn" id="wfm-models-fav-btn" title="Favorites">&#9733;</button>
                     <button class="wfm-filter-btn" id="wfm-models-batch-filter-btn" title="Batch">B</button>
-                    <input type="text" id="wfm-models-search" class="wfm-search-input" placeholder="Search models...">
+                    <div class="wfm-search-wrap">
+                        <input type="text" id="wfm-models-search" class="wfm-search-input" placeholder="Search models...">
+                        <button class="wfm-search-clear-btn" id="wfm-models-search-clear-btn" title="Clear search">✕</button>
+                    </div>
                     <select id="wfm-models-tag-filter" class="wfm-select wfm-toolbar-select"><option value="">All Tags</option></select>
                     <select id="wfm-models-dir-filter" class="wfm-select wfm-toolbar-select"><option value="">All Folders</option></select>
                     <select id="wfm-models-group-filter" class="wfm-select wfm-toolbar-select"><option value="">All Groups</option></select>
@@ -216,6 +243,7 @@
                     <button id="wfm-models-select-btn" class="wfm-btn wfm-btn-sm wfm-btn-success" title="Multi-select models">Select</button>
                     <button id="wfm-models-batch-clear-btn" class="wfm-btn wfm-btn-sm" title="Clear all batch entries">BC</button>
                     <button id="wfm-models-stack-clear-btn" class="wfm-btn wfm-btn-sm" title="Clear all stack entries (Lora)">SC</button>
+                    <button id="wfm-models-clear-filters-btn" class="wfm-btn wfm-btn-sm" title="Clear all filters"></button>
                 </div>
                 <!-- Bulk action bar (shown in select mode) -->
                 <div id="wfm-models-bulk-bar" class="wfm-bulk-bar" style="display:none;"></div>
@@ -1172,6 +1200,7 @@
                                 <li id="wfm-help-nodes-4">Create, rename, delete node groups and assign/remove nodes</li>
                                 <li id="wfm-help-nodes-5">Side panel: Details (class name, package, category, description, flags), I/O Spec (inputs/outputs with types and defaults), Groups management</li>
                                 <li id="wfm-help-nodes-6">Node Sets: create reusable node collections with descriptions, tags, and link definitions between nodes</li>
+                                <li id="wfm-help-nodes-7">Multi-select: Ctrl+click to toggle individual nodes, Shift+click for range selection; bulk action bar appears with add to group / remove from group / create &amp; add group / bulk favorite / unfavorite</li>
                             </ul>
                         </div>
                     </div>
@@ -1466,7 +1495,10 @@
             <div class="wfm-toolbar">
                 <div class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;align-items:center;">
                     <button id="wfm-gallery-fav-btn" class="wfm-filter-btn" title="Favorites">&#9733;</button>
-                    <input type="text" id="wfm-gallery-search" class="wfm-search-input" placeholder="Search images...">
+                    <div class="wfm-search-wrap">
+                        <input type="text" id="wfm-gallery-search" class="wfm-search-input" placeholder="Search images...">
+                        <button class="wfm-search-clear-btn" id="wfm-gallery-search-clear-btn" title="Clear search">✕</button>
+                    </div>
                     <select id="wfm-gallery-tag-filter" class="wfm-select wfm-toolbar-select">
                         <option value="">All Tags</option>
                     </select>
@@ -1488,6 +1520,7 @@
                     <button id="wfm-gallery-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
                     <button id="wfm-gallery-send-image-edit-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to Image Edit tab">Image Edit</button>
                     <button id="wfm-gallery-send-genui-image-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to GenerateUI Image input">Send GenUI Image</button>
+                    <button id="wfm-gallery-clear-filters-btn" class="wfm-btn wfm-btn-sm" title="Clear all filters"></button>
                 </div>
                 <!-- 複数選択時の一括操作バー -->
                 <div id="wfm-gallery-bulk-bar" class="wfm-gallery-bulk-bar" style="display:none;">

@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.62-green)
+![Version](https://img.shields.io/badge/version-0.3.63-green)
 
 ## Screenshots
 
@@ -64,6 +64,8 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **AI summary** — generate workflow descriptions using Ollama
 - **Import / Export** — import workflows from files or clipboard; **Send to Canvas** button sends the selected workflow directly to the ComfyUI canvas (UI and API formats both supported)
 - **Default view setting** — persist your preferred view mode (Thumbnail / Table)
+- **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
+- **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, group filter, and badge filter (ALL) in one click
 
 ### Canvas Snapshot (v0.1.2)
 - **One-click capture** — click the camera button in ComfyUI's top bar to snapshot the current workflow canvas
@@ -171,6 +173,8 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
 - **Image Edit button** — toolbar button; sends the selected image directly to the Image Edit tab as the base layer
 - **Send GenUI Image button** — toolbar button (next to Image Edit); uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded
+- **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
+- **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, tag filter, group filter, and favorites filter in one click (sort order is preserved)
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
 - **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
@@ -182,6 +186,9 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Node detail panel** — view I/O specifications, edit tags, manage groups
 - **Node Sets** — save multiple nodes + connections as reusable sets from the ComfyUI canvas
 - **Right-click context menu** — "Save as Node Set" option on any node in ComfyUI
+- **Multi-select** — Ctrl+click to toggle individual nodes, Shift+click for range selection; bulk action bar appears with: add to group / remove from group / create & add group / bulk favorite / unfavorite
+- **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
+- **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, category, package, tag, group, and favorites filter in one click
 
 ### Models Tab (v0.2.3)
 - **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding) with sub-tab switching
@@ -204,6 +211,8 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
   - **Group row** — select an existing group and **Add** / **Remove**, or type a new name and **Create & Add**
   - **Badge row** — select a badge and **+Badge** / **−Badge** to apply or remove from all selected
   - **File row** — select a destination subfolder (or type a new folder name and create it) then **Move** to relocate the model file with all sidecar files; **Delete Files** (right end) permanently removes selected models and all associated files
+- **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
+- **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, tag filter, folder filter, group filter, favorites filter, and status filter in one click
 
 ### Tagger Tab (v0.3.38)
 - **3 sub-tabs** — Single / Batch / DB for single-image tagging, folder batch processing, and tag database management
@@ -361,6 +370,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.63
+- **Nodes tab — multi-select** — Ctrl+click to toggle individual nodes, Shift+click for range selection; bulk action bar appears with add to group / remove from group / create & add group / bulk favorite / unfavorite; works in both Card and Table view modes
+- **All tabs — search clear (✕)** — inline ✕ overlay button inside each search box (Workflow / Nodes / Models / Gallery); shown only when text is entered, click to clear and re-filter immediately
+- **All tabs — clear all filters button** — new ✕ Clear button at the rightmost end of each tab's toolbar; resets all active filters (search, group, tag, folder, favorites, badge) in one click; Gallery sort order is preserved
 
 ### v0.3.62
 - **Gallery tab — Send GenUI Image button** — new toolbar button (next to Image Edit); uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; `comfyEditor.applyImageToSlot(file, slotIndex)` added to `comfyui-editor.js` for reusable image-slot injection

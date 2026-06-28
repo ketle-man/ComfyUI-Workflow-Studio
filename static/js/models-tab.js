@@ -7,7 +7,7 @@ import { showToast, openModal, closeModal } from "./app.js";
 import { t } from "./i18n.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
-import { escapeHtml, readJsonStorage } from "./util.js";
+import { escapeHtml, readJsonStorage, setupSearchClearBtn } from "./util.js";
 
 // ── Constants ─────────────────────────────────────────────
 const RESERVED_GROUPS = ["Batch", "Stack"];
@@ -2319,6 +2319,11 @@ export function initModelsTab() {
             renderModelGrid();
         });
     }
+    setupSearchClearBtn("wfm-models-search", "wfm-models-search-clear-btn", () => {
+        state.searchText = "";
+        state.currentPage = 0;
+        renderModelGrid();
+    });
 
     // Tag filter
     document.getElementById("wfm-models-tag-filter")?.addEventListener("change", (e) => {
@@ -2403,6 +2408,37 @@ export function initModelsTab() {
     document.getElementById("wfm-models-stack-clear-btn")?.addEventListener("click", () => {
         clearStackGroup();
     });
+
+    // Clear filters button
+    const modelsClearBtn = document.getElementById("wfm-models-clear-filters-btn");
+    if (modelsClearBtn) {
+        modelsClearBtn.textContent = t("clearFilters");
+        modelsClearBtn.addEventListener("click", () => {
+            state.searchText = "";
+            state.tagFilter = "";
+            state.dirFilter = "";
+            state.groupFilter = "";
+            state.statusFilter = "all";
+            state.showFavoritesOnly = false;
+            state.showBatchOnly = false;
+            state.currentPage = 0;
+            const searchInput = document.getElementById("wfm-models-search");
+            if (searchInput) searchInput.value = "";
+            const tagFilter = document.getElementById("wfm-models-tag-filter");
+            if (tagFilter) tagFilter.value = "";
+            const dirFilter = document.getElementById("wfm-models-dir-filter");
+            if (dirFilter) dirFilter.value = "";
+            const groupFilter = document.getElementById("wfm-models-group-filter");
+            if (groupFilter) groupFilter.value = "";
+            const statusFilter = document.getElementById("wfm-models-status-filter");
+            if (statusFilter) statusFilter.value = "all";
+            const favBtn = document.getElementById("wfm-models-fav-btn");
+            if (favBtn) favBtn.classList.remove("active");
+            const batchFilterBtn = document.getElementById("wfm-models-batch-filter-btn");
+            if (batchFilterBtn) batchFilterBtn.classList.remove("active");
+            renderModelGrid();
+        });
+    }
 
     // View mode (thumb / card / table)
     document.querySelectorAll("[data-models-view]").forEach((btn) => {

@@ -10,7 +10,7 @@ import { loadWorkflowIntoEditor } from "./generate-tab.js";
 import { t, getSummaryPrompt } from "./i18n.js";
 import { highlightJSON } from "./json-highlight.js";
 import { openBadgeEditModal } from "./models-tab.js";
-import { escapeHtml, getSettings, readJsonStorage } from "./util.js";
+import { escapeHtml, getSettings, readJsonStorage, setupSearchClearBtn } from "./util.js";
 
 // ============================================
 // Constants
@@ -1227,6 +1227,11 @@ export function initWorkflowTab() {
             renderGrid();
         });
     }
+    setupSearchClearBtn("wfm-search", "wfm-search-clear-btn", () => {
+        state.searchText = "";
+        state.currentPage = 0;
+        renderGrid();
+    });
 
     // Drag & drop on workflow grid
     const grid = document.getElementById("wfm-workflow-grid");
@@ -1353,6 +1358,25 @@ export function initWorkflowTab() {
     document.getElementById("wfm-wf-batch-clear-btn")?.addEventListener("click", () => {
         clearBatch();
     });
+
+    // Toolbar: Clear filters button
+    const wfClearBtn = document.getElementById("wfm-wf-clear-filters-btn");
+    if (wfClearBtn) {
+        wfClearBtn.textContent = t("clearFilters");
+        wfClearBtn.addEventListener("click", () => {
+            state.activeBadge = "ALL";
+            state.showBatchOnly = false;
+            state.searchText = "";
+            state.groupFilter = "";
+            state.currentPage = 0;
+            const searchInput = document.getElementById("wfm-search");
+            if (searchInput) searchInput.value = "";
+            const groupFilter = document.getElementById("wfm-group-filter");
+            if (groupFilter) groupFilter.value = "";
+            renderModelFilters();
+            renderGrid();
+        });
+    }
 
     // Initial load
     loadWorkflows();
