@@ -28,6 +28,7 @@ export class Layer {
         this.textProps  = null;        // テキストレイヤー用プロパティ（再編集・再描画に使用）
         this.locked     = false;       // ロック中は SelectTool の変形を禁止
         this.maskApply  = false;       // マスクレイヤー: true=クリッピングマスクとして機能
+        this.operation  = "add";       // マスクレイヤー合成モード: "add" | "subtract"
     }
 
     clear() {
@@ -59,6 +60,7 @@ export class Layer {
             textProps:  this.textProps  ?? null,
             locked:     this.locked     ?? false,
             maskApply:  this.maskApply  ?? false,
+            operation:  this.operation  ?? "add",
         };
     }
 
@@ -80,6 +82,7 @@ export class Layer {
         layer.textProps  = json.textProps  ?? null;
         layer.locked     = json.locked     ?? false;
         layer.maskApply  = json.maskApply  ?? false;
+        layer.operation  = json.operation  ?? "add";
 
         if (json.imageData) {
             return new Promise(resolve => {
@@ -180,6 +183,14 @@ export class LayerManager {
     toggleMaskApply(id) {
         const layer = this.layers.find(l => l.id === id);
         if (layer && layer.type === "mask") { layer.maskApply = !layer.maskApply; this._emit("change"); }
+    }
+
+    toggleOperation(id) {
+        const layer = this.layers.find(l => l.id === id);
+        if (layer && layer.type === "mask") {
+            layer.operation = layer.operation === "add" ? "subtract" : "add";
+            this._emit("change");
+        }
     }
 
     setOpacity(id, opacity) {

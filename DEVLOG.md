@@ -1,5 +1,178 @@
 # DEVLOG - ComfyUI-Workflow-Studio
 
+---
+
+## 計画: Image Edit 拡張 — ABRブラシ連携 + Mask Editor One 統合
+
+**方針**: Mask Editor One（同作者）のインストールを前提に、WFS Image Edit タブに2つの拡張を加える。
+
+### フェーズ1: Draw ツール — ABRブラシ対応
+
+#### 概要
+WFS の Draw ツール（`DrawTool.js`）に画像ブラシ（PNG スタンプ）描画機能を追加する。
+ブラシデータは Mask Editor One の API エンドポイントを介して取得・管理する。
+
+#### バックエンド（Mask Editor One API 共用）
+Mask Editor One がインストールされていれば以下のエンドポイントが利用可能：
+
+| エンドポイント | 用途 |
+|---------------|------|
+| `GET /mask_editor/brushes/list` | フォルダツリー + ブラシ一覧取得 |
+| `GET /mask_editor/brushes/raw?path=…` | ブラシ PNG 画像をサーブ |
+| `POST /mask_editor/brushes/import` | PNG フォルダ一括インポート |
+| `POST /mask_editor/brushes/upload_abr` | ABR ファイルインポート（パーサーは Mask Editor One 側） |
+
+ブラシの格納先は Mask Editor One のフォルダ（`comfyui-mask-editor-one/brushes/`）を共用。
+一度インポートすれば WFS / Mask Editor One の両方で同じブラシが使える。
+
+#### フロントエンド変更
+
+**`DrawTool.js`**
+- `brushType: "soft"` | `"image"` プロパティ追加
+- `imageBrush: { canvas, width, height }` — スタンプ用 OffscreenCanvas をキャッシュ
+- `_stamp()` を改修: `"image"` モード時は `ctx.drawImage(stamp)` で描画（Jitter は phase 2 以降）
+- サイズは `brushSize` を高さ基準に、アスペクト比を維持してスケーリング
+
+**Image Edit タブ (`image-edit-tab.js`)**
+- Draw ツール Options パネルに「Brush Library」ボタンを追加
+- Mask Editor One 未検出時はボタンをグレーアウト + ツールチップ表示
+
+**ブラシライブラリ UI（新規モーダルまたはサイドパネル）**
+- Mask Editor One API 未応答時は「Mask Editor One が必要です」メッセージ
+- 応答時: フォルダツリー + ブラシサムネイルグリッド表示
+- クリックでブラシを選択 → `DrawTool` に適用
+- Import Folder / Import ABR ボタン（Mask Editor One の import エンドポイントを呼ぶ）
+
+#### Mask Editor One 検出ロジック
+```javascript
+// /mask_editor/brushes/list に HEAD または GET を投げて 200 なら存在確認
+async function detectMaskEditorOne() {
+    try {
+        const r = await fetch("/mask_editor/brushes/list");
+        return r.ok;
+    } catch { return false; }
+}
+```
+
+---
+
+### フェーズ2: Mask Editor One 連携ボタン
+
+#### 概要
+WFS Image Edit タブのツールバーまたは Mask ツールのオプションパネルに
+「Mask Editor で開く」ボタンを追加する。
+現在のキャンバスレイヤーを画像として Mask Editor One に渡し、編集結果を WFS に戻す。
+
+#### 実装ポイント
+- WFS のキャンバス合成画像 (`_exportComposite()`) を Blob として取得
+- Mask Editor One の `/mask_editor/store_image` に POST してキャッシュ
+- Mask Editor One のモーダルを JavaScript から起動（`window.maskEditorOpen()` など）
+- Apply 後のコールバックで Mask Editor One の結果マスク PNG を取得
+- WFS の mask レイヤーとして追加
+
+#### Mask Editor One 未インストール時
+- ボタンを非表示（検出ロジックで判定）
+
+---
+
+### 変更ファイル予定
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `static/js/image-edit/DrawTool.js` | 画像ブラシ描画対応 |
+| `static/js/image-edit-tab.js` | Brush Library ボタン・Mask Editor 連携ボタン |
+| `static/js/image-edit/BrushLibrary.js` | 新規: ブラシライブラリモーダル UI |
+| `py/routes/` | 不要（Mask Editor One API を直接利用） |
+| `static/css/main.css` | ブラシライブラリ UI スタイル |
+| `static/js/i18n.js` | ブラシ関連 i18n キー追加 |
+| `templates/index.html` | 不要（動的生成） |
+
+---
+
+### 実装順序
+1. `DrawTool.js` に画像ブラシ描画機能を追加（スタンプモード）
+2. Mask Editor One 検出ロジックを実装
+3. `BrushLibrary.js` 新規作成（ライブラリモーダル UI）
+4. Draw ツール Options パネルに Brush Library ボタンを接続
+5. フェーズ2: Mask Editor 連携ボタンを追加
+
+---
+
+## 2026-06-28: v0.3.64 — Image Edit マスク Add/Subtract・BiRefNet BG Remove・SAM3 セグメンテーション・ブラシカーソルバグ修正
+
+**変更ファイル**: `static/js/image-edit-tab.js`, `static/js/image-edit/LayerManager.js`
+
+### 概要
+
+Image Edit タブのマスク機能を強化。Mask Editor One インストール済み環境向けに BiRefNet 背景削除と SAM3 テキストプロンプトセグメンテーションを追加。また独立機能としてマスクレイヤーの合成モード（Add/Subtract）を実装。
+
+---
+
+### マスクレイヤー Add/Subtract 合成モード
+
+#### LayerManager.js
+- `Layer` クラスに `operation: "add"` プロパティ追加（`maskApply` 用）
+- `toJSON()` / `fromJSON()` で保存・復元対応
+- `LayerManager.toggleOperation(id)` メソッド追加（add ⇔ subtract トグル）
+
+#### image-edit-tab.js — レイヤーパネル
+- マスクレイヤー行に **A/S トグルボタン** を追加（緑=Add、赤=Subtract）
+- クリックで `toggleOperation()` を呼び出し、合成ビューと一覧を再描画
+- マスクレイヤー選択時、`operation` に合わせて MaskTool の `mode` を自動同期（subtract → erase）
+
+#### image-edit-tab.js — `_updateCompositeView()` 改修
+- 連続する `maskApply: true` マスクレイヤーをグループとして検出
+- グループを back→front 順で合成（Mask Editor One `CanvasCompositor` と同ロジック）
+  - `add` → `globalCompositeOperation = "lighten"`
+  - `subtract` → `globalCompositeOperation = "destination-out"`
+- 合成マスクでターゲットレイヤーを `destination-in` でクリップ
+- バグ修正: `maskApply=true` マスクが layers 末尾（ターゲットなし）の場合にオーバーレイ表示のみにフォールバック
+
+---
+
+### BG Remove — BiRefNet（Mask Editor One 連携）
+
+- BG Remove ツール起動時に `/mask_editor/birefnet/status` を確認
+- Mask Editor One 未インストール時: BiRefNet オプションを `disabled`（"Mask Editor One required" 表示）
+- インストール済み時: BiRefNet 選択可能
+- 実行フロー:
+  1. `store_image` でアクティブレイヤー画像を Mask Editor One キャッシュに送信（`node_id: "wfs_bgremove"`）
+  2. `birefnet/remove_bg` で推論
+  3. グレースケールマスク（白=前景）→ RGBA PNG に変換（`_applyMaskToImage()`）
+  4. 既存の BG Remove フロー（New Layer / 上書き）で結果を適用
+
+---
+
+### SAM3 セグメンテーション（Mask Editor One 連携）
+
+- Mask ツールの上部メニューに **[SAM3] ボタン**を追加（Paint の隣）
+- 起動時に `/mask_editor/sam3/status` を確認して有効/無効を制御
+
+#### SAM3 モードの上部メニュー
+| 要素 | 説明 |
+|------|------|
+| テキスト入力 | セグメント対象のプロンプト（"cat", "person" 等） |
+| Max セレクト | 最大マスク取得数（3/6/9/12） |
+| Segment ボタン | 推論実行 |
+
+#### プロパティペイン（SAM3）
+| 要素 | 説明 |
+|------|------|
+| Mode: Add/Erase | 適用モード切り替え |
+| サムネイルグリッド | 候補マスクをクリックで選択/解除（青ボーダー + ✓ マーク） |
+| Apply Selected (N) | 選択マスクをまとめて適用 |
+
+#### 実行フロー
+1. `store_image` でイメージレイヤーを送信（`node_id: "wfs_sam3"`）
+2. `sam3/segment` で推論 → 複数マスク候補をプロパティペインに表示
+3. サムネイルをクリックして複数選択（新規 Segment 時に選択リセット）
+4. Apply Selected でまとめて合成適用
+   - Add → `source-over`（既存マスクに重ね塗り）
+   - Erase → `destination-out`（既存マスクから消去）
+5. アクティブレイヤーがマスクでない場合は新規マスクレイヤーを自動作成
+
+---
+
 ## 2026-06-28: v0.3.63 — ノードタブ複数選択・全タブフィルタークリア・検索Xボタン
 
 **変更ファイル**: `static/js/nodes-tab.js`, `static/js/workflow-tab.js`, `static/js/models-tab.js`, `static/js/gallery-tab.js`, `static/js/util.js`, `static/js/i18n.js`, `static/css/main.css`, `templates/index.html`

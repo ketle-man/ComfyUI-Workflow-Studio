@@ -87,6 +87,16 @@ class ImageEditTab {
             processing: false,
             aborted: false
         };
+        // Mask Editor One BiRefNet 利用可否
+        this._birefnetAvailable = false;
+        // Mask Editor One SAM3 状態
+        this._sam3Available = false;
+        this._sam3Results   = [];   // [{mask_b64, score, area}, ...]
+        this._sam3Prompt    = "";
+        this._sam3MaxMasks  = 9;
+        this._sam3Loading   = false;
+        this._sam3Mode      = "add";        // "add" | "erase"
+        this._sam3Selected  = new Set();    // 選択中の結果インデックス
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -100,6 +110,31 @@ class ImageEditTab {
         this._setupLayerPanel();
         this._setupKeyboard();
         this._initBrushCursor();
+        // Mask Editor One の BiRefNet / SAM3 が利用可能か非同期で確認
+        this._checkBiRefNetAvailability();
+        this._checkSam3Availability();
+    }
+
+    async _checkBiRefNetAvailability() {
+        try {
+            const resp = await fetch("/mask_editor/birefnet/status");
+            if (!resp.ok) return;
+            const json = await resp.json();
+            this._birefnetAvailable = json.loaded === true || json.model_found === true;
+        } catch {
+            this._birefnetAvailable = false;
+        }
+    }
+
+    async _checkSam3Availability() {
+        try {
+            const resp = await fetch("/mask_editor/sam3/status");
+            if (!resp.ok) return;
+            const json = await resp.json();
+            this._sam3Available = json.loaded === true || json.ckpt_found === true;
+        } catch {
+            this._sam3Available = false;
+        }
     }
 
     // ── ブラシカーソル ────────────────────────────
@@ -133,6 +168,8 @@ class ImageEditTab {
         const refCanvas = document.getElementById("ie-canvas-draw");
         if (!refCanvas) { el.style.display = "none"; return; }
         const rect  = refCanvas.getBoundingClientRect();
+        // Image Edit タブ非表示時（width=0）はカーソルを消す
+        if (rect.width === 0 || rect.height === 0) { el.style.display = "none"; return; }
         const scale = rect.width / refCanvas.width;
         const px    = Math.max(2, size * scale);
 
@@ -463,11 +500,39 @@ class ImageEditTab {
 
         } else if (toolId === "mask") {
             const sub = this._maskSubtool ?? "paint";
+            const sam3Disabled = this._sam3Available ? "" : "disabled";
+            const sam3Title    = this._sam3Available ? "SAM3 Segment" : "SAM3 (Mask Editor One required)";
+            const sam3Ui = this._sam3Available && sub === "sam3" ? `
+                <div class="ie-opt-group">
+                    <input type="text" id="ie-sam3-prompt" class="ie-opt-input"
+                        placeholder="e.g. cat, person..."
+                        value="${this._sam3Prompt}"
+                        style="width:160px;font-size:11px;padding:2px 6px;border:1px solid var(--wfm-border);border-radius:3px;background:var(--wfm-surface);color:var(--wfm-text);">
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;color:var(--wfm-text-secondary);">Max</label>
+                    <select id="ie-sam3-max" class="ie-opt-select" style="width:44px;">
+                        ${[3,6,9,12].map(n => `<option value="${n}"${n === this._sam3MaxMasks ? " selected" : ""}>${n}</option>`).join("")}
+                    </select>
+                </div>
+                <div class="ie-opt-group">
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="ie-sam3-run-btn" ${this._sam3Loading ? "disabled" : ""}>
+                        ${this._sam3Loading ? "Running..." : "Segment"}
+                    </button>
+                </div>
+                <span id="ie-sam3-status" style="font-size:11px;color:var(--wfm-text-secondary);margin-left:4px;">
+                    ${this._sam3Results.length > 0 ? `${this._sam3Results.length} masks found` : ""}
+                </span>
+            ` : "";
             el.innerHTML = `
                 <div class="ie-opt-group">
                     <button class="wfm-btn wfm-btn-sm${sub === "paint" ? " ie-opt-active" : ""}" id="ie-mask-paint-btn">Paint</button>
+                    <button class="wfm-btn wfm-btn-sm${sub === "sam3"  ? " ie-opt-active" : ""}" id="ie-mask-sam3-btn"
+                        ${sam3Disabled} title="${sam3Title}">SAM3</button>
                 </div>
                 <div style="width:1px;height:22px;background:var(--wfm-border);margin:0 4px;flex-shrink:0;"></div>
+                ${sam3Ui}
+                ${sub !== "sam3" ? `
                 <div class="ie-opt-group">
                     <label style="font-size:11px;cursor:pointer;color:var(--wfm-text-secondary);">
                         <input type="checkbox" id="ie-mask-invert" ${this._maskInverted ? "checked" : ""}> Invert
@@ -482,12 +547,25 @@ class ImageEditTab {
                     <label style="font-size:11px;color:var(--wfm-text-secondary);">Blur</label>
                     <input type="range" id="ie-mask-blur" min="0" max="50" value="${this._maskBlur}" style="width:70px;">
                     <span id="ie-mask-blur-val" style="font-size:11px;min-width:22px;">${this._maskBlur}</span>px
-                </div>
+                </div>` : ""}
             `;
             document.getElementById("ie-mask-paint-btn")?.addEventListener("click", () => {
                 this._maskSubtool = "paint";
                 this._renderToolOptions("mask");
             });
+            document.getElementById("ie-mask-sam3-btn")?.addEventListener("click", () => {
+                if (this._sam3Available) {
+                    this._maskSubtool = "sam3";
+                    this._renderToolOptions("mask");
+                }
+            });
+            document.getElementById("ie-sam3-prompt")?.addEventListener("input", e => {
+                this._sam3Prompt = e.target.value;
+            });
+            document.getElementById("ie-sam3-max")?.addEventListener("change", e => {
+                this._sam3MaxMasks = parseInt(e.target.value);
+            });
+            document.getElementById("ie-sam3-run-btn")?.addEventListener("click", () => this._runSam3Segment());
             document.getElementById("ie-mask-invert")?.addEventListener("change", e => {
                 this._maskInverted = e.target.checked;
                 this._updateCompositeView();
@@ -575,12 +653,16 @@ class ImageEditTab {
             });
 
         } else if (toolId === "bgremove") {
+            const birefnetDisabled = this._birefnetAvailable ? "" : "disabled";
+            const birefnetLabel    = this._birefnetAvailable
+                ? "BiRefNet (Mask Editor One)"
+                : "BiRefNet (Mask Editor One required)";
             el.innerHTML = `
                 <div class="ie-opt-group">
                     <label>Model</label>
                     <select id="ie-bgremove-model" class="ie-opt-select">
                         <option value="imgly">Lightweight (@imgly)</option>
-                        <option value="birefnet" disabled>BiRefNet (coming soon)</option>
+                        <option value="birefnet" ${birefnetDisabled}>${birefnetLabel}</option>
                     </select>
                 </div>
                 <div class="ie-opt-group">
@@ -667,6 +749,64 @@ class ImageEditTab {
                 this._maskTool.hardness = parseInt(e.target.value) / 100;
                 document.getElementById("ie-mask-hard-lbl").textContent = e.target.value + "%";
                 this._maskTool._stamp = null;
+            });
+        } else if (sub === "sam3") {
+            const modeAdd   = this._sam3Mode === "add";
+            const selCount  = this._sam3Selected.size;
+            const hasResult = this._sam3Results.length > 0;
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label>Mode</label>
+                    <div style="display:flex;gap:4px;">
+                        <button class="wfm-btn wfm-btn-sm${modeAdd   ? " ie-opt-active" : ""}" id="ie-sam3-mode-add"   style="flex:1;">Add</button>
+                        <button class="wfm-btn wfm-btn-sm${!modeAdd  ? " ie-opt-active" : ""}" id="ie-sam3-mode-erase" style="flex:1;">Erase</button>
+                    </div>
+                </div>
+                ${hasResult ? `
+                <div class="ie-props-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+                    <div style="font-size:11px;color:var(--wfm-text-secondary);">Click to select / deselect:</div>
+                    <div id="ie-sam3-results" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">
+                        ${this._sam3Results.map((r, i) => {
+                            const sel = this._sam3Selected.has(i);
+                            const borderColor = sel ? "var(--wfm-primary,#4682e6)" : "var(--wfm-border)";
+                            const bg          = sel ? "color-mix(in srgb,var(--wfm-primary,#4682e6) 15%,transparent)" : "transparent";
+                            return `<div class="ie-sam3-thumb" data-idx="${i}"
+                                style="cursor:pointer;border:2px solid ${borderColor};border-radius:4px;overflow:hidden;text-align:center;background:${bg};position:relative;">
+                                <img src="${r.mask_b64}" style="width:100%;display:block;background:#000;">
+                                <div style="font-size:10px;padding:2px 0;color:var(--wfm-text-secondary);">
+                                    ${Math.round((r.score ?? 0) * 100)}%
+                                </div>
+                                ${sel ? '<div style="position:absolute;top:2px;right:3px;font-size:12px;line-height:1;color:var(--wfm-primary,#4682e6);">✓</div>' : ""}
+                            </div>`;
+                        }).join("")}
+                    </div>
+                    <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="ie-sam3-apply-btn"
+                        ${selCount === 0 ? "disabled" : ""} style="margin-top:4px;">
+                        Apply Selected${selCount > 0 ? ` (${selCount})` : ""}
+                    </button>
+                </div>` : `
+                <div style="font-size:11px;color:var(--wfm-text-secondary);padding:4px 0;">
+                    ${this._sam3Loading ? "Segmenting..." : "Enter a prompt and press Segment"}
+                </div>`}
+            `;
+            document.getElementById("ie-sam3-mode-add")?.addEventListener("click", () => {
+                this._sam3Mode = "add";
+                this._renderMaskProps("sam3");
+            });
+            document.getElementById("ie-sam3-mode-erase")?.addEventListener("click", () => {
+                this._sam3Mode = "erase";
+                this._renderMaskProps("sam3");
+            });
+            body.querySelectorAll(".ie-sam3-thumb").forEach(el => {
+                el.addEventListener("click", () => {
+                    const idx = parseInt(el.dataset.idx);
+                    if (this._sam3Selected.has(idx)) this._sam3Selected.delete(idx);
+                    else                              this._sam3Selected.add(idx);
+                    this._renderMaskProps("sam3");
+                });
+            });
+            document.getElementById("ie-sam3-apply-btn")?.addEventListener("click", () => {
+                this._applySelectedSam3Masks();
             });
         } else {
             body.innerHTML = `<span style="font-size:11px;color:var(--wfm-text-secondary);">No options</span>`;
@@ -1156,28 +1296,49 @@ class ImageEditTab {
         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
 
         const layers = this._layerMgr.layers;
-        // maskApply=true のマスクの直下（back側、i+1）レイヤーはマスク処理でまとめて描画
-        // layers[0]=front … layers[n-1]=back、走査は back→front (i=n-1→0)
-        const maskedIndices = new Set();
-        for (let i = 0; i < layers.length; i++) {
-            if (layers[i].type === "mask" && layers[i].maskApply && layers[i].visible && i + 1 < layers.length) {
-                maskedIndices.add(i + 1); // 直下のレイヤーを先にスキップ
+        // layers[0]=front … layers[n-1]=back、走査は back→front
+
+        // 前処理: 連続する maskApply=true マスクグループを検出
+        // グループの front 側インデックス → { masks: Layer[], target: Layer, targetIdx }
+        const maskGroupMap = new Map();
+        const skipIndices  = new Set();
+        let i = 0;
+        while (i < layers.length) {
+            if (layers[i].type === "mask" && layers[i].maskApply) {
+                const frontIdx = i;
+                const masks = [];
+                while (i < layers.length && layers[i].type === "mask" && layers[i].maskApply) {
+                    masks.push(layers[i]);
+                    skipIndices.add(i);
+                    i++;
+                }
+                if (i < layers.length) {
+                    maskGroupMap.set(frontIdx, { masks, target: layers[i], targetIdx: i });
+                    skipIndices.add(i); // ターゲットもグループ処理でまとめて描画
+                } else {
+                    // ターゲットなし（末尾）→ グループをオーバーレイ表示のみ
+                    maskGroupMap.set(frontIdx, { masks, target: null, targetIdx: -1 });
+                }
+            } else {
+                i++;
             }
         }
 
-        for (let i = layers.length - 1; i >= 0; i--) {
-            const layer = layers[i];
+        for (let j = layers.length - 1; j >= 0; j--) {
+            if (skipIndices.has(j)) {
+                // マスクグループの front に到達したらグループ全体を描画
+                if (maskGroupMap.has(j)) {
+                    const group = maskGroupMap.get(j);
+                    this._renderMaskGroup(ctx, drawCanvas, group.masks, group.target);
+                }
+                continue;
+            }
+            const layer = layers[j];
             if (!layer.visible) continue;
-            if (maskedIndices.has(i)) continue; // マスク処理でまとめて描画するのでスキップ
 
             if (layer.type === "mask") {
-                if (layer.maskApply && i + 1 < layers.length) {
-                    // 直下（back側、i+1）のレイヤーをクリッピングマスクとして合成
-                    this._renderMaskedLayer(ctx, drawCanvas, layer, layers[i + 1]);
-                } else {
-                    // maskApply=false のときはオーバーレイ表示のみ
-                    this._renderMaskLayerOverlay(ctx, layer);
-                }
+                // maskApply=false のマスクはオーバーレイ表示のみ
+                this._renderMaskLayerOverlay(ctx, layer);
             } else {
                 ctx.save();
                 ctx.globalAlpha = layer.opacity;
@@ -1188,6 +1349,59 @@ class ImageEditTab {
             }
         }
         this._compositeMode = true;
+    }
+
+    _renderMaskGroup(ctx, drawCanvas, maskLayers, targetLayer) {
+        const W = drawCanvas.width;
+        const H = drawCanvas.height;
+
+        // ターゲットなし → オーバーレイ表示のみ
+        if (!targetLayer) {
+            for (const ml of maskLayers) {
+                if (ml.visible) this._renderMaskLayerOverlay(ctx, ml);
+            }
+            return;
+        }
+
+        // 1. マスクグループを合成（Mask Editor One CanvasCompositor と同ロジック）
+        //    maskLayers は front→back 順なので back→front（逆順）で合成
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width  = W;
+        maskCanvas.height = H;
+        const mc = maskCanvas.getContext("2d");
+        for (let k = maskLayers.length - 1; k >= 0; k--) {
+            const ml = maskLayers[k];
+            if (!ml.visible) continue;
+            mc.save();
+            mc.globalAlpha = ml.opacity;
+            mc.globalCompositeOperation = ml.operation === "subtract" ? "destination-out" : "lighten";
+            Layer.applyTransform(mc, ml);
+            mc.drawImage(ml.canvas, -ml.canvas.width / 2, -ml.canvas.height / 2);
+            mc.restore();
+        }
+
+        // 2. 合成マスクでターゲットレイヤーをクリップ
+        const tmp = document.createElement("canvas");
+        tmp.width  = W;
+        tmp.height = H;
+        const tc = tmp.getContext("2d");
+        if (targetLayer.visible) {
+            tc.save();
+            tc.globalAlpha = targetLayer.opacity;
+            tc.globalCompositeOperation = targetLayer.blendMode;
+            Layer.applyTransform(tc, targetLayer);
+            tc.drawImage(targetLayer.canvas, -targetLayer.canvas.width / 2, -targetLayer.canvas.height / 2);
+            tc.restore();
+        }
+        tc.globalCompositeOperation = this._maskInverted ? "destination-out" : "destination-in";
+        tc.drawImage(maskCanvas, 0, 0);
+
+        ctx.drawImage(tmp, 0, 0);
+
+        // 3. 全マスクレイヤーのオーバーレイ表示
+        for (const ml of maskLayers) {
+            if (ml.visible) this._renderMaskLayerOverlay(ctx, ml);
+        }
     }
 
     _renderMaskedLayer(ctx, drawCanvas, maskLayer, targetLayer, showOverlay = true) {
@@ -1330,7 +1544,10 @@ class ImageEditTab {
             const maskApplyBtn = layer.type === "mask"
                 ? `<button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="mask-apply"
                         title="${layer.maskApply ? "Disable clipping mask" : "Enable as clipping mask"}"
-                        style="color:${layer.maskApply ? "var(--wfm-primary,#4682e6)" : "inherit"};font-size:11px;">✂</button>`
+                        style="color:${layer.maskApply ? "var(--wfm-primary,#4682e6)" : "inherit"};font-size:11px;">✂</button>
+                   <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="mask-op"
+                        title="${layer.operation === "subtract" ? "Mode: Subtract (click to switch to Add)" : "Mode: Add (click to switch to Subtract)"}"
+                        style="font-size:10px;font-weight:bold;min-width:16px;color:${layer.operation === "subtract" ? "#e2534a" : "#4db84d"};">${layer.operation === "subtract" ? "S" : "A"}</button>`
                 : "";
             return `
                 <div class="ie-layer-item ${isActive ? "active" : ""}" data-id="${layer.id}" data-action="select" data-type="${layer.type}">
@@ -1359,6 +1576,10 @@ class ImageEditTab {
                     this._layerMgr.toggleMaskApply(id);
                     this._updateCompositeView();
                     this._refreshLayerList();
+                } else if (action === "mask-op") {
+                    this._layerMgr.toggleOperation(id);
+                    this._updateCompositeView();
+                    this._refreshLayerList();
                 } else if (action === "lock") {
                     this._layerMgr.toggleLocked(id);
                     // ロック変更はSelectToolのオーバーレイを再描画
@@ -1376,6 +1597,11 @@ class ImageEditTab {
                             // すでにマスクツール選択中 → canvas だけ切り替え
                             this._maskTool?.setCanvas(layer.canvas);
                             this._maskTool?.activate();
+                        }
+                        // operation に合わせて MaskTool の mode を同期
+                        if (this._maskTool) {
+                            this._maskTool.mode = layer.operation === "subtract" ? "erase" : "paint";
+                            this._renderToolOptions("mask");
                         }
                         this._updateCompositeView();
                     } else if (this._activeTool === "draw" && layer) {
@@ -1784,10 +2010,175 @@ class ImageEditTab {
         });
     }
 
+    async _runSam3Segment() {
+        if (!this._layerMgr || this._sam3Loading) return;
+        const prompt = this._sam3Prompt.trim();
+        if (!prompt) { showToast("Please enter a prompt", "warning"); return; }
+
+        // 推論対象: アクティブレイヤー（マスクなら下のイメージレイヤーを探す）
+        let imageLayer = this._layerMgr.activeLayer;
+        if (!imageLayer || imageLayer.type === "mask") {
+            imageLayer = this._layerMgr.layers.find(l => l.type !== "mask" && l.visible);
+        }
+        if (!imageLayer) { showToast("No image layer found", "error"); return; }
+
+        const NODE_ID = "wfs_sam3";
+        this._sam3Loading  = true;
+        this._sam3Results  = [];
+        this._sam3Selected = new Set();
+        this._renderToolOptions("mask");
+        this._renderMaskProps("sam3");
+
+        try {
+            const dataUrl = imageLayer.canvas.toDataURL("image/png");
+            await fetch("/mask_editor/store_image", {
+                method:  "POST",
+                headers: { "Content-Type": "application/json" },
+                body:    JSON.stringify({ node_id: NODE_ID, image_b64: dataUrl }),
+            });
+
+            const resp = await fetch("/mask_editor/sam3/segment", {
+                method:  "POST",
+                headers: { "Content-Type": "application/json" },
+                body:    JSON.stringify({ node_id: NODE_ID, prompt, max_masks: this._sam3MaxMasks }),
+            });
+            const json = await resp.json();
+            if (json.error) throw new Error(json.error);
+            this._sam3Results = json.masks || [];
+            if (this._sam3Results.length === 0) showToast("No masks found", "warning");
+            else showToast(`${this._sam3Results.length} mask(s) found`, "success");
+        } catch (err) {
+            showToast("SAM3 error: " + err.message, "error");
+        } finally {
+            this._sam3Loading = false;
+            this._renderToolOptions("mask");
+            this._renderMaskProps("sam3");
+        }
+    }
+
+    async _applySelectedSam3Masks() {
+        if (!this._layerMgr || this._sam3Selected.size === 0) return;
+        const indices = [...this._sam3Selected].sort((a, b) => a - b);
+        const masks   = indices.map(i => this._sam3Results[i]).filter(Boolean);
+        if (masks.length === 0) return;
+
+        let maskLayer = this._layerMgr.activeLayer;
+        if (!maskLayer || maskLayer.type !== "mask") {
+            const ref = this._layerMgr.activeLayer;
+            maskLayer = this._layerMgr.addLayer("mask", "SAM3 Mask", {
+                contentW: ref?.canvas.width  ?? this._layerMgr.width,
+                contentH: ref?.canvas.height ?? this._layerMgr.height,
+                displayW: ref?.displayW      ?? this._layerMgr.width,
+                displayH: ref?.displayH      ?? this._layerMgr.height,
+                x: ref?.x ?? 0, y: ref?.y ?? 0,
+            });
+            this._layerMgr.setActive(maskLayer.id);
+        }
+
+        this._saveUndo();
+        for (const r of masks) {
+            await this._applySam3Mask(maskLayer, r.mask_b64, this._sam3Mode);
+        }
+
+        this._updateCompositeView();
+        this._refreshLayerList();
+        showToast(`SAM3: ${masks.length} mask(s) applied (${this._sam3Mode})`, "success");
+    }
+
+    _applySam3Mask(maskLayer, maskB64, mode = "add") {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => {
+                const W = maskLayer.canvas.width;
+                const H = maskLayer.canvas.height;
+                // グレースケール輝度 → アルファ白マスクに変換
+                const off = document.createElement("canvas");
+                off.width = W; off.height = H;
+                const mc = off.getContext("2d");
+                mc.drawImage(img, 0, 0, W, H);
+                const imgData = mc.getImageData(0, 0, W, H);
+                const d = imgData.data;
+                for (let i = 0; i < d.length; i += 4) {
+                    const lum = d[i];
+                    d[i] = d[i+1] = d[i+2] = 255;
+                    d[i+3] = lum;
+                }
+                mc.putImageData(imgData, 0, 0);
+                // モードに合わせてマスクキャンバスに合成
+                maskLayer.ctx.save();
+                maskLayer.ctx.globalCompositeOperation = mode === "erase" ? "destination-out" : "source-over";
+                maskLayer.ctx.drawImage(off, 0, 0);
+                maskLayer.ctx.restore();
+                resolve();
+            };
+            img.onerror = resolve;
+            img.src = maskB64;
+        });
+    }
+
     async _bgRemoveBiRefNet(dataUrl, onStatus) {
-        // TODO: POST /api/wfm/bg-remove — Python backend using comfy.bg_removal_model
-        // Returns RGBA PNG data-URL with background removed
-        throw new Error("BiRefNet not yet implemented");
+        const NODE_ID = "wfs_bgremove";
+
+        // 1. アクティブレイヤー画像を Mask Editor One のキャッシュに登録
+        onStatus("Sending image...");
+        const storeResp = await fetch("/mask_editor/store_image", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ node_id: NODE_ID, image_b64: dataUrl }),
+        });
+        if (!storeResp.ok) throw new Error("Failed to cache image for BiRefNet");
+
+        // 2. BiRefNet 推論実行
+        onStatus("Running BiRefNet...");
+        const resp = await fetch("/mask_editor/birefnet/remove_bg", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ node_id: NODE_ID }),
+        });
+        const json = await resp.json();
+        if (json.error) throw new Error(json.error);
+
+        // 3. グレースケールマスク (白=前景) → RGBA PNG に変換して返す
+        onStatus("Compositing...");
+        return await this._applyMaskToImage(dataUrl, json.mask_b64);
+    }
+
+    async _applyMaskToImage(imageB64, maskB64) {
+        const loadImage = src => new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload  = () => resolve(img);
+            img.onerror = () => reject(new Error("Image load failed: " + src.slice(0, 40)));
+            img.src = src;
+        });
+        const [origImg, maskImg] = await Promise.all([loadImage(imageB64), loadImage(maskB64)]);
+
+        const w = origImg.naturalWidth;
+        const h = origImg.naturalHeight;
+
+        // マスク: グレースケール輝度値 → アルファチャンネル (RGBA 白マスク)
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width  = w;
+        maskCanvas.height = h;
+        const mc = maskCanvas.getContext("2d");
+        mc.drawImage(maskImg, 0, 0, w, h);
+        const maskData = mc.getImageData(0, 0, w, h);
+        const md = maskData.data;
+        for (let i = 0; i < md.length; i += 4) {
+            md[i + 3] = md[i]; // 輝度 → アルファ
+            md[i] = md[i + 1] = md[i + 2] = 255;
+        }
+        mc.putImageData(maskData, 0, 0);
+
+        // 元画像にマスクを destination-in で適用
+        const out = document.createElement("canvas");
+        out.width  = w;
+        out.height = h;
+        const ctx = out.getContext("2d");
+        ctx.drawImage(origImg, 0, 0, w, h);
+        ctx.globalCompositeOperation = "destination-in";
+        ctx.drawImage(maskCanvas, 0, 0, w, h);
+
+        return out.toDataURL("image/png");
     }
 
     async _applyBgRemove() {
