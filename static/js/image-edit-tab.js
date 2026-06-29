@@ -97,6 +97,9 @@ class ImageEditTab {
         this._sam3Loading   = false;
         this._sam3Mode      = "add";        // "add" | "erase"
         this._sam3Selected  = new Set();    // 選択中の結果インデックス
+        // ABR brush (Mask Editor One) — optional feature
+        this._abrAvailable = false;
+        this._abrBrushTree = [];
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -113,6 +116,7 @@ class ImageEditTab {
         // Mask Editor One の BiRefNet / SAM3 が利用可能か非同期で確認
         this._checkBiRefNetAvailability();
         this._checkSam3Availability();
+        this._checkAbrAvailability();
     }
 
     async _checkBiRefNetAvailability() {
@@ -134,6 +138,18 @@ class ImageEditTab {
             this._sam3Available = json.loaded === true || json.ckpt_found === true;
         } catch {
             this._sam3Available = false;
+        }
+    }
+
+    async _checkAbrAvailability() {
+        try {
+            const resp = await fetch("/mask_editor/brushes/list");
+            if (!resp.ok) return;
+            const json = await resp.json();
+            this._abrBrushTree = json.tree || [];
+            this._abrAvailable = this._abrBrushTree.length > 0;
+        } catch {
+            this._abrAvailable = false;
         }
     }
 
@@ -170,6 +186,11 @@ class ImageEditTab {
         const rect  = refCanvas.getBoundingClientRect();
         // Image Edit タブ非表示時（width=0）はカーソルを消す
         if (rect.width === 0 || rect.height === 0) { el.style.display = "none"; return; }
+        // キャンバス外は通常カーソルを表示
+        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+            el.style.display = "none";
+            return;
+        }
         const scale = rect.width / refCanvas.width;
         const px    = Math.max(2, size * scale);
 
@@ -726,9 +747,43 @@ class ImageEditTab {
                 </div>
                 <div class="ie-props-row">
                     <label>Hardness</label>
-                    <input type="range" id="ie-mask-hard" min="0" max="100" value="${Math.round(t.hardness * 100)}">
+                    <input type="range" id="ie-mask-hard" min="0" max="100" value="${Math.round(t.hardness * 100)}"
+                        ${t.brushImage ? "disabled title='Hardness applies to circle brush only'" : ""}>
                     <span id="ie-mask-hard-lbl">${Math.round(t.hardness * 100)}%</span>
                 </div>
+                ${this._abrAvailable ? `
+                <div style="margin:6px 0 4px;border-top:1px solid var(--wfm-border);padding-top:6px;font-size:10px;color:var(--wfm-text-secondary);letter-spacing:0.05em;">
+                    MASK EDITOR ONE
+                </div>
+                <div class="ie-props-row">
+                    <label>Brush</label>
+                    <span style="font-size:11px;color:var(--wfm-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                        title="${t.brushName ?? "Circle"}">${t.brushName ?? "Circle"}</span>
+                    <button class="wfm-btn wfm-btn-sm" id="ie-mask-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;">Select</button>
+                    ${t.brushImage ? `<button class="wfm-btn wfm-btn-sm" id="ie-mask-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
+                </div>
+                ${t.brushImage ? `
+                <div class="ie-props-row">
+                    <label>Spacing</label>
+                    <input type="range" id="ie-mask-spacing" min="5" max="100" value="${Math.round((t.spacing ?? 0.25) * 100)}">
+                    <span id="ie-mask-spacing-lbl">${Math.round((t.spacing ?? 0.25) * 100)}%</span>
+                </div>
+                <div class="ie-props-row">
+                    <label>Angle</label>
+                    <input type="range" id="ie-mask-angle" min="0" max="359" value="${t.angle ?? 0}">
+                    <span id="ie-mask-angle-lbl">${t.angle ?? 0}°</span>
+                </div>
+                <div class="ie-props-row">
+                    <label>Sz Jitter</label>
+                    <input type="range" id="ie-mask-szjitter" min="0" max="100" value="${Math.round((t.sizeJitterAmount ?? 0.5) * 100)}">
+                    <span id="ie-mask-szjitter-lbl">${Math.round((t.sizeJitterAmount ?? 0.5) * 100)}%</span>
+                </div>
+                <div class="ie-props-row">
+                    <label>Rot. Jitter</label>
+                    <label style="cursor:pointer;font-size:11px;">
+                        <input type="checkbox" id="ie-mask-rotjitter" ${t.rotationJitter ? "checked" : ""}> On
+                    </label>
+                </div>` : ""}` : ""}
             `;
             document.getElementById("ie-mask-mode-add")?.addEventListener("click", () => {
                 this._maskTool.mode = "paint";
@@ -749,6 +804,27 @@ class ImageEditTab {
                 this._maskTool.hardness = parseInt(e.target.value) / 100;
                 document.getElementById("ie-mask-hard-lbl").textContent = e.target.value + "%";
                 this._maskTool._stamp = null;
+            });
+            document.getElementById("ie-mask-select-brush")?.addEventListener("click", () => this._openAbrBrushPicker());
+            document.getElementById("ie-mask-clear-brush")?.addEventListener("click", () => {
+                this._maskTool?.clearImageBrush();
+                this._renderMaskProps("paint");
+            });
+            document.getElementById("ie-mask-spacing")?.addEventListener("input", e => {
+                this._maskTool.spacing = parseInt(e.target.value) / 100;
+                document.getElementById("ie-mask-spacing-lbl").textContent = e.target.value + "%";
+            });
+            document.getElementById("ie-mask-angle")?.addEventListener("input", e => {
+                this._maskTool.angle = parseInt(e.target.value);
+                document.getElementById("ie-mask-angle-lbl").textContent = e.target.value + "°";
+            });
+            document.getElementById("ie-mask-szjitter")?.addEventListener("input", e => {
+                this._maskTool.sizeJitterAmount = parseInt(e.target.value) / 100;
+                this._maskTool.sizeJitter = this._maskTool.sizeJitterAmount > 0;
+                document.getElementById("ie-mask-szjitter-lbl").textContent = e.target.value + "%";
+            });
+            document.getElementById("ie-mask-rotjitter")?.addEventListener("change", e => {
+                this._maskTool.rotationJitter = e.target.checked;
             });
         } else if (sub === "sam3") {
             const modeAdd   = this._sam3Mode === "add";
@@ -2008,6 +2084,261 @@ class ImageEditTab {
             reader.onerror = reject;
             reader.readAsDataURL(resultBlob);
         });
+    }
+
+    _openAbrBrushPicker() {
+        const existing = document.getElementById("wfm-abr-picker-overlay");
+        if (existing) { existing.remove(); return; }
+
+        const overlay = document.createElement("div");
+        overlay.id = "wfm-abr-picker-overlay";
+        Object.assign(overlay.style, {
+            position: "fixed", inset: "0",
+            background: "rgba(0,0,0,0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: "99999",
+        });
+
+        const modal = document.createElement("div");
+        Object.assign(modal.style, {
+            background: "var(--wfm-surface, #2a2a2a)",
+            border: "1px solid var(--wfm-border, #444)",
+            borderRadius: "8px",
+            width: "640px", height: "460px",
+            display: "flex", flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            color: "var(--wfm-text, #ddd)",
+            fontFamily: "sans-serif",
+        });
+
+        // Header
+        const header = document.createElement("div");
+        Object.assign(header.style, {
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "8px 12px",
+            borderBottom: "1px solid var(--wfm-border, #444)",
+            fontWeight: "bold", fontSize: "13px", flexShrink: "0",
+        });
+        const headerTitle = document.createElement("span");
+        headerTitle.textContent = "ABR Brush Library (Mask Editor One)";
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "×";
+        closeBtn.className = "wfm-btn wfm-btn-sm";
+        closeBtn.style.cssText = "font-size:16px;padding:0 6px;";
+        closeBtn.onclick = () => overlay.remove();
+        header.appendChild(headerTitle);
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
+
+        // Body: tree + grid
+        const body = document.createElement("div");
+        Object.assign(body.style, { display: "flex", flex: "1", overflow: "hidden" });
+
+        const treeEl = document.createElement("div");
+        Object.assign(treeEl.style, {
+            width: "150px", flexShrink: "0",
+            borderRight: "1px solid var(--wfm-border, #444)",
+            overflowY: "auto", padding: "4px 0", fontSize: "12px",
+        });
+
+        const gridEl = document.createElement("div");
+        Object.assign(gridEl.style, {
+            flex: "1", overflowY: "auto",
+            display: "flex", flexWrap: "wrap",
+            alignContent: "flex-start", padding: "6px", gap: "4px",
+        });
+
+        body.appendChild(treeEl);
+        body.appendChild(gridEl);
+        modal.appendChild(body);
+
+        // Footer
+        const footer = document.createElement("div");
+        Object.assign(footer.style, {
+            display: "flex", gap: "8px", padding: "8px 12px", flexShrink: "0",
+            borderTop: "1px solid var(--wfm-border, #444)",
+        });
+        const resetBtn = document.createElement("button");
+        resetBtn.className = "wfm-btn wfm-btn-sm";
+        resetBtn.textContent = "⬤ Round Brush (default)";
+        resetBtn.onclick = () => {
+            this._maskTool?.clearImageBrush();
+            this._renderMaskProps("paint");
+            this._renderToolOptions("mask");
+            overlay.remove();
+        };
+        footer.appendChild(resetBtn);
+        modal.appendChild(footer);
+
+        overlay.appendChild(modal);
+        overlay.addEventListener("mousedown", e => { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+
+        // ── Data helpers ────────────────────────────────────────────
+        const tree = this._abrBrushTree;
+        let selectedFolder = null;
+        const expanded = new Set();
+
+        const collectFiles = (nodes) => {
+            const result = [];
+            for (const n of nodes) {
+                if (n.type === "file") result.push(n);
+                else if (n.type === "folder" && n.children) result.push(...collectFiles(n.children));
+            }
+            return result;
+        };
+
+        const findFolder = (nodes, path) => {
+            for (const n of nodes) {
+                if (n.type !== "folder") continue;
+                if (n.path === path) return n;
+                const found = findFolder(n.children || [], path);
+                if (found) return found;
+            }
+            return null;
+        };
+
+        // ── Brush thumbnail ─────────────────────────────────────────
+        const makeBrushThumb = (node) => {
+            const item = document.createElement("div");
+            Object.assign(item.style, {
+                width: "72px", cursor: "pointer", textAlign: "center",
+                padding: "4px", borderRadius: "4px",
+                border: "1px solid var(--wfm-border, #444)",
+                background: "var(--wfm-bg, #1a1a1a)",
+                boxSizing: "border-box",
+            });
+            item.title = node.name;
+
+            const THUMB = 64;
+            const canvas = document.createElement("canvas");
+            canvas.width = THUMB; canvas.height = THUMB;
+            canvas.style.cssText = "display:block;border-radius:3px;";
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#1a1a2a";
+            ctx.fillRect(0, 0, THUMB, THUMB);
+
+            const img = new Image();
+            img.onload = () => {
+                const srcW = img.naturalWidth || img.width;
+                const srcH = img.naturalHeight || img.height;
+                const aspect = srcW / srcH || 1;
+                const WORK = 128;
+                const wW = aspect >= 1 ? WORK : Math.max(1, Math.round(WORK * aspect));
+                const wH = aspect >= 1 ? Math.max(1, Math.round(WORK / aspect)) : WORK;
+                const tmp = document.createElement("canvas");
+                tmp.width = wW; tmp.height = wH;
+                const stx = tmp.getContext("2d");
+                stx.drawImage(img, 0, 0, wW, wH);
+                const id = stx.getImageData(0, 0, wW, wH);
+                const d = id.data;
+                let hasAlpha = false;
+                for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { hasAlpha = true; break; }
+                let invertLum = false;
+                if (!hasAlpha) {
+                    const corners = [0, wW - 1, wW * (wH - 1), wW * wH - 1];
+                    let bg = 0;
+                    for (const ci of corners) { const ii = ci * 4; bg += (d[ii] * 0.299 + d[ii+1] * 0.587 + d[ii+2] * 0.114) / 255; }
+                    invertLum = (bg / corners.length) > 0.5;
+                }
+                for (let i = 0; i < d.length; i += 4) {
+                    const a = hasAlpha ? d[i+3] / 255 : (() => { const l = (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114)/255; return invertLum ? 1-l : l; })();
+                    d[i] = d[i+1] = d[i+2] = 255; d[i+3] = Math.round(a * 255);
+                }
+                stx.putImageData(id, 0, 0);
+                const THRESHOLD = 15;
+                let x0 = wW, x1 = -1, y0 = wH, y1 = -1;
+                for (let y = 0; y < wH; y++) for (let x = 0; x < wW; x++) if (d[(y*wW+x)*4+3] > THRESHOLD) { if (x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+                if (x1 >= x0 && y1 >= y0) {
+                    const cW = x1-x0+1, cH = y1-y0+1;
+                    const s = Math.min((THUMB-4)/cW, (THUMB-4)/cH);
+                    ctx.drawImage(tmp, x0, y0, cW, cH, Math.round((THUMB-Math.round(cW*s))/2), Math.round((THUMB-Math.round(cH*s))/2), Math.round(cW*s), Math.round(cH*s));
+                }
+            };
+            img.src = `/mask_editor/brushes/raw?path=${encodeURIComponent(node.path)}`;
+            item.appendChild(canvas);
+
+            const label = document.createElement("div");
+            label.textContent = node.name;
+            Object.assign(label.style, { fontSize: "10px", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--wfm-text-secondary, #999)" });
+            item.appendChild(label);
+
+            item.addEventListener("mouseenter", () => { item.style.background = "color-mix(in srgb, var(--wfm-primary, #4682e6) 20%, transparent)"; item.style.borderColor = "var(--wfm-primary, #4682e6)"; });
+            item.addEventListener("mouseleave", () => { item.style.background = "var(--wfm-bg, #1a1a1a)"; item.style.borderColor = "var(--wfm-border, #444)"; });
+            item.onclick = () => {
+                const loadImg = new Image();
+                loadImg.onload = () => {
+                    this._maskTool?.setImageBrush(loadImg, node.name);
+                    this._renderMaskProps("paint");
+                    this._renderToolOptions("mask");
+                    overlay.remove();
+                };
+                loadImg.src = `/mask_editor/brushes/raw?path=${encodeURIComponent(node.path)}`;
+            };
+            return item;
+        };
+
+        // ── Grid rendering ─────────────────────────────────────────
+        const showFolder = (path) => {
+            const files = path === null ? collectFiles(tree) : collectFiles(findFolder(tree, path)?.children || []);
+            gridEl.innerHTML = "";
+            if (files.length === 0) {
+                const msg = document.createElement("span");
+                msg.style.cssText = "font-size:12px;color:var(--wfm-text-secondary,#999);padding:12px;";
+                msg.textContent = tree.length === 0 ? "No brushes installed" : "No brushes in this folder";
+                gridEl.appendChild(msg);
+                return;
+            }
+            for (const file of files) gridEl.appendChild(makeBrushThumb(file));
+        };
+
+        // ── Tree rendering ─────────────────────────────────────────
+        const renderTree = () => {
+            treeEl.innerHTML = "";
+            const allItem = document.createElement("div");
+            Object.assign(allItem.style, {
+                padding: "5px 10px", cursor: "pointer", fontSize: "12px",
+                background: selectedFolder === null ? "color-mix(in srgb, var(--wfm-primary, #4682e6) 25%, transparent)" : "",
+            });
+            allItem.textContent = "All Brushes";
+            allItem.onclick = () => { selectedFolder = null; renderTree(); showFolder(null); };
+            treeEl.appendChild(allItem);
+
+            const renderNodes = (nodes, depth) => {
+                for (const n of nodes) {
+                    if (n.type !== "folder") continue;
+                    const isExpanded = expanded.has(n.path);
+                    const item = document.createElement("div");
+                    Object.assign(item.style, {
+                        padding: `5px 10px 5px ${10 + depth * 12}px`,
+                        cursor: "pointer", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px",
+                        background: selectedFolder === n.path ? "color-mix(in srgb, var(--wfm-primary, #4682e6) 25%, transparent)" : "",
+                    });
+                    const arrow = document.createElement("span");
+                    arrow.style.cssText = "font-size:9px;color:var(--wfm-text-secondary,#999);flex-shrink:0;";
+                    arrow.textContent = isExpanded ? "▼" : "▶";
+                    const nameSpan = document.createElement("span");
+                    nameSpan.textContent = n.name;
+                    nameSpan.style.overflow = "hidden";
+                    nameSpan.style.textOverflow = "ellipsis";
+                    nameSpan.style.whiteSpace = "nowrap";
+                    item.appendChild(arrow);
+                    item.appendChild(nameSpan);
+                    item.onclick = () => {
+                        if (isExpanded) expanded.delete(n.path); else expanded.add(n.path);
+                        selectedFolder = n.path;
+                        renderTree(); showFolder(n.path);
+                    };
+                    treeEl.appendChild(item);
+                    if (isExpanded) renderNodes(n.children || [], depth + 1);
+                }
+            };
+            renderNodes(tree, 0);
+        };
+
+        renderTree();
+        showFolder(null);
     }
 
     async _runSam3Segment() {

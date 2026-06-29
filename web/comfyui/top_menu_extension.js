@@ -611,27 +611,55 @@ app.registerExtension({
             { tooltip: NODE_SETS_TOOLTIP, className: "wfm-node-sets-btn", getIcon: getNodeSetsIcon, styles: null },
         ];
 
-        const replaceButtonIcons = () => {
+        const applyIconToButton = (btn, cfg) => {
+            // Skip if the SVG icon is already in place
+            if (btn.querySelector("svg")) return;
+            btn.classList.add(cfg.className);
+            btn.innerHTML = cfg.getIcon();
+            btn.style.borderRadius = "4px";
+            btn.style.padding = "6px";
+            if (cfg.styles) Object.assign(btn.style, cfg.styles);
+            const svg = btn.querySelector("svg");
+            if (svg) {
+                svg.style.width = "20px";
+                svg.style.height = "20px";
+            }
+        };
+
+        // Initial application — retry until buttons are rendered by Vue
+        const pollUntilFound = () => {
             let foundAny = false;
             for (const cfg of buttonConfigs) {
                 document.querySelectorAll(`button[aria-label="${cfg.tooltip}"]`).forEach((btn) => {
                     foundAny = true;
-                    btn.classList.add(cfg.className);
-                    btn.innerHTML = cfg.getIcon();
-                    btn.style.borderRadius = "4px";
-                    btn.style.padding = "6px";
-                    if (cfg.styles) Object.assign(btn.style, cfg.styles);
-                    const svg = btn.querySelector("svg");
-                    if (svg) {
-                        svg.style.width = "20px";
-                        svg.style.height = "20px";
-                    }
+                    applyIconToButton(btn, cfg);
                 });
             }
             if (!foundAny) {
-                requestAnimationFrame(replaceButtonIcons);
+                requestAnimationFrame(pollUntilFound);
             }
         };
-        requestAnimationFrame(replaceButtonIcons);
+        requestAnimationFrame(pollUntilFound);
+
+        // MutationObserver: re-apply icons after Vue re-renders the action bar
+        // (e.g. when the Properties Panel is toggled inside a subgraph)
+        if (typeof MutationObserver !== "undefined") {
+            const observer = new MutationObserver(() => {
+                for (const cfg of buttonConfigs) {
+                    document.querySelectorAll(`button[aria-label="${cfg.tooltip}"]`).forEach((btn) => {
+                        // Only re-apply when Vue has reset innerHTML back to <i>
+                        if (btn.querySelector("i")) {
+                            applyIconToButton(btn, cfg);
+                        }
+                    });
+                }
+            });
+            const watchNode =
+                document.querySelector("[data-testid='action-bar-buttons']") ||
+                document.querySelector(".actionbar-container") ||
+                document.body;
+            observer.observe(watchNode, { childList: true, subtree: true });
+            window.__wfmIconObserver = observer;
+        }
     },
 });

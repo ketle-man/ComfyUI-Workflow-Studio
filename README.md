@@ -18,7 +18,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.63-green)
+![Version](https://img.shields.io/badge/version-0.3.65-green)
 
 ## Screenshots
 
@@ -225,7 +225,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **DB tab** — searchable SQLite database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records
 - **Dependencies** — install into ComfyUI's embedded Python: `python_embedded\python.exe -m pip install -r requirements.txt`; for GPU inference use `onnxruntime-gpu`; TensorFlow (DeepDanbooru) is optional and commented out in `requirements.txt`
 
-### Image Edit Tab (v0.3.61)
+### Image Edit Tab (v0.3.65)
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG
 - **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
 - **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers
@@ -234,9 +234,9 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
   - **Draw** — freehand brush; options: color, brush size, blend mode; paints directly onto the active draw layer while all other layers remain visible; brush cursor shown as a size-accurate circle; strokes can start from outside the canvas margin and continue past the edge
   - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
   - **Shape** — drag to draw geometric shapes (Rect / Ellipse / Line / FreeLine); options: shape type, Rounded toggle (Rect/Ellipse), Fill color, Stroke color + width, Opacity; each committed shape becomes an independent draw layer; Stroke None hidden for Line/FreeLine (stroke always active)
-  - **Mask** — paint a white mask onto a dedicated mask layer; click **M** in the Layers header to add a mask layer (Mask tool activates automatically); clicking a mask layer in the list also switches to the Mask tool; **Tool Options bar**: Paint sub-tool button, Invert checkbox, Overlay color picker (default red), Blur slider (0–50 px); **Properties pane** (left of the Layers panel): Size (1–200 px), Hardness (0–100%), Mode — **Add** (draw white = mask present) / **Erase** (erase to transparent = mask absent); **✂ button** on the layer row enables/disables the mask as a clipping mask — when enabled (blue), the layer directly below is clipped to the painted area and the result is applied when exporting; brush cursor shown as a size-accurate circle; strokes can start from outside the canvas margin and continue past the edge
+  - **Mask** — paint a white mask onto a dedicated mask layer, or use SAM3 text-prompt segmentation (requires Mask Editor One); click **M** in the Layers header to add a mask layer (Mask tool activates automatically); clicking a mask layer in the list also switches to the Mask tool; **Tool Options bar**: Paint / SAM3 sub-tool buttons, Invert checkbox, Overlay color picker (default red), Blur slider (0–50 px); SAM3 button disabled when Mask Editor One is not installed; **Properties pane — Paint mode**: Mode (Add / Erase), Size (1–200 px), Hardness (0–100%); **MASK EDITOR ONE section** (visible when Mask Editor One is installed): Select opens the ABR stamp-brush library — choosing a brush replaces the default circle; ✕ clears back to Circle; when an image brush is active, Hardness is disabled and Spacing (5–100%), Angle (0–359°), Sz Jitter (random size per stamp, 0–100%), Rot. Jitter (random rotation per stamp on/off) controls appear; **Properties pane — SAM3 mode**: enter a text prompt (e.g. "cat"), set Max candidates (3/6/9/12), click Segment — candidate mask thumbnails appear; click to select (blue border + ✓, multi-select supported), click Apply Selected (N) to apply with current Mode (Add / Erase); a new mask layer is created automatically if needed; **Mask layer A/S operation**: A/S toggle button on each mask layer row — Add (green) composites normally, Subtract (red) cuts the mask from the layer below; **✂ clipping mask button** on the layer row clips the layer directly below to the painted area; brush cursor shown as size-accurate circle; strokes can start from outside the canvas margin and continue past the edge
   - **Blur** — **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: enable the toggle then drag a rectangle on the canvas to apply blur or mosaic to that region only (blue preview for blur, orange for mosaic); Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo
-  - **BG Remove** — remove the background from the active layer; **Lightweight (@imgly)**: runs entirely in the browser via CDN (no server required; ~40 MB model downloaded on first use); **BiRefNet**: high-quality removal via the Python backend (coming soon); **New Layer** option (default on) adds the result as a new layer above the original; when off, replaces the active layer in-place
+  - **BG Remove** — remove the background from the active layer; **Lightweight (@imgly)**: runs entirely in the browser via CDN (no server required; ~40 MB model downloaded on first use); **BiRefNet**: high-quality removal via Mask Editor One's Python backend (requires Mask Editor One installed and `birefnet.safetensors` in `ComfyUI/models/background_removal/`); **New Layer** option (default on) adds the result as a new layer above the original; when off, replaces the active layer in-place
   - **Filter (G'MIC)** — apply G'MIC-Qt filter effects to the active image layer; click **Edit with G'MIC** to launch G'MIC-Qt GUI; select a filter and click OK — a "G'MIC-Qt filter output" window appears; close it to save the result back as the active layer; requires G'MIC-Qt Standalone installed and path configured in Settings → G'MIC-Qt Executable Path
 - **Layer panel** — layer list with visibility (👁/🚫), lock (🔒/🔓), and clipping-mask (✂) toggles; opacity slider; type icons (🖼 image / T text / ✏ draw / ⬚ mask); Layer 1 is automatically locked on first image load
 - **Layer lock** — locked layers show an orange bounding box and 🔒 icon on the canvas; move/resize/rotate are disabled while locked; click the 🔓 button in the layer row to unlock
@@ -356,6 +356,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **[Ollama](https://ollama.com/)** — for AI chat assistant, translation, and VLM features
 - **[LM Studio](https://lmstudio.ai/)** — alternative backend for translation and VLM (OpenAI-compatible API)
 - **[Eagle](https://eagle.cool/)** — for auto-saving generated images with metadata
+- **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one) (v0.1.9+)** — enables BiRefNet background removal, SAM3 text-prompt segmentation, and ABR stamp-brush library in the Image Edit Mask tool; `birefnet.safetensors` must be placed in `ComfyUI/models/background_removal/` for BiRefNet
 
 ---
 
@@ -370,6 +371,18 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.65
+- **Image Edit — Mask Editor One integration fixes** — `store_image` API field mismatch (`image_b64` → `bg_image_b64`) corrected so BiRefNet and SAM3 no longer report "no image available"; `server.py` updated to accept both field names for backward compatibility
+- **Image Edit — top bar icon persistence** — WFS / Snapshot / Node Sets SVG icons in the ComfyUI action bar disappeared when the Properties Panel was opened (Vue re-render reset custom `innerHTML` to `<i>`); fixed with a `MutationObserver` that re-applies SVG icons whenever a reset is detected
+- **Image Edit — Mask Tool: ABR brush library** (requires Mask Editor One) — Select button in the Properties pane opens a folder-tree + thumbnail-grid brush picker; stamp brushes are loaded from Mask Editor One's `/mask_editor/brushes/` folder; ✕ clears back to the default circle brush
+- **Image Edit — Mask Tool: ABR brush controls** — when an image brush is active, Hardness is disabled and new controls appear in the Properties pane: Spacing (stamp interval 5–100%), Angle (fixed rotation 0–359°), Sz Jitter (random size reduction per stamp 0–100%), Rot. Jitter (random angle per stamp on/off); size jitter clamped to minimum 1 px to prevent zero-dimension canvas errors
+- **Image Edit — Mask brush cursor** — brush size circle is now hidden outside the canvas; only shown when the pointer is within the canvas bounds (window-level mousemove no longer shows the cursor overlay outside)
+
+### v0.3.64
+- **Image Edit — Mask layer Add/Subtract** — A/S toggle button on each mask layer row; Add (green, default) composites the mask normally; Subtract (red) cuts the mask area from the layer below; multiple mask layers are composited back-to-front matching Mask Editor One's CanvasCompositor logic
+- **Image Edit — BiRefNet BG Remove** (requires Mask Editor One + `birefnet.safetensors` in `ComfyUI/models/background_removal/`) — BiRefNet model now fully functional via Mask Editor One's Python backend; grayscale mask returned as RGBA PNG and applied as a new layer or in-place per the New Layer toggle
+- **Image Edit — SAM3 segmentation** (requires Mask Editor One) — new SAM3 sub-tool in the Mask tool options bar; enter a text prompt, set Max candidates (3/6/9/12), click Segment; candidate mask thumbnails shown in the Properties pane; click to select (multi-select), Apply Selected (N) applies all chosen masks with Add or Erase mode; new mask layer auto-created if active layer is not a mask
 
 ### v0.3.63
 - **Nodes tab — multi-select** — Ctrl+click to toggle individual nodes, Shift+click for range selection; bulk action bar appears with add to group / remove from group / create & add group / bulk favorite / unfavorite; works in both Card and Table view modes
