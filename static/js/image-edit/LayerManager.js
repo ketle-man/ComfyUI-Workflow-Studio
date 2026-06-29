@@ -40,13 +40,23 @@ export class Layer {
         thumb.width  = size;
         thumb.height = size;
         const ctx = thumb.getContext("2d");
-        ctx.fillStyle = "#aaa";
-        ctx.fillRect(0, 0, size, size);
-        ctx.fillStyle = "#fff";
-        for (let x = 0; x < size; x += 8)
-            for (let y = 0; y < size; y += 8)
-                if ((x / 8 + y / 8) % 2 === 0) ctx.fillRect(x, y, 8, 8);
-        ctx.drawImage(this.canvas, 0, 0, size, size);
+
+        if (this.type === "mask") {
+            // マスクレイヤー: 黒背景に白マスクのグレースケール表示
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, size, size);
+            ctx.drawImage(this.canvas, 0, 0, size, size);
+        } else {
+            // 通常レイヤー: チェッカーボード背景（透過表示用）
+            ctx.fillStyle = "#aaa";
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = "#fff";
+            for (let x = 0; x < size; x += 8)
+                for (let y = 0; y < size; y += 8)
+                    if ((x / 8 + y / 8) % 2 === 0) ctx.fillRect(x, y, 8, 8);
+            ctx.drawImage(this.canvas, 0, 0, size, size);
+        }
+
         return thumb.toDataURL("image/png");
     }
 

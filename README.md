@@ -1,60 +1,64 @@
-# ComfyUI-Workflow-Studio
+前回から引き続きImage EditタブのMask Editor Oneとの連携、機能追加を行いたい。まずDrawメニューにマスクメニューと同じくプロパティペインを追加し上部のcolor他をプロパティに移動、下部にMask Editor Oneのブラシ機能としたい。名称による混乱を防ぐためMASK EDITOR ONE (COLOR)としてほしい。# ComfyUI-Workflow-Studio
 
 A comprehensive workflow, asset management, and generation UI plugin for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
 **📁 Management** — organize all your assets in one studio
+
 - Workflow, model, image, and prompt management
 - AI-powered prompt writing assistance, translation, and tag generation
 - File drop & Gallery-linked metadata viewing — inspect and reuse generation settings instantly
 
 **⚡ GenerateUI** — a productivity-focused generation tab connected to every other tab
+
 - Batch generation across models, samplers, prompts, and workflows
 - Image Feeder for continuous folder-based generation
 
 **📚 Workflow Studio Library** — a multi-function side panel for smooth ComfyUI integration
+
 - Drag & drop models, nodes, prompts, and workflows straight onto the canvas
 - **Send to Canvas**: click "Send to Canvas" (Workflow tab) or "Copy & Send Canvas" (Gallery tab) to send the workflow directly to the ComfyUI canvas — UI and API formats both supported
 - View metadata from images / JSON, then drop the detected models and prompts onto the canvas
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.65-green)
+![Version](https://img.shields.io/badge/version-0.3.66-green)
 
 ## Screenshots
 
-| Workflow Tab | Models Tab |
-|:---:|:---:|
+|              Workflow Tab              |             Models Tab             |
+| :-------------------------------------: | :---------------------------------: |
 | ![Workflow Tab](docs/1_workflowtab.png) | ![Models Tab](docs/2_modelstab.png) |
 
-| Prompt Input Assistance | Gen UI Feeder |
-|:---:|:---:|
+|                   Prompt Input Assistance                   |               Gen UI Feeder               |
+| :----------------------------------------------------------: | :---------------------------------------: |
 | ![Prompt Input Assistance](docs/3_PromptInputAssistance.png) | ![Gen UI Feeder](docs/4_GenUI_feeder.png) |
 
-| GenUI LoRA Stack | GenUI Batch |
-|:---:|:---:|
+|                GenUI LoRA Stack                |               GenUI Batch               |
+| :---------------------------------------------: | :-------------------------------------: |
 | ![GenUI LoRA Stack](docs/9_GenUI_LoraStack.png) | ![GenUI Batch](docs/10_GenUI_Batch.png) |
 
-| Models Multi-select Menu | Top Bar |
-|:---:|:---:|
+|                   Models Multi-select Menu                   |            Top Bar            |
+| :-----------------------------------------------------------: | :---------------------------: |
 | ![Models Multi-select Menu](docs/11_multiple_select_menu.png) | ![Top Bar](docs/5_topbar.png) |
 
-| WS Library | Library Information |
-|:---:|:---:|
+|              WS Library              |                  Library Information                  |
+| :----------------------------------: | :---------------------------------------------------: |
 | ![WS Library](docs/6_ws_library.png) | ![Library Information](docs/7_library_Infomation.png) |
 
-| Tagger Tab | Image Edit Tab |
-|:---:|:---:|
+|            Tagger Tab            |              Image Edit Tab              |
+| :-------------------------------: | :--------------------------------------: |
 | ![Tagger Tab](docs/12_Tagger.png) | ![Image Edit Tab](docs/13_ImageEdit.png) |
 
-| Customize | |
-|:---:|:---:|
-| ![Customize](docs/8_Customize.png) | |
+|             Customize             |  |
+| :--------------------------------: | :-: |
+| ![Customize](docs/8_Customize.png) |  |
 
 ---
 
 ## Features
 
 ### Workflow Tab
+
 - **Thumbnail / Table views** — switch between view modes to browse your workflow library
 - **Thumbnail side panel** — preview workflow canvas snapshots in the side panel
 - **Badge filtering** — filter by user-defined badges (free labels you assign to each workflow)
@@ -68,12 +72,14 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, group filter, and badge filter (ALL) in one click
 
 ### Canvas Snapshot (v0.1.2)
+
 - **One-click capture** — click the camera button in ComfyUI's top bar to snapshot the current workflow canvas
 - **Auto-save as thumbnail** — the snapshot is saved directly to the workflow data folder as a PNG thumbnail
 - **Embedded workflow metadata** — workflow JSON is embedded in the PNG (tEXt chunk), compatible with ComfyUI's drag-and-drop import
 - **Auto-import** — the captured workflow is automatically imported and appears in the Workflow tab
 
 ### GenerateUI Tab (v0.3.5)
+
 - **5-tab layout** — Input / Model / Settings / Feeder / Batch tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API
 - **Input tab** — Prompt and Image inner tabs (drag-and-drop upload); Prompt tab shows Positive Prompt and Negative Prompt textareas, plus an **Embeddings selector** at the bottom (Filter + Select + Weight input + Paste button); Paste inserts `(embedding:Name:weight)` at the cursor position of the last focused textarea (defaults to Positive when neither is focused); Raw JSON (540px) in the right column
@@ -92,9 +98,11 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
 ### Feeder subtab (v0.3.5 / v0.3.42)
+
 Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons at the top of the left pane (persisted in `localStorage`).
 
 **Image Loop mode** — requires the **[comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder)** custom node.
+
 - **ImageFeeder node control** — select the target node from a dropdown auto-populated from the loaded workflow; edit all node parameters (Directory, Sort Mode, Index, Start/End Index, Batch Size, Seed, Use Selection) and Apply to the workflow
 - **Image library** — 3-pane layout: folder tree (left) browsing `user/default/image-loop-data/`, image grid with checkbox selection (center), preview panel with resolution and file size (right)
 - **Selection management** — check individual images; All / None buttons for the current folder; selected files are reflected in `selected_files` on Apply
@@ -107,6 +115,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Seed** — Run loop uses the right-pane seed setting (Random / Fixed / Increment / Decrement); the node's own Seed field only affects random sort order
 
 **Gallery mode** (v0.3.42) — no external plugin required; uses the built-in **WFS_GalleryFeeder** custom node.
+
 - **WFS_GalleryFeeder node** — reads images directly from a Gallery group and outputs them one at a time; inputs: `group_name`, `index`, `sort_mode` (filename_asc / filename_desc / random), `seed`
 - **Node & group selector** — pick the WFS_GalleryFeeder node from the loaded workflow and choose which Gallery group to feed images from; `__Feeder__` group is auto-created on first open
 - **Image grid** — center pane shows all images in the selected group; click any image to update the Index to that position
@@ -114,6 +123,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Run / Stop controls** — left pane Run / Stop buttons manage the generation loop; After Gen combo (loop / increment / fixed), ▶ Run, and ■ Stop widgets are also available directly on the WFS_GalleryFeeder node in the ComfyUI canvas (`gallery_feeder_extension.js`)
 
 ### Prompt Tab
+
 - **3-column layout** — AI Assistant (left), Presets/Preset Manager tab-panel (center), Wildcard support (right)
 - **AI chat assistant** — powered by [Ollama](https://ollama.com/), generate and refine prompts interactively
 - **Image attachment** — attach reference images for vision-capable models
@@ -127,6 +137,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Wildcard file manager** — create, view, and edit `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; click a filename in the file picker to insert `__filename__` at cursor
 
 ### Metadata Tab (v0.3.8)
+
 - **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
 - **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
 - **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/2511/Layered, Z-Image Base/Turbo, Ernie Image, WAN2.2); node types covered: UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, QuadrupleCLIPLoader (e.g. HiDream 4-CLIP)
@@ -137,6 +148,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Format note** — supported formats and covered model types are always shown in the left column
 
 ### Settings Tab
+
 - **2-column layout** — left column for all settings; right column shows the Theme panel fixed in place (sticky)
 - **Collapsible sections** — all settings organized in accordion panels for a clean layout
 - **Theme selection** — 13 built-in themes with visual swatch preview (Dark, Pop, Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro Pixel, Pastel, Brutalism, Earthy, Material, Monotone, Corporate)
@@ -156,6 +168,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Language** — English / Japanese / Chinese
 
 ### Gallery Tab (v0.3.44)
+
 - **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
 - **Folder management** — create subfolders ("+ New") or delete the selected folder with all contents ("Del") from the folder tree header
@@ -180,6 +193,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
 
 ### Nodes Tab (v0.1.7)
+
 - **Node Browser** — browse all installed ComfyUI nodes from `/object_info` API with Card/Table views
 - **Search & Filter** — full-text search, filter by category, package, tags, groups, and favorites
 - **Package badges** — color-coded badges generated from package names
@@ -191,6 +205,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, category, package, tag, group, and favorites filter in one click
 
 ### Models Tab (v0.2.3)
+
 - **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding) with sub-tab switching
 - **Thumbnail / Table views** — switch between view modes with pagination (24 items per page); Table view includes **Type** and **Base Model** columns sourced from cached CivitAI data, displayed between the Subdirectory and Extension columns; Enable/Disable column labeled **E/D**
 - **Table column sort** — click any column header to sort ascending (▲), click again for descending (▼), click a third time to clear; active column highlighted in accent color
@@ -215,6 +230,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, tag filter, folder filter, group filter, favorites filter, and status filter in one click
 
 ### Tagger Tab (v0.3.38)
+
 - **3 sub-tabs** — Single / Batch / DB for single-image tagging, folder batch processing, and tag database management
 - **Model support** — WD Tagger (ONNX, NCHW/NHWC auto-detect), SwinV2 (ONNX), DeepDanbooru (.h5, requires TensorFlow); place each model in its own subfolder under `ComfyUI/models/tagger/<model-name>/` containing the `.onnx` + `selected_tags.csv` (or `.h5` + label file)
 - **Threshold sliders** — General threshold (default 0.35) and Character threshold for `character:` prefix tags (default 0.85); sliders update the display value in real time
@@ -226,6 +242,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Dependencies** — install into ComfyUI's embedded Python: `python_embedded\python.exe -m pip install -r requirements.txt`; for GPU inference use `onnxruntime-gpu`; TensorFlow (DeepDanbooru) is optional and commented out in `requirements.txt`
 
 ### Image Edit Tab (v0.3.65)
+
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG
 - **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
 - **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers
@@ -234,7 +251,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
   - **Draw** — freehand brush; options: color, brush size, blend mode; paints directly onto the active draw layer while all other layers remain visible; brush cursor shown as a size-accurate circle; strokes can start from outside the canvas margin and continue past the edge
   - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
   - **Shape** — drag to draw geometric shapes (Rect / Ellipse / Line / FreeLine); options: shape type, Rounded toggle (Rect/Ellipse), Fill color, Stroke color + width, Opacity; each committed shape becomes an independent draw layer; Stroke None hidden for Line/FreeLine (stroke always active)
-  - **Mask** — paint a white mask onto a dedicated mask layer, or use SAM3 text-prompt segmentation (requires Mask Editor One); click **M** in the Layers header to add a mask layer (Mask tool activates automatically); clicking a mask layer in the list also switches to the Mask tool; **Tool Options bar**: Paint / SAM3 sub-tool buttons, Invert checkbox, Overlay color picker (default red), Blur slider (0–50 px); SAM3 button disabled when Mask Editor One is not installed; **Properties pane — Paint mode**: Mode (Add / Erase), Size (1–200 px), Hardness (0–100%); **MASK EDITOR ONE section** (visible when Mask Editor One is installed): Select opens the ABR stamp-brush library — choosing a brush replaces the default circle; ✕ clears back to Circle; when an image brush is active, Hardness is disabled and Spacing (5–100%), Angle (0–359°), Sz Jitter (random size per stamp, 0–100%), Rot. Jitter (random rotation per stamp on/off) controls appear; **Properties pane — SAM3 mode**: enter a text prompt (e.g. "cat"), set Max candidates (3/6/9/12), click Segment — candidate mask thumbnails appear; click to select (blue border + ✓, multi-select supported), click Apply Selected (N) to apply with current Mode (Add / Erase); a new mask layer is created automatically if needed; **Mask layer A/S operation**: A/S toggle button on each mask layer row — Add (green) composites normally, Subtract (red) cuts the mask from the layer below; **✂ clipping mask button** on the layer row clips the layer directly below to the painted area; brush cursor shown as size-accurate circle; strokes can start from outside the canvas margin and continue past the edge
+  - **Mask** — 7 sub-tools for painting masks onto a dedicated mask layer; click **M** in the Layers header to add a mask layer (Mask tool activates automatically); clicking a mask layer in the list also switches to the Mask tool; **Tool Options bar**: sub-tool buttons (Paint / Color / Alpha / Text / Vector / Shape / SAM3), Invert checkbox, Overlay color picker (default red), Blur slider (0–50 px); SAM3 requires Mask Editor One (disabled when not installed); Color / Alpha / Text / Vector / Shape work without Mask Editor One; **Properties pane — Paint**: Mode (Add / Erase), Size (1–200 px), Hardness (0–100%); **MASK EDITOR ONE section** (Paint sub-tool, visible when installed): Select opens the ABR stamp-brush library; ✕ clears back to Circle; when an image brush is active, Hardness is disabled and Spacing (5–100%), Angle (0–359°), Sz Jitter (0–100%), Rot. Jitter (on/off) appear; **Properties pane — Color**: click canvas to flood-select pixels by color similarity; Mode (Add / Subtract), Tolerance (0–255), Feather % (0–100); **Properties pane — Alpha**: extract the active layer's transparency as a mask; Threshold, Invert checkbox, Extract Alpha button; **Properties pane — Text**: click canvas to open a stamp overlay — enter text, set Font / Size / Bold / Italic / Align / Mode (Add / Erase), Stamp or Ctrl+Enter to apply; multi-line supported; **Properties pane — Vector**: click to add Catmull-Rom spline points; Enter (or click first point) closes and fills the polygon; Backspace removes the last point; Esc resets; Mode (Add / Erase); **Properties pane — Shape**: drag to draw Rect or Ellipse; hold Shift for square/circle; blue dashed outline preview while dragging; Mode (Add / Erase); **Properties pane — SAM3**: enter a text prompt, set Max candidates (3/6/9/12), click Segment; select candidate thumbnails (multi-select), Apply Selected (N) applies with current Mode; **Mask layer A/S operation**: A/S toggle — Add (green) composites normally, Subtract (red) cuts the mask from below; **✂ clipping mask button** clips the layer below to the painted area; brush cursor shown as size-accurate circle; strokes can start from outside the canvas margin and continue past the edge
   - **Blur** — **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: enable the toggle then drag a rectangle on the canvas to apply blur or mosaic to that region only (blue preview for blur, orange for mosaic); Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo
   - **BG Remove** — remove the background from the active layer; **Lightweight (@imgly)**: runs entirely in the browser via CDN (no server required; ~40 MB model downloaded on first use); **BiRefNet**: high-quality removal via Mask Editor One's Python backend (requires Mask Editor One installed and `birefnet.safetensors` in `ComfyUI/models/background_removal/`); **New Layer** option (default on) adds the result as a new layer above the original; when off, replaces the active layer in-place
   - **Filter (G'MIC)** — apply G'MIC-Qt filter effects to the active image layer; click **Edit with G'MIC** to launch G'MIC-Qt GUI; select a filter and click OK — a "G'MIC-Qt filter output" window appears; close it to save the result back as the active layer; requires G'MIC-Qt Standalone installed and path configured in Settings → G'MIC-Qt Executable Path
@@ -246,6 +263,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Undo / Redo** — Ctrl+Z / Ctrl+Y (or toolbar buttons); keyboard shortcuts: V (Select), B (Draw), T (Text), S (Shape), Delete (remove selected layer when 2+ exist)
 
 ### AI TOOL Tab (v0.3.14)
+
 - **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
 - **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
 - **Chat pane** (v0.3.40) — multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for a newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`
@@ -257,6 +275,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
 
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
+
 - **Tab layout (W / N / P / M / I / A)** — compact single-letter tabs with full name shown on hover
 - **W — Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
 - **N — Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs), ★ star shown for favorites in All view
@@ -279,8 +298,9 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **⚙ Theme settings** — customize panel background, sub-header background, text, border, and secondary text colors; saved to localStorage and applied on every open
 
 ### Help & Support Tab (v0.1.3)
+
 - **Sidebar navigation** — 2-column layout: left sidebar (15 topics) + right content pane; click any topic to switch the displayed content
-- **Support** — fixed at the bottom of the sidebar; shows GitHub and Ko-fi links in the right pane
+- **Support** — fixed at the bottom of the sidebar; shows GitHub, Ko-fi, **ComfyUI Image Feeder**, and **Mask Editor One** repository links in the right pane
 - **Feature list** — overview of all features organized by tab
 - **Keyboard Shortcuts** and **Troubleshooting** sections included
 
@@ -363,7 +383,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ## Supported Languages
 
 | Language | Status |
-|----------|--------|
+| -------- | ------ |
 | English  | Full   |
 | Japanese | Full   |
 | Chinese  | Full   |
@@ -372,7 +392,18 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.3.66
+
+- **Image Edit — Mask Tool: 5 new sub-tools** — Paint / Color / Alpha / Text / Vector / Shape / SAM3 (7 sub-tools total); Color, Alpha, Text, Vector, and Shape work without Mask Editor One
+  - **Color** — click the canvas to flood-select pixels similar in color to the clicked point; Properties pane: Mode (Add / Subtract), Tolerance (0–255), Feather % (0–100)
+  - **Alpha** — extract the active layer's alpha channel as a mask; Properties pane: Threshold, Invert checkbox, Extract Alpha button
+  - **Text** — click to open a stamp overlay; enter text, set Font / Size / Bold / Italic / Align / Mode (Add / Erase), confirm with Stamp or Ctrl+Enter; multi-line text supported
+  - **Vector** — click to add Catmull-Rom spline control points; Enter (or click the first point) closes and fills the polygon; Backspace removes the last point; Esc resets; Mode (Add / Erase)
+  - **Shape** — drag to draw a rectangle or ellipse; hold Shift for a perfect square/circle; blue dashed outline preview while dragging; Properties pane: Mode (Add / Erase), Shape (Rect / Ellipse)
+- **Help — Support page** — added **ComfyUI Image Feeder** and **Mask Editor One** GitHub repository links to the Support card
+
 ### v0.3.65
+
 - **Image Edit — Mask Editor One integration fixes** — `store_image` API field mismatch (`image_b64` → `bg_image_b64`) corrected so BiRefNet and SAM3 no longer report "no image available"; `server.py` updated to accept both field names for backward compatibility
 - **Image Edit — top bar icon persistence** — WFS / Snapshot / Node Sets SVG icons in the ComfyUI action bar disappeared when the Properties Panel was opened (Vue re-render reset custom `innerHTML` to `<i>`); fixed with a `MutationObserver` that re-applies SVG icons whenever a reset is detected
 - **Image Edit — Mask Tool: ABR brush library** (requires Mask Editor One) — Select button in the Properties pane opens a folder-tree + thumbnail-grid brush picker; stamp brushes are loaded from Mask Editor One's `/mask_editor/brushes/` folder; ✕ clears back to the default circle brush
@@ -380,22 +411,26 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Image Edit — Mask brush cursor** — brush size circle is now hidden outside the canvas; only shown when the pointer is within the canvas bounds (window-level mousemove no longer shows the cursor overlay outside)
 
 ### v0.3.64
+
 - **Image Edit — Mask layer Add/Subtract** — A/S toggle button on each mask layer row; Add (green, default) composites the mask normally; Subtract (red) cuts the mask area from the layer below; multiple mask layers are composited back-to-front matching Mask Editor One's CanvasCompositor logic
 - **Image Edit — BiRefNet BG Remove** (requires Mask Editor One + `birefnet.safetensors` in `ComfyUI/models/background_removal/`) — BiRefNet model now fully functional via Mask Editor One's Python backend; grayscale mask returned as RGBA PNG and applied as a new layer or in-place per the New Layer toggle
 - **Image Edit — SAM3 segmentation** (requires Mask Editor One) — new SAM3 sub-tool in the Mask tool options bar; enter a text prompt, set Max candidates (3/6/9/12), click Segment; candidate mask thumbnails shown in the Properties pane; click to select (multi-select), Apply Selected (N) applies all chosen masks with Add or Erase mode; new mask layer auto-created if active layer is not a mask
 
 ### v0.3.63
+
 - **Nodes tab — multi-select** — Ctrl+click to toggle individual nodes, Shift+click for range selection; bulk action bar appears with add to group / remove from group / create & add group / bulk favorite / unfavorite; works in both Card and Table view modes
 - **All tabs — search clear (✕)** — inline ✕ overlay button inside each search box (Workflow / Nodes / Models / Gallery); shown only when text is entered, click to clear and re-filter immediately
 - **All tabs — clear all filters button** — new ✕ Clear button at the rightmost end of each tab's toolbar; resets all active filters (search, group, tag, folder, favorites, badge) in one click; Gallery sort order is preserved
 
 ### v0.3.62
+
 - **Gallery tab — Send GenUI Image button** — new toolbar button (next to Image Edit); uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; `comfyEditor.applyImageToSlot(file, slotIndex)` added to `comfyui-editor.js` for reusable image-slot injection
 - **Bug fix: tagger_settings.json missing from data export** — `tagger_settings.json` was absent from `_DATA_FILES` in `settings_routes.py`; Tagger model directory and threshold settings were silently excluded from Settings → Data Management export/import; fixed by adding the file to the export list
 - **Help — Send GenUI Image** — new help card (`helpGallery17`) added in EN/JA/ZH; registered in `helpIdMap`
 - **Screenshots — Tagger and Image Edit tabs** — `docs/12_Tagger.png` and `docs/13_ImageEdit.png` added to the README screenshots section
 
 ### v0.3.61
+
 - **Image Edit — Draw / Mask brush cursor** — cursor replaced with a size-accurate circle overlay matching the current brush size; the circle scales correctly with canvas zoom so the visible area matches exactly what will be painted
 - **Image Edit — Draw / Mask out-of-canvas strokes** — strokes can now start from the canvas margin area (outside the image boundary) and continue past the edge without interruption; `window`-level `mousemove` / `mouseup` tracking keeps the stroke alive when the pointer leaves the canvas element
 - **G'MIC — argument order fix** — corrected `gmic_qt.exe` launch arguments to `-o <output> <input>` (the only order G'MIC-Qt Standalone accepts); the previous order caused the GUI to exit immediately without opening
@@ -404,10 +439,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help — G'MIC Filter section** — added two new help cards (G'MIC Filter usage and G'MIC-Qt Installation) with full i18n support (English / Japanese / Chinese)
 
 ### v0.3.60
+
 - **Image Edit — Filter tool (G'MIC-Qt integration)** — the previously inactive ★ Filter tool now launches G'MIC-Qt GUI with the active layer image; select a filter and click OK, then close the "G'MIC-Qt filter output" window to apply the result back as the active layer; polling-based job system with progress display, Cancel button, and Undo support; requires G'MIC-Qt Standalone (`gmic_qt.exe`) configured in Settings
 - **Settings — G'MIC-Qt Executable Path** — new collapsible section in Settings for entering and saving the path to `gmic_qt.exe`
 
 ### v0.3.59
+
 - **Image Edit — Mask Tool** — new Mask tool (🎭) in the Image Edit sidebar; click **M** in the Layers header to add a mask layer (Mask tool activates automatically); clicking a mask layer in the layer list also switches to the Mask tool; **Tool Options bar**: Paint button, Invert checkbox (inverts overlay preview), Overlay color picker (default red), Blur slider (0–50 px) for overlay edge softening; **Properties pane** (left of the Layers panel, shown when Mask tool is active): Size (1–200 px), Hardness (0–100%), Mode — **Add** / **Erase** toggle buttons (active mode highlighted in blue)
 - **Image Edit — Clipping mask (✂ button)** — each mask layer row shows a ✂ toggle; when enabled (blue), the mask clips the layer directly below it so only the painted area is visible; clipping is applied to PNG save / Save to Gallery / Send to ComfyUI exports
 - **Image Edit — Draw & Mask paint bugfix** — Draw and Mask tools now paint directly onto `layer.canvas`; all other layers remain fully visible during brush strokes (previously the composite view was replaced by the active layer only while painting)
@@ -415,20 +452,24 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help — Mask Tool section** — added Mask Tool card with full i18n support (English / Japanese / Chinese); updated Tools list, layer type icon list, and Layer panel "M button" description
 
 ### v0.3.58
+
 - **GenerateUI Model tab — Diffusion Model GGUF support** — `LoaderGGUF` and `LoaderGGUFAdvanced` nodes are now recognized alongside `UNETLoader` / `UnetLoaderGGUF`; the correct input key (`gguf_name` vs `unet_name`) is selected automatically on Apply; the Models tab "GenUI Model" button also applies correctly to `LoaderGGUF` workflows
 - **GenerateUI Model tab — Text Encoder expanded (CLIPLoader / DualCLIPLoader / GGUF variants)** — the Text Encoder section now renders a node-type-aware UI: **single CLIP** (`CLIPLoader` / `ClipLoaderGGUF`) shows one clip selector + **type** dropdown + **device** (GGUF only); **Dual CLIP** (`DualCLIPLoader` / `DualClipLoaderGGUF`) shows two clip selectors (clip_name1 / clip_name2) + **type** dropdown + **device** (GGUF only); type options are fetched dynamically from `/object_info`; filter applies to the first selector only
 
 ### v0.3.57
+
 - **Image Edit — Blur tool** — new Blur tool (≈) in the Image Edit sidebar; **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: toggle to enter rect-draw mode then drag to select a region — blur or mosaic is applied on mouse release; Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo (Ctrl+Z)
 - **Image Edit — BG Remove tool** — new BG Remove tool (⬚); **Lightweight (@imgly)**: background removal running entirely in the browser via CDN (~40 MB model cached after first load); **BiRefNet**: stub wired to a future Python backend endpoint (coming soon); **New Layer** checkbox (default on) adds the result as a new layer above the original — uncheck to replace the active layer in-place; supports Undo
 - **Image Edit — sidebar icons** — removed `ie-tool-placeholder` dimming from Blur and BG Remove buttons; both now display at full brightness matching other active tools
 - **Help — Blur / BG Remove sections** — added two new help cards (Blur Tool and BG Remove Tool) with full i18n support (English / Japanese / Chinese); Tools list updated with Blur and BG Remove overview items
 
 ### v0.3.56
+
 - **GenerateUI — Style selector** — new checkbox and dropdown next to the Reset Workflow button; when enabled, a Fooocus-style JSON style is applied to positive and negative prompts at generation time; style files (`*.json`) are read from `user/default/Workflow-Studio/style/`; multiple files are merged into a single list sorted by filename; the style's `{prompt}` placeholder is replaced with the original prompt text, otherwise the style text is appended; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation workflow copy and never modify the loaded workflow
 - **Batch tab — Style batch** — new **Style** tab in the Batch left pane lists all styles loaded from the style directory (flat list with All / None buttons); select any combination, enable the **Style** column in Batch Queue, then Generate to run each selected style sequentially; Batch Queue expanded from 6 to 7 columns (Style added as the rightmost column)
 
 ### v0.3.55
+
 - **Group feature — fix data loss on Windows (backslash/slash mismatch)** — on Windows, ComfyUI returns model paths with backslashes (`sub\model.safetensors`) while the backend normalized to forward slashes; this caused all subdir group members to be flagged as missing and deleted on save; fixed by normalizing both stored and scanned paths to forward slashes in `get_model_groups` and `save_model_groups`
 - **Group feature — network drive protection** — if no model directories are accessible (e.g. external drive disconnected), the group cleanup step is now skipped entirely to prevent wiping all group memberships
 - **Group feature — scan cache** — `_scan_model_names` now caches results for 30 seconds to eliminate redundant full directory scans on startup (caused high CPU load / crash on large model sets)
@@ -442,19 +483,23 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help tab — Image Edit section i18n** — the Image Edit help page was hardcoded in English with no language switching support; all 6 sections (30 items + 7 headings) now have i18n IDs wired to English / Japanese / Chinese translations
 
 ### v0.3.54
+
 - **Image Edit — Shape tool (S)** — new Shape tool added to the Image Edit toolbar; draw Rect, Ellipse, Line, and FreeLine shapes by dragging; each committed shape becomes an independent draw layer that can be undone in a single step; Tool Options: shape type selector, Rounded toggle (Rect/Ellipse only), Fill color + None toggle (hidden for Line/FreeLine), Stroke color + width (Stroke None hidden for Line/FreeLine where stroke is always active), Opacity slider, Undo button; blue dashed outline previews the shape during drag; keyboard shortcut **S** activates the tool
 - **Models tab — fix B/S overlay buttons not highlighting** — the Batch (B) and Stack (S) card overlay buttons failed to turn yellow after clicking because `e.currentTarget` is nulled by the browser after an `async` event handler yields at `await`; fixed by capturing `const btn = e.currentTarget` before the await in both handlers
 
 ### v0.3.53
+
 - **Image Edit Tab** — new layer-based image editing tab with Select / Draw / Text tools, multi-layer compositing, canvas zoom & pan, and Undo/Redo; text layers are sized to exact bounding-box dimensions and regenerated at display resolution on resize to prevent blurring; double-click a text layer to re-edit its content; Gallery tab gains an "Image Edit" toolbar button to send the selected image directly to the editor
 - **Image Edit — Layer lock** — lock icon (🔒/🔓) on each layer row; locked layers display an orange bounding box and ignore all Select-tool transforms; Layer 1 is auto-locked when the first image is loaded to prevent accidental moves
 - **Image Edit — Save to Gallery** — "Save to Gallery" button (next to Save PNG) saves the composite image to the Gallery root folder; filename defaults to `wfs-image-YYYYMMDDHHmmss`; backed by new `POST /wfm/gallery/image/save` API endpoint
 - **Help tab — Image Edit page** — new dedicated help page covering tools, layer panel, text quality, export options, and keyboard shortcuts
 
 ### v0.3.52
+
 - **GenerateUI Model tab — fix LoRA selection reset when switching subtabs** — applying a LoRA via "GenUI Model" button and then switching to another subTab (Prompt/Image/Settings) and back to Model caused the LoRA selector, syntax display, and trigger words to revert to the original workflow values; fixed by reading `currentVal` directly from `currentWorkflow` instead of the stale `currentAnalysis`, and by saving/restoring the Single tab's syntax and trigger words across re-renders
 
 ### v0.3.51
+
 - **Models tab — Embedding type: GenUI PP / GenUI NP buttons** — Embedding models now show two buttons ("GenUI PP" and "GenUI NP") in the side panel nav, detail side panel, and detail modal (replacing the single "GenUI Model" button); clicking either appends `(embedding:Name:1.0)` to the Positive or Negative prompt of the loaded workflow
 - **GenerateUI Prompt tab — Embeddings selector** — new section at the bottom of the Prompt tab: Filter input, model select dropdown, Weight input (default 1.0), and Paste button; Paste inserts `(embedding:Stem:weight)` at the cursor position of the last focused textarea (Positive or Negative); focus state is tracked on click/keyup/blur so the button works even after clicking away
 - **GenerateUI Model tab — Hypernetwork support** — Hypernetwork section added with model selector (filter) and Strength field; applies to `HypernetworkLoader` nodes in the workflow; GenUI Model button in Models tab also triggers Hypernetwork apply
@@ -462,33 +507,40 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Models tab — GenUI Model button in side panel nav** — "GenUI Model" button added to the tab navigation bar (Info / Group / CivitAI) of the side panel; appears for supported model types (Checkpoint, LoRA, VAE, etc.) and hides for unsupported types; Embedding type shows PP/NP nav buttons instead
 
 ### v0.3.50
+
 - **Gallery tab — fix prompt search causing ComfyUI hang under large folders** — the v0.3.49 on-demand metadata read ran synchronously on the aiohttp event loop, blocking ComfyUI when folders contained many uncached images; fixed by: (1) removing on-demand reads from `list_images()`; (2) wrapping `list_images()` in `asyncio.to_thread()` to keep the event loop free; (3) adding a background indexer (`start_background_index`) that automatically indexes uncached images after a folder is loaded — processes 10 images per batch with a 50 ms sleep between batches; cancellable on folder switch
 
 ### v0.3.49
+
 - **GenerateUI tab — A1111-style SPA-side wildcard expansion** — when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains `__name__` syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation
 - **Gallery tab — fix Export button missing label** — the bulk action bar's Export button had no text label because the `textContent` assignment was missing from `updateUITexts()`; fixed by adding the `galleryBulkExport` i18n key assignment alongside the existing Move/Delete entries
 - **Gallery tab — fix prompt search not matching images with no cached index** — `prompt_cache` was only built when an image was opened in the detail panel; A1111 images (or any images never opened) were invisible to prompt search; now when search is active and `prompt_cache` is empty, the image file is read on-demand and the cache is populated and persisted for future searches
 
 ### v0.3.48
+
 - **Gallery tab — single image download** — hover over a detail-panel preview image to reveal a download overlay (⬇ icon); click to download the original file with its original filename preserved
 - **Gallery tab — bulk export to ZIP** — multiple selected images can be exported as a ZIP archive via the "Export" button in the bulk action bar; filename: `gallery_export_<timestamp>.zip`; backend: `POST /wfm/gallery/images/export-zip` with path-traversal protection
 
 ### v0.3.47
+
 - **Models tab — fix stale group state after file move** — when models were moved to a subdirectory via "Move To...", `state.modelGroups` in the JS client was not updated to reflect the new model paths; the group filter view would lose the moved models immediately after the operation. Now the client-side group membership is updated in sync with the server-side rename (mirrors the existing Python `move_models` logic). Generate tab Batch groups are unaffected as they always fetch fresh from the server.
 
 ### v0.3.46
+
 - **Prompt tab AI Assistant — LM Studio support** — switched from Python proxy (`/api/wfm/ollama/*`) to direct browser-to-backend API calls (same pattern as the AI TOOL tab); supports Ollama (`/api/chat`) and LM Studio (`/v1/chat/completions`); image attachments are automatically converted to the correct format per backend
 - **Settings tab — AI Assistant Settings (Prompt Tab)** — renamed from "Ollama Settings"; added backend selector (Ollama / LM Studio), URL input with per-backend placeholder, model select with Refresh, and Test button; settings saved to localStorage `wfm_prompt_ai_settings` (independent of AI TOOL tab settings)
 - **Auto-refresh on backend change** — if the backend is switched in Settings tab while Prompt tab is already open, `sendMessage()` now detects the mismatch and automatically re-fetches the model list before sending; model status shows the active backend name (`[ollama]` / `[lmstudio]`)
 - **Help text updated** (EN/JA/ZH) — Prompt tab, Settings tab, and Troubleshooting sections updated to reflect Ollama / LM Studio dual-backend support
 
 ### v0.3.45
+
 - **Group auto-cleanup — Models tab** — stale group entries (models that no longer exist on disk) are automatically removed when the Models tab is loaded or the model type is switched; models moved within the app via "Move To..." also update their group membership immediately
 - **Group auto-cleanup — Gallery tab (folder view)** — metadata entries for missing files are cleaned up each time a folder is scanned (`list_images`), synchronized with the 60s TTL + folder-mtime cache
 - **Group auto-cleanup — Gallery tab (group image list)** — `list_images_in_group` (used by the Feeder tab Gallery mode) now filters out non-existent paths and removes them from the group in a single write operation
 - **Gallery tab — Shift+click range selection** — Shift+click selects all images between the last clicked item (anchor) and the current item; works in both thumbnail and table views; anchor is updated on Ctrl+click and regular click; resets on folder change, image reload, and Deselect All; help text updated (EN/JA/ZH)
 
 ### v0.3.44
+
 - **Gallery tab — server-side thumbnail generation** — `GET /wfm/gallery/image/thumb?path=...&w=256` endpoint generates 256px JPEG thumbnails via Pillow and caches them to `data/thumb_cache/` keyed by `md5(path:mtime:width)`; GIF served as-is to preserve animation; falls back to the original file if Pillow is unavailable; thumbnail view and table view both switched from `/image/serve` to `/image/thumb`
 - **Gallery tab — infinite-scroll paging** — thumbnail view renders 50 images initially; an IntersectionObserver sentinel (rootMargin 300px) appends the next page on scroll; sentinel is disconnected and removed when all images are rendered; paging resets on every `renderImages()` call (folder change, filter, sort)
 - **Gallery tab — bulk API endpoints** — `POST /wfm/gallery/bulk/favorite` and `POST /wfm/gallery/bulk/group` handle favorite set and group add/remove for any number of images in a single request; replaced N-parallel individual fetches in `bulkSetFavorite()` and `bulkAddToGroup()`
@@ -501,10 +553,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help tab — search box** — live search input above the nav sidebar filters matching pages and auto-clicks the first result; placeholder text localized (EN/JA/ZH)
 
 ### v0.3.43
+
 - **Send to Canvas — direct canvas load via `window.opener`** — clicking "Send to Canvas" (Workflow tab) or "Copy & Send Canvas" (Gallery tab) now sends the workflow directly to the ComfyUI canvas without requiring a title drag; uses `window.opener.wfmReceiveWorkflow()` registered by `node_sets_menu.js` via `app.handleFile()`; both UI and API formats are supported; fallback to localStorage + title drag when `window.opener` is unavailable (e.g. opened from a bookmark), UI-format only
 - **Workflow Studio Library — API-format DnD enabled** — API-format workflows in the W (Workflows) sub-tab are no longer grayed out; drag & drop and double-click now work for all formats via `app.handleFile()`
 
 ### v0.3.42
+
 - **Feeder tab — Gallery mode** — new [Image Loop] / [Gallery] toggle in the Feeder tab; Gallery mode drives a WFS_GalleryFeeder node without any external plugin: node selector, group select, sort mode / index / seed, After Gen (Loop / Increment / Fixed), Run / Stop; center pane shows the selected group's images — click any image to jump to that index; `__Feeder__` group is auto-created on first open
 - **WFS_GalleryFeeder custom node** — new ComfyUI node (Workflow Studio category) that reads images from a Gallery group and outputs one `IMAGE` at a time; inputs: `group_name`, `index`, `sort_mode` (filename_asc / filename_desc / random), `seed`; skips missing files; `IS_CHANGED` ensures re-execution on every queue
 - **WFS_GalleryFeeder — ComfyUI canvas controls** — `gallery_feeder_extension.js` adds After Gen combo (loop / increment / fixed), ▶ Run button, and ■ Stop button as non-serialized widgets directly on the node in the ComfyUI canvas; manages per-node loop state with `waitForExecution()` Promise pattern; `onRemoved` hook auto-stops the loop on node deletion
@@ -516,6 +570,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Bug fix: WFS_GalleryFeeder seed validation error** — seed `max` changed from `0x7FFFFFFF` to `0xffffffffffffffff` (matching KSampler); `applySeedToWorkflow()` was writing values exceeding the old max, causing `value_bigger_than_max` validation failures
 
 ### v0.3.41
+
 - **Generate UI — ImpactWildcardEncode / ImpactWildcardProcessor prompt detection** — fixed: wildcard text inputs from comfy-impact-pack nodes were not shown in the Prompt tab of Generate UI
   - `CLIPTextEncodeEditPlus` node (used as the text encoder in these workflows) now correctly propagates positive/negative roles upstream to ImpactWildcard nodes via BFS
   - `CLIPTextEncodeEditPlus` with an empty `text_edit` field is no longer added to `prompt_nodes` ahead of the upstream ImpactWildcard node, preventing a blank text area
@@ -523,17 +578,20 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
   - Static fallback mapping added for `ImpactWildcardProcessor` and `ImpactWildcardEncode` so detection works even when the ComfyUI server is offline
 
 ### v0.3.40
+
 - **AI TOOL tab — Chat pane** — new pane (between Translation and TOOLS) for multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`
 - **AI TOOL tab — Wildcard generation** — new "Create wildcards" task in the TOOLS pane dropdown; enter a category name and count, click Run to generate plain-text entries one per line (no markdown, no numbering); output can be pasted directly into wildcard `.txt` files
 - **Library A tab — Chat and Wildcards** — both features added to the side panel's A tab: Chat as a new sub-tab (Translation → Chat → TOOLS → Settings), wildcard generation as a new option in the TOOLS sub-tab dropdown
 - **Help updated** — AI TOOL tab help card updated to 6 items (Chat and Wildcards added); Library panel sidepanel-16 updated; EN/JA/ZH
 
 ### v0.3.39
+
 - **Workflow tab — Send to Canvas button** — replaced "Open in ComfyUI" (toolbar and detail modal) with "Send to Canvas"; stores the selected workflow in `localStorage` for title-drag to the canvas without opening a new browser tab
 - **Gallery tab — Copy & Send Canvas button** — renamed "Copy Workflow" to "Copy & Send Canvas"; copies the embedded workflow JSON to the clipboard and simultaneously stores it for title-drag
 - **Workflow Studio Library — title drag** — after "Send to Canvas" or "Copy & Send Canvas" is clicked, the "Workflow Studio Library" panel title turns blue with a green ● indicator; drag the title onto the ComfyUI canvas to load the workflow; title resets automatically after loading
 
 ### v0.3.38
+
 - **Tagger tab** — new tab for automatic image tagging; supports WD Tagger (ONNX), SwinV2, DeepDanbooru (.h5), and Ollama VLM; 3 sub-tabs: Single (drag & drop / upload, 5 output targets), Batch (folder processing with real-time progress), DB (searchable SQLite database with CSV export)
 - **Tagger single — GenUI:P button** — new button (left of "Send to Prompt") that appends generated tags to the GenerateUI positive prompt and immediately applies them to the loaded workflow; shows a warning if no workflow is loaded in GenerateUI
 - **Tagger batch — Write .txt output** — new output option that creates `<filename>.txt` alongside each processed image containing all generated tags (comma-separated)
@@ -544,11 +602,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Workflow analyzer — lumina2 model type** — CLIPLoader `type: "lumina2"` is now correctly classified as Z-IMAGE in the workflow type detector
 
 ### v0.3.37
+
 - **Models tab — Select All button** — new button added to the right of "Deselect All" in the multi-select action bar; selects all models currently visible after applying the active search / filter / group filters
 - **Gallery tab — Select All button** — new button added to the right of "Deselect All" in the bulk action bar; selects all images in the current folder view
 - **Gallery bulk bar — i18n** — all bulk action bar buttons and the selection count were hard-coded English strings; they now use the `t()` translation system (EN / JA / ZH) so the bar respects the selected UI language
 
 ### v0.3.36
+
 - **GenerateUI Save — overwrite protection** — saving now checks for an existing file and asks for confirmation before overwriting; if the target file is in UI format, a dedicated warning explains that saving in API format will lose the node layout
 - **GenerateUI Save — Raw JSON sync** — unapplied Raw JSON edits are now included in the save (parsed and synced back to the editor); invalid JSON aborts the save with an error instead of silently saving stale content
 - **GenerateUI Save — hardening** — filename is set via DOM (no HTML-attribute injection), image extensions (`.png` etc.) are stripped from the default name, and a double-submit guard prevents duplicate POSTs
@@ -558,11 +618,13 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **README refreshed** — intro rewritten around the three pillars (Management / GenerateUI / Library side panel); new screenshots: GenUI LoRA Stack, GenUI Batch, Models Multi-select Menu; WS Library image updated
 
 ### v0.3.35
+
 - **Models tab — Table column sort** — click any column header to sort ascending (▲), click again for descending (▼), click a third time to clear; active column name highlighted in accent color; Enable/Disable column header now labeled **E/D**
 - **Gallery tab — Load GenUI button** — new button to the right of the Metadata button in the detail panel; loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; warning toast shown if no workflow is embedded or the format is unsupported; Metadata button restyled green, Load GenUI uses primary accent color
 - **GenerateUI tab — Save button** — new button at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API; workflow name label updates to the saved filename on success
 
 ### v0.3.33
+
 - **LoRA pane — workflow load no longer overwrites LoraManager** — removed the auto-apply block that replaced `inputs.loras` / `inputs.text` with Stack group contents on every workflow load; Stack is now applied only when the Apply button is pressed
 - **LoRA pane — 🔄 button no longer resets to Single tab** — active tab state is saved before `innerHTML` rebuild and restored afterwards; staying on Stack tab after refresh
 - **Models tab — Stack group hidden for non-LoRA types** — when switching to Checkpoint or other non-LoRA types, the Stack group is now excluded from the group filter dropdown and side-panel group management (LoRA-only concept)
@@ -570,20 +632,24 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Stack Apply — trigger words now applied correctly on first press** — trigger words (`currentAllTriggers` / `currentActiveTriggers`) are now recomputed at click time from the latest `_stackActive` + `metadata` + `civitaiCache`; previously used a stale snapshot captured at render time, causing trigger words to be missing on the first Apply and to linger after disabling a model
 
 ### v0.3.32
+
 - **Lora Loader (LoraManager) LoRA detection** — I tab and Metadata tab now correctly detect LoRAs from `Lora Loader (LoraManager)` nodes in API format (`inputs.loras.__value__`); `strength`/`clipStrength` stored as strings (e.g. `"0.20"`) are now parsed correctly
 - **LoraManager node placement — LoRA syntax** — placing a `Lora Loader (LoraManager)` node via drag now also updates the `text` widget with `<lora:name:strength>` syntax (previously only the `loras` array widget was set)
 - **M tab Groups — LoRA → LoraManager drop** — LoRA groups in the Library M tab show an **All N LoRAs** item; drag to canvas places a `Lora Loader (LoraManager)` node with all group LoRAs; double-click also places at canvas center
 - **P tab — Groups sub-tab** — new Groups sub-tab (row 2) in the Library P tab; groups are read from `localStorage["wfm_prompt_preset_groups"]` (shared with Batch); expanding a group shows draggable preset items
 
 ### v0.3.31
+
 - **LoRA pane — Single/Stack tabs** — LoRA pane split into two tabs: Single (filter, model dropdown, M/C strength, target node, Apply, P, LORA SYNTAX, TRIGGER WORDS) and Stack (target node, Apply, P, Toggle-all, global strength adjuster, LORA SYNTAX, TRIGGER WORDS, model list); each tab has independent strength settings
 - **GenUI Model — LoRA improvements** — now correctly handles `Lora Loader (LoraManager)` nodes (previously failed to find the node); on apply: switches to Single tab, disables all Stack models, and updates LORA SYNTAX / TRIGGER WORDS in the Single tab panel
 
 ### v0.3.30
+
 - **LoRA Stack trigger words fix** — inactive stack models no longer show their trigger words in the Trigger words display; both initial render and per-model toggle/toggle-all now filter to active models only
 - **Help troubleshooting** — added entry for "No such file or directory" error when running LoRA Stack (comfyui-lora-manager compatibility issue)
 
 ### v0.3.29
+
 - **LoRA section unified** — single LoRA and Stack sections merged into one pane; Apply button handles both cases (stack models present → apply all active + prompt sync; no stack → apply selected single LoRA + prompt sync); Ctrl+Apply removed, now plain Apply by default
 - **LoRA prompt sync** — Apply inserts `<lora:stem:M:C>` syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by diff (removes stale tokens, re-adds active ones); works for both single LoRA and Stack
 - **P button** — placed to the right of Apply; immediately writes the current Positive prompt textarea to the target workflow node without switching tabs
@@ -602,22 +668,26 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Models thumbnail bug fixes** — preview endpoint now sends `Cache-Control: no-cache`; files under 100 bytes skipped; `.disabled` model files included in preview change lookup
 
 ### v0.3.23
+
 - **Bug fix: workflow batch 404** — `_runBatchGenerate()` workflow case was fetching `/api/wfm/workflows/{filename}` (non-existent route); corrected to `/api/wfm/workflows/raw?filename={filename}`
 - **Bug fix: rename double-submit** — `addEventListener("blur", commitRename)` was accumulating on the persistent `#wfm-modal-title-input` element each time the modal opened; subsequent renames fired the handler twice, sending two rename requests back-to-back (first succeeds, second returns 409 or 404); fixed by storing the listener reference on `titleInput._commitRename` and calling `removeEventListener` before re-registering
 
 ### v0.3.22
+
 - **Card view removed** — Workflow tab and Models tab no longer offer Card view; Thumbnail and Table remain; if `"card"` was previously stored in localStorage it falls back to Thumbnail automatically
 - **Batch type selector** — replaced the Checkpoint Batch toggle with per-type checkboxes on the Batch Queue column headers (Checkpoint / Lora / Prompt / Workflow); radio behavior ensures only one type is active at a time; the Batch panel below Generate repurposed as a status display showing the active type, amber progress bar, and Pause/Resume / Stop controls
 - **4-type batch generation** — `_runBatchGenerate()` dispatches to Checkpoint (file-tree + group selection), Lora (group selection), Prompt (preset group items applied to positive/negative nodes), and Workflow (group selection, restores original workflow after batch); all types use the same generic `_runBatchLoop()` with pause/abort support
 - **Help updated** — EN / JA / ZH strings updated for `helpWf1`, `helpModels2`, `helpGen11`, `helpGen13`, `helpGen14`
 
 ### v0.3.21
+
 - **CivitAI Host setting** — new dropdown in Settings tab (CivitAI section): choose `civitai.com` (SFW only) or `civitai.red` (unrestricted); selection is saved to `settings.json` and synced to `localStorage` so the Models tab uses it immediately without extra server calls
 - **CivitAI panel — Info / Sample sub-tabs** — the CivitAI side panel is split into two sub-tabs; Info tab contains model details and actions; Sample tab shows all sample images (count displayed in label); images open full-size in a new browser tab on click
 - **Bug fix: model page URL for existing cache** — `modelId: null` entries (the majority of the cache) previously generated broken links (`/models?modelVersionId=…`); both the Python service and the JS renderer now fall back to `/{host}/model-versions/{versionId}` which redirects correctly to the model page; all 324 existing cache entries are fixed immediately without re-fetching
 - **Help updated** — Batch tab entries (gen-12 / gen-13 / gen-14) and Settings entries (settings-11 Text Size / settings-12 RAW JSON Colors / settings-13 CivitAI Host) are now fully localized in EN / JA / ZH; `helpGen3` updated to reflect 5-tab layout; `helpGen11` rewritten to describe the Batch toggle; JA/ZH translations no longer contain untranslated English terms (Filter, Pause/Resume, Stop)
 
 ### v0.3.20
+
 - **CivitAI panel — Type / Base Model / Hash display** — side panel CivitAI tab now shows a Type badge (e.g. CHECKPOINT, LORA), Base Model row, and Hash row (BLAKE3 preferred, SHA256 fallback from CivitAI API or local metadata); click the hash to copy the full value to clipboard
 - **CivitAI panel — images open in new tab** — sample images in the CivitAI tab are now wrapped in links; clicking an image opens the full-size version in a new browser tab
 - **CivitAI panel — 3-state UI** — the panel now distinguishes between "not yet checked" (blue fetch button), "checked but not found on CivitAI" (re-check button with a notice), and "found" (full info); no more ambiguity after running batch fetch
@@ -626,6 +696,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **CivitAI cache — `fileHashes` field added** — `_extract_info` now stores the primary file's full hash map (BLAKE3, SHA256, AutoV2, etc.) so the Hash row is populated for newly fetched or refreshed models
 
 ### v0.3.19
+
 - **CivitAI batch fetch — major speedup** — switched from one-by-one `GET` requests (0.5 s delay each) to `POST /model-versions/by-hash` batch endpoint; up to 100 hashes per request, reducing 100-model fetch from ~50 s to a few seconds
 - **Retry with exponential backoff** — `fetch_by_hash` and the new batch POST both retry on HTTP 429 / 500 / 502 / 503 / 504 with 1 s → 2 s → 4 s delays (max 3 attempts), as recommended in the CivitAI API docs
 - **CivitAI API key support** — optional Bearer token can be set in Settings tab (CivitAI API Key section); environment variable `CIVITAI_API_KEY` takes priority over the stored key; API keys are excluded from data exports
@@ -634,29 +705,35 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Bug fix: CivitAI tab blank after batch fetch** — the `done` SSE event now applies `data.hashes` directly to `state.modelMetadata` so the side-panel CivitAI tab renders correctly even when the subsequent `fetchModelMetadata()` call races ahead of the server flush
 
 ### v0.3.18
+
 - **Batch tab** — new 5th subtab in GenerateUI with a dedicated 3-pane layout for assembling checkpoint batch queues; left pane: file-tree checkpoint selection (filter, All/None, initially unchecked); center pane: group-based selection with inner tabs (Checkpoint / Lora / Prompt / Workflow — Lora/Prompt/Workflow coming soon); right pane: live Batch Queue preview combining both pane selections with duplicates removed
 - **Checkpoint selector moved** — the checkpoint dropdown is removed from the right panel; selection is now done exclusively in the Batch tab left and center panes; the right panel retains only the enable/disable toggle and progress display
 - **Group selection fix** — batch group selection now stores selected group names (not raw model names), so changes to group membership in the Models tab are always reflected in the queue without stale entries
 - **Models tab bulk operations expanded** — bulk action bar now includes: Deselect All (clear all selections without exiting select mode), ★ Favorite / ☆ Unfavorite, +Badge / −Badge (apply or remove a badge from all selected models); existing group and delete operations unchanged
 
 ### v0.3.17
+
 - **CivitAI SSL fix** — resolved `CERTIFICATE_VERIFY_FAILED` errors when fetching model info on Windows Portable Python environments; uses `certifi` CA bundle when available, falls back to system store, and disables verification only as a last resort with a warning log
 - **Lora Manager support** — `Lora Loader (LoraManager)` nodes (ComfyUI-Lora-Manager) are now correctly converted from UI format to API format in the GenerateUI tab; the `loras` widget array is wrapped to `{"__value__": [...]}` as required by the node, enabling generation with LoRA Manager workflows
 
 ### v0.3.16
+
 - **CivitAI preview fallback** — model cards and the detail panel's Info tab now display the first CivitAI image directly when no local preview file exists; if the backend download fails (e.g. network restriction server-side), the browser fetches the image URL from the CivitAI cache as a fallback so the preview is always shown after fetching
 
 ### v0.3.15
+
 - **Sample workflows** — added `workflows/` directory containing 13 sample workflows (SD1.5 / SDXL / DWPose / Face Detailer / Image Editing) with PNG thumbnails, bundled in the package
 - **CivitAI auto-preview** — when fetching CivitAI info (individual or batch), the first CivitAI image is automatically downloaded and saved as `{model_stem}.preview.png` if no preview exists; batch summary reports the count of auto-saved previews
 - **TOOLS pane — Create Tags** — new task option in the VLM dropdown (both SPA AI TOOL tab and Library A tab): generates a comma-separated list of descriptive English tags from the image
 
 ### v0.3.14
+
 - **AI TOOL tab redesign** — tab renamed from "A" to "AI TOOL"; sub-tab navigation removed in favor of a permanent 3-pane layout (Translation 40% | TOOLS 40% | Settings 20%) — all panes always visible simultaneously; "VLM" pane renamed to "TOOLS"
 - **Settings — RAW JSON Colors** — new accordion section with 6 color pickers to customize the syntax highlight colors for the Raw JSON editor in Generate UI: Default Text, Name/Scheduler, Title, Width/Height, Prompt/Text, Image/File; changes apply immediately on color pick; Reset Defaults restores the original scheme; saved to `localStorage` under `wfm_settings.jsonColors` and applied on startup
 - **Help tab updated** — AI TOOL tab card rewritten; Settings card updated with RAW JSON Colors entry; Library panel sidepanel-16 entry updated
 
 ### v0.3.13
+
 - **AI Tab (A)** — new tab added to both the SPA and the Workflow Studio Library side panel (rightmost tab)
   - **Translation sub-tab** — translate text via Ollama or LM Studio between Japanese, English, Chinese, or a custom Free language; ⇄ swap button exchanges both language selectors and text content simultaneously; language selections persisted automatically
   - **VLM sub-tab** — drop zone (110px, matching the I tab) accepts images via drag & drop or click; task selector (Describe Image / Create Prompt); Run button streams result into output area with Copy button; Ollama uses `images:[base64]` payload, LM Studio uses `image_url` content block
@@ -666,15 +743,18 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help Tab updated** — added AI Tab (A) feature card and Library panel A tab entry; i18n support in EN/JA/ZH
 
 ### v0.3.12
+
 - **GenerateUI — Raw JSON search** — always-visible search bar above the Raw JSON editor; finds all matches as you type with match count (`3/12`); navigate forward/back with ↑/↓ buttons, Enter / Shift+Enter, or Escape / ✕ to clear; current match highlighted in orange, other matches in yellow; search overlay syncs with editor scroll and stays updated while editing
 - **Workflow analyzer — extended model type detection** — added CLIPLoader `type` field mapping to model family (`flux`, `hidream_i`, `wan`, `cosmos`, `lumina`, `ovis`, etc.) via `_CLIP_TYPE_TO_MODEL`; subgraph nodes (`definitions.subgraphs`) now scanned for model detection; `UnetLoaderGGUF` and similar loaders matched via `"UnetLoader" in ntype`; new families added: NewBie, Ovis, HiDream, Wan, Cosmos, Lumina; model-name detection refactored into reusable `_detect_model_type_from_name()`
 - **Screenshots refreshed** — replaced tab-by-tab screenshots with 8 feature-focused images
 
 ### v0.3.11
+
 - **Metadata Tab — extended loader support** — `metadata-tab.js` now recognizes `UnetLoaderGGUF` and `UNETLoaderGGUF` as Diffusion Model (e.g. HiDream GGUF workflows), and `QuadrupleCLIPLoader` as Text Encoder (e.g. HiDream 4-CLIP); previously these were detected only in the side panel I tab, not in the Metadata tab itself
 - **Settings Tab — Text Size** — new slider (10–28 px) in the Settings tab adjusts font size for all prompt and chat text areas at once: Generate UI positive/negative prompts, AI Assistant chat input, Preset prompts, Wildcard text area and file editor, and Metadata prompt full preview; applied immediately on drag and persisted with Save Settings
 
 ### v0.3.10
+
 - **Information tab — drag to canvas** — model, lora, and Prompts sub-tabs in the side panel I tab now support drag & drop onto the ComfyUI canvas; double-click also places nodes at canvas center
   - model sub-tab: each item places the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`)
   - lora sub-tab: drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (shown for 1+ LoRAs) places all LoRAs in a single `Lora Loader (LoraManager)` node
@@ -684,44 +764,52 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Preview area fixed height** — Information tab drop zone fixed at 110px so model/prompt lists are no longer compressed when a large image is loaded
 
 ### v0.3.9
+
 - **Side panel I tab** — new Information tab in the Workflow Studio Library side panel; drop a ComfyUI PNG/WebP/JSON directly in the panel to inspect models, LoRAs, and prompts without opening the Metadata tab; sub-tabs: model / lora / Prompts with full-text preview and Copy button
 - **Side panel tab redesign** — tabs shortened to single letters (W / N / P / M / I) with full name shown on hover
 - **Bug fix: top bar icons** — icons (Workflow Studio / camera / Node Sets) were invisible in newer ComfyUI versions because Iconify converted the MDI CSS class to an inline SVG before the custom SVG could be injected; fixed by removing the early-return guard and adopting the same simple `requestAnimationFrame` retry pattern used by lora-manager
 
 ### v0.3.8
+
 - **Metadata Tab: extended subgraph support** — added extraction for Flux.2 Dev fp8 (`SamplerCustomAdvanced`), Flux.2 Klein 4B Distilled (image edit), Ernie Image, Qwen-Image-Edit 2511 (`TextEncodeQwenImageEditPlus`), and WAN2.2 14B Animate (top-level CLIPTextEncode + subgraph KSampler)
 - **Prompt type: Text (no badge)** — when positive/negative polarity cannot be determined (indirect sampler connections, cross-level links, `PrimitiveStringMultiline` etc.), prompts are listed without a POS/NEG badge; action buttons still work normally
 - **Prompt extraction improvements** — `extractPromptsFromNodeSet` now resolves link sources from any STRING-output node (e.g. `ComfySwitchNode`, `PrimitiveStringMultiline`) without type restriction; `PrimitiveStringMultiline` search and final text-encoder fallback both extended to include subgraph nodes via `collectAllNodes`
 - **i18n** — added `metaPromptText` key (EN: "Text" / JA: "テキスト" / ZH: "文本")
 
 ### v0.3.7
+
 - **Metadata Tab: subgraph workflow support** — Flux.2 (Dev fp8 / Klein), Qwen-Image-Edit (/ 2511 / Layered), and Z-Image (Base / Turbo) official templates now correctly extract models and prompts; these use ComfyUI's `definitions.subgraphs` format with `UNETLoader`, `CLIPLoader`, and `VAELoader` inside the subgraph
 - **Prompt extraction improvements** — 7-stage fallback chain: ImageMetadataPromptLoader → WFS_PromptText → top-level CLIPTextEncode+KSampler → `PrimitiveStringMultiline` (flux2-klein) → subgraph CLIPTextEncode+KSampler → PromptStyler → all CLIPTextEncode text
 - **MarkdownNote model fallback** — `extractMarkdownNoteModels()` parses `**section** → - [model](url)` patterns from MarkdownNote nodes as a supplemental model source
 - **Format note updated** — "Flux.2 / Qwen-Image / Z-Image subgraph workflows supported" (EN/JA/ZH)
 
 ### v0.3.6
+
 - **Metadata Tab** — new tab (between Prompt and Gallery) that extracts model and prompt information from ComfyUI-generated PNG/WebP images and workflow JSON files; 3-column layout: drop zone with image preview (left), Checkpoint/VAE/Diffusion Model/Text Encoder lists (center), LoRA list with strength values + Prompt list with full-text viewer (right)
 - **Prompt action buttons** — Copy, GenUI:P/N (set GenerateUI prompts), Prompt:P/N (set Prompt tab preset prompts) directly from the extracted prompt text
 - **SDXL Prompt Styler support** — improved prompt extraction resolves `PromptStyler → CLIPTextEncode` link chains in both LiteGraph and API workflow formats
 - **Format support** — ComfyUI (PNG/WebP/JSON), SD WebUI, SD Forge, Fooocus
 
 ### v0.3.5
+
 - **Feeder subtab** — new subtab in GenerateUI for controlling [comfyui-image-feeder](https://github.com/ketle-man/comfyui-image-feeder) nodes; left pane: node selector + all ImageFeeder parameters + presets + Run/Stop controls; center pane: folder tree, image grid with checkbox selection, and preview panel
 - **Run loop with After gen modes** — Loop (wrap and continue), Increment (advance and auto-stop), Fixed (constant index); index updates automatically via WebSocket `image_loop_node_sync` after each generation; seed comes from the right-pane seed setting
 - **Workflow analysis improvements** — `analyzeWorkflow` now handles multi-hop CONDITIONING chains via BFS (up to 5 iterations), CLIPTextEncodeSDXL / CLIPTextEncodeSDXLRefiner, SDXLPromptStyler / SDXLPromptStylerAdvanced, KSamplerAdvanced (`noise_seed`), TextEncodeQwenImageEditPlus, PrimitiveStringMultiline, Power Lora Loader (rgthree), and `Checkpoint Loader` (WAS) with space in the class name
 
 ### v0.3.4
+
 - **Wildcard support panel** — new right column in the Prompt tab with a one-click toolbar for inserting wildcard syntax (`{|}`, `{n$|}`, `__|__`, `:`, `;`, `$`, `<lora::1:LBW=;>`, `[]`, single/multi pick) and wrapping selected text; dedicated prompt textarea and wildcard file picker (click to insert `__filename__`)
 - **Wildcard file manager** — create, view, edit, and delete `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; editor opens inline with filename input and save/cancel controls
 - **Preset/Preset Manager tab switch** — the center pane of the Prompt tab is now a two-tab panel (Presets / Preset Manager) to reclaim horizontal space for the new wildcard panel
 - **Wildcard Integration setting** — new accordion section in Settings tab; auto-detects ComfyUI-Impact-Pack; when installed, provides a button to create a directory junction (Windows) or symlink (other OS) from the WFS wildcard directory to Impact Pack's `wildcards/` directory; existing WFS files are migrated automatically; a Remove Link button reverses the operation
 
 ### v0.3.2
+
 - **Checkpoint Batch** — new panel in the GenerateUI right column (below Seed, above results); enable via checkbox to auto-generate once per checkpoint model; filter included/excluded subfolders by comma-separated names (empty = all checkpoints); real-time preview of matched model count; amber progress bar shows current model name and index; Stop button aborts the loop after the current generation completes; failed models are counted and reported in the summary toast
 - **Seed layout fix** — seed value input and mode selector (Random / Fixed / Increment / Decrement) now stacked vertically so neither is clipped in narrow panels
 
 ### v0.3.1
+
 - **Folder operations** — create subfolders and delete folders (with all contents) directly from the folder tree header buttons
 - **File operations** — move or delete individual images from the detail panel; bulk move and bulk delete from the multi-select bar
 - **Tree state preserved** — folder expansion state is maintained after create/delete/move/refresh operations
@@ -729,10 +817,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Workflow auto-save** — after each generation in the Generate UI tab, the current workflow is automatically saved to gallery metadata for the generated images; shown in the Metadata tab even if PNG embedding is absent
 
 ### v0.3.0
+
 - **Cross-type group filter** — the group filter dropdown in the Models tab now shows groups from all model types simultaneously, each prefixed with a type label (`[Checkpoint]`, `[LoRA]`, etc.); selecting a group automatically switches to the corresponding model type
 - **Sidebar group display fixed** — the ComfyUI sidebar "Model Groups" view now correctly renders per-type groups (introduced in v0.2.9) with a type label on each group header; fixes a crash where `.filter is not a function` was thrown on the new nested group structure
 
 ### v0.2.9
+
 - **Model Enable/Disable** — hide models from ComfyUI by renaming the file extension to `.disabled`; toggle per model (⏸ button on each card/row), per group (Enable All / Disable All buttons in the Group panel), or filter the grid by status (All / Enabled only / Disabled only). Changes take effect after ComfyUI refresh.
 - **Per-type model groups** — groups are now scoped to each model type; checkpoint groups only appear in the Checkpoint tab, LoRA groups only in the LoRA tab, etc. Existing flat groups are automatically migrated.
 - **Multi-select mode** — click the Select button in the toolbar to enter selection mode; check individual models across Thumbnail / Card / Table views
@@ -742,10 +832,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Bug fix** — Hypernetwork tab showed `C`, `O`, `M`, `B` as fake model items; caused by the new ComfyUI API format returning `"COMBO"` as the first element; fixed in `comfyui-client.js`
 
 ### v0.2.8
+
 - **Data storage moved** — plugin data (settings, metadata, prompts, etc.) is now stored in `ComfyUI/user/default/Workflow-Studio/` instead of `custom_nodes/ComfyUI-Workflow-Studio/data/`; falls back to the old `data/` directory if `user/default/` does not exist
 - **Data Management section** — new Settings tab section to export all plugin data to a single JSON file and import it back; useful for migration, backup, and reinstallation
 
 ### v0.2.7
+
 - **Gallery tab** — new image browser for ComfyUI output folder; Thumbnail/Table views, multi-select with Bulk Bar, server-side group/tag/favorite filtering, group management (rename support), performance-optimized with  + mtime folder cache
 - **Group UI unified** — Workflow, Nodes, and Gallery group panels rebuilt to match the Models tab 4-section pattern (Current Groups / Add to Group / Create New Group / Manage Groups); Rename support added to Workflow and Nodes tabs
 - **Settings 2-column layout** — Theme panel fixed on the right (50% width, sticky); all other settings flow continuously on the left with no visual gap
@@ -753,18 +845,21 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help tab** — Gallery tab description card added
 
 ### v0.2.5
+
 - **Sidebar Category/Package sub-tabs** — added 📂 Category and 🧩 Package sub-tabs to the Nodes tab in Workflow Studio Library; each shows a dropdown to filter nodes by category or custom node package (reads `/object_info` for accurate package detection)
 - **Sidebar theme settings** — added ⚙ button in the panel header to customize background, sub-header background, text, border, and secondary text colors with live preview; settings saved to localStorage
 - **Sidebar TextEncoder (By Type)** — fixed TextEncoder not appearing in Models → By Type; now uses `DualCLIPLoader` → `CLIPLoader` fallback to retrieve `clip_name1` list
 - **Hide `.index.json`** — excluded `.index.json` from both the Workflow tab and the Workflow Studio Library side panel
 
 ### v0.2.4
+
 - **GenerateUI tab redesign** — reorganized from 5 tabs (Prompt/Image/Model/Settings/Raw JSON) to 3 tabs (Input/Model/Settings); each tab shows a Raw JSON column (540px) for instant JSON preview and direct editing from any tab
 - **Input tab** — Prompt and Image stacked vertically in the left column
 - **Settings tab** — KSampler and LatentImage stacked vertically in the left column
 - **Raw JSON tab removed** — Raw JSON is now always visible as a right-column panel within each tab
 
 ### v0.2.3
+
 - **Badge system unified** — Workflow and Models tabs now share a single badge palette (`⚙ Badge` button); workflow auto-analysis model type system removed in favor of user-defined free-label badges
 - **GenUI Model button** — apply any model from the Models tab directly to the corresponding node in GenerateUI's current workflow (available in detail modal and side panel; Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder)
 - **Sidebar Models tab** — added All / ★ Favorites / Groups / By Type sub-tabs to the Models section of Workflow Studio Library
@@ -772,6 +867,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Sidebar panel width** — widened from 280px to 310px
 
 ### v0.2.2
+
 - **Models tab** — browse, search, and manage all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder) with Thumbnail/Card/Table views
 - **CivitAI integration** — fetch model metadata by SHA256 hash (individual or batch per model type) with SSE progress streaming
 - **Model groups** — create, rename, delete groups and assign/remove models for organization
@@ -784,6 +880,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help tab updated** — Models Tab section added to feature list
 
 ### v0.2.0
+
 - **Prompt presets in sidebar** — added Prompts tab to Workflow Studio Library (ComfyUI side panel) with All / Favorites / Categories sub-tabs
 - **WFS_PromptText custom node** — drag prompt presets onto the canvas to create nodes with positive/negative prompt outputs
 - **Preset Manager** — 3-column layout in Prompt tab: AI Assistant | Presets editor | Preset Manager (All / Favorites / Groups)
@@ -795,47 +892,56 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **Help tab updated** — Prompt Tab and Workflow Studio Library sections reflect new features
 
 ### v0.1.9
+
 - **Side panel 2-row sub-tabs** — Workflows: row 1 (Workflows / Favorites / Groups), row 2 (Model Type); Nodes: row 1 (Nodes / Favorites / Groups), row 2 (Sets)
 - **Save dialog** — canvas snapshot now shows a filename edit dialog instead of auto-naming
 - **API/App format badge** — workflow items in side panel show red (API) or orange (APP) badge
 - **Group auto-cleanup** — deleted workflows are automatically removed from groups on refresh
 
 ### v0.1.8
+
 - **WF & Node Library side panel** — renamed from "Node Library", added two top-level tabs (Workflows / Nodes) accessible from ComfyUI top bar
 - **Workflows tab** — browse favorite workflows, filter by model type, filter by group with collapsible sections
 - **Workflow drag & drop** — drag workflows from the side panel onto the canvas to load them instantly
 - **Help tab update** — added Nodes Tab and WF & Node Library sections to the feature list
 
 ### v0.1.7
+
 - **Nodes tab** — browse, search, and filter all installed ComfyUI nodes with Card/Table views, pagination (50 nodes/page), package color badges, and node detail side panel with I/O specs
 - **Node Sets** — save selected nodes + connections from ComfyUI canvas as reusable sets via right-click context menu
 - **Node Library side panel** — accessible from ComfyUI top bar with Favorites, Sets, and Groups tabs, drag & drop placement
 - **3 top bar buttons** — Workflow Studio, Canvas Snapshot, and Node Library buttons in ComfyUI's action bar
 
 ### v0.1.6
+
 - **Security fix** — path traversal vulnerability in `workflow_service.py` (reported via ComfyUI-Manager PR review)
 
 ### v0.1.5
+
 - **Theme system** — 13 built-in themes selectable from Settings tab with instant preview (Deep Ocean Dark, Pop & Vibrant, Light Minimalist, Cyberpunk, Glassmorphism, Neumorphism, Retro 8-bit, Pastel Dream, Brutalism, Earthy, Material UI, Monotone + Accent, Corporate Trust)
 - Theme preference persisted in localStorage and restored on page load (no flash)
 - Special CSS effects per theme: neon glow (Cyberpunk), backdrop blur (Glassmorphism), dual shadow (Neumorphism), pixel borders (Retro/Brutalism)
 
 ### v0.1.4
+
 - **App format support** — detect `.app.json` workflows (ComfyUI App mode), show "App Format" badge, block loading in GenerateUI with guidance message
 - **Preset clipboard copy** — added PP Copy / NP Copy buttons to copy positive/negative prompts to clipboard
 - **Analysis bugfix** — fixed workflow analysis crash when `widgets_values` contains non-string values (e.g. integers)
 
 ### v0.1.3
+
 - Added **Help & Support tab** — feature list, tips, and support links (GitHub, Ko-fi)
 - Multi-language support (EN/JA/ZH) for all help content
 
 ### v0.1.2
+
 - Added **Canvas Snapshot** button to ComfyUI top bar — capture workflow canvas as PNG thumbnail with embedded workflow metadata
 - Added **Thumbnail tab** to the workflow side panel for quick visual preview
 - Added **Thumbnail section** to the workflow detail modal
 - Snapshot images are auto-imported as workflows with thumbnails
 
 ### v0.1.1
+
 - Initial feature set: Workflow management, GenerateUI, Prompt assistant, Settings
 
 ---
@@ -918,3 +1024,4 @@ MIT License
 - [ComfyUI-Gallery](https://github.com/PanicTitan/ComfyUI-Gallery) by PanicTitan — thumbnail grid UX reference
 - [infinite-image-browsing](https://github.com/zanllp/sd-webui-infinite-image-browsing) by zanllp — thumbnail caching and index strategy reference
 - [Fooocus](https://github.com/lllyasviel/Fooocus) by lllyasviel — style preset JSON format reference
+

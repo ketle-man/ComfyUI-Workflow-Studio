@@ -10,6 +10,7 @@ import { TextTool, TEXT_FONTS } from "./image-edit/TextTool.js";
 import { SelectTool }          from "./image-edit/SelectTool.js";
 import { ShapeTool }           from "./image-edit/ShapeTool.js";
 import { MaskTool }            from "./image-edit/MaskTool.js";
+import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTool, MASK_TEXT_FONTS } from "./image-edit/MaskEditorOneTools.js";
 import { showToast }           from "./app.js";
 
 const TOOL_DEFS = [
@@ -78,6 +79,12 @@ class ImageEditTab {
         // Mask ツール
         this._maskTool         = null;
         this._maskSubtool      = "paint";
+        // Mask Editor One 追加ツール
+        this._maskColorTool  = null;
+        this._maskAlphaTool  = null;
+        this._maskTextTool   = null;
+        this._maskVectorTool = null;
+        this._maskShapeTool  = null;
         this._maskInverted     = false;
         this._maskOverlayColor = "#ff0000";
         this._maskBlur         = 0;
@@ -178,7 +185,7 @@ class ImageEditTab {
         const tool = this._activeTool;
         const size = tool === "draw"
             ? this._drawTool?.brushSize
-            : tool === "mask" ? this._maskTool?.brushSize : null;
+            : (tool === "mask" && this._maskSubtool === "paint") ? this._maskTool?.brushSize : null;
         if (size == null) { el.style.display = "none"; return; }
 
         const refCanvas = document.getElementById("ie-canvas-draw");
@@ -223,7 +230,7 @@ class ImageEditTab {
         if (this._activeTool === "text")   this._textTool?.deactivate();
         if (this._activeTool === "select") this._selectTool?.deactivate();
         if (this._activeTool === "shape")  this._shapeTool?.deactivate();
-        if (this._activeTool === "mask")   this._maskTool?.deactivate();
+        if (this._activeTool === "mask")   this._deactivateMaskSubtool();
         if (this._activeTool === "filter") {
             this._gmicAbort();
         }
@@ -236,8 +243,8 @@ class ImageEditTab {
                 overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
             }
         }
-        // マスク以外に切り替えたらプロパティペインを非表示
-        if (toolId !== "mask") {
+        // Draw/Mask以外に切り替えたらプロパティペインを非表示
+        if (toolId !== "mask" && toolId !== "draw") {
             const pane = document.getElementById("ie-props-pane");
             if (pane) pane.style.display = "none";
         }
@@ -270,12 +277,9 @@ class ImageEditTab {
             this._shapeTool.setCanvas(overlayCanvas);
             this._shapeTool.activate();
             if (overlayCanvas) overlayCanvas.style.cursor = "crosshair";
-        } else if (this._activeTool === "mask" && this._maskTool) {
-            const activeLayer = this._layerMgr?.activeLayer;
-            if (activeLayer?.type === "mask") {
-                this._maskTool.setCanvas(activeLayer.canvas);
-            }
-            this._maskTool.activate();
+        } else if (this._activeTool === "mask") {
+            this._initMaskEditorOneTools();
+            this._activateMaskSubtool();
         } else if (this._activeTool === "blur") {
             if (overlayCanvas) overlayCanvas.style.cursor = this._blurRectMode ? "crosshair" : "default";
         }
@@ -332,55 +336,8 @@ class ImageEditTab {
             });
 
         } else if (toolId === "draw" && this._drawTool) {
-            el.innerHTML = `
-                <div class="ie-opt-group">
-                    <label>Color</label>
-                    <input type="color" id="ie-draw-color" value="${this._drawTool.color}"
-                        style="width:30px;height:24px;padding:0;border:1px solid var(--wfm-border);cursor:pointer;border-radius:3px;">
-                </div>
-                <div class="ie-opt-group">
-                    <label>Size</label>
-                    <input type="range" id="ie-draw-size" min="1" max="200" value="${this._drawTool.brushSize}" style="width:80px;">
-                    <span id="ie-draw-size-lbl">${this._drawTool.brushSize}px</span>
-                </div>
-                <div class="ie-opt-group">
-                    <label>Hardness</label>
-                    <input type="range" id="ie-draw-hard" min="0" max="100" value="${Math.round(this._drawTool.hardness*100)}" style="width:70px;">
-                    <span id="ie-draw-hard-lbl">${Math.round(this._drawTool.hardness*100)}%</span>
-                </div>
-                <div class="ie-opt-group">
-                    <label>Opacity</label>
-                    <input type="range" id="ie-draw-opacity" min="1" max="100" value="${Math.round(this._drawTool.opacity*100)}" style="width:70px;">
-                    <span id="ie-draw-opacity-lbl">${Math.round(this._drawTool.opacity*100)}%</span>
-                </div>
-                <div class="ie-opt-group">
-                    <label>Mode</label>
-                    <select id="ie-draw-mode" class="ie-opt-select">
-                        <option value="draw"  ${this._drawTool.mode==="draw"  ? "selected":""}>Draw</option>
-                        <option value="erase" ${this._drawTool.mode==="erase" ? "selected":""}>Erase</option>
-                    </select>
-                </div>
-            `;
-            document.getElementById("ie-draw-color")?.addEventListener("input", e => {
-                this._drawTool.color = e.target.value; this._drawTool._stamp = null;
-            });
-            document.getElementById("ie-draw-size")?.addEventListener("input", e => {
-                this._drawTool.brushSize = parseInt(e.target.value);
-                document.getElementById("ie-draw-size-lbl").textContent = e.target.value + "px";
-                this._drawTool._stamp = null;
-            });
-            document.getElementById("ie-draw-hard")?.addEventListener("input", e => {
-                this._drawTool.hardness = parseInt(e.target.value) / 100;
-                document.getElementById("ie-draw-hard-lbl").textContent = e.target.value + "%";
-                this._drawTool._stamp = null;
-            });
-            document.getElementById("ie-draw-opacity")?.addEventListener("input", e => {
-                this._drawTool.opacity = parseInt(e.target.value) / 100;
-                document.getElementById("ie-draw-opacity-lbl").textContent = e.target.value + "%";
-            });
-            document.getElementById("ie-draw-mode")?.addEventListener("change", e => {
-                this._drawTool.mode = e.target.value;
-            });
+            el.innerHTML = "";
+            this._renderDrawProps();
 
         } else if (toolId === "text" && this._textTool) {
             el.innerHTML = `
@@ -546,9 +503,14 @@ class ImageEditTab {
                 </span>
             ` : "";
             el.innerHTML = `
-                <div class="ie-opt-group">
-                    <button class="wfm-btn wfm-btn-sm${sub === "paint" ? " ie-opt-active" : ""}" id="ie-mask-paint-btn">Paint</button>
-                    <button class="wfm-btn wfm-btn-sm${sub === "sam3"  ? " ie-opt-active" : ""}" id="ie-mask-sam3-btn"
+                <div class="ie-opt-group" style="flex-wrap:nowrap;gap:2px;">
+                    <button class="wfm-btn wfm-btn-sm${sub === "paint"  ? " ie-opt-active" : ""}" id="ie-mask-paint-btn">Paint</button>
+                    <button class="wfm-btn wfm-btn-sm${sub === "color"  ? " ie-opt-active" : ""}" id="ie-mask-color-btn">Color</button>
+                    <button class="wfm-btn wfm-btn-sm${sub === "alpha"  ? " ie-opt-active" : ""}" id="ie-mask-alpha-btn">Alpha</button>
+                    <button class="wfm-btn wfm-btn-sm${sub === "text"   ? " ie-opt-active" : ""}" id="ie-mask-text-btn">Text</button>
+                    <button class="wfm-btn wfm-btn-sm${sub === "vector" ? " ie-opt-active" : ""}" id="ie-mask-vector-btn">Vector</button>
+                    <button class="wfm-btn wfm-btn-sm${sub === "shape"  ? " ie-opt-active" : ""}" id="ie-mask-shape-btn">Shape</button>
+                    <button class="wfm-btn wfm-btn-sm${sub === "sam3"   ? " ie-opt-active" : ""}" id="ie-mask-sam3-btn"
                         ${sam3Disabled} title="${sam3Title}">SAM3</button>
                 </div>
                 <div style="width:1px;height:22px;background:var(--wfm-border);margin:0 4px;flex-shrink:0;"></div>
@@ -571,14 +533,25 @@ class ImageEditTab {
                 </div>` : ""}
             `;
             document.getElementById("ie-mask-paint-btn")?.addEventListener("click", () => {
-                this._maskSubtool = "paint";
-                this._renderToolOptions("mask");
+                this._switchMaskSubtool("paint");
+            });
+            document.getElementById("ie-mask-color-btn")?.addEventListener("click", () => {
+                this._switchMaskSubtool("color");
+            });
+            document.getElementById("ie-mask-alpha-btn")?.addEventListener("click", () => {
+                this._switchMaskSubtool("alpha");
+            });
+            document.getElementById("ie-mask-text-btn")?.addEventListener("click", () => {
+                this._switchMaskSubtool("text");
+            });
+            document.getElementById("ie-mask-vector-btn")?.addEventListener("click", () => {
+                this._switchMaskSubtool("vector");
+            });
+            document.getElementById("ie-mask-shape-btn")?.addEventListener("click", () => {
+                this._switchMaskSubtool("shape");
             });
             document.getElementById("ie-mask-sam3-btn")?.addEventListener("click", () => {
-                if (this._sam3Available) {
-                    this._maskSubtool = "sam3";
-                    this._renderToolOptions("mask");
-                }
+                if (this._sam3Available) this._switchMaskSubtool("sam3");
             });
             document.getElementById("ie-sam3-prompt")?.addEventListener("input", e => {
                 this._sam3Prompt = e.target.value;
@@ -884,9 +857,377 @@ class ImageEditTab {
             document.getElementById("ie-sam3-apply-btn")?.addEventListener("click", () => {
                 this._applySelectedSam3Masks();
             });
+        } else if (sub === "color" && this._maskColorTool) {
+            const t = this._maskColorTool;
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label>Mode</label>
+                    <div style="display:flex;gap:4px;">
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "add"      ? " ie-opt-active" : ""}" id="ie-mc-add"  style="flex:1;">Add</button>
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "subtract" ? " ie-opt-active" : ""}" id="ie-mc-sub"  style="flex:1;">Sub</button>
+                    </div>
+                </div>
+                <div class="ie-props-row">
+                    <label>Tolerance</label>
+                    <input type="range" id="ie-mc-tol" min="0" max="255" value="${t.tolerance}">
+                    <span id="ie-mc-tol-lbl">${t.tolerance}</span>
+                </div>
+                <div class="ie-props-row">
+                    <label>Feather %</label>
+                    <input type="range" id="ie-mc-fea" min="0" max="100" value="${t.feather}">
+                    <span id="ie-mc-fea-lbl">${t.feather}%</span>
+                </div>
+                <div style="font-size:10px;color:var(--wfm-text-secondary);margin-top:2px;">Click on canvas to select color</div>
+            `;
+            document.getElementById("ie-mc-add")?.addEventListener("click", () => { t.mode = "add"; this._renderMaskProps("color"); });
+            document.getElementById("ie-mc-sub")?.addEventListener("click", () => { t.mode = "subtract"; this._renderMaskProps("color"); });
+            document.getElementById("ie-mc-tol")?.addEventListener("input", e => {
+                t.tolerance = parseInt(e.target.value);
+                document.getElementById("ie-mc-tol-lbl").textContent = e.target.value;
+            });
+            document.getElementById("ie-mc-fea")?.addEventListener("input", e => {
+                t.feather = parseInt(e.target.value);
+                document.getElementById("ie-mc-fea-lbl").textContent = e.target.value + "%";
+            });
+
+        } else if (sub === "alpha" && this._maskAlphaTool) {
+            const t = this._maskAlphaTool;
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label>Threshold</label>
+                    <input type="range" id="ie-ma-thr" min="0" max="255" value="${t.threshold}">
+                    <span id="ie-ma-thr-lbl">${t.threshold}</span>
+                </div>
+                <div class="ie-props-row">
+                    <label style="cursor:pointer;">
+                        <input type="checkbox" id="ie-ma-inv" ${t.invert ? "checked" : ""}> Invert
+                    </label>
+                </div>
+                <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="ie-ma-extract" style="margin-top:4px;">Extract Alpha</button>
+                <div style="font-size:10px;color:var(--wfm-text-secondary);margin-top:2px;">Extracts alpha from image layers</div>
+            `;
+            document.getElementById("ie-ma-thr")?.addEventListener("input", e => {
+                t.threshold = parseInt(e.target.value);
+                document.getElementById("ie-ma-thr-lbl").textContent = e.target.value;
+            });
+            document.getElementById("ie-ma-inv")?.addEventListener("change", e => { t.invert = e.target.checked; });
+            document.getElementById("ie-ma-extract")?.addEventListener("click", () => {
+                const activeLayer = this._layerMgr?.activeLayer;
+                if (!activeLayer || activeLayer.type !== "mask") { showToast("Select a mask layer first", "info"); return; }
+                const bgCv = this._buildBgCanvas();
+                this._maskAlphaTool.setCanvas(activeLayer.canvas);
+                this._maskAlphaTool.setSourceImage(bgCv);
+                this._saveUndo();
+                this._maskAlphaTool.extract();
+                this._updateCompositeView();
+                this._refreshLayerList();
+            });
+
+        } else if (sub === "text" && this._maskTextTool) {
+            const t = this._maskTextTool;
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label>Mode</label>
+                    <div style="display:flex;gap:4px;">
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "add"   ? " ie-opt-active" : ""}" id="ie-mt-add"   style="flex:1;">Add</button>
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-mt-erase" style="flex:1;">Erase</button>
+                    </div>
+                </div>
+                <div class="ie-props-row">
+                    <label>Font</label>
+                    <select id="ie-mt-font" class="ie-opt-select" style="width:100%;font-size:11px;">
+                        ${MASK_TEXT_FONTS.map(f => `<option value="${f}"${t.fontFamily === f ? " selected" : ""}>${f}</option>`).join("")}
+                    </select>
+                </div>
+                <div class="ie-props-row">
+                    <label>Size</label>
+                    <input type="number" id="ie-mt-size" value="${t.fontSize}" min="6" max="500" class="ie-opt-input" style="width:60px;">
+                </div>
+                <div class="ie-props-row" style="flex-direction:row;align-items:center;gap:6px;">
+                    <button class="wfm-btn wfm-btn-sm${t.bold   ? " ie-opt-active" : ""}" id="ie-mt-bold"   style="min-width:30px;"><b>B</b></button>
+                    <button class="wfm-btn wfm-btn-sm${t.italic ? " ie-opt-active" : ""}" id="ie-mt-italic" style="min-width:30px;"><i>I</i></button>
+                    <select id="ie-mt-align" class="ie-opt-select" style="flex:1;font-size:11px;">
+                        ${["left","center","right"].map(a => `<option value="${a}"${t.align === a ? " selected" : ""}>${a.charAt(0).toUpperCase()+a.slice(1)}</option>`).join("")}
+                    </select>
+                </div>
+                <div style="font-size:10px;color:var(--wfm-text-secondary);margin-top:2px;">Click on canvas to stamp text</div>
+            `;
+            document.getElementById("ie-mt-add")?.addEventListener("click", () => { t.mode = "add"; this._renderMaskProps("text"); });
+            document.getElementById("ie-mt-erase")?.addEventListener("click", () => { t.mode = "erase"; this._renderMaskProps("text"); });
+            document.getElementById("ie-mt-font")?.addEventListener("change", e => { t.fontFamily = e.target.value; });
+            document.getElementById("ie-mt-size")?.addEventListener("input", e => { t.fontSize = parseInt(e.target.value) || 64; });
+            document.getElementById("ie-mt-bold")?.addEventListener("click", () => { t.bold = !t.bold; this._renderMaskProps("text"); });
+            document.getElementById("ie-mt-italic")?.addEventListener("click", () => { t.italic = !t.italic; this._renderMaskProps("text"); });
+            document.getElementById("ie-mt-align")?.addEventListener("change", e => { t.align = e.target.value; });
+
+        } else if (sub === "vector" && this._maskVectorTool) {
+            const t = this._maskVectorTool;
+            const pts = t._points ?? [];
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label>Mode</label>
+                    <div style="display:flex;gap:4px;">
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "add"   ? " ie-opt-active" : ""}" id="ie-mv-add"   style="flex:1;">Add</button>
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-mv-erase" style="flex:1;">Erase</button>
+                    </div>
+                </div>
+                <div class="ie-props-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
+                    <span style="color:var(--wfm-text-secondary);">Points: ${pts.length}</span>
+                    <button class="wfm-btn wfm-btn-sm" id="ie-mv-reset">Reset</button>
+                </div>
+                <div style="font-size:10px;color:var(--wfm-text-secondary);margin-top:2px;line-height:1.5;">
+                    Click: add point<br>
+                    Click 1st point: close<br>
+                    Enter: close open path<br>
+                    Backspace: remove last<br>
+                    Esc: reset
+                </div>
+            `;
+            document.getElementById("ie-mv-add")?.addEventListener("click", () => { t.mode = "add"; this._renderMaskProps("vector"); });
+            document.getElementById("ie-mv-erase")?.addEventListener("click", () => { t.mode = "erase"; this._renderMaskProps("vector"); });
+            document.getElementById("ie-mv-reset")?.addEventListener("click", () => { t.reset(); this._renderMaskProps("vector"); });
+
+        } else if (sub === "shape" && this._maskShapeTool) {
+            const t = this._maskShapeTool;
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label>Mode</label>
+                    <div style="display:flex;gap:4px;">
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "add"   ? " ie-opt-active" : ""}" id="ie-ms-add"   style="flex:1;">Add</button>
+                        <button class="wfm-btn wfm-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-ms-erase" style="flex:1;">Erase</button>
+                    </div>
+                </div>
+                <div class="ie-props-row">
+                    <label>Shape</label>
+                    <div style="display:flex;gap:4px;">
+                        <button class="wfm-btn wfm-btn-sm${t.shape === "rect"    ? " ie-opt-active" : ""}" id="ie-ms-rect"    style="flex:1;">Rect</button>
+                        <button class="wfm-btn wfm-btn-sm${t.shape === "ellipse" ? " ie-opt-active" : ""}" id="ie-ms-ellipse" style="flex:1;">Ellipse</button>
+                    </div>
+                </div>
+                <div style="font-size:10px;color:var(--wfm-text-secondary);margin-top:2px;">Shift: square / circle</div>
+            `;
+            document.getElementById("ie-ms-add")?.addEventListener("click", () => { t.mode = "add"; this._renderMaskProps("shape"); });
+            document.getElementById("ie-ms-erase")?.addEventListener("click", () => { t.mode = "erase"; this._renderMaskProps("shape"); });
+            document.getElementById("ie-ms-rect")?.addEventListener("click", () => { t.shape = "rect"; this._renderMaskProps("shape"); });
+            document.getElementById("ie-ms-ellipse")?.addEventListener("click", () => { t.shape = "ellipse"; this._renderMaskProps("shape"); });
+
         } else {
             body.innerHTML = `<span style="font-size:11px;color:var(--wfm-text-secondary);">No options</span>`;
         }
+    }
+
+    _renderDrawProps() {
+        const pane  = document.getElementById("ie-props-pane");
+        const body  = document.getElementById("ie-props-body");
+        const title = document.getElementById("ie-props-title");
+        if (!pane || !body) return;
+        pane.style.display = "flex";
+        if (title) title.textContent = "Draw";
+
+        const t = this._drawTool;
+        body.innerHTML = `
+            <div class="ie-props-row">
+                <label>Mode</label>
+                <div style="display:flex;gap:4px;">
+                    <button class="wfm-btn wfm-btn-sm${t.mode === "draw"  ? " ie-opt-active" : ""}" id="ie-draw-mode-draw"  style="flex:1;">Draw</button>
+                    <button class="wfm-btn wfm-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-draw-mode-erase" style="flex:1;">Erase</button>
+                </div>
+            </div>
+            <div class="ie-props-row">
+                <label>Color</label>
+                <input type="color" id="ie-draw-color" value="${t.color}"
+                    style="width:36px;height:24px;padding:0;border:1px solid var(--wfm-border);cursor:pointer;border-radius:3px;flex-shrink:0;">
+            </div>
+            <div class="ie-props-row">
+                <label>Size</label>
+                <input type="range" id="ie-draw-size" min="1" max="200" value="${t.brushSize}">
+                <span id="ie-draw-size-lbl">${t.brushSize}px</span>
+            </div>
+            <div class="ie-props-row">
+                <label>Hardness</label>
+                <input type="range" id="ie-draw-hard" min="0" max="100" value="${Math.round(t.hardness * 100)}"
+                    ${t.brushImage ? "disabled title='Hardness applies to circle brush only'" : ""}>
+                <span id="ie-draw-hard-lbl">${Math.round(t.hardness * 100)}%</span>
+            </div>
+            <div class="ie-props-row">
+                <label>Opacity</label>
+                <input type="range" id="ie-draw-opacity" min="1" max="100" value="${Math.round(t.opacity * 100)}">
+                <span id="ie-draw-opacity-lbl">${Math.round(t.opacity * 100)}%</span>
+            </div>
+            ${this._abrAvailable ? `
+            <div style="margin:6px 0 4px;border-top:1px solid var(--wfm-border);padding-top:6px;font-size:10px;color:var(--wfm-text-secondary);letter-spacing:0.05em;">
+                MASK EDITOR ONE (COLOR)
+            </div>
+            <div class="ie-props-row">
+                <label>Brush</label>
+                <span style="font-size:11px;color:var(--wfm-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                    title="${t.brushName ?? "Circle"}">${t.brushName ?? "Circle"}</span>
+                <button class="wfm-btn wfm-btn-sm" id="ie-draw-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;">Select</button>
+                ${t.brushImage ? `<button class="wfm-btn wfm-btn-sm" id="ie-draw-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
+            </div>
+            ${t.brushImage ? `
+            <div class="ie-props-row">
+                <label>Spacing</label>
+                <input type="range" id="ie-draw-spacing" min="5" max="100" value="${Math.round((t.spacing ?? 0.25) * 100)}">
+                <span id="ie-draw-spacing-lbl">${Math.round((t.spacing ?? 0.25) * 100)}%</span>
+            </div>
+            <div class="ie-props-row">
+                <label>Angle</label>
+                <input type="range" id="ie-draw-angle" min="0" max="359" value="${t.angle ?? 0}">
+                <span id="ie-draw-angle-lbl">${t.angle ?? 0}°</span>
+            </div>
+            <div class="ie-props-row">
+                <label>Sz Jitter</label>
+                <input type="range" id="ie-draw-szjitter" min="0" max="100" value="${Math.round((t.sizeJitterAmount ?? 0.5) * 100)}">
+                <span id="ie-draw-szjitter-lbl">${Math.round((t.sizeJitterAmount ?? 0.5) * 100)}%</span>
+            </div>
+            <div class="ie-props-row">
+                <label>Rot. Jitter</label>
+                <label style="cursor:pointer;font-size:11px;">
+                    <input type="checkbox" id="ie-draw-rotjitter" ${t.rotationJitter ? "checked" : ""}> On
+                </label>
+            </div>` : ""}` : ""}
+        `;
+
+        document.getElementById("ie-draw-mode-draw")?.addEventListener("click", () => {
+            this._drawTool.mode = "draw";
+            this._drawTool._stamp = null;
+            this._renderDrawProps();
+        });
+        document.getElementById("ie-draw-mode-erase")?.addEventListener("click", () => {
+            this._drawTool.mode = "erase";
+            this._drawTool._stamp = null;
+            this._renderDrawProps();
+        });
+        document.getElementById("ie-draw-color")?.addEventListener("input", e => {
+            this._drawTool.color = e.target.value;
+            this._drawTool._stamp = null;
+            this._drawTool._imgStamp = null;
+        });
+        document.getElementById("ie-draw-size")?.addEventListener("input", e => {
+            this._drawTool.brushSize = parseInt(e.target.value);
+            document.getElementById("ie-draw-size-lbl").textContent = e.target.value + "px";
+            this._drawTool._stamp = null;
+        });
+        document.getElementById("ie-draw-hard")?.addEventListener("input", e => {
+            this._drawTool.hardness = parseInt(e.target.value) / 100;
+            document.getElementById("ie-draw-hard-lbl").textContent = e.target.value + "%";
+            this._drawTool._stamp = null;
+        });
+        document.getElementById("ie-draw-opacity")?.addEventListener("input", e => {
+            this._drawTool.opacity = parseInt(e.target.value) / 100;
+            document.getElementById("ie-draw-opacity-lbl").textContent = e.target.value + "%";
+        });
+        document.getElementById("ie-draw-select-brush")?.addEventListener("click", () => this._openAbrBrushPickerForDraw());
+        document.getElementById("ie-draw-clear-brush")?.addEventListener("click", () => {
+            this._drawTool?.clearImageBrush();
+            this._renderDrawProps();
+        });
+        document.getElementById("ie-draw-spacing")?.addEventListener("input", e => {
+            this._drawTool.spacing = parseInt(e.target.value) / 100;
+            document.getElementById("ie-draw-spacing-lbl").textContent = e.target.value + "%";
+        });
+        document.getElementById("ie-draw-angle")?.addEventListener("input", e => {
+            this._drawTool.angle = parseInt(e.target.value);
+            document.getElementById("ie-draw-angle-lbl").textContent = e.target.value + "°";
+        });
+        document.getElementById("ie-draw-szjitter")?.addEventListener("input", e => {
+            this._drawTool.sizeJitterAmount = parseInt(e.target.value) / 100;
+            this._drawTool.sizeJitter = this._drawTool.sizeJitterAmount > 0;
+            document.getElementById("ie-draw-szjitter-lbl").textContent = e.target.value + "%";
+        });
+        document.getElementById("ie-draw-rotjitter")?.addEventListener("change", e => {
+            this._drawTool.rotationJitter = e.target.checked;
+        });
+    }
+
+    // ── Mask Editor One 追加ツール: 初期化・切り替え ──────────────────────────
+
+    _initMaskEditorOneTools() {
+        if (this._maskColorTool) return; // 初期化済み
+        const overlayCanvas = document.getElementById("ie-canvas-overlay");
+        const onChange = () => { this._updateCompositeView(); this._refreshLayerList(); };
+
+        this._maskColorTool  = new MaskColorTool();
+        this._maskColorTool.onChange(onChange);
+
+        this._maskAlphaTool  = new MaskAlphaTool();
+        this._maskAlphaTool.onChange(onChange);
+
+        this._maskTextTool   = new MaskTextTool();
+        this._maskTextTool.onChange(onChange);
+
+        this._maskVectorTool = new MaskVectorTool();
+        this._maskVectorTool.setPreviewCanvas(overlayCanvas);
+        this._maskVectorTool.onBeforeCommit = () => this._saveUndo();
+        this._maskVectorTool.onChange(() => { onChange(); this._renderMaskProps("vector"); });
+
+        this._maskShapeTool  = new MaskShapeTool();
+        this._maskShapeTool.setPreviewCanvas(overlayCanvas);
+        this._maskShapeTool.onChange(onChange);
+    }
+
+    _deactivateMaskSubtool() {
+        const sub = this._maskSubtool;
+        if (sub === "paint")  this._maskTool?.deactivate();
+        if (sub === "color")  this._maskColorTool?.deactivate();
+        if (sub === "alpha")  this._maskAlphaTool?.deactivate();
+        if (sub === "text")   this._maskTextTool?.deactivate();
+        if (sub === "vector") this._maskVectorTool?.deactivate();
+        if (sub === "shape")  this._maskShapeTool?.deactivate();
+    }
+
+    _activateMaskSubtool() {
+        const sub         = this._maskSubtool;
+        const activeLayer = this._layerMgr?.activeLayer;
+        const canvas      = activeLayer?.type === "mask" ? activeLayer.canvas : null;
+        if (sub === "paint" && this._maskTool) {
+            if (canvas) this._maskTool.setCanvas(canvas);
+            this._maskTool.activate();
+        } else if (sub === "color" && this._maskColorTool) {
+            if (canvas) this._maskColorTool.setCanvas(canvas);
+            this._maskColorTool.activate();
+        } else if (sub === "alpha" && this._maskAlphaTool) {
+            if (canvas) this._maskAlphaTool.setCanvas(canvas);
+            this._maskAlphaTool.activate();
+        } else if (sub === "text" && this._maskTextTool) {
+            if (canvas) this._maskTextTool.setCanvas(canvas);
+            this._maskTextTool.activate();
+        } else if (sub === "vector" && this._maskVectorTool) {
+            if (canvas) this._maskVectorTool.setCanvas(canvas);
+            this._maskVectorTool.activate();
+        } else if (sub === "shape" && this._maskShapeTool) {
+            if (canvas) this._maskShapeTool.setCanvas(canvas);
+            this._maskShapeTool.activate();
+        }
+    }
+
+    _switchMaskSubtool(sub) {
+        this._deactivateMaskSubtool();
+        this._maskSubtool = sub;
+        this._renderToolOptions("mask");
+        this._activateMaskSubtool();
+    }
+
+    // マスクを除いた全表示レイヤーを合成した背景キャンバスを生成（ColorTool/AlphaTool 用）
+    _buildBgCanvas() {
+        const canvas = document.createElement("canvas");
+        canvas.width  = this._canvasW;
+        canvas.height = this._canvasH;
+        if (!this._layerMgr) return canvas;
+        const ctx    = canvas.getContext("2d");
+        const layers = this._layerMgr.layers;
+        for (let i = layers.length - 1; i >= 0; i--) {
+            const layer = layers[i];
+            if (!layer.visible || layer.type === "mask") continue;
+            ctx.save();
+            ctx.globalAlpha = layer.opacity;
+            ctx.globalCompositeOperation = layer.blendMode;
+            Layer.applyTransform(ctx, layer);
+            ctx.drawImage(layer.canvas, -layer.canvas.width / 2, -layer.canvas.height / 2);
+            ctx.restore();
+        }
+        return canvas;
     }
 
     _renderMaskLayerOverlay(ctx, maskLayer) {
@@ -1043,16 +1384,37 @@ class ImageEditTab {
             this._drawTool.onMouseDown(pos.x, pos.y);
             this._updateCompositeView();
 
-        } else if (this._activeTool === "mask" && this._maskTool) {
+        } else if (this._activeTool === "mask") {
             const activeLayer = this._layerMgr.activeLayer;
             if (!activeLayer || activeLayer.type !== "mask") {
                 showToast("Select a mask layer first", "info");
                 return;
             }
-            this._saveUndo();
-            this._maskTool.setCanvas(activeLayer.canvas);
-            this._maskTool.onMouseDown(pos.x, pos.y);
-            this._updateCompositeView();
+            const sub = this._maskSubtool;
+            if (sub === "paint" && this._maskTool) {
+                this._saveUndo();
+                this._maskTool.setCanvas(activeLayer.canvas);
+                this._maskTool.onMouseDown(pos.x, pos.y);
+                this._updateCompositeView();
+            } else if (sub === "color" && this._maskColorTool) {
+                this._saveUndo();
+                this._maskColorTool.setCanvas(activeLayer.canvas);
+                this._maskColorTool.setBgCanvas(this._buildBgCanvas());
+                this._maskColorTool.onMouseDown(pos.x, pos.y);
+                this._updateCompositeView();
+                this._refreshLayerList();
+            } else if (sub === "text" && this._maskTextTool) {
+                this._maskTextTool.setCanvas(activeLayer.canvas);
+                this._maskTextTool.onMouseDown(pos.x, pos.y);
+            } else if (sub === "vector" && this._maskVectorTool) {
+                this._maskVectorTool.setCanvas(activeLayer.canvas);
+                this._maskVectorTool.onMouseDown(pos.x, pos.y);
+                this._renderMaskProps("vector");
+            } else if (sub === "shape" && this._maskShapeTool) {
+                this._saveUndo();
+                this._maskShapeTool.setCanvas(activeLayer.canvas);
+                this._maskShapeTool.onMouseDown(pos.x, pos.y);
+            }
 
         } else if (this._activeTool === "shape" && this._shapeTool) {
             this._shapeTool.onMouseDown(pos.x, pos.y);
@@ -1085,8 +1447,15 @@ class ImageEditTab {
             if (this._drawTool?._drawing) this._updateCompositeView();
         }
         if (this._activeTool === "mask") {
-            this._maskTool?.onMouseMove(pos.x, pos.y);
-            if (this._maskTool?._drawing) this._updateCompositeView();
+            const sub = this._maskSubtool;
+            if (sub === "paint") {
+                this._maskTool?.onMouseMove(pos.x, pos.y);
+                if (this._maskTool?._drawing) this._updateCompositeView();
+            } else if (sub === "vector") {
+                this._maskVectorTool?.onMouseMove(pos.x, pos.y);
+            } else if (sub === "shape") {
+                this._maskShapeTool?.onMouseMove(pos.x, pos.y, e);
+            }
         }
         if (this._activeTool === "shape")  this._shapeTool?.onMouseMove(pos.x, pos.y);
         if (this._activeTool === "select") this._selectTool?.onMouseMove(pos.x, pos.y);
@@ -1099,7 +1468,18 @@ class ImageEditTab {
     _onToolMouseUp(e) {
         if (!this._layerMgr || e.button !== 0) return;
         if (this._activeTool === "draw")   this._drawTool?.onMouseUp();
-        if (this._activeTool === "mask")   this._maskTool?.onMouseUp();
+        if (this._activeTool === "mask") {
+            const sub = this._maskSubtool;
+            if (sub === "paint") this._maskTool?.onMouseUp();
+            else if (sub === "shape") {
+                const activeLayer = this._layerMgr?.activeLayer;
+                if (activeLayer?.type === "mask") {
+                    this._maskShapeTool?.onMouseUp();
+                    this._updateCompositeView();
+                    this._refreshLayerList();
+                }
+            }
+        }
         if (this._activeTool === "shape")  this._shapeTool?.onMouseUp();
         if (this._activeTool === "select") this._selectTool?.onMouseUp();
         if (this._activeTool === "blur" && this._blurDragging) {
@@ -1115,6 +1495,7 @@ class ImageEditTab {
         this._hideBrushCursor();
         if (this._activeTool === "shape")  this._shapeTool?.onMouseLeave();
         if (this._activeTool === "select") this._selectTool?.onMouseLeave();
+        if (this._activeTool === "mask" && this._maskSubtool === "vector") this._maskVectorTool?.onMouseLeave();
         if (this._activeTool === "blur" && this._blurDragging) {
             this._blurDragging = false;
             const overlay = document.getElementById("ie-canvas-overlay");
@@ -1864,6 +2245,9 @@ class ImageEditTab {
             }
             if (e.ctrlKey && e.key === "z") { e.preventDefault(); this._undo(); }
             if (e.ctrlKey && e.key === "y") { e.preventDefault(); this._redo(); }
+            if (this._activeTool === "mask" && this._maskSubtool === "vector") {
+                this._maskVectorTool?.onKeyDown(e);
+            }
             if (!e.ctrlKey && !e.target.closest("input, textarea, select")) {
                 if (e.key === "v") this._setActiveTool("select");
                 if (e.key === "b") this._setActiveTool("draw");
@@ -2294,6 +2678,258 @@ class ImageEditTab {
         };
 
         // ── Tree rendering ─────────────────────────────────────────
+        const renderTree = () => {
+            treeEl.innerHTML = "";
+            const allItem = document.createElement("div");
+            Object.assign(allItem.style, {
+                padding: "5px 10px", cursor: "pointer", fontSize: "12px",
+                background: selectedFolder === null ? "color-mix(in srgb, var(--wfm-primary, #4682e6) 25%, transparent)" : "",
+            });
+            allItem.textContent = "All Brushes";
+            allItem.onclick = () => { selectedFolder = null; renderTree(); showFolder(null); };
+            treeEl.appendChild(allItem);
+
+            const renderNodes = (nodes, depth) => {
+                for (const n of nodes) {
+                    if (n.type !== "folder") continue;
+                    const isExpanded = expanded.has(n.path);
+                    const item = document.createElement("div");
+                    Object.assign(item.style, {
+                        padding: `5px 10px 5px ${10 + depth * 12}px`,
+                        cursor: "pointer", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px",
+                        background: selectedFolder === n.path ? "color-mix(in srgb, var(--wfm-primary, #4682e6) 25%, transparent)" : "",
+                    });
+                    const arrow = document.createElement("span");
+                    arrow.style.cssText = "font-size:9px;color:var(--wfm-text-secondary,#999);flex-shrink:0;";
+                    arrow.textContent = isExpanded ? "▼" : "▶";
+                    const nameSpan = document.createElement("span");
+                    nameSpan.textContent = n.name;
+                    nameSpan.style.overflow = "hidden";
+                    nameSpan.style.textOverflow = "ellipsis";
+                    nameSpan.style.whiteSpace = "nowrap";
+                    item.appendChild(arrow);
+                    item.appendChild(nameSpan);
+                    item.onclick = () => {
+                        if (isExpanded) expanded.delete(n.path); else expanded.add(n.path);
+                        selectedFolder = n.path;
+                        renderTree(); showFolder(n.path);
+                    };
+                    treeEl.appendChild(item);
+                    if (isExpanded) renderNodes(n.children || [], depth + 1);
+                }
+            };
+            renderNodes(tree, 0);
+        };
+
+        renderTree();
+        showFolder(null);
+    }
+
+    _openAbrBrushPickerForDraw() {
+        const existing = document.getElementById("wfm-abr-picker-overlay");
+        if (existing) { existing.remove(); return; }
+
+        const overlay = document.createElement("div");
+        overlay.id = "wfm-abr-picker-overlay";
+        Object.assign(overlay.style, {
+            position: "fixed", inset: "0",
+            background: "rgba(0,0,0,0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: "99999",
+        });
+
+        const modal = document.createElement("div");
+        Object.assign(modal.style, {
+            background: "var(--wfm-surface, #2a2a2a)",
+            border: "1px solid var(--wfm-border, #444)",
+            borderRadius: "8px",
+            width: "640px", height: "460px",
+            display: "flex", flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            color: "var(--wfm-text, #ddd)",
+            fontFamily: "sans-serif",
+        });
+
+        const header = document.createElement("div");
+        Object.assign(header.style, {
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "8px 12px",
+            borderBottom: "1px solid var(--wfm-border, #444)",
+            fontWeight: "bold", fontSize: "13px", flexShrink: "0",
+        });
+        const headerTitle = document.createElement("span");
+        headerTitle.textContent = "ABR Brush Library — MASK EDITOR ONE (COLOR)";
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "×";
+        closeBtn.className = "wfm-btn wfm-btn-sm";
+        closeBtn.style.cssText = "font-size:16px;padding:0 6px;";
+        closeBtn.onclick = () => overlay.remove();
+        header.appendChild(headerTitle);
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
+
+        const body = document.createElement("div");
+        Object.assign(body.style, { display: "flex", flex: "1", overflow: "hidden" });
+
+        const treeEl = document.createElement("div");
+        Object.assign(treeEl.style, {
+            width: "150px", flexShrink: "0",
+            borderRight: "1px solid var(--wfm-border, #444)",
+            overflowY: "auto", padding: "4px 0", fontSize: "12px",
+        });
+
+        const gridEl = document.createElement("div");
+        Object.assign(gridEl.style, {
+            flex: "1", overflowY: "auto",
+            display: "flex", flexWrap: "wrap",
+            alignContent: "flex-start", padding: "6px", gap: "4px",
+        });
+
+        body.appendChild(treeEl);
+        body.appendChild(gridEl);
+        modal.appendChild(body);
+
+        const footer = document.createElement("div");
+        Object.assign(footer.style, {
+            display: "flex", gap: "8px", padding: "8px 12px", flexShrink: "0",
+            borderTop: "1px solid var(--wfm-border, #444)",
+        });
+        const resetBtn = document.createElement("button");
+        resetBtn.className = "wfm-btn wfm-btn-sm";
+        resetBtn.textContent = "⬤ Round Brush (default)";
+        resetBtn.onclick = () => {
+            this._drawTool?.clearImageBrush();
+            this._renderDrawProps();
+            overlay.remove();
+        };
+        footer.appendChild(resetBtn);
+        modal.appendChild(footer);
+
+        overlay.appendChild(modal);
+        overlay.addEventListener("mousedown", e => { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+
+        const tree = this._abrBrushTree;
+        let selectedFolder = null;
+        const expanded = new Set();
+
+        const collectFiles = (nodes) => {
+            const result = [];
+            for (const n of nodes) {
+                if (n.type === "file") result.push(n);
+                else if (n.type === "folder" && n.children) result.push(...collectFiles(n.children));
+            }
+            return result;
+        };
+
+        const findFolder = (nodes, path) => {
+            for (const n of nodes) {
+                if (n.type !== "folder") continue;
+                if (n.path === path) return n;
+                const found = findFolder(n.children || [], path);
+                if (found) return found;
+            }
+            return null;
+        };
+
+        const currentColor = this._drawTool?.color ?? "#ff0000";
+        const hex = currentColor.replace("#", "");
+        const cr  = parseInt(hex.slice(0, 2), 16);
+        const cg  = parseInt(hex.slice(2, 4), 16);
+        const cb  = parseInt(hex.slice(4, 6), 16);
+
+        const makeBrushThumb = (node) => {
+            const item = document.createElement("div");
+            Object.assign(item.style, {
+                width: "72px", cursor: "pointer", textAlign: "center",
+                padding: "4px", borderRadius: "4px",
+                border: "1px solid var(--wfm-border, #444)",
+                background: "var(--wfm-bg, #1a1a1a)",
+                boxSizing: "border-box",
+            });
+            item.title = node.name;
+
+            const THUMB = 64;
+            const canvas = document.createElement("canvas");
+            canvas.width = THUMB; canvas.height = THUMB;
+            canvas.style.cssText = "display:block;border-radius:3px;";
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#1a1a2a";
+            ctx.fillRect(0, 0, THUMB, THUMB);
+
+            const img = new Image();
+            img.onload = () => {
+                const srcW = img.naturalWidth || img.width;
+                const srcH = img.naturalHeight || img.height;
+                const aspect = srcW / srcH || 1;
+                const WORK = 128;
+                const wW = aspect >= 1 ? WORK : Math.max(1, Math.round(WORK * aspect));
+                const wH = aspect >= 1 ? Math.max(1, Math.round(WORK / aspect)) : WORK;
+                const tmp = document.createElement("canvas");
+                tmp.width = wW; tmp.height = wH;
+                const stx = tmp.getContext("2d");
+                stx.drawImage(img, 0, 0, wW, wH);
+                const id = stx.getImageData(0, 0, wW, wH);
+                const d = id.data;
+                let hasAlpha = false;
+                for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { hasAlpha = true; break; }
+                let invertLum = false;
+                if (!hasAlpha) {
+                    const corners = [0, wW - 1, wW * (wH - 1), wW * wH - 1];
+                    let bg = 0;
+                    for (const ci of corners) { const ii = ci * 4; bg += (d[ii] * 0.299 + d[ii+1] * 0.587 + d[ii+2] * 0.114) / 255; }
+                    invertLum = (bg / corners.length) > 0.5;
+                }
+                for (let i = 0; i < d.length; i += 4) {
+                    const a = hasAlpha ? d[i+3] / 255 : (() => { const l = (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114)/255; return invertLum ? 1-l : l; })();
+                    d[i] = cr; d[i+1] = cg; d[i+2] = cb; d[i+3] = Math.round(a * 255);
+                }
+                stx.putImageData(id, 0, 0);
+                const THRESHOLD = 15;
+                let x0 = wW, x1 = -1, y0 = wH, y1 = -1;
+                for (let y = 0; y < wH; y++) for (let x = 0; x < wW; x++) if (d[(y*wW+x)*4+3] > THRESHOLD) { if (x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+                if (x1 >= x0 && y1 >= y0) {
+                    const cW = x1-x0+1, cH = y1-y0+1;
+                    const s = Math.min((THUMB-4)/cW, (THUMB-4)/cH);
+                    ctx.drawImage(tmp, x0, y0, cW, cH, Math.round((THUMB-Math.round(cW*s))/2), Math.round((THUMB-Math.round(cH*s))/2), Math.round(cW*s), Math.round(cH*s));
+                }
+            };
+            img.src = `/mask_editor/brushes/raw?path=${encodeURIComponent(node.path)}`;
+            item.appendChild(canvas);
+
+            const label = document.createElement("div");
+            label.textContent = node.name;
+            Object.assign(label.style, { fontSize: "10px", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--wfm-text-secondary, #999)" });
+            item.appendChild(label);
+
+            item.addEventListener("mouseenter", () => { item.style.background = "color-mix(in srgb, var(--wfm-primary, #4682e6) 20%, transparent)"; item.style.borderColor = "var(--wfm-primary, #4682e6)"; });
+            item.addEventListener("mouseleave", () => { item.style.background = "var(--wfm-bg, #1a1a1a)"; item.style.borderColor = "var(--wfm-border, #444)"; });
+            item.onclick = () => {
+                const loadImg = new Image();
+                loadImg.onload = () => {
+                    this._drawTool?.setImageBrush(loadImg, node.name);
+                    this._renderDrawProps();
+                    overlay.remove();
+                };
+                loadImg.src = `/mask_editor/brushes/raw?path=${encodeURIComponent(node.path)}`;
+            };
+            return item;
+        };
+
+        const showFolder = (path) => {
+            const files = path === null ? collectFiles(tree) : collectFiles(findFolder(tree, path)?.children || []);
+            gridEl.innerHTML = "";
+            if (files.length === 0) {
+                const msg = document.createElement("span");
+                msg.style.cssText = "font-size:12px;color:var(--wfm-text-secondary,#999);padding:12px;";
+                msg.textContent = tree.length === 0 ? "No brushes installed" : "No brushes in this folder";
+                gridEl.appendChild(msg);
+                return;
+            }
+            for (const file of files) gridEl.appendChild(makeBrushThumb(file));
+        };
+
         const renderTree = () => {
             treeEl.innerHTML = "";
             const allItem = document.createElement("div");

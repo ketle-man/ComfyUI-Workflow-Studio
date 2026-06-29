@@ -381,7 +381,7 @@
     padding: 0;
     line-height: 1;
     color: var(--wfm-text);
-    opacity: 0.5;
+    opacity: 0.85;
     flex-shrink: 0;
     transition: opacity 0.1s;
 }
