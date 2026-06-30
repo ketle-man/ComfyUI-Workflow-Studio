@@ -2,6 +2,35 @@
 
 ---
 
+## v0.3.67
+
+### Alt+Click Apply & Generate
+
+GenerateUI タブの Apply ボタンを Alt+Click すると、Apply と Generate を1操作で実行できる機能を追加。
+よく変更する箇所（Positive Prompt・Checkpoint・KSampler）でApplyボタンとGenerateボタンを往復する手間を省く。
+
+**対象ボタン（`comfyui-editor.js`）:**
+- Input タブ — Positive Prompt の Apply（`wfm-prompt-pos-apply`）
+- Model タブ — 全モデル Apply（`wfm-model-apply`: Checkpoint / VAE / Diffusion Model / ControlNet / Hypernetwork）
+- Settings タブ — KSampler の Apply（`wfm-settings-sampler-apply`）
+
+**動作の流れ:**
+1. Alt+Click → Apply 処理を実行（ワークフローへの書き込み＋Raw JSON同期）
+2. Apply が成功（対象ノードが存在）した場合のみ `wfm:apply-and-generate` カスタムイベントを dispatch
+3. `generate-tab.js` のリスナーがイベントを受け取り `handleGenerate()` を呼び出す
+
+循環参照を避けるためカスタムイベント経由で連携（comfyui-editor.js は generate-tab.js を import しない設計を維持）。
+対象ノードが存在しない場合はdispatchされないため、ワークフロー未読み込み時は何も起きない。
+
+各 Apply ボタンに `title="Apply (Alt+Click: Apply & Generate)"` を追加してホバーで操作を確認できるようにした。
+
+**ヘルプ更新:**
+- `helpGen18` を EN/JA/ZH の3言語で追加
+- `index.html` に `wfm-help-gen-18` の `<li>` 追加
+- `app.js` の `helpIdMap` に `"wfm-help-gen-18": "helpGen18"` 登録
+
+---
+
 ## 計画: Image Edit 拡張 — ABRブラシ連携 + Mask Editor One 統合
 
 **方針**: Mask Editor One（同作者）のインストールを前提に、WFS Image Edit タブに2つの拡張を加える。

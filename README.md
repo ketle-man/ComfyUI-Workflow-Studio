@@ -1,4 +1,4 @@
-前回から引き続きImage EditタブのMask Editor Oneとの連携、機能追加を行いたい。まずDrawメニューにマスクメニューと同じくプロパティペインを追加し上部のcolor他をプロパティに移動、下部にMask Editor Oneのブラシ機能としたい。名称による混乱を防ぐためMASK EDITOR ONE (COLOR)としてほしい。# ComfyUI-Workflow-Studio
+# ComfyUI-Workflow-Studio
 
 A comprehensive workflow, asset management, and generation UI plugin for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.66-green)
+![Version](https://img.shields.io/badge/version-0.3.67-green)
 
 ## Screenshots
 
@@ -391,6 +391,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.67
+
+- **GenerateUI — Alt+Click Apply & Generate** — Alt+Click any Apply button to apply the parameter and immediately queue a generation in one step; applies to Positive Prompt Apply (Input tab), all model Apply buttons (Model tab: Checkpoint / VAE / Diffusion Model / ControlNet / Hypernetwork), and KSampler Apply (Settings tab); only triggers generation when the target node exists in the loaded workflow (no action on missing nodes); each Apply button shows a tooltip `Apply (Alt+Click: Apply & Generate)` on hover
+- **Help — Alt+Click Apply & Generate** — new help entry (`helpGen18`) added in EN / JA / ZH
 
 ### v0.3.66
 

@@ -225,7 +225,7 @@ export const comfyEditor = {
                         ${positiveNodes.map((n) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" selected>ID:${n.id} (${n.title})</option>`).join("")}
                         ${nodeOpts}
                     </select>
-                    <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-apply">Apply</button>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-apply" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                 </div>
                 <textarea class="wfm-textarea" id="wfm-prompt-pos-text" rows="6">${positiveNodes[0]?.text || ""}</textarea>
             </div>
@@ -254,7 +254,7 @@ export const comfyEditor = {
             </div>
         `;
 
-        document.getElementById("wfm-prompt-pos-apply")?.addEventListener("click", () => {
+        document.getElementById("wfm-prompt-pos-apply")?.addEventListener("click", (e) => {
             const nodeId = document.getElementById("wfm-prompt-pos-target")?.value;
             const text = document.getElementById("wfm-prompt-pos-text")?.value;
             if (nodeId && comfyUI.currentWorkflow?.[nodeId]) {
@@ -262,6 +262,7 @@ export const comfyEditor = {
                 const textKey = promptNode?.textKey || "text";
                 comfyUI.currentWorkflow[nodeId].inputs[textKey] = text;
                 _syncRawJson();
+                if (e.altKey) document.dispatchEvent(new CustomEvent("wfm:apply-and-generate"));
             }
         });
 
@@ -377,7 +378,7 @@ export const comfyEditor = {
                     ${extrasHtml}
                     <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
                         <select class="wfm-select" id="wfm-model-${s.key}-target" style="flex:1;">${targetOpts}</select>
-                        <button class="wfm-btn wfm-btn-sm wfm-model-apply" data-key="${s.key}" data-input="${s.inputKey}">Apply</button>
+                        <button class="wfm-btn wfm-btn-sm wfm-model-apply" data-key="${s.key}" data-input="${s.inputKey}" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                     </div>
                 </div>
             `;
@@ -402,7 +403,7 @@ export const comfyEditor = {
 
         // Apply buttons
         el.querySelectorAll(".wfm-model-apply").forEach((btn) => {
-            btn.addEventListener("click", () => {
+            btn.addEventListener("click", (e) => {
                 const key = btn.dataset.key;
                 let inputKey = btn.dataset.input;
                 const select = document.getElementById(`wfm-model-${key}`);
@@ -424,6 +425,7 @@ export const comfyEditor = {
                         if (!isNaN(exVal)) comfyUI.currentWorkflow[nodeId].inputs[exInputKey] = exVal;
                     });
                     _syncRawJson();
+                    if (e.altKey) document.dispatchEvent(new CustomEvent("wfm:apply-and-generate"));
                 }
             });
         });
@@ -890,7 +892,7 @@ export const comfyEditor = {
                         <label>Denoise</label>
                         <input type="number" class="wfm-input" id="wfm-settings-denoise" value="${sampler.denoise ?? 1.0}" step="0.05" min="0" max="1">
                     </div>
-                    <button class="wfm-btn wfm-btn-sm" id="wfm-settings-sampler-apply">Apply</button>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-settings-sampler-apply" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                     ` : "<p class='wfm-placeholder'>No KSampler node found</p>"}
                 </div>
                 <div style="flex:1;min-width:0;padding-left:14px;">
@@ -934,7 +936,7 @@ export const comfyEditor = {
             </div>
         `;
 
-        document.getElementById("wfm-settings-sampler-apply")?.addEventListener("click", () => {
+        document.getElementById("wfm-settings-sampler-apply")?.addEventListener("click", (e) => {
             const nodeId = document.getElementById("wfm-settings-sampler-id")?.value;
             if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
             const inputs = comfyUI.currentWorkflow[nodeId].inputs;
@@ -947,6 +949,7 @@ export const comfyEditor = {
             inputs.scheduler = document.getElementById("wfm-settings-scheduler")?.value;
             inputs.denoise = parseFloat(document.getElementById("wfm-settings-denoise")?.value) || 1.0;
             _syncRawJson();
+            if (e.altKey) document.dispatchEvent(new CustomEvent("wfm:apply-and-generate"));
         });
 
         document.getElementById("wfm-settings-latent-apply")?.addEventListener("click", () => {

@@ -1752,6 +1752,9 @@ export async function initGenerateTab() {
     // Generate button
     document.getElementById("wfm-gen-generate-btn")?.addEventListener("click", handleGenerate);
 
+    // Alt+Apply from Input/Model/Settings tabs → Apply & Generate
+    document.addEventListener("wfm:apply-and-generate", () => handleGenerate());
+
     // Interrupt button (stops both single generation and batch loop)
     document.getElementById("wfm-gen-interrupt-btn")?.addEventListener("click", async () => {
         _ckptBatch.aborted = true;

@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-workflow-studio"
 description = "A comprehensive workflow, asset management, and generation UI plugin for ComfyUI. Manage workflows, models, images, and prompts; batch generation and Image Feeder in the GenerateUI tab; library side panel with canvas drag & drop and AI tools."
-version = "0.3.66"
+version = "0.3.67"
 license = "MIT"
 requires-python = ">= 3.10"
 dependencies = ["jinja2"]
