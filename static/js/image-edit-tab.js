@@ -724,15 +724,15 @@ class ImageEditTab {
                         ${t.brushImage ? "disabled title='Hardness applies to circle brush only'" : ""}>
                     <span id="ie-mask-hard-lbl">${Math.round(t.hardness * 100)}%</span>
                 </div>
-                ${this._abrAvailable ? `
-                <div style="margin:6px 0 4px;border-top:1px solid var(--wfm-border);padding-top:6px;font-size:10px;color:var(--wfm-text-secondary);letter-spacing:0.05em;">
+                <div style="margin:6px 0 4px;border-top:1px solid var(--wfm-border);padding-top:6px;font-size:10px;color:${this._abrAvailable ? "var(--wfm-success)" : "var(--wfm-text-secondary)"};letter-spacing:0.05em;"
+                    title="${this._abrAvailable ? "Mask Editor One: brushes available" : "Mask Editor One: no brushes imported yet"}">
                     MASK EDITOR ONE
                 </div>
                 <div class="ie-props-row">
                     <label>Brush</label>
                     <span style="font-size:11px;color:var(--wfm-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                         title="${t.brushName ?? "Circle"}">${t.brushName ?? "Circle"}</span>
-                    <button class="wfm-btn wfm-btn-sm" id="ie-mask-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;">Select</button>
+                    <button class="wfm-btn wfm-btn-sm" id="ie-mask-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;" ${this._abrAvailable ? "" : "disabled"}>Select</button>
                     ${t.brushImage ? `<button class="wfm-btn wfm-btn-sm" id="ie-mask-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
                 </div>
                 ${t.brushImage ? `
@@ -756,7 +756,7 @@ class ImageEditTab {
                     <label style="cursor:pointer;font-size:11px;">
                         <input type="checkbox" id="ie-mask-rotjitter" ${t.rotationJitter ? "checked" : ""}> On
                     </label>
-                </div>` : ""}` : ""}
+                </div>` : ""}
             `;
             document.getElementById("ie-mask-mode-add")?.addEventListener("click", () => {
                 this._maskTool.mode = "paint";
@@ -1054,15 +1054,15 @@ class ImageEditTab {
                 <input type="range" id="ie-draw-opacity" min="1" max="100" value="${Math.round(t.opacity * 100)}">
                 <span id="ie-draw-opacity-lbl">${Math.round(t.opacity * 100)}%</span>
             </div>
-            ${this._abrAvailable ? `
-            <div style="margin:6px 0 4px;border-top:1px solid var(--wfm-border);padding-top:6px;font-size:10px;color:var(--wfm-text-secondary);letter-spacing:0.05em;">
+            <div style="margin:6px 0 4px;border-top:1px solid var(--wfm-border);padding-top:6px;font-size:10px;color:${this._abrAvailable ? "var(--wfm-success)" : "var(--wfm-text-secondary)"};letter-spacing:0.05em;"
+                title="${this._abrAvailable ? "Mask Editor One: brushes available" : "Mask Editor One: no brushes imported yet"}">
                 MASK EDITOR ONE (COLOR)
             </div>
             <div class="ie-props-row">
                 <label>Brush</label>
                 <span style="font-size:11px;color:var(--wfm-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                     title="${t.brushName ?? "Circle"}">${t.brushName ?? "Circle"}</span>
-                <button class="wfm-btn wfm-btn-sm" id="ie-draw-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;">Select</button>
+                <button class="wfm-btn wfm-btn-sm" id="ie-draw-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;" ${this._abrAvailable ? "" : "disabled"}>Select</button>
                 ${t.brushImage ? `<button class="wfm-btn wfm-btn-sm" id="ie-draw-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
             </div>
             ${t.brushImage ? `
@@ -1086,7 +1086,7 @@ class ImageEditTab {
                 <label style="cursor:pointer;font-size:11px;">
                     <input type="checkbox" id="ie-draw-rotjitter" ${t.rotationJitter ? "checked" : ""}> On
                 </label>
-            </div>` : ""}` : ""}
+            </div>` : ""}
         `;
 
         document.getElementById("ie-draw-mode-draw")?.addEventListener("click", () => {

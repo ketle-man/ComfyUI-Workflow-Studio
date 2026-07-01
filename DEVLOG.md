@@ -2,6 +2,30 @@
 
 ---
 
+## v0.3.68
+
+### MASK EDITOR ONE セクション常時表示化
+
+ユーザー報告: 「Image EditタブでABRブラシが表示できない」の原因調査から発生。実際にはSAM3・BiRefNetは正常動作しており（`/mask_editor/sam3/status`・`/mask_editor/birefnet/status`とも`loaded: true`）、原因は Mask Editor One の `brushes/` フォルダが空（`.abr`未インポート）で、`_abrAvailable = tree.length > 0` の判定によりセクション自体が非表示になっていたこと。
+
+調査の結果を受け、「MASK EDITOR ONEセクションは常時表示し、色で利用可否を示す」という方針に変更。
+
+**対象ファイル:** `static/js/image-edit-tab.js`
+
+**変更内容:**
+- Mask Paint モード（`_renderMaskProps`）・Draw ツール（`_renderDrawProps`）双方で、`MASK EDITOR ONE` / `MASK EDITOR ONE (COLOR)` セクションを囲んでいた `${this._abrAvailable ? ... : ""}` の外側条件分岐を削除し、常時レンダリングするように変更
+- セクション見出しの文字色を `this._abrAvailable` に応じて動的に切り替え: 利用可能時 `var(--wfm-success)`（緑）、未インポート時 `var(--wfm-text-secondary)`（既存のデフォルト色）
+- 見出しに `title` 属性でツールチップ（"Mask Editor One: brushes available" / "no brushes imported yet"）を追加
+- Select ボタンは `this._abrAvailable` が false の間 `disabled` 属性を付与（ブラシが1つもない状態でクリックしても意味がないため）
+- ブラシ画像が選択済み（`t.brushImage`）の場合の Spacing / Angle / Sz Jitter / Rot. Jitter 詳細行の表示条件は変更なし（`t.brushImage` の有無のみで判定、`_abrAvailable` とは独立）
+
+**ヘルプ更新（3点セット）:**
+- `templates/index.html`: `wfm-help-imageedit-5`（Draw）・`wfm-help-imageedit-mask-4`（Mask Paint）の文言を更新
+- `static/js/i18n.js`: `helpImageEdit5` / `helpImageEditMask4` を EN/JA/ZH 3言語で更新
+- `static/js/app.js` の `helpIdMap` は既存キーのままで対応不要（新規キー追加なし）
+
+**Why:** `_abrAvailable` はブラシ登録数のみで決まり、Mask Editor One のインストール有無とは無関係だった。旧仕様（ブラシ0件でセクション非表示）だと、ユーザーは機能の存在自体に気づけず「ABRブラシが使えない」と誤認する。常時表示＋色分けにすることで、機能の存在と現在の利用可否を両方伝える。
+
 ## v0.3.67
 
 ### Alt+Click Apply & Generate

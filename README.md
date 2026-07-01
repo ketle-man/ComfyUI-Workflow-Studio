@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.67-green)
+![Version](https://img.shields.io/badge/version-0.3.68-green)
 
 ## Screenshots
 
@@ -391,6 +391,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.68
+
+- **Image Edit — MASK EDITOR ONE section always visible** — the ABR brush section in the Draw tool's (`MASK EDITOR ONE (COLOR)`) and Mask Paint mode's (`MASK EDITOR ONE`) Properties pane is now always shown instead of being hidden when no brushes are imported; the header text turns green when at least one ABR brush is available and gray when none are imported yet; the Select button is disabled until a brush exists
+- **Help — MASK EDITOR ONE status** — updated `helpImageEdit5` (Draw tool) and `helpImageEditMask4` (Mask Paint mode) in EN / JA / ZH to describe the always-visible section and its color-coded availability state
 
 ### v0.3.67
 
