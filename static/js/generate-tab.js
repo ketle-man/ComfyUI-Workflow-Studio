@@ -1559,20 +1559,89 @@ async function _runBatchGenerate() {
             if (loraNodes.length === 0) { showToast(t("modelsGenUINoNode", "LoRA"), "error"); return; }
             const list = [..._getSelectedLoraGroupItems()];
             if (list.length === 0) { showToast(t("batchNoneSelected", "LoRAs"), "error"); return; }
-            await _runBatchLoop(list, (loraName) => {
-                for (const node of loraNodes) {
-                    if (!comfyUI.currentWorkflow?.[node.id]) continue;
-                    if (node.is_lora_manager) {
+            // 通常のLoraLoaderはComfyUI側のenumリストに存在しないファイル名だとバリデーションエラーになる。
+            // ComfyUI(Windows)はサブフォルダ区切りに"\"を使うが内部リストは"/"のため、事前に正しい表記へ変換しておく。
+            let loraNameMap = null;
+            if (loraNodes.some((node) => !node.is_lora_manager)) {
+                try {
+                    const known = await comfyUI.fetchLoras();
+                    loraNameMap = new Map(known.map((n) => [n.replace(/\\/g, "/"), n]));
+                    const missing = list.filter((name) => !loraNameMap.has(name.replace(/\\/g, "/")));
+                    if (missing.length > 0) {
+                        showToast(t("batchLoraMissing", missing.length, list.length, missing[0]), "error");
+                    }
+                } catch {}
+            }
+            // Positiveプロンプトへlora構文＋トリガーワードを反映するための準備（Single/Stack適用と同じ仕組み）
+            const positiveNodes = (comfyUI.currentAnalysis?.prompt_nodes || []).filter((n) => n.role === "positive");
+            let metadata = {}, civitaiCache = {};
+            try {
+                const [metaRes, civRes] = await Promise.all([
+                    fetch("/api/wfm/models/metadata"),
+                    fetch("/api/wfm/models/civitai/cache"),
+                ]);
+                metadata = metaRes.ok ? await metaRes.json() : {};
+                civitaiCache = civRes.ok ? await civRes.json() : {};
+            } catch {}
+
+            // バッチ開始前のプロンプトを保存し、完了・停止後に復元する
+            const posTextarea = document.getElementById("wfm-prompt-pos-text");
+            const savedTextareaValue = posTextarea ? posTextarea.value : null;
+            const savedNodeTexts = new Map();
+            for (const node of positiveNodes) {
+                const wfNode = comfyUI.currentWorkflow?.[node.id];
+                if (wfNode) savedNodeTexts.set(node.id, wfNode.inputs[node.textKey || "text"]);
+            }
+
+            try {
+                await _runBatchLoop(list, (loraName) => {
+                    for (const node of loraNodes) {
+                        if (!comfyUI.currentWorkflow?.[node.id]) continue;
+                        if (node.is_lora_manager) {
+                            const stem = loraName.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+                            comfyUI.currentWorkflow[node.id].inputs.loras = {
+                                __value__: [{ name: stem, strength: 1.0, active: true, expanded: false, clipStrength: 1.0, locked: false }],
+                            };
+                            comfyUI.currentWorkflow[node.id].inputs.text = `<lora:${stem}:1:1>`;
+                        } else {
+                            const actualName = loraNameMap?.get(loraName.replace(/\\/g, "/")) || loraName;
+                            comfyUI.currentWorkflow[node.id].inputs.lora_name = actualName;
+                        }
+                    }
+
+                    if (positiveNodes.length > 0) {
                         const stem = loraName.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
-                        comfyUI.currentWorkflow[node.id].inputs.loras = {
-                            __value__: [{ name: stem, strength: 1.0, active: true, expanded: false, clipStrength: 1.0, locked: false }],
-                        };
-                        comfyUI.currentWorkflow[node.id].inputs.text = `<lora:${stem}:1:1>`;
-                    } else {
-                        comfyUI.currentWorkflow[node.id].inputs.lora_name = loraName;
+                        const firstStandardNode = loraNodes.find((n) => !n.is_lora_manager);
+                        const strModel = firstStandardNode ? (comfyUI.currentWorkflow[firstStandardNode.id]?.inputs.strength_model ?? 1.0) : 1.0;
+                        const strClip = firstStandardNode ? (comfyUI.currentWorkflow[firstStandardNode.id]?.inputs.strength_clip ?? 1.0) : 1.0;
+                        const loraSyntax = `<lora:${stem}:${strModel}:${strClip}>`;
+                        const sha = (metadata[loraName] || {}).sha256;
+                        const civInfo = sha && civitaiCache[sha];
+                        const triggerWords = civInfo?.trainedWords || [];
+                        const append = triggerWords.length > 0 ? `${loraSyntax}, ${triggerWords.join(", ")}` : loraSyntax;
+
+                        for (const node of positiveNodes) {
+                            const wfNode = comfyUI.currentWorkflow?.[node.id];
+                            if (!wfNode) continue;
+                            const base = (savedNodeTexts.get(node.id) || "").replace(/,\s*$/, "").trim();
+                            wfNode.inputs[node.textKey || "text"] = base ? `${base}, ${append}` : append;
+                        }
+                        if (posTextarea && savedTextareaValue !== null) {
+                            const base = savedTextareaValue.replace(/,\s*$/, "").trim();
+                            posTextarea.value = base ? `${base}, ${append}` : append;
+                        }
+                    }
+                }, (name) => name.replace(/\.[^.]+$/, ""));
+            } finally {
+                // プロンプトをバッチ開始前の状態へ復元
+                for (const node of positiveNodes) {
+                    const wfNode = comfyUI.currentWorkflow?.[node.id];
+                    if (wfNode && savedNodeTexts.has(node.id)) {
+                        wfNode.inputs[node.textKey || "text"] = savedNodeTexts.get(node.id);
                     }
                 }
-            }, (name) => name.replace(/\.[^.]+$/, ""));
+                if (posTextarea && savedTextareaValue !== null) posTextarea.value = savedTextareaValue;
+            }
             break;
         }
         case "prompt": {

@@ -1506,6 +1506,40 @@ function bindEvents() {
         }
     });
 
+    // 選択画像を ComfyUI Comic Creator の選択コマ／オーバーレイへ送信
+    // （ComfyUI Comic CreaterからこのGalleryタブがiframe埋め込みされている場合のみ表示・動作する）
+    const sendCcBtn = document.getElementById("wfm-gallery-send-cc-btn");
+    if (sendCcBtn) {
+        let embedded = false;
+        try {
+            embedded = !!(window.parent && window.parent !== window);
+        } catch (e) {
+            embedded = false;
+        }
+        if (embedded) sendCcBtn.style.display = "";
+
+        sendCcBtn.addEventListener("click", () => {
+            if (!state.selectedImage) {
+                showToast(t("gallerySelectImageFirst"), "info");
+                return;
+            }
+            let insertFn = null;
+            try {
+                if (window.parent && window.parent !== window && typeof window.parent.insertImageFromUrl === "function") {
+                    insertFn = window.parent.insertImageFromUrl;
+                }
+            } catch (e) {
+                insertFn = null;
+            }
+            if (!insertFn) {
+                showToast(t("galleryCCNotAvailable"), "info");
+                return;
+            }
+            insertFn(API.serveImage(state.selectedImage.path));
+            showToast(t("gallerySentCC"), "success");
+        });
+    }
+
     // 検索
     document.getElementById("wfm-gallery-search")?.addEventListener("input", (e) => {
         state.search = e.target.value;

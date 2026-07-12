@@ -85,7 +85,7 @@ function _applyLoraToNode(nodeId, loraPath, strModel, strClip, isLoraManager) {
         };
         comfyUI.currentWorkflow[nodeId].inputs.text = `<lora:${stem}:${strModel}:${strClip}>`;
     } else {
-        comfyUI.currentWorkflow[nodeId].inputs.lora_name = loraPath;
+        comfyUI.currentWorkflow[nodeId].inputs.lora_name = comfyEditor.resolveLoraName(loraPath);
         comfyUI.currentWorkflow[nodeId].inputs.strength_model = strModel;
         comfyUI.currentWorkflow[nodeId].inputs.strength_clip = strClip;
     }
@@ -197,6 +197,13 @@ export const comfyEditor = {
             this.models.lastError = err.message;
             console.error("Failed to load model lists:", err);
         }
+    },
+
+    // ComfyUI(Windows)は"\"区切りでLoraのenumを返すため、内部の"/"区切り表記と突き合わせて実際の表記に変換する
+    resolveLoraName(name) {
+        const normalized = name.replace(/\\/g, "/");
+        const found = this.models.loras.find((n) => n.replace(/\\/g, "/") === normalized);
+        return found || name;
     },
 
     renderAll(analysis, workflow) {
@@ -785,7 +792,7 @@ export const comfyEditor = {
             } else {
                 const first = stackModels[0];
                 if (first) {
-                    comfyUI.currentWorkflow[nodeId].inputs.lora_name = first;
+                    comfyUI.currentWorkflow[nodeId].inputs.lora_name = comfyEditor.resolveLoraName(first);
                     comfyUI.currentWorkflow[nodeId].inputs.strength_model = _stackStrengths[first]?.m ?? 1.0;
                     comfyUI.currentWorkflow[nodeId].inputs.strength_clip = _stackStrengths[first]?.c ?? 1.0;
                 }

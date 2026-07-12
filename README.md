@@ -94,6 +94,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
   - **Left pane** — 4 tabs: **Checkpoints** (file-tree; Filter / All / None), **Sampler** (KSampler sampler list), **Scheduler** (KSampler scheduler list), **Style** (flat list of all styles from `Workflow-Studio/style/`; All / None buttons)
   - **Center pane** — group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint/Lora groups come from the Models tab, Prompt groups from the Prompt tab, Workflow groups from the Workflow tab — check a group to add all its members, expand ▶ to select individually
   - **Right pane (Batch Queue)** — 7 columns: Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler / **Style**; each column header has an enable checkbox (radio behavior: only one at a time); count shown per column; Style batch applies each selected style sequentially to a workflow copy
+  - **Lora batch prompt sync** (v0.3.69) — for each selected LoRA, its syntax (`<lora:name:strength_model:strength_clip>`) and CivitAI trained words are automatically appended to the Positive prompt (rebuilt from the original prompt each time, not accumulated), then restored to the pre-batch state when the batch completes or is stopped; if a selected LoRA is not yet recognized by ComfyUI's model list, a warning toast suggests a Refresh or restart
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and more
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
@@ -186,6 +187,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
 - **Image Edit button** — toolbar button; sends the selected image directly to the Image Edit tab as the base layer
 - **Send GenUI Image button** — toolbar button (next to Image Edit); uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded
+- **Send CC button** (v0.3.69) — toolbar button, shown only when this Gallery tab is embedded as an iframe inside ComfyUI Comic Creator (a separate custom node); sends the selected image directly into Comic Creator's currently selected panel/overlay
 - **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, tag filter, group filter, and favorites filter in one click (sort order is preserved)
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
@@ -391,6 +393,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.69
+
+- **Gallery — Send CC button** — new toolbar button, shown only when the Gallery tab is embedded as an iframe inside ComfyUI Comic Creator (a separate custom node); sends the selected image directly into Comic Creator's currently selected panel/overlay via its existing `insertImageFromUrl(url)` helper (no changes required on the Comic Creator side)
+- **Lora batch — validation fix** — fixed a `Prompt outputs failed validation` error where LoRA files that actually existed were rejected by the standard `LoraLoader` node; the root cause was a path-separator mismatch (ComfyUI on Windows returns `\`-separated enum values while WFS tracked LoRAs internally with `/`); a shared `resolveLoraName()` helper now converts to ComfyUI's actual notation before applying, used consistently by Lora Single apply, Stack apply, the Models tab GenUI Model button, and Lora batch generation
+- **Lora batch — pre-flight check** — before running a batch on a standard `LoraLoader` workflow, selected LoRAs are checked against ComfyUI's current model list; if any are not yet recognized, a warning toast suggests a Refresh or ComfyUI restart (skipped for Lora Manager–based workflows, which have no enum constraint)
+- **Lora batch — automatic prompt sync** — for each LoRA applied during a batch, its syntax (`<lora:name:strength_model:strength_clip>`) and CivitAI trained words are automatically appended to the Positive prompt, rebuilt from the original prompt each time (not accumulated); the prompt is automatically restored to its pre-batch state when the batch completes, is stopped, or errors
+- **Models tab — Close button in detail modal** — added a Close button at the right end of the Save / GenUI PP·NP / Delete button row in the model detail modal (all sub-tabs), reducing mouse travel to the top-right ✕ during repeated batch edits
+- **Help** — new help entry (`helpGen19`) added in EN / JA / ZH describing the Lora batch prompt sync, restore, and pre-flight check behavior
 
 ### v0.3.68
 

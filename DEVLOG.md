@@ -2,6 +2,57 @@
 
 ---
 
+## v0.3.69
+
+### Gallery → ComfyUI Comic Creator 連携（Send CC ボタン）
+
+ComfyUI Comic Creator（別カスタムノード、連携先名称は「Comic Creater」から改称。`/wfm` を同一オリジンのiframeで埋め込み使用）から、Workflow Studio の Gallery タブで選択した画像を直接送り込めるようにする連携機能。
+
+**対象ファイル:** `templates/index.html`, `static/js/gallery-tab.js`, `static/js/i18n.js`
+
+**変更内容:**
+- Gallery ツールバーの「Send GenUI Image」ボタン右隣に「Send CC」ボタンを追加（`wfm-gallery-send-cc-btn`）。初期状態は非表示
+- `gallery-tab.js` の `bindEvents()` で、`window.parent !== window`（iframe埋め込み判定）の場合のみボタンを表示
+- クリック時: `state.selectedImage` 未選択なら案内トースト。埋め込み側であれば `window.parent.insertImageFromUrl(url)`（ComfyUI Comic Creator 側の既存グローバル関数、`main.js` が非モジュールスクリプトのため `window` 直下に生えている）を呼び出し、選択中のコマ／オーバーレイへ画像を挿入する。関数が存在しない（ComfyUI Comic Creator以外からの埋め込み等）場合は案内トーストを表示
+- `window.parent` へのアクセスはtry/catchで保護（クロスオリジン埋め込み時の例外対策）
+- i18n: `galleryCCNotAvailable` / `gallerySentCC` を EN/JA/ZH に追加
+
+**ComfyUI Comic Creator 側は無改修。** 既存の `insertImageFromUrl(url)`（コマ・オーバーレイ判定込みの画像挿入共通ヘルパー）をそのまま呼び出す設計。
+
+**ハマりどころ（デプロイ同期忘れ）:** 本リポジトリは開発用ディレクトリと実行時の `custom_nodes/comfyui-workflow-studio`（StabilityMatrix配下）が別実体のコピーであり、symlinkではない。上記3ファイルを開発リポジトリのみ編集した状態でComfyUIを起動していたため、「Send CCボタンが表示されない」という報告を受けた。実行時ディレクトリへ3ファイルを手動コピーして解決（差分は今回の追加分のみで他の乖離なし）。今後この種の変更をした際は、都度 `custom_nodes/` 側への同期を忘れないこと（本体のコミット前チェックリスト「全ファイルを custom_nodes/ に同期」を参照）。
+
+### Loraバッチ生成のバリデーションエラー修正 + プロンプト自動反映
+
+ユーザー報告「生成UIタブのBatchタブでLoraのバッチ機能を使用してIllustriousグループ（128モデル）でバッチ生成を開始したがエラー（`Prompt outputs failed validation`）となった」の調査から一連の修正を実施。
+
+**原因: パス区切り文字の不一致**
+ComfyUI(Windows)はLoraのサブフォルダ区切りに`\`を使ってenumリストを返すが、Workflow Studio内部では`/`区切りで管理していたため、実ファイルが存在するにもかかわらずLoraLoaderの`lora_name`バリデーションに失敗していた（当初「サーバー起動後のキャッシュ未反映」と誤診断したが、実際は表記の不一致が原因だった）。
+
+**対象ファイル:** `static/js/comfyui-editor.js`, `static/js/models-tab.js`, `static/js/generate-tab.js`
+
+**変更内容:**
+- `comfyui-editor.js`の`comfyEditor`に共通ヘルパー`resolveLoraName(name)`を追加 — 内部の`/`区切り表記を、`comfyEditor.models.loras`（ComfyUIから取得済みの実表記）と突き合わせて実際の表記に変換
+- Lora Single適用（`_applyLoraToNode`）、Stack Apply、`models-tab.js`のGenUI Modelボタンの3箇所を`resolveLoraName`経由に統一
+- Loraバッチ実行（`generate-tab.js`）は`comfyUI.fetchLoras()`を都度呼び出して同様の変換マップを構築（バッチ実行前チェックと共用）
+
+**Loraバッチ実行前チェック:**
+- 通常のLoraLoaderノードを使うワークフローの場合、バッチ開始前に選択済みLoraをComfyUI側の最新一覧と突き合わせ、認識されていないものがあれば`batchLoraMissing`警告トーストを表示（ComfyUIのRefresh/再起動を促す）
+- Lora Managerノード使用時はenum制約がないため対象外
+
+**Loraバッチ実行時のプロンプト自動反映:**
+- 各Loraアイテム適用時、Positiveプロンプト（テキストエリア＋ワークフロー内の各positiveノード）にLora構文`<lora:name:strength_model:strength_clip>`とCivitAIトリガーワードを自動追加。常にバッチ開始前の元プロンプトを起点に再構築するため、Lora構文が蓄積されることはない
+- バッチ完了・停止（Stopボタン）・エラーいずれの場合も`finally`でプロンプトを開始前の状態に自動復元
+
+**モデル詳細モーダルに「閉じる」ボタン追加:**
+- `models-tab.js`のモデル詳細モーダル（Checkpoint/Lora/Embedding/Hypernetworkなど全サブタブ共通）で、「保存」「GenUI PP/NP」「削除」ボタンの並び右端に「閉じる」ボタンを追加。連続作業時にモーダル右上のXボタンまでマウス移動する手間を削減。既存の`close` i18nキーを再利用
+
+**ヘルプ更新（3点セット）:**
+- `templates/index.html`: `wfm-help-gen-19`を新規追加
+- `static/js/i18n.js`: `helpGen19`をEN/JA/ZHで新規追加（Loraバッチのプロンプト自動反映・復元・事前チェックの説明）
+- `static/js/app.js`の`helpIdMap`に`"wfm-help-gen-19": "helpGen19"`を登録
+
+**その他:** 連携先カスタムノードの名称変更（Comic Creater → ComfyUI Comic Creator）をUI文言・コメント（`i18n.js`, `templates/index.html`, `gallery-tab.js`）に反映。
+
 ## v0.3.68
 
 ### MASK EDITOR ONE セクション常時表示化

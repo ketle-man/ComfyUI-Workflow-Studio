@@ -130,7 +130,7 @@ function applyToGenUI(modelName, modelType) {
             };
             comfyUI.currentWorkflow[nodeId].inputs.text = `<lora:${stem}:1:1>`;
         } else {
-            comfyUI.currentWorkflow[nodeId].inputs.lora_name = modelName;
+            comfyUI.currentWorkflow[nodeId].inputs.lora_name = comfyEditor.resolveLoraName(modelName);
         }
 
         // Disable all Stack models and switch to Single tab
@@ -1386,6 +1386,7 @@ function openDetailModal(modelName) {
                             ? `<button class="wfm-btn wfm-btn-sm" id="wfm-modal-genui-model" title="${t("modelsGenUITitle")}">${t("modelsGenUIBtn")}</button>`
                             : "")}
                     <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-modal-model-delete" style="margin-left:auto;">${t("modelsDelete")}</button>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-modal-model-close">${t("close")}</button>
                 </div>
             </div>
         </div>`;
@@ -1444,6 +1445,11 @@ function openDetailModal(modelName) {
     });
     document.getElementById("wfm-modal-genui-np")?.addEventListener("click", () => {
         applyEmbeddingToPrompt(modelName, "negative");
+    });
+
+    // Close button (連続作業時にXボタンまでマウス移動しなくて済むように)
+    document.getElementById("wfm-modal-model-close")?.addEventListener("click", () => {
+        closeModal();
     });
 
     // Delete model button

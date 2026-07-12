@@ -1103,6 +1103,7 @@
                                 <li id="wfm-help-gen-17">Style batch: select styles in the left pane Style tab, enable the Style column in Batch Queue, then Generate — each selected style is applied in sequence to the positive and negative prompts; styles are applied to workflow copies so the loaded workflow is not modified; style files are re-read each time the page loads from <code>user/default/Workflow-Studio/style/*.json</code></li>
                                 <li id="wfm-help-gen-16">SPA-side wildcard expansion (A1111-style): when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains __name__ syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation</li>
                                 <li id="wfm-help-gen-18">Alt+Click any Apply button (Positive Prompt / Checkpoint / KSampler) to Apply &amp; Generate in one step — applies the parameter to the workflow then immediately queues a generation; only fires when the target node exists in the loaded workflow</li>
+                                <li id="wfm-help-gen-19">Lora batch: for each LoRA, its syntax (&lt;lora:name:strength_model:strength_clip&gt;) and CivitAI trained words are automatically appended to the Positive prompt — rebuilt from the original prompt each time, not accumulated; the prompt is automatically restored to its pre-batch state when the batch completes or is stopped; if a selected LoRA is not yet recognized by ComfyUI's model list, a warning toast is shown (Refresh or restart ComfyUI)</li>
                             </ul>
                         </div>
                     </div>
@@ -1543,6 +1544,7 @@
                     <button id="wfm-gallery-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
                     <button id="wfm-gallery-send-image-edit-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to Image Edit tab">Image Edit</button>
                     <button id="wfm-gallery-send-genui-image-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to GenerateUI Image input">Send GenUI Image</button>
+                    <button id="wfm-gallery-send-cc-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to ComfyUI Comic Creator's selected panel" style="display:none;">Send CC</button>
                     <button id="wfm-gallery-clear-filters-btn" class="wfm-btn wfm-btn-sm" title="Clear all filters"></button>
                 </div>
                 <!-- 複数選択時の一括操作バー -->
