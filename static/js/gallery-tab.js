@@ -43,6 +43,43 @@ const API = {
 
 export const FEEDER_GROUP = "__Feeder__";
 
+// ComfyUI Comic Creater からiframe越しに画像を受け取り、Generate UIのImage入力スロットへ直接セットする（I2I連携）。
+// Comic Creater側の「I2Iへ送る」ボタンから
+// iframe.contentWindow._wfmReceiveImageForI2I(blob, name, workflowData?, workflowFilename?) として呼ばれる。
+// 画像スロットへのセット自体は wfm-gallery-send-genui-image-btn のクリックハンドラ（Galleryの選択画像を送る版）と同一。
+// workflowData が渡された場合（Comic Creater側の設定タブでデフォルトワークフローが有効な時）は、
+// 画像をセットする前にそのワークフローを読み込む。
+window._wfmReceiveImageForI2I = async (blob, name, workflowData, workflowFilename) => {
+    try {
+        if (workflowData) {
+            try {
+                // iframeロード直後などモデルリスト未取得のままワークフローを読み込むと、
+                // Model/生成UIタブのCheckpoint等ドロップダウンが空のままレンダリングされてしまう。
+                // 接続確認・モデルリスト取得を保証してからワークフローを読み込む
+                if (!comfyUI.connected) {
+                    await comfyUI.checkConnection();
+                }
+                if (comfyUI.connected && (!comfyEditor.models.checkpoints || comfyEditor.models.checkpoints.length === 0)) {
+                    await comfyEditor.loadModelLists();
+                }
+                await loadWorkflowIntoEditor(workflowData, workflowFilename || "workflow.json");
+            } catch (e) {
+                console.warn("[I2I] failed to load default workflow:", e);
+            }
+        }
+        const file = new File([blob], name || "cc-image.png", { type: blob.type || "image/png" });
+        document.querySelector('[data-tab="generate"]')?.click();
+        document.querySelector('.wfm-gen-subtab-btn[data-subtab="input"]')?.click();
+        document.querySelector('.wfm-input-inner-tab[data-input-tab="image"]')?.click();
+        await comfyEditor.applyImageToSlot(file, 0);
+        showToast(t("gallerySentGenUI"), "success");
+        return true;
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+        return false;
+    }
+};
+
 // ── ページング ────────────────────────────────────────────────
 const PAGE_SIZE = 50;
 let _renderedCount = 0;
@@ -1523,6 +1560,34 @@ function bindEvents() {
                 showToast(t("gallerySelectImageFirst"), "info");
                 return;
             }
+            const url = API.serveImage(state.selectedImage.path);
+
+            // I2I送信元がImageタブだった場合はそちらへ画像を読み込ませる（_ccI2ITargetModeはComic Creater側が
+            // 「I2Iへ送る」ボタン押下時にセットするフラグ。undefined/'layout'なら従来通りコマ/オーバーレイへ挿入）
+            let targetMode = null;
+            try {
+                targetMode = window.parent?._ccI2ITargetMode || null;
+            } catch (e) {
+                targetMode = null;
+            }
+            if (targetMode === "image") {
+                let imageTab = null;
+                try {
+                    if (window.parent && window.parent !== window && typeof window.parent._ccImageTab?.loadFromUrl === "function") {
+                        imageTab = window.parent._ccImageTab;
+                    }
+                } catch (e) {
+                    imageTab = null;
+                }
+                if (!imageTab) {
+                    showToast(t("galleryCCNotAvailable"), "info");
+                    return;
+                }
+                imageTab.loadFromUrl(url, (state.selectedImage.filename || "cc-image").replace(/\.[^.]+$/, ""));
+                showToast(t("gallerySentCC"), "success");
+                return;
+            }
+
             let insertFn = null;
             try {
                 if (window.parent && window.parent !== window && typeof window.parent.insertImageFromUrl === "function") {
@@ -1535,7 +1600,7 @@ function bindEvents() {
                 showToast(t("galleryCCNotAvailable"), "info");
                 return;
             }
-            insertFn(API.serveImage(state.selectedImage.path));
+            insertFn(url);
             showToast(t("gallerySentCC"), "success");
         });
     }

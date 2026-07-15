@@ -1231,6 +1231,9 @@ class ImageEditTab {
     }
 
     _renderMaskLayerOverlay(ctx, maskLayer) {
+        // アクティブなマスクレイヤーのみオーバーレイ表示（非アクティブなマスクは隠す）
+        if (this._layerMgr?.activeLayer !== maskLayer) return;
+
         const overlayColor = this._maskOverlayColor;
         const blurPx       = this._maskBlur;
         const inverted     = this._maskInverted;
@@ -1588,9 +1591,12 @@ class ImageEditTab {
         this._canvasH  = h;
         this._baseName = "new-canvas";
         this._initCanvases();
+        const layer1 = this._layerMgr.addLayer("draw", "Layer 1");
+        this._layerMgr.setActive(layer1.id);
         this._undoStack = [];
         this._redoStack = [];
         this._setActiveTool("select");
+        this._selectTool?.setLayer(layer1);
         this._refreshLayerList();
         this._updateCompositeView();
         this._fitToView();
@@ -2066,6 +2072,7 @@ class ImageEditTab {
                         this._updateCompositeView();
                     } else if (this._activeTool === "select" && layer) {
                         this._selectTool?.setLayer(layer);
+                        this._updateCompositeView();
                     } else {
                         this._updateCompositeView();
                     }

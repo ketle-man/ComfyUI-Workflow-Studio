@@ -82,7 +82,8 @@ async def handle_chat(request: web.Request) -> web.Response:
     try:
         body = await request.json()
         cfg = _get_ollama_config()
-        model = body.get("model", cfg["model"])
+        model = body.get("model") or cfg["model"]
+        base_url = (body.get("url") or cfg["url"]).rstrip("/")
         messages = body.get("messages", [])
 
         def _chat():
@@ -92,7 +93,7 @@ async def handle_chat(request: web.Request) -> web.Response:
                 "stream": False,
             }).encode("utf-8")
 
-            url = f"{cfg['url']}/api/chat"
+            url = f"{base_url}/api/chat"
             req = urllib.request.Request(
                 url,
                 data=payload,

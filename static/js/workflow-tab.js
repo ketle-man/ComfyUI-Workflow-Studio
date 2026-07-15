@@ -1129,10 +1129,18 @@ function openDetailModal(wf) {
         try {
             const wfJson = await getRawWorkflow(wf.filename);
             const promptText = getSummaryPrompt() + JSON.stringify(wfJson).substring(0, 4000);
+            const aiCfg = readJsonStorage("wfm_prompt_ai_settings", {});
+            if (aiCfg.backend && aiCfg.backend !== "ollama") {
+                throw new Error(t("summarizeOllamaOnly"));
+            }
             const chatRes = await fetch("/api/wfm/ollama/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ messages: [{ role: "user", content: promptText }] }),
+                body: JSON.stringify({
+                    url: aiCfg.backendUrl || undefined,
+                    model: aiCfg.model || undefined,
+                    messages: [{ role: "user", content: promptText }],
+                }),
             });
             const chatData = await chatRes.json();
             if (chatData.error) throw new Error(chatData.error);

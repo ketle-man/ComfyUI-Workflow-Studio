@@ -2,6 +2,57 @@
 
 ---
 
+## v0.3.70
+
+### Workflow AI要約: Ollama 404エラー修正
+
+ユーザー報告「ワークフロー詳細モーダルの要約機能でエラー `[ERROR] Ollama chat error: HTTP Error 404: Not Found`」の調査から発生。
+
+**原因:** `static/js/workflow-tab.js` の要約ボタンはモデル名を指定せずサーバー側 `/api/wfm/ollama/chat` を呼んでおり、サーバー側デフォルト（`py/routes/ollama_routes.py` の `OLLAMA_DEFAULTS.model = "llava"`、タグ無し）が使われていた。実環境には `llava:7b` のようにタグ付きの名前でしか入っておらず、Ollamaは完全一致でしかモデルを解決しないため404になっていた。加えて、設定タブの「AI Assistant Settings (Prompt Tab)」（`localStorage` の `wfm_prompt_ai_settings`）にOllamaのURL・モデル選択UIがすでに存在していたが、Workflowタブの要約機能はこれを一切参照していなかった。
+
+**対象ファイル:** `static/js/workflow-tab.js`, `py/routes/ollama_routes.py`, `static/js/i18n.js`
+
+**変更内容:**
+- `workflow-tab.js`: 要約ボタンが `readJsonStorage("wfm_prompt_ai_settings", {})` で設定タブ保存済みのbackend/backendUrl/modelを読み込み、`/api/wfm/ollama/chat` へ `url` / `model` を渡すように変更。backendが `ollama` 以外（LM Studio）の場合は明示的にエラートースト
+- `ollama_routes.py`: `handle_chat` がリクエストbodyの `url` も受け付けるように対応（従来は `model` のみ）
+- i18n: `summarizeOllamaOnly` をEN/JA/ZHに追加
+
+### Image Edit: New button で Layer 1 自動追加
+
+ユーザー要望「New button 画像作成時に自動でレイヤー1を追加してほしい」。既存の画像ロード時（`hasLayers` が偽の新規キャンバス経路）は既に「Layer 1」を自動生成していたが、`_newCanvas()`（Newボタン）だけは空の `LayerManager` のままだった。
+
+**対象ファイル:** `static/js/image-edit-tab.js`
+
+**変更内容:** `_newCanvas()` で `this._layerMgr.addLayer("draw", "Layer 1")` を追加し、アクティブレイヤー・SelectToolに設定。
+
+### Image Edit: マスクレイヤーのオーバーレイをアクティブなマスクのみに表示
+
+ユーザー要望「マスクレイヤーのオーバーレイ表示をマスクレイヤー以外は非表示にしたい」。従来は `layer.visible` のみを条件にオーバーレイ（半透明の色付き表示）を描画しており、非アクティブなマスクレイヤーも常に表示され続けていた。
+
+**対象ファイル:** `static/js/image-edit-tab.js`
+
+**変更内容:**
+- `_renderMaskLayerOverlay(ctx, maskLayer)` の先頭に `if (this._layerMgr?.activeLayer !== maskLayer) return;` を追加。全ての呼び出し経路（単独マスク／マスクグループ）を1箇所でカバー
+- **副次修正:** レイヤーパネルでSelectツール使用中に通常レイヤーへ切り替えた際に `_updateCompositeView()` が呼ばれていない分岐があり、上記の変更後は「マスク選択→通常レイヤー選択」でオーバーレイが画面に残ったままになる不具合が顕在化するため、当該分岐にも再描画呼び出しを追加
+
+### GenerateUI Input: プロンプトの「戻す」ボタン + 強調weight編集（Ctrl+↑/↓）
+
+ユーザー要望2件を同じセッションでまとめて実装。
+
+**対象ファイル:** `static/js/comfyui-editor.js`, `static/js/i18n.js`
+
+**変更内容:**
+- **戻すボタン（↺）** — Positive/Negative各Applyボタンの左隣に追加。クリックで、選択中ノードIDに対応する**ワークフロー上の現在値**（＝直前にApply/ロードされた値）をテキストエリアへ再読み込みする、Applyの逆操作。ノード選択セレクトに `min-width:0` を追加し、ボタン増加によるレイアウト圧迫に対応
+- **強調weight編集（Ctrl+↑/↓）** — A1111 / ComfyUIネイティブのCLIP Text Encodeと同様の操作感。選択テキスト（無ければカーソル位置の括弧ブロック、次点で単語）を `(text:weight)` 構文に変換し、0.05刻みで増減。weightがちょうど1.0に戻ったら括弧を自動除去。汎用ヘルパー `_attachPromptWeightControl` / `_selectSurroundingParenBlock` / `_selectSurroundingWord` を新規追加し、Positive/Negative両テキストエリアにアタッチ
+- **バグ修正（同セッション内）** — weightがマイナスに達した状態（例: `(watermark:-0.05)`）でさらにCtrl+↓を押すと `((watermark:-0.05):0.95)` のような二重括弧になる不具合を確認。原因は数値抽出の正規表現 `([\d.]+)` が負符号にマッチせず、マッチ全体が失敗して選択テキスト全体を新しい単語として扱っていたため。`(-?[\d.]+)` に修正。下限は設けない仕様（ComfyUIネイティブのCLIP Text Encodeも同様に無制限のため）
+- i18n: `revertPromptTitle` をEN/JA/ZHに追加
+
+**ヘルプ更新（3点セット）:**
+- `templates/index.html`: `wfm-help-imageedit-3`（New button説明にLayer 1自動追加を追記）、`wfm-help-imageedit-mask-3`（アクティブなマスクのみオーバーレイ表示である旨を追記）、`wfm-help-gen-4`（戻すボタン・Ctrl+↑/↓ weight編集の説明を追記）
+- `static/js/i18n.js`: `helpImageEdit3` / `helpImageEditMask3` / `helpGen4` をEN/JA/ZHで更新（新規キー追加ではなく既存キーへの追記のため `app.js` の `helpIdMap` は変更不要）
+
+**教訓（デプロイ同期、再掲）:** 開発リポジトリと `custom_nodes/comfyui-workflow-studio`（StabilityMatrix配下の実行時ディレクトリ）は別実体のコピーであり自動同期しない。今回変更した全ファイル（`workflow-tab.js`, `ollama_routes.py`, `image-edit-tab.js`, `comfyui-editor.js`, `i18n.js`, `templates/index.html`）を都度両方へ適用して対応した。
+
 ## v0.3.69
 
 ### Gallery → ComfyUI Comic Creator 連携（Send CC ボタン）
@@ -20,6 +71,25 @@ ComfyUI Comic Creator（別カスタムノード、連携先名称は「Comic Cr
 **ComfyUI Comic Creator 側は無改修。** 既存の `insertImageFromUrl(url)`（コマ・オーバーレイ判定込みの画像挿入共通ヘルパー）をそのまま呼び出す設計。
 
 **ハマりどころ（デプロイ同期忘れ）:** 本リポジトリは開発用ディレクトリと実行時の `custom_nodes/comfyui-workflow-studio`（StabilityMatrix配下）が別実体のコピーであり、symlinkではない。上記3ファイルを開発リポジトリのみ編集した状態でComfyUIを起動していたため、「Send CCボタンが表示されない」という報告を受けた。実行時ディレクトリへ3ファイルを手動コピーして解決（差分は今回の追加分のみで他の乖離なし）。今後この種の変更をした際は、都度 `custom_nodes/` 側への同期を忘れないこと（本体のコミット前チェックリスト「全ファイルを custom_nodes/ に同期」を参照）。
+
+### I2I連携（Comic Creater送信画像の受信・デフォルトワークフロー自動読込）
+
+ComfyUI Comic Creater の「I2Iへ送る」ボタンから、iframe越しに画像をGenerate UIのImage入力スロットへ直接セットする受信用グローバル関数`window._wfmReceiveImageForI2I(blob, name, workflowData?, workflowFilename?)`を新規追加。上記のSend CCと対になる、逆方向（Comic Creater→Workflow Studio）の連携。既存の「Send GenUI Image」（Galleryの選択画像を送る版）とロジックを共有。
+
+**対象ファイル:** `static/js/gallery-tab.js`
+
+**変更内容:**
+- `window._wfmReceiveImageForI2I`をモジュールトップレベルに追加。`comfyEditor.applyImageToSlot(file, 0)`を呼び、Generate UI → Input → Imageタブへ自動切替した上で画像をLoadImageスロットにセットする
+- `workflowData`（ワークフローJSON）が渡された場合、画像をセットする前に`loadWorkflowIntoEditor(workflowData, workflowFilename)`（generate-tab.js既存export）でワークフローを差し替える。Comic Creater側の設定タブで「デフォルトI2Iワークフロー」が有効な場合のみ渡される（`user/default/workflows/`配下のファイルをComic Creater側が`GET /api/wfm/workflows/raw?filename=X`で取得して渡す設計、本リポジトリのAPI自体は無改修）
+- 既存の「Send CC」ボタンのクリックハンドラを拡張し、`window.parent._ccI2ITargetMode`（Comic Creater側が送信元をレイアウトタブ／Imageタブのどちらか記録するフラグ）を参照して、`window.parent.insertImageFromUrl(url)`（レイアウトタブ挿入、従来通り）と`window.parent._ccImageTab.loadFromUrl(url, name)`（Imageタブ読込、新規）を分岐
+
+**ハマりどころ1（プレビューのURLキャッシュ）:** Comic Creater側が同一ファイル名で連続送信すると、`applyImageToSlot`が`previewImg.src`に設定するURL文字列（`/view?filename=...`）が変わらないため、サーバー側は正しく上書きされているのにブラウザがキャッシュ画像を表示し続けた（「編集内容が反映されていないように見えるが、実際に生成すると反映されている」という診断が難しい症状として報告された）。対策はComic Creater側でファイル名をタイムスタンプ付きでユニーク化する方式とし、本リポジトリ側は無改修で解決。
+
+**ハマりどころ2（モデルリスト未取得）:** iframe埋め込み直後など`comfyEditor.models`（Checkpoint等一覧、`init()`時に1回だけ非同期取得）が空のタイミングで`loadWorkflowIntoEditor`を呼ぶと、Model/生成UIタブのCheckpoint等ドロップダウンが空のままレンダリングされ、選択もできなくなる不具合が発生した（Comic Creater再起動でも再現するとの報告）。`_wfmReceiveImageForI2I`内でワークフローロード前に`comfyUI.checkConnection()`→（`comfyEditor.models.checkpoints`が空なら）`comfyEditor.loadModelLists()`を保証するよう修正して解決。
+
+**ComfyUI Comic Creator 側の実装:** レイアウトタブ・Imageタブの「I2Iへ送る」ボタン、送信共通関数`sendImageToWorkflowStudioI2I`、設定タブの「I2I設定」ブロック（デフォルトワークフローのON/OFF・ファイル名指定）はすべてComic Creater側に実装（本リポジトリからは見えない）。
+
+**教訓（デプロイ同期忘れ、再掲）:** 前回のSend CC実装時と同じ理由で、開発リポジトリと`custom_nodes/comfyui-workflow-studio`（StabilityMatrix配下の実行時ディレクトリ）は別実体のコピーであり自動同期しない。今回は`gallery-tab.js`の変更を都度両方へ適用して対応した。
 
 ### Loraバッチ生成のバリデーションエラー修正 + プロンプト自動反映
 

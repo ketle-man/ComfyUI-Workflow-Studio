@@ -4,6 +4,7 @@
 
 import { comfyUI } from "./comfyui-client.js";
 import { syncJsonHighlight } from "./json-highlight.js";
+import { t } from "./i18n.js";
 
 // ── Latent Image preset state ─────────────────────────────
 const _LATENT_PRESET_KEY = "wfm_latent_presets";
@@ -153,6 +154,58 @@ function _syncRawJson() {
     }
 }
 
+// ── プロンプト強調weight編集 (Ctrl+↑/↓) ──────────────────────
+// A1111 / ComfyUIネイティブのCLIP Text Encodeと同様の操作感:
+// 選択（無ければカーソル位置の括弧ブロックまたは単語）を (text:weight) 形式に変換し、
+// weightを0.05刻みで増減する。weightが1.0に戻ったら括弧を除去する。
+const _PROMPT_WEIGHT_DELIMITERS = new Set([",", "\n", "\r", "\t", " ", "(", ")", ":"]);
+
+function _selectSurroundingParenBlock(text, pos) {
+    const openIdx = text.lastIndexOf("(", pos - 1);
+    if (openIdx === -1) return null;
+    const closeBefore = text.lastIndexOf(")", pos - 1);
+    if (closeBefore > openIdx) return null; // カーソルは既に閉じたブロックの外
+    const closeIdx = text.indexOf(")", pos);
+    if (closeIdx === -1) return null;
+    return { start: openIdx, end: closeIdx + 1 };
+}
+
+function _selectSurroundingWord(text, pos) {
+    let start = pos, end = pos;
+    while (start > 0 && !_PROMPT_WEIGHT_DELIMITERS.has(text[start - 1])) start--;
+    while (end < text.length && !_PROMPT_WEIGHT_DELIMITERS.has(text[end])) end++;
+    return { start, end };
+}
+
+function _attachPromptWeightControl(textarea) {
+    textarea.addEventListener("keydown", (e) => {
+        if (!e.ctrlKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+        e.preventDefault();
+
+        const delta = e.key === "ArrowUp" ? 0.05 : -0.05;
+        const text = textarea.value;
+        let start = textarea.selectionStart;
+        let end = textarea.selectionEnd;
+
+        if (start === end) {
+            const range = _selectSurroundingParenBlock(text, start) || _selectSurroundingWord(text, start);
+            start = range.start;
+            end = range.end;
+        }
+        if (start === end) return;
+
+        const selected = text.substring(start, end);
+        const m = selected.match(/^\((.*):(-?[\d.]+)\)$/s);
+        const inner = m ? m[1] : selected;
+        let weight = (m ? parseFloat(m[2]) : 1.0) + delta;
+        weight = Math.round(weight * 100) / 100;
+
+        const replacement = weight === 1.0 ? inner : `(${inner}:${weight.toFixed(2)})`;
+        textarea.value = text.substring(0, start) + replacement + text.substring(end);
+        textarea.setSelectionRange(start, start + replacement.length);
+    });
+}
+
 export const comfyEditor = {
     models: {
         checkpoints: [],
@@ -228,10 +281,11 @@ export const comfyEditor = {
             <div class="wfm-form-group">
                 <label>Positive Prompt</label>
                 <div style="display:flex;gap:8px;margin-bottom:6px;">
-                    <select id="wfm-prompt-pos-target" class="wfm-select" style="width:auto;flex:1">
+                    <select id="wfm-prompt-pos-target" class="wfm-select" style="width:auto;flex:1;min-width:0;">
                         ${positiveNodes.map((n) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" selected>ID:${n.id} (${n.title})</option>`).join("")}
                         ${nodeOpts}
                     </select>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-revert" title="${t("revertPromptTitle")}">↺</button>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-apply" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                 </div>
                 <textarea class="wfm-textarea" id="wfm-prompt-pos-text" rows="6">${positiveNodes[0]?.text || ""}</textarea>
@@ -239,10 +293,11 @@ export const comfyEditor = {
             <div class="wfm-form-group">
                 <label>Negative Prompt</label>
                 <div style="display:flex;gap:8px;margin-bottom:6px;">
-                    <select id="wfm-prompt-neg-target" class="wfm-select" style="width:auto;flex:1">
+                    <select id="wfm-prompt-neg-target" class="wfm-select" style="width:auto;flex:1;min-width:0;">
                         ${negativeNodes.map((n) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" selected>ID:${n.id} (${n.title})</option>`).join("")}
                         ${nodeOpts}
                     </select>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-neg-revert" title="${t("revertPromptTitle")}">↺</button>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-neg-apply">Apply</button>
                 </div>
                 <textarea class="wfm-textarea" id="wfm-prompt-neg-text" rows="6">${negativeNodes[0]?.text || ""}</textarea>
@@ -284,6 +339,27 @@ export const comfyEditor = {
             }
         });
 
+        // Revert: テキストエリアを直前にApplyされたノードの現在値へ戻す
+        document.getElementById("wfm-prompt-pos-revert")?.addEventListener("click", () => {
+            const nodeId = document.getElementById("wfm-prompt-pos-target")?.value;
+            const wfNode = comfyUI.currentWorkflow?.[nodeId];
+            const ta = document.getElementById("wfm-prompt-pos-text");
+            if (!nodeId || !wfNode || !ta) return;
+            const promptNode = (analysis.prompt_nodes || []).find(n => n.id === nodeId);
+            const textKey = promptNode?.textKey || "text";
+            ta.value = wfNode.inputs[textKey] ?? "";
+        });
+
+        document.getElementById("wfm-prompt-neg-revert")?.addEventListener("click", () => {
+            const nodeId = document.getElementById("wfm-prompt-neg-target")?.value;
+            const wfNode = comfyUI.currentWorkflow?.[nodeId];
+            const ta = document.getElementById("wfm-prompt-neg-text");
+            if (!nodeId || !wfNode || !ta) return;
+            const promptNode = (analysis.prompt_nodes || []).find(n => n.id === nodeId);
+            const textKey = promptNode?.textKey || "text";
+            ta.value = wfNode.inputs[textKey] ?? "";
+        });
+
         // Track last focused prompt textarea for Paste button
         ["wfm-prompt-pos-text", "wfm-prompt-neg-text"].forEach((taId) => {
             const ta = document.getElementById(taId);
@@ -293,6 +369,7 @@ export const comfyEditor = {
                     _lastPromptFocus = { id: taId, selStart: ta.selectionStart, selEnd: ta.selectionEnd };
                 });
             });
+            _attachPromptWeightControl(ta);
         });
 
         // Embedding filter
