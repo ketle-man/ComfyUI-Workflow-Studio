@@ -2938,6 +2938,41 @@ body {
     line-height: 24px;
 }
 
+.wfm-i2i-mask-section {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--wfm-border);
+}
+
+.wfm-i2i-mask-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    margin-bottom: 6px;
+}
+
+.wfm-i2i-mask-filename {
+    font-size: 10px;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+}
+
+.wfm-i2i-mask-preview-wrap .wfm-i2i-preview-img {
+    max-height: 70px;
+    background: #000;
+}
+
+.wfm-i2i-mask-drop-zone {
+    padding: 8px;
+}
+
 /* ============================================
    Side Panel - Thumbnail Tab
    ============================================ */

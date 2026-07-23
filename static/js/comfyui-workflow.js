@@ -487,6 +487,8 @@ export const comfyWorkflow = {
             vae_nodes: [],
             save_nodes: [],
             load_image_nodes: [],
+            inpaint_encode_nodes: [],
+            mask_editor_one_nodes: [],
             text_encoder_nodes: [],
             diffusion_model_nodes: [],
             controlnet_nodes: [],
@@ -809,6 +811,22 @@ export const comfyWorkflow = {
                 });
             }
 
+            // --- VAE Encode (for Inpainting) nodes ---
+            if (ct === "VAEEncodeForInpaint") {
+                result.inpaint_encode_nodes.push({
+                    id, type: ct, title,
+                    grow_mask_by: inputs.grow_mask_by,
+                });
+            }
+
+            // --- Mask Editor One nodes (comfyui-mask-editor-one) ---
+            // 画像とマスクをノード自身が内包する（LoadImageを介さない）インペイント画像ソース。
+            // image出力はサーバー側キャッシュ(bg_image_b64、node_idキー)から、mask出力は
+            // layer_data(JSON文字列)ウィジェットの各レイヤーのアルファチャンネルから合成される。
+            if (ct === "MaskEditorOne") {
+                result.mask_editor_one_nodes.push({ id, type: ct, title });
+            }
+
             // --- Text encoder (CLIP) nodes ---
             if (ct === "DualCLIPLoader" || ct === "CLIPLoader" || ct === "ClipLoaderGGUF" || ct === "DualClipLoaderGGUF") {
                 result.text_encoder_nodes.push({
@@ -847,6 +865,24 @@ export const comfyWorkflow = {
                     hypernetwork_name: inputs.hypernetwork_name,
                     strength: inputs.strength ?? 1.0,
                 });
+            }
+        }
+
+        // --- Post-pass: flag LoadImage nodes whose MASK output (slot 1) is wired to something
+        // downstream (directly, or via a pass-through node like MaskEditorNode). These are the
+        // "inpaint-capable" slots — image + mask both come from the same node's two outputs, so
+        // painting a mask for them only requires re-uploading that one node's image with the mask
+        // baked into the alpha channel (matches ComfyUI's native LoadImage alpha→MASK extraction). ---
+        const loadImageIds = new Set(result.load_image_nodes.filter(n => n.type === "LoadImage").map(n => n.id));
+        if (loadImageIds.size > 0) {
+            for (const node of Object.values(workflow)) {
+                if (!node?.inputs) continue;
+                for (const v of Object.values(node.inputs)) {
+                    if (Array.isArray(v) && v.length === 2 && Number(v[1]) === 1 && loadImageIds.has(String(v[0]))) {
+                        const target = result.load_image_nodes.find(n => n.id === String(v[0]));
+                        if (target) target.mask_used = true;
+                    }
+                }
             }
         }
 

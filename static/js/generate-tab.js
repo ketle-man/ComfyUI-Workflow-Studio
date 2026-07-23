@@ -1397,7 +1397,7 @@ async function _expandWildcardsInWorkflow(workflow) {
 // Generation (core — throws on error)
 // ============================================
 
-async function _coreGenerate(silent = false) {
+async function _coreGenerate(silent = false, workflowOverride = null) {
     const progressBar = document.getElementById("wfm-gen-progress-bar");
     const progressText = document.getElementById("wfm-gen-progress-text");
     const resultImg = document.getElementById("wfm-gen-result-img");
@@ -1409,7 +1409,8 @@ async function _coreGenerate(silent = false) {
     if (progressBar) progressBar.style.width = "0%";
     if (progressText) progressText.textContent = "Starting...";
 
-    const workflowExpanded = await _expandWildcardsInWorkflow({ ...comfyUI.currentWorkflow });
+    const baseWorkflow = workflowOverride || comfyUI.currentWorkflow;
+    const workflowExpanded = await _expandWildcardsInWorkflow({ ...baseWorkflow });
     const workflowForGenerate = _applyStyleToWorkflow(workflowExpanded);
     const { images, seed } = await comfyUI.generate(
         workflowForGenerate,
@@ -1463,7 +1464,7 @@ async function _coreGenerate(silent = false) {
     }
 
     if (images.length > 0) {
-        saveGeneratedImagesMeta(images, { ...comfyUI.currentWorkflow }).catch(() => {});
+        saveGeneratedImagesMeta(images, { ...baseWorkflow }).catch(() => {});
     }
 
     if (!silent) showToast(t("generationComplete"), "success");
@@ -1729,14 +1730,20 @@ async function _runBatchGenerate() {
 // Generate entry point
 // ============================================
 
-async function handleGenerate() {
-    if (!comfyUI.currentWorkflow) {
+// workflowOverride: 明示的に渡された場合、comfyUI.currentWorkflow の代わりにこのワークフローで
+// 生成する（GenerateUIの表示状態には触れない。Image Edit「Inpaint」の専用ワークフロー実行から利用）。
+// ボタンのclickハンドラから呼ばれる場合は第一引数がMouseEventになるため、その場合は無視する。
+async function handleGenerate(workflowOverride = null) {
+    if (workflowOverride instanceof Event) workflowOverride = null;
+
+    if (!workflowOverride && !comfyUI.currentWorkflow) {
         showToast(t("noWorkflowLoaded"), "error");
         return;
     }
     if (comfyUI.generating) return;
 
-    comfyEditor.syncToWorkflow();
+    // オーバーライド実行時は GenerateUI 側の表示中プロンプトを別ワークフローへ誤って書き込まないよう同期をスキップする
+    if (!workflowOverride) comfyEditor.syncToWorkflow();
 
     const genBtn = document.getElementById("wfm-gen-generate-btn");
     const interruptBtn = document.getElementById("wfm-gen-interrupt-btn");
@@ -1747,18 +1754,20 @@ async function handleGenerate() {
     _ckptBatch.paused = false;
     _ckptBatch._resumeResolve = null;
 
-    const batchEnabled = _activeBatchType !== null;
+    // オーバーライド実行時はバッチモードの影響を受けない単発生成に固定する
+    const batchEnabled = !workflowOverride && _activeBatchType !== null;
 
     try {
         if (batchEnabled) {
             await _runBatchGenerate();
         } else {
             try {
-                await _coreGenerate(false);
+                await _coreGenerate(false, workflowOverride);
             } catch (err) {
                 const progressText = document.getElementById("wfm-gen-progress-text");
                 if (progressText) progressText.textContent = "Error";
                 showToast(t("generationError", err.message), "error");
+                throw err;
             }
         }
     } finally {
@@ -1819,7 +1828,12 @@ export async function initGenerateTab() {
     });
 
     // Generate button
-    document.getElementById("wfm-gen-generate-btn")?.addEventListener("click", handleGenerate);
+    document.getElementById("wfm-gen-generate-btn")?.addEventListener("click", () => {
+        handleGenerate().catch(() => {});
+    });
+
+    // Cross-tab entry point (Image Edit「Inpaint」タブの Run ボタンなど外部から生成を呼び出す用)
+    window._wfmGenerateTab = { generate: handleGenerate };
 
     // Alt+Apply from Input/Model/Settings tabs → Apply & Generate
     document.addEventListener("wfm:apply-and-generate", () => handleGenerate());

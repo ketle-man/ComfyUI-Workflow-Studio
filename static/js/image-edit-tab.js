@@ -12,6 +12,9 @@ import { ShapeTool }           from "./image-edit/ShapeTool.js";
 import { MaskTool }            from "./image-edit/MaskTool.js";
 import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTool, MASK_TEXT_FONTS } from "./image-edit/MaskEditorOneTools.js";
 import { showToast }           from "./app.js";
+import { comfyUI }             from "./comfyui-client.js";
+import { comfyEditor }         from "./comfyui-editor.js";
+import { comfyWorkflow }       from "./comfyui-workflow.js";
 
 const TOOL_DEFS = [
     { id: "select",   icon: "▲",  label: "Select",    ready: true  },
@@ -22,6 +25,7 @@ const TOOL_DEFS = [
     { id: "blur",     icon: "≈",   label: "Blur",      ready: true  },
     { id: "filter",   icon: "★",   label: "Filter",    ready: true },
     { id: "bgremove", icon: "⬚",   label: "BG Remove", ready: true  },
+    { id: "inpaint",  icon: "🩹",  label: "Inpaint",   ready: true  },
 ];
 
 const UNDO_LIMIT = 20;
@@ -107,6 +111,17 @@ class ImageEditTab {
         // ABR brush (Mask Editor One) — optional feature
         this._abrAvailable = false;
         this._abrBrushTree = [];
+        // Inpaint ツール
+        this._inpaintPositive   = "";
+        this._inpaintNegative   = "";
+        this._inpaintGrowMaskBy = null;  // null = 未初期化（ワークフローの現在値から初期化）
+        this._inpaintDenoise    = null;  // null = 未初期化（ワークフローの現在値から初期化）
+        this._inpaintRunning    = false;
+        this._inpaintResultUrl  = null;
+        // Inpaint 専用ワークフロー（OFF時は GenerateUI で読み込み中のワークフローを使用）
+        this._inpaintUseDedicated     = false;
+        this._inpaintDedicatedFilename = null;
+        this._inpaintWorkflowList      = [];
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -124,6 +139,20 @@ class ImageEditTab {
         this._checkBiRefNetAvailability();
         this._checkSam3Availability();
         this._checkAbrAvailability();
+        // Inpaint「専用ワークフロー」選択肢のため、保存済みワークフロー一覧を取得
+        this._fetchInpaintWorkflowList();
+    }
+
+    async _fetchInpaintWorkflowList() {
+        try {
+            const resp = await fetch(`${comfyUI.baseUrl}/api/wfm/workflows`);
+            if (!resp.ok) return;
+            const list = await resp.json();
+            this._inpaintWorkflowList = (list || []).map((w) => w.filename).filter(Boolean);
+            if (this._activeTool === "inpaint") this._renderInpaintProps();
+        } catch {
+            this._inpaintWorkflowList = [];
+        }
     }
 
     async _checkBiRefNetAvailability() {
@@ -243,8 +272,8 @@ class ImageEditTab {
                 overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
             }
         }
-        // Draw/Mask以外に切り替えたらプロパティペインを非表示
-        if (toolId !== "mask" && toolId !== "draw") {
+        // Draw/Mask/Inpaint以外に切り替えたらプロパティペインを非表示
+        if (toolId !== "mask" && toolId !== "draw" && toolId !== "inpaint") {
             const pane = document.getElementById("ie-props-pane");
             if (pane) pane.style.display = "none";
         }
@@ -689,6 +718,10 @@ class ImageEditTab {
             document.getElementById("ie-gmic-open-btn")?.addEventListener("click", () => this._gmicOpenGui());
             document.getElementById("ie-gmic-apply-btn")?.addEventListener("click", () => this._gmicApplyResult());
             document.getElementById("ie-gmic-abort-btn")?.addEventListener("click", () => this._gmicAbort());
+
+        } else if (toolId === "inpaint") {
+            el.innerHTML = "";
+            this._renderInpaintProps();
         } else {
             const def = TOOL_DEFS.find(d => d.id === toolId);
             el.innerHTML = `<span style="font-size:12px;color:var(--wfm-text-secondary);">${def?.label ?? toolId}: coming soon</span>`;
@@ -1228,6 +1261,194 @@ class ImageEditTab {
             ctx.restore();
         }
         return canvas;
+    }
+
+    // ── Inpaint ツール ─────────────────────────────
+    // マスクレイヤー(透過背景+白ペイント)を黒背景に合成し、白=インペイント対象/黒=維持の
+    // 不透明なグレースケールPNGとして書き出す（LayerのgetThumbnailDataURLと同じ規約）。
+    _exportMaskCanvas(maskLayer) {
+        const w = maskLayer.canvas.width, h = maskLayer.canvas.height;
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(maskLayer.canvas, 0, 0);
+        return canvas;
+    }
+
+    _renderInpaintProps() {
+        const pane  = document.getElementById("ie-props-pane");
+        const body  = document.getElementById("ie-props-body");
+        const title = document.getElementById("ie-props-title");
+        if (!pane || !body) return;
+        pane.style.display = "flex";
+        if (title) title.textContent = "Inpaint";
+
+        // 未初期化ならワークフローの現在値から初期化（VAEEncodeForInpaint.grow_mask_by / KSampler.denoise）
+        if (this._inpaintGrowMaskBy == null) {
+            this._inpaintGrowMaskBy = comfyUI.currentAnalysis?.inpaint_encode_nodes?.[0]?.grow_mask_by ?? 6;
+        }
+        if (this._inpaintDenoise == null) {
+            const samplerNode = (comfyUI.currentAnalysis?.sampler_nodes || []).find((n) => n.denoise !== undefined);
+            this._inpaintDenoise = samplerNode?.denoise ?? 1.0;
+        }
+
+        body.innerHTML = `
+            <div class="ie-props-row">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="checkbox" id="ie-inpaint-use-dedicated" ${this._inpaintUseDedicated ? "checked" : ""}>
+                    Use dedicated workflow
+                </label>
+            </div>
+            <div class="ie-props-row" id="ie-inpaint-dedicated-row" style="${this._inpaintUseDedicated ? "" : "display:none;"}">
+                <select id="ie-inpaint-dedicated-select" style="flex:1;">
+                    <option value="">-- select workflow --</option>
+                    ${this._inpaintWorkflowList.map((f) => `<option value="${f}" ${f === this._inpaintDedicatedFilename ? "selected" : ""}>${f}</option>`).join("")}
+                </select>
+            </div>
+            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                <label>Positive Prompt</label>
+                <textarea id="ie-inpaint-positive" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._inpaintPositive}</textarea>
+            </div>
+            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                <label>Negative Prompt</label>
+                <textarea id="ie-inpaint-negative" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._inpaintNegative}</textarea>
+            </div>
+            <div class="ie-props-row">
+                <label>Grow Mask By</label>
+                <input type="number" id="ie-inpaint-grow-mask" min="0" max="200" step="1" value="${this._inpaintGrowMaskBy}" style="width:60px;">
+            </div>
+            <div class="ie-props-row">
+                <label>Denoise</label>
+                <input type="number" id="ie-inpaint-denoise" min="0" max="1" step="0.01" value="${this._inpaintDenoise}" style="width:60px;">
+            </div>
+            <div class="ie-props-row">
+                <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="ie-inpaint-run-btn" style="flex:1;" ${this._inpaintRunning ? "disabled" : ""}>
+                    ${this._inpaintRunning ? "Running..." : "Run"}
+                </button>
+            </div>
+            <span id="ie-inpaint-status" style="font-size:11px;color:var(--wfm-text-secondary);"></span>
+            ${this._inpaintResultUrl ? `
+            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                <label>Result</label>
+                <img src="${this._inpaintResultUrl}" style="max-width:100%;border-radius:var(--wfm-radius-sm);border:1px solid var(--wfm-border);">
+            </div>
+            ` : ""}
+        `;
+
+        document.getElementById("ie-inpaint-use-dedicated")?.addEventListener("change", e => {
+            this._inpaintUseDedicated = e.target.checked;
+            this._renderInpaintProps();
+        });
+        document.getElementById("ie-inpaint-dedicated-select")?.addEventListener("change", e => {
+            this._inpaintDedicatedFilename = e.target.value || null;
+        });
+        document.getElementById("ie-inpaint-positive")?.addEventListener("input", e => { this._inpaintPositive = e.target.value; });
+        document.getElementById("ie-inpaint-negative")?.addEventListener("input", e => { this._inpaintNegative = e.target.value; });
+        document.getElementById("ie-inpaint-grow-mask")?.addEventListener("input", e => {
+            this._inpaintGrowMaskBy = parseInt(e.target.value) || 0;
+        });
+        document.getElementById("ie-inpaint-denoise")?.addEventListener("input", e => {
+            this._inpaintDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
+            if (Number.isNaN(this._inpaintDenoise)) this._inpaintDenoise = 1.0;
+        });
+        document.getElementById("ie-inpaint-run-btn")?.addEventListener("click", () => this._runInpaint());
+    }
+
+    async _runInpaint() {
+        if (this._inpaintRunning) return;
+        if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
+
+        const maskLayer = (this._layerMgr.activeLayer?.type === "mask")
+            ? this._layerMgr.activeLayer
+            : this._layerMgr.layers.find(l => l.type === "mask");
+        if (!maskLayer) { showToast("Create a mask layer first (Mask tool)", "info"); return; }
+
+        if (this._inpaintUseDedicated) {
+            if (!this._inpaintDedicatedFilename) { showToast("Select a dedicated workflow first", "info"); return; }
+        } else if (!comfyUI.currentAnalysis) {
+            showToast("Load a workflow in GenerateUI first", "info");
+            return;
+        }
+
+        const runBtn    = document.getElementById("ie-inpaint-run-btn");
+        const statusEl  = document.getElementById("ie-inpaint-status");
+        const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+
+        this._inpaintRunning = true;
+        if (runBtn) { runBtn.disabled = true; runBtn.textContent = "Running..."; }
+        setStatus(this._inpaintUseDedicated ? "Loading dedicated workflow..." : "Compositing...");
+
+        try {
+            // 専用ワークフロー使用時は GenerateUI の comfyUI.currentWorkflow/currentAnalysis には
+            // 一切触れず、ここでロード・解析したローカルなワークフロー/解析結果だけを使う。
+            let targetWorkflow = null;
+            let targetAnalysis = null;
+
+            if (this._inpaintUseDedicated) {
+                const resp = await fetch(`${comfyUI.baseUrl}/api/wfm/workflows/raw?filename=${encodeURIComponent(this._inpaintDedicatedFilename)}`);
+                if (!resp.ok) throw new Error(`Failed to load workflow (HTTP ${resp.status})`);
+                let dedicatedWorkflow = await resp.json();
+                const format = comfyWorkflow.detectFormat(dedicatedWorkflow, this._inpaintDedicatedFilename);
+                if (format === "ui") {
+                    dedicatedWorkflow = await comfyWorkflow.convertUiToApi(dedicatedWorkflow);
+                } else if (format !== "api") {
+                    throw new Error("Unsupported or unrecognized workflow format");
+                }
+                targetWorkflow = dedicatedWorkflow;
+                targetAnalysis = comfyWorkflow.analyzeWorkflow(dedicatedWorkflow);
+            }
+
+            // LoadImage(の MASK 出力が使われている)スロットを優先し、無ければ Mask Editor One
+            // ノード（LoadImage を介さず画像/マスクを内包する custom node）にフォールバックする
+            const analysisForLookup = targetAnalysis || comfyUI.currentAnalysis;
+            const slotIndex = (analysisForLookup.load_image_nodes || []).findIndex(n => n.mask_used);
+            const meoNode = (analysisForLookup.mask_editor_one_nodes || [])[0];
+            if (slotIndex === -1 && !meoNode) {
+                throw new Error("No inpaint-capable LoadImage or Mask Editor One node found in the workflow");
+            }
+
+            setStatus("Compositing...");
+            const bgCanvas   = this._buildBgCanvas();
+            const imageBlob  = await new Promise((resolve) => bgCanvas.toBlob(resolve, "image/png"));
+            const maskCanvas = this._exportMaskCanvas(maskLayer);
+            const maskBlob   = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
+
+            const overrideOpts = targetWorkflow ? { workflow: targetWorkflow, analysis: targetAnalysis } : {};
+
+            setStatus("Uploading...");
+            if (slotIndex !== -1) {
+                await comfyEditor.applyImageAndMaskToSlot(imageBlob, maskBlob, slotIndex, overrideOpts);
+            } else {
+                await comfyEditor.applyImageAndMaskToMaskEditorOneNode(imageBlob, maskBlob, meoNode.id, overrideOpts);
+            }
+
+            comfyEditor.setPromptText("positive", this._inpaintPositive, overrideOpts);
+            comfyEditor.setPromptText("negative", this._inpaintNegative, overrideOpts);
+            comfyEditor.setInpaintParams({
+                growMaskBy: this._inpaintGrowMaskBy,
+                denoise: this._inpaintDenoise,
+                ...overrideOpts,
+            });
+
+            if (!window._wfmGenerateTab?.generate) throw new Error("GenerateUI is not ready yet");
+
+            setStatus("Generating...");
+            await window._wfmGenerateTab.generate(targetWorkflow || undefined);
+
+            const resultImg = document.getElementById("wfm-gen-result-img");
+            if (resultImg?.src) this._inpaintResultUrl = resultImg.src;
+
+            setStatus("Done");
+            showToast("Inpaint generation complete", "success");
+        } catch (err) {
+            setStatus("Error");
+            showToast(`Inpaint failed: ${err.message}`, "error");
+        } finally {
+            this._inpaintRunning = false;
+            this._renderInpaintProps();
+        }
     }
 
     _renderMaskLayerOverlay(ctx, maskLayer) {

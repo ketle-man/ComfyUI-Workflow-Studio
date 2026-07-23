@@ -1327,6 +1327,7 @@
                                 <li id="wfm-help-imageedit-7b">Blur (≈): apply Gaussian blur or mosaic to the active layer — whole-layer or region-based (drag a rectangle); see the Blur Tool card below for details</li>
                                 <li id="wfm-help-imageedit-7c">BG Remove (⬚): remove the background from the active layer using Lightweight (@imgly, runs in browser) or BiRefNet (requires Mask Editor One + birefnet.safetensors in ComfyUI/models/background_removal/); see the BG Remove Tool card below for details</li>
                                 <li id="wfm-help-imageedit-7d">Mask (🎭): paint masks on a mask layer using 6 sub-tools — Paint (freehand), Color (flood-select by similar color), Alpha (extract from image transparency), Text (stamp text), Vector (Catmull-Rom spline polygon), Shape (rect / ellipse); SAM3 text-prompt segmentation is also available when Mask Editor One is installed; click "M" in the Layers header to add a mask layer; see the Mask Tool card below for details</li>
+                                <li id="wfm-help-imageedit-7e">Inpaint (🩹): composites the visible layers plus a Mask layer into one RGBA image (mask baked into the alpha channel) and applies it to the first inpaint-capable LoadImage node in the workflow currently loaded in GenerateUI (a node whose MASK output feeds something like VAEEncodeForInpaint); enter Positive/Negative prompts, Grow Mask By (applied to the VAE Encode (for Inpainting) node), and Denoise (applied to KSampler) in the properties panel, then click Run to upload and generate without leaving the Image Edit tab — the result is shown back in the properties panel when done; requires a Mask layer to be painted first and an inpaint-capable workflow loaded in GenerateUI; also works with workflows built around the Mask Editor One custom node (comfyui-mask-editor-one) instead of LoadImage — image/mask are pushed to it via its node_id-keyed server cache and layer_data widget; "Use dedicated workflow" checkbox: when off, the workflow currently loaded in GenerateUI is used (unchanged); when on, pick a saved workflow from the dropdown — it is loaded, edited, and generated entirely in the background without disturbing the workflow shown in GenerateUI</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1670,6 +1671,7 @@
                     <button class="ie-tool-btn"                    data-tool="blur"     title="Blur">≈</button>
                     <button class="ie-tool-btn"                    data-tool="filter"   title="Filter">★</button>
                     <button class="ie-tool-btn"                    data-tool="bgremove" title="BG Remove">⬚</button>
+                    <button class="ie-tool-btn"                    data-tool="inpaint"  title="Inpaint">🩹</button>
                 </div>
 
                 <!-- Center -->

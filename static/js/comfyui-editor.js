@@ -154,6 +154,87 @@ function _syncRawJson() {
     }
 }
 
+// ── Inpaint: 画像+マスクのRGBA合成 ──────────────────────
+// mask は白=インペイント対象領域/黒=維持領域のグレースケール画像を想定（Image Editの
+// マスクレイヤーも、手動でドロップする白黒マスクファイルも同じ規約）。
+// ComfyUIネイティブのLoadImageはアルファチャンネルから mask = 1 - alpha を抽出するため、
+// 合成後の alpha は 255 - maskGray とする。
+async function _loadImageElement(src) {
+    const isBlobLike = src instanceof Blob;
+    const url = isBlobLike ? URL.createObjectURL(src) : src;
+    try {
+        const img = new Image();
+        img.src = url;
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = () => reject(new Error("Failed to load image"));
+        });
+        return img;
+    } finally {
+        if (isBlobLike) URL.revokeObjectURL(url);
+    }
+}
+
+async function _compositeImageWithMask(imageInput, maskInput) {
+    const img  = await _loadImageElement(imageInput);
+    const mask = await _loadImageElement(maskInput);
+
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    const imgData = ctx.getImageData(0, 0, w, h);
+
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = w; maskCanvas.height = h;
+    const mctx = maskCanvas.getContext("2d");
+    mctx.drawImage(mask, 0, 0, w, h);
+    const maskData = mctx.getImageData(0, 0, w, h).data;
+
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        data[i + 3] = 255 - maskData[i];
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+// ── Inpaint: Mask Editor One (comfyui-mask-editor-one) ノード向けヘルパー ──────
+// この custom node は LoadImage を介さず、画像は /mask_editor/store_image でサーバー側
+// キャッシュ(bg_image_b64, node_idキー)へ、マスクは layer_data(JSON文字列)ウィジェットの
+// 各レイヤーの「アルファチャンネル」から合成される（LoadImageの 1-alpha とは逆で、
+// alpha値がそのままmask値になる規約）。
+async function _imageInputToDataURL(imageInput) {
+    const img = await _loadImageElement(imageInput);
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    return canvas.toDataURL("image/png");
+}
+
+async function _maskInputToAlphaDataURL(maskInput) {
+    const img = await _loadImageElement(maskInput);
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    const imgData = ctx.getImageData(0, 0, w, h);
+
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        const gray = data[i];
+        data[i] = data[i + 1] = data[i + 2] = 255;
+        data[i + 3] = gray;
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    return canvas.toDataURL("image/png");
+}
+
 // ── プロンプト強調weight編集 (Ctrl+↑/↓) ──────────────────────
 // A1111 / ComfyUIネイティブのCLIP Text Encodeと同様の操作感:
 // 選択（無ければカーソル位置の括弧ブロックまたは単語）を (text:weight) 形式に変換し、
@@ -1114,14 +1195,18 @@ export const comfyEditor = {
         if (!el) return;
 
         const loadNodes = analysis.load_image_nodes || [];
-        if (loadNodes.length === 0) {
-            el.innerHTML = `<p class="wfm-placeholder">No LoadImage nodes found in workflow</p>`;
+        const meoNodes  = analysis.mask_editor_one_nodes || [];
+        if (loadNodes.length === 0 && meoNodes.length === 0) {
+            el.innerHTML = `<p class="wfm-placeholder">No LoadImage / Mask Editor One nodes found in workflow</p>`;
             return;
         }
 
         // Render up to 4 image input slots
         const slots = loadNodes.slice(0, 4);
+        // Mask Editor One ノード（画像+マスクを内包、常に両方必須）— 別枠で最大2件表示
+        const meoSlots = meoNodes.slice(0, 2);
         el.innerHTML = `
+            ${slots.length === 0 ? "" : `
             <div class="wfm-i2i-grid">
                 ${slots.map((node, i) => `
                     <div class="wfm-i2i-slot" data-slot="${i}" data-node-id="${node.id}">
@@ -1138,6 +1223,23 @@ export const comfyEditor = {
                                 <input type="file" accept="image/*" class="wfm-i2i-file" id="wfm-i2i-file-${i}" style="display:none;">
                             </label>
                         </div>
+                        ${node.mask_used ? `
+                        <div class="wfm-i2i-mask-section">
+                            <div class="wfm-i2i-mask-header">
+                                <span>Mask</span>
+                                <span class="wfm-i2i-mask-filename" id="wfm-i2i-mask-filename-${i}"></span>
+                            </div>
+                            <div class="wfm-i2i-preview-wrap wfm-i2i-mask-preview-wrap" id="wfm-i2i-mask-preview-wrap-${i}" style="display:none;">
+                                <img class="wfm-i2i-preview-img" id="wfm-i2i-mask-preview-${i}">
+                            </div>
+                            <div class="wfm-i2i-drop-zone wfm-i2i-mask-drop-zone" id="wfm-i2i-mask-drop-${i}">
+                                <label class="wfm-i2i-drop-label">
+                                    Drop mask (white=inpaint) or click to select
+                                    <input type="file" accept="image/*" class="wfm-i2i-file" id="wfm-i2i-mask-file-${i}" style="display:none;">
+                                </label>
+                            </div>
+                        </div>
+                        ` : ""}
                         <div style="display:flex;gap:6px;margin-top:6px;">
                             <button class="wfm-btn wfm-btn-sm wfm-btn-primary wfm-i2i-apply" data-slot="${i}" disabled>Apply</button>
                             <span class="wfm-i2i-status" id="wfm-i2i-status-${i}"></span>
@@ -1145,6 +1247,46 @@ export const comfyEditor = {
                     </div>
                 `).join("")}
             </div>
+            `}
+            ${meoSlots.length === 0 ? "" : `
+            <div class="wfm-i2i-grid" style="margin-top:12px;">
+                ${meoSlots.map((node, i) => `
+                    <div class="wfm-i2i-slot" data-meo-slot="${i}" data-node-id="${node.id}">
+                        <div class="wfm-i2i-slot-header">
+                            <span style="font-weight:600;font-size:12px;">ID:${node.id} ${node.title} (Mask Editor One)</span>
+                        </div>
+                        <div class="wfm-i2i-preview-wrap" id="wfm-meo-preview-wrap-${i}" style="display:none;">
+                            <img class="wfm-i2i-preview-img" id="wfm-meo-preview-${i}">
+                        </div>
+                        <div class="wfm-i2i-drop-zone" id="wfm-meo-drop-${i}">
+                            <label class="wfm-i2i-drop-label">
+                                Drop image or click to select
+                                <input type="file" accept="image/*" class="wfm-i2i-file" id="wfm-meo-file-${i}" style="display:none;">
+                            </label>
+                        </div>
+                        <div class="wfm-i2i-mask-section">
+                            <div class="wfm-i2i-mask-header">
+                                <span>Mask</span>
+                                <span class="wfm-i2i-mask-filename" id="wfm-meo-mask-filename-${i}"></span>
+                            </div>
+                            <div class="wfm-i2i-preview-wrap wfm-i2i-mask-preview-wrap" id="wfm-meo-mask-preview-wrap-${i}" style="display:none;">
+                                <img class="wfm-i2i-preview-img" id="wfm-meo-mask-preview-${i}">
+                            </div>
+                            <div class="wfm-i2i-drop-zone wfm-i2i-mask-drop-zone" id="wfm-meo-mask-drop-${i}">
+                                <label class="wfm-i2i-drop-label">
+                                    Drop mask (white=inpaint) or click to select
+                                    <input type="file" accept="image/*" class="wfm-i2i-file" id="wfm-meo-mask-file-${i}" style="display:none;">
+                                </label>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:6px;margin-top:6px;">
+                            <button class="wfm-btn wfm-btn-sm wfm-btn-primary wfm-meo-apply" data-slot="${i}" disabled>Apply</button>
+                            <span class="wfm-i2i-status" id="wfm-meo-status-${i}"></span>
+                        </div>
+                    </div>
+                `).join("")}
+            </div>
+            `}
         `;
 
         // Initialize each slot
@@ -1156,7 +1298,13 @@ export const comfyEditor = {
             const filenameEl = document.getElementById(`wfm-i2i-filename-${i}`);
             const statusEl = document.getElementById(`wfm-i2i-status-${i}`);
             const dropZone = document.getElementById(`wfm-i2i-drop-${i}`);
+            const maskFileInput = document.getElementById(`wfm-i2i-mask-file-${i}`);
+            const maskDropZone = document.getElementById(`wfm-i2i-mask-drop-${i}`);
+            const maskPreviewWrap = document.getElementById(`wfm-i2i-mask-preview-wrap-${i}`);
+            const maskPreviewImg = document.getElementById(`wfm-i2i-mask-preview-${i}`);
+            const maskFilenameEl = document.getElementById(`wfm-i2i-mask-filename-${i}`);
             let pendingFile = null;
+            let pendingMaskFile = null;
 
             const applyFile = (file) => {
                 if (!file || !file.type.startsWith("image/")) return;
@@ -1169,9 +1317,23 @@ export const comfyEditor = {
                 statusEl.textContent = "";
             };
 
+            const applyMaskFile = (file) => {
+                if (!file || !file.type.startsWith("image/")) return;
+                pendingMaskFile = file;
+                const url = URL.createObjectURL(file);
+                maskPreviewImg.src = url;
+                maskPreviewWrap.style.display = "";
+                maskFilenameEl.textContent = file.name;
+                applyBtn.disabled = false;
+                statusEl.textContent = "";
+            };
+
             // File input change
             fileInput?.addEventListener("change", () => {
                 if (fileInput.files.length > 0) applyFile(fileInput.files[0]);
+            });
+            maskFileInput?.addEventListener("change", () => {
+                if (maskFileInput.files.length > 0) applyMaskFile(maskFileInput.files[0]);
             });
 
             // Drag & drop
@@ -1189,14 +1351,39 @@ export const comfyEditor = {
                     if (e.dataTransfer.files.length > 0) applyFile(e.dataTransfer.files[0]);
                 });
             }
+            if (maskDropZone) {
+                maskDropZone.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    maskDropZone.classList.add("drag-over");
+                });
+                maskDropZone.addEventListener("dragleave", () => {
+                    maskDropZone.classList.remove("drag-over");
+                });
+                maskDropZone.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    maskDropZone.classList.remove("drag-over");
+                    if (e.dataTransfer.files.length > 0) applyMaskFile(e.dataTransfer.files[0]);
+                });
+            }
 
             // Apply button: upload to ComfyUI and set on node
+            // (マスクが指定されている場合は画像+マスクをRGBA合成して1枚のPNGとしてアップロードする)
             applyBtn?.addEventListener("click", async () => {
-                if (!pendingFile) return;
+                if (!pendingFile && !pendingMaskFile) return;
                 applyBtn.disabled = true;
                 statusEl.textContent = "Uploading...";
                 try {
-                    const result = await comfyUI.uploadImage(pendingFile, pendingFile.name);
+                    let result;
+                    if (pendingMaskFile) {
+                        const baseImage = pendingFile || previewImg.src;
+                        if (!baseImage) throw new Error("No base image to apply mask to");
+                        const composedBlob = await _compositeImageWithMask(baseImage, pendingMaskFile);
+                        const fileName = (pendingFile?.name || node.image || "inpaint.png").replace(/\.[^.]+$/, "") + "_masked.png";
+                        const composedFile = new File([composedBlob], fileName, { type: "image/png" });
+                        result = await comfyUI.uploadImage(composedFile, fileName);
+                    } else {
+                        result = await comfyUI.uploadImage(pendingFile, pendingFile.name);
+                    }
                     if (result.name) {
                         // Update workflow node
                         if (comfyUI.currentWorkflow?.[node.id]) {
@@ -1209,6 +1396,76 @@ export const comfyEditor = {
                     } else {
                         throw new Error("Upload returned no filename");
                     }
+                } catch (err) {
+                    statusEl.textContent = `✗ ${err.message}`;
+                    statusEl.style.color = "var(--wfm-danger)";
+                    applyBtn.disabled = false;
+                }
+            });
+        });
+
+        // Initialize each Mask Editor One slot（画像+マスク両方が揃って初めてApply可能）
+        meoSlots.forEach((node, i) => {
+            const fileInput = document.getElementById(`wfm-meo-file-${i}`);
+            const maskFileInput = document.getElementById(`wfm-meo-mask-file-${i}`);
+            const dropZone = document.getElementById(`wfm-meo-drop-${i}`);
+            const maskDropZone = document.getElementById(`wfm-meo-mask-drop-${i}`);
+            const previewWrap = document.getElementById(`wfm-meo-preview-wrap-${i}`);
+            const previewImg = document.getElementById(`wfm-meo-preview-${i}`);
+            const maskPreviewWrap = document.getElementById(`wfm-meo-mask-preview-wrap-${i}`);
+            const maskPreviewImg = document.getElementById(`wfm-meo-mask-preview-${i}`);
+            const maskFilenameEl = document.getElementById(`wfm-meo-mask-filename-${i}`);
+            const applyBtn = el.querySelector(`.wfm-meo-apply[data-slot="${i}"]`);
+            const statusEl = document.getElementById(`wfm-meo-status-${i}`);
+            let pendingFile = null;
+            let pendingMaskFile = null;
+
+            const updateApplyEnabled = () => { applyBtn.disabled = !(pendingFile && pendingMaskFile); };
+
+            const applyFile = (file) => {
+                if (!file || !file.type.startsWith("image/")) return;
+                pendingFile = file;
+                previewImg.src = URL.createObjectURL(file);
+                previewWrap.style.display = "";
+                statusEl.textContent = "";
+                updateApplyEnabled();
+            };
+            const applyMaskFile = (file) => {
+                if (!file || !file.type.startsWith("image/")) return;
+                pendingMaskFile = file;
+                maskPreviewImg.src = URL.createObjectURL(file);
+                maskPreviewWrap.style.display = "";
+                maskFilenameEl.textContent = file.name;
+                statusEl.textContent = "";
+                updateApplyEnabled();
+            };
+
+            fileInput?.addEventListener("change", () => {
+                if (fileInput.files.length > 0) applyFile(fileInput.files[0]);
+            });
+            maskFileInput?.addEventListener("change", () => {
+                if (maskFileInput.files.length > 0) applyMaskFile(maskFileInput.files[0]);
+            });
+
+            [[dropZone, applyFile], [maskDropZone, applyMaskFile]].forEach(([zone, handler]) => {
+                if (!zone) return;
+                zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("drag-over"); });
+                zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+                zone.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    zone.classList.remove("drag-over");
+                    if (e.dataTransfer.files.length > 0) handler(e.dataTransfer.files[0]);
+                });
+            });
+
+            applyBtn?.addEventListener("click", async () => {
+                if (!pendingFile || !pendingMaskFile) return;
+                applyBtn.disabled = true;
+                statusEl.textContent = "Uploading...";
+                try {
+                    await this.applyImageAndMaskToMaskEditorOneNode(pendingFile, pendingMaskFile, node.id);
+                    statusEl.textContent = "✓ Applied";
+                    statusEl.style.color = "var(--wfm-success)";
                 } catch (err) {
                     statusEl.textContent = `✗ ${err.message}`;
                     statusEl.style.color = "var(--wfm-danger)";
@@ -1246,6 +1503,113 @@ export const comfyEditor = {
 
         _syncRawJson();
         return result.name;
+    },
+
+    // imageInput/maskInput: File/Blob いずれも可。マスクは白=インペイント対象領域のグレースケール想定。
+    // 画像とマスクをRGBA合成し、1枚のPNGとして対象LoadImageノードへアップロードする
+    // （ComfyUIネイティブのアルファ→MASK抽出に準拠。Image Edit「Inpaint」タブのRunボタンから利用）。
+    // opts.workflow/opts.analysis を渡すと、comfyUI.currentWorkflow/currentAnalysis の代わりに
+    // そのワークフローへ書き込む（GenerateUIタブの表示・DOM更新は行わない。専用ワークフロー実行用）。
+    async applyImageAndMaskToSlot(imageInput, maskInput, slotIndex = 0, opts = {}) {
+        const workflow = opts.workflow || comfyUI.currentWorkflow;
+        const analysis = opts.analysis || comfyUI.currentAnalysis;
+        const loadNodes = analysis?.load_image_nodes || [];
+        const node = loadNodes[slotIndex];
+        if (!node) throw new Error("No LoadImage node at slot " + slotIndex);
+
+        const composedBlob = await _compositeImageWithMask(imageInput, maskInput);
+        const fileName = `inpaint_${Math.random().toString(36).slice(2, 10)}.png`;
+        const composedFile = new File([composedBlob], fileName, { type: "image/png" });
+
+        const result = await comfyUI.uploadImage(composedFile, fileName);
+        if (!result.name) throw new Error("Upload returned no filename");
+
+        if (workflow?.[node.id]) {
+            workflow[node.id].inputs.image = result.name;
+        }
+
+        if (opts.workflow) return result.name;
+
+        const previewWrap = document.getElementById(`wfm-i2i-preview-wrap-${slotIndex}`);
+        const previewImg  = document.getElementById(`wfm-i2i-preview-${slotIndex}`);
+        const filenameEl  = document.getElementById(`wfm-i2i-filename-${slotIndex}`);
+        const statusEl    = document.getElementById(`wfm-i2i-status-${slotIndex}`);
+        const applyBtn    = document.querySelector(`.wfm-i2i-apply[data-slot="${slotIndex}"]`);
+
+        if (previewImg) {
+            previewImg.src = `/view?filename=${encodeURIComponent(result.name)}&type=input`;
+            if (previewWrap) previewWrap.style.display = "";
+        }
+        if (filenameEl) filenameEl.textContent = result.name;
+        if (statusEl)   { statusEl.textContent = `✓ ${result.name}`; statusEl.style.color = "var(--wfm-success)"; }
+        if (applyBtn)   applyBtn.disabled = true;
+
+        _syncRawJson();
+        return result.name;
+    },
+
+    // imageInput/maskInput: File/Blob いずれも可。マスクは白=インペイント対象領域のグレースケール想定。
+    // Mask Editor One (comfyui-mask-editor-one) ノード向け。画像はサーバー側キャッシュへ
+    // /mask_editor/store_image でPOSHし（node_idキー、bg_image_b64）、マスクは layer_data
+    // ウィジェットへ「アルファチャンネル=mask値」のレイヤーとして書き込む。
+    // opts.workflow を渡すと comfyUI.currentWorkflow の代わりにそのワークフローへ書き込む。
+    async applyImageAndMaskToMaskEditorOneNode(imageInput, maskInput, nodeId, opts = {}) {
+        const workflow = opts.workflow || comfyUI.currentWorkflow;
+        const bgDataUrl   = await _imageInputToDataURL(imageInput);
+        const maskDataUrl = await _maskInputToAlphaDataURL(maskInput);
+
+        const resp = await fetch(`${comfyUI.baseUrl}/mask_editor/store_image`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ node_id: String(nodeId), bg_image_b64: bgDataUrl }),
+        });
+        if (!resp.ok) throw new Error(`Failed to store image for Mask Editor One (node ${nodeId})`);
+
+        if (workflow?.[nodeId]) {
+            workflow[nodeId].inputs.layer_data = JSON.stringify({
+                layers: [{ visible: true, opacity: 1, operation: "add", imageData: maskDataUrl }],
+            });
+        }
+
+        if (!opts.workflow) _syncRawJson();
+    },
+
+    // Inpaint Run から呼ばれるポジ/ネガプロンプト設定。
+    // opts.workflow/opts.analysis を渡すと、GenerateUIタブの選択中ターゲット（DOM）に依存せず、
+    // そのワークフロー内の最初の該当role prompt_nodeへ直接反映する（専用ワークフロー実行用）。
+    setPromptText(role, text, opts = {}) {
+        if (opts.workflow && opts.analysis) {
+            const node = (opts.analysis.prompt_nodes || []).find((n) => n.role === role);
+            if (node && opts.workflow[node.id]) {
+                opts.workflow[node.id].inputs[node.textKey || "text"] = text;
+            }
+            return;
+        }
+        const textareaId = role === "positive" ? "wfm-prompt-pos-text" : "wfm-prompt-neg-text";
+        const textarea = document.getElementById(textareaId);
+        if (textarea) textarea.value = text;
+        this.syncToWorkflow();
+        _syncRawJson();
+    },
+
+    // Inpaint Run から呼ばれる grow_mask_by / denoise 設定。
+    // ワークフロー内の最初の VAEEncodeForInpaint ノード / denoise を持つ最初の sampler ノードへ反映する
+    // （複数のインペイントパイプラインが同一ワークフローに存在するケースは現状非対応）。
+    // workflow/analysis を渡すと comfyUI.currentWorkflow/currentAnalysis の代わりにそちらへ書き込む。
+    setInpaintParams({ growMaskBy, denoise, workflow, analysis } = {}) {
+        const wf = workflow || comfyUI.currentWorkflow;
+        const an = analysis || comfyUI.currentAnalysis;
+        const encodeNode = an?.inpaint_encode_nodes?.[0];
+        if (encodeNode && growMaskBy != null && wf?.[encodeNode.id]) {
+            wf[encodeNode.id].inputs.grow_mask_by = growMaskBy;
+        }
+
+        const samplerNode = (an?.sampler_nodes || []).find((n) => n.denoise !== undefined);
+        if (samplerNode && denoise != null && wf?.[samplerNode.id]) {
+            wf[samplerNode.id].inputs.denoise = denoise;
+        }
+
+        if (!workflow) _syncRawJson();
     },
 
     syncToWorkflow() {

@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.70-green)
+![Version](https://img.shields.io/badge/version-0.3.71-green)
 
 ## Screenshots
 
@@ -85,6 +85,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Input tab** — Prompt and Image inner tabs (drag-and-drop upload); Prompt tab shows Positive Prompt and Negative Prompt textareas, plus an **Embeddings selector** at the bottom (Filter + Select + Weight input + Paste button); Paste inserts `(embedding:Name:weight)` at the cursor position of the last focused textarea (defaults to Positive when neither is focused); Raw JSON (540px) in the right column
   - **Revert button** (v0.3.70) — a ↺ button next to each Apply button reverts the textarea to the node's currently applied value (the reverse of Apply)
   - **Emphasis weight editing** (v0.3.70) — select text (or just place the cursor on a word/parenthesis block) and press Ctrl+↑/↓ to adjust `(text:weight)` by ±0.05, A1111/native-ComfyUI style; parentheses are removed automatically when the weight returns to 1.0
+  - **Mask slot for inpainting** (v0.3.71) — LoadImage slots whose MASK output feeds an inpaint node (e.g. `VAEEncodeForInpaint`) show an additional Mask drop zone; when a mask is set, image + mask are composited into a single RGBA upload (mask baked into the alpha channel) matching ComfyUI's native alpha→MASK extraction — no extra nodes required
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — single clip: type + device; dual clip: two clip selectors + type + device), **Hypernetwork** (with Strength field) selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
@@ -250,7 +251,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG
 - **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
 - **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers and automatically adds an empty Layer 1 (v0.3.70)
-- **Tools** — Select (V), Draw (B), Text (T), Shape (S), Mask (🎭), Blur (≈), BG Remove (⬚), Filter (★); tool options bar updates per active tool
+- **Tools** — Select (V), Draw (B), Text (T), Shape (S), Mask (🎭), Blur (≈), BG Remove (⬚), Filter (★), Inpaint (🩹); tool options bar updates per active tool
   - **Select** — click to select; drag to move; drag corner handles to resize; drag circle handle to rotate; Flip H / Flip V / Rotate angle in the options bar; double-click a text layer to re-edit its content
   - **Draw** — freehand brush; options: color, brush size, blend mode; paints directly onto the active draw layer while all other layers remain visible; brush cursor shown as a size-accurate circle; strokes can start from outside the canvas margin and continue past the edge
   - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
@@ -259,6 +260,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
   - **Blur** — **Whole Blur**: Gaussian blur to the entire active layer with intensity slider (1–50 px); **Whole Mosaic**: pixelation mosaic with block-size slider (5–100 px); **Rect Blur / Rect Mosaic**: enable the toggle then drag a rectangle on the canvas to apply blur or mosaic to that region only (blue preview for blur, orange for mosaic); Rect Blur and Rect Mosaic are mutually exclusive; all operations support Undo
   - **BG Remove** — remove the background from the active layer; **Lightweight (@imgly)**: runs entirely in the browser via CDN (no server required; ~40 MB model downloaded on first use); **BiRefNet**: high-quality removal via Mask Editor One's Python backend (requires Mask Editor One installed and `birefnet.safetensors` in `ComfyUI/models/background_removal/`); **New Layer** option (default on) adds the result as a new layer above the original; when off, replaces the active layer in-place
   - **Filter (G'MIC)** — apply G'MIC-Qt filter effects to the active image layer; click **Edit with G'MIC** to launch G'MIC-Qt GUI; select a filter and click OK — a "G'MIC-Qt filter output" window appears; close it to save the result back as the active layer; requires G'MIC-Qt Standalone installed and path configured in Settings → G'MIC-Qt Executable Path
+  - **Inpaint** (v0.3.71) — composites the visible layers plus a Mask layer into one RGBA image (mask baked into the alpha channel) and applies it to the first inpaint-capable LoadImage node in the workflow currently loaded in GenerateUI (a node whose MASK output feeds something like `VAEEncodeForInpaint`); also supports workflows built around the **Mask Editor One** custom node (`comfyui-mask-editor-one`) instead of LoadImage — image/mask are pushed via its node_id-keyed server cache and `layer_data` widget; **Properties pane**: Positive/Negative prompts, Grow Mask By (applied to the VAE Encode (for Inpainting) node), Denoise (applied to KSampler), Run button; **Use dedicated workflow** checkbox — when off, generates against the workflow currently loaded in GenerateUI; when on, pick a saved workflow from the dropdown to load, edit, and generate entirely in the background without disturbing what's shown in GenerateUI; the result image is shown back in the Properties pane when generation completes; requires a Mask layer painted first (Mask tool)
 - **Layer panel** — layer list with visibility (👁/🚫), lock (🔒/🔓), and clipping-mask (✂) toggles; opacity slider; type icons (🖼 image / T text / ✏ draw / ⬚ mask); Layer 1 is automatically locked on first image load
 - **Layer lock** — locked layers show an orange bounding box and 🔒 icon on the canvas; move/resize/rotate are disabled while locked; click the 🔓 button in the layer row to unlock
 - **Text quality** — text layers are rendered at their measured bounding-box size; resizing with the Select tool regenerates the canvas at the new display resolution so text stays sharp
@@ -395,6 +397,14 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.71
+
+- **Image Edit — Inpaint tool (🩹)** — new tool composites the canvas (all non-mask layers) plus the active mask layer, uploads to an inpaint-capable LoadImage node (or a Mask Editor One node) in the GenerateUI workflow, applies Positive/Negative prompts, Grow Mask By, and Denoise, then triggers generation — all without leaving the Image Edit tab; the result is shown in the Properties pane
+- **Image Edit — Inpaint: dedicated workflow** — "Use dedicated workflow" checkbox lets you pick a saved workflow to run the inpaint against instead of the one currently loaded in GenerateUI, without disturbing what's shown there
+- **Image Edit — Inpaint: Mask Editor One support** — workflows built around the `comfyui-mask-editor-one` custom node (no LoadImage) are also supported; image/mask are pushed via its node_id-keyed server cache and `layer_data` widget
+- **GenerateUI — Input/Image tab mask slots** — LoadImage nodes whose MASK output feeds an inpaint node (e.g. `VAEEncodeForInpaint`) now show an additional Mask drop zone; image + mask are composited into a single RGBA upload matching ComfyUI's native alpha→MASK extraction
+- New example workflows: `ws_inpaint_basic.json`, `ws_inpaint_mask_editor_one.json`
 
 ### v0.3.70
 

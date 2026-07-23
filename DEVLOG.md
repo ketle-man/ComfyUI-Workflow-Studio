@@ -2,6 +2,44 @@
 
 ---
 
+## v0.3.71
+
+### Inpaint機能の追加（GenerateUI Imageタブ + Image Edit「Inpaint」タブ）
+
+ユーザー要望「インペイント機能を追加したい」。参考ワークフロー（SDXL + VAEEncodeForInpaint構成）の解析から着手し、複数セッションにわたり段階的に実装。
+
+**対象ファイル:** `static/js/comfyui-workflow.js`, `static/js/comfyui-editor.js`, `static/js/image-edit-tab.js`, `static/js/generate-tab.js`, `static/js/i18n.js`, `static/css/main.css`, `templates/index.html`, `static/js/app.js`
+
+**ワークフロー解析（`analyzeWorkflow`）:**
+- `load_image_nodes` に `mask_used` フラグを追加。`LoadImage` ノードのMASK出力（output slot 1）が他ノードの入力（`["<id>", 1]` 参照）として使われているかを走査して判定。`MaskEditorNode` 等の中継ノードを経由していても、参照元のLoadImageまで正しく特定できる
+- `inpaint_encode_nodes`（`VAEEncodeForInpaint` の `grow_mask_by`）、`mask_editor_one_nodes`（`MaskEditorOne` ノード）を新規検出
+
+**生成UI Input/Imageタブ — マスクスロット:**
+- `mask_used` なLoadImageスロットにのみ「Mask」ドロップゾーンを追加表示
+- Apply時、マスク指定があれば画像+マスクをRGBA合成（マスク白領域→アルファ0）して1枚のPNGとしてアップロード。ComfyUIネイティブの `mask = 1 - alpha` 抽出にそのまま準拠するため追加ノード不要
+- Mask Editor One ノード用の専用スロットも追加（画像・マスクの両方が揃って初めてApply可能）
+
+**Image Editタブ — Inpaintツール（🩹）:**
+- プロパティパネルにポジ/ネガプロンプト、Grow Mask By、Denoise、Runボタン、結果画像プレビューを追加
+- Run押下で: 非マスクレイヤー合成画像 + アクティブなマスクレイヤーを書き出し → 生成UIのインペイント対応スロットへRGBA合成アップロード → プロンプト/grow_mask_by/denoiseを反映 → GenerateUIの生成を呼び出し（画面はImage Editタブに留まる）→ 完了後の結果画像をプロパティパネルに表示
+- **バグ修正:** ツールバーの `<button data-tool="inpaint">` を `templates/index.html` に追加し忘れており、`TOOL_DEFS` にエントリを追加しただけではボタンが表示されない不具合があった（ツールバーは静的HTML、`TOOL_DEFS` は `ready` 判定とラベル参照専用）
+
+**Mask Editor One（`comfyui-mask-editor-one`）対応:**
+- 実装（`nodes.py`/`server.py`）を調査した結果、この custom node は `LoadImage` を介さず、画像はサーバー側インメモリキャッシュ（`node_id` キー、`bg_image_b64`、`/mask_editor/store_image` でPOST）から、マスクは `layer_data`（JSON文字列ウィジェット）の各レイヤーの**アルファチャンネル**から合成されると判明（`LoadImage` の `1 - alpha` とは逆で、alpha値がそのままmask値になる規約）
+- `comfyEditor.applyImageAndMaskToMaskEditorOneNode()` を新規実装し、この2つの経路（画像キャッシュPOST + layer_data書き込み）を実装
+- Inpaint Runは `mask_used` なLoadImageスロットを優先し、無ければMask Editor Oneノードへ自動フォールバック
+
+**インペイント専用ワークフロー:**
+- Inpaintプロパティ上部に「Use dedicated workflow」チェックボックス + 保存済みワークフロー選択ドロップダウンを追加。OFF時は従来通りGenerateUIの読み込み中ワークフローを使用、ON時は選択したワークフローをその場でロード・解析し、**GenerateUIタブの表示状態には一切触れずに**画像/マスク/プロンプト/パラメータを適用して生成
+- `generate-tab.js`: `_coreGenerate`/`handleGenerate` に `workflowOverride` 引数を追加（省略時は従来通り `comfyUI.currentWorkflow` を使用）。オーバーライド時はバッチモードの影響を受けない単発生成に固定し、GenerateUI側のプロンプト同期（`syncToWorkflow`）もスキップ
+- `comfyui-editor.js`: `applyImageAndMaskToSlot` / `applyImageAndMaskToMaskEditorOneNode` / `setPromptText` / `setInpaintParams` に `{workflow, analysis}` オプションを追加し、指定時はそちらへ直接書き込む方式に統一
+
+**サンプルワークフロー追加:** `workflows/ws_inpaint_basic.json`（LoadImage直結）、`workflows/ws_inpaint_mask_editor_one.json`（Mask Editor One使用）とプレビュー画像
+
+**ヘルプ更新（3点セット）:** `templates/index.html`、`static/js/i18n.js`（EN/JA/ZH `helpImageEdit7e` 新規）、`static/js/app.js`（`helpIdMap` に `wfm-help-imageedit-7e` 追加）
+
+**既知の簡略化点:** Grow Mask By / Denoiseのプロパティパネル初期表示値は、専用ワークフロー使用時も常にGenerateUI側の読み込み中ワークフローから算出される（Run実行時に書き込まれる値自体は専用ワークフロー側に正しく反映される）
+
 ## v0.3.70
 
 ### Workflow AI要約: Ollama 404エラー修正
