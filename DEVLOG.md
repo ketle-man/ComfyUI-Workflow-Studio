@@ -2,6 +2,20 @@
 
 ---
 
+## v0.3.72
+
+### Comic Creator連携用の外部Inpaintエントリポイントを追加
+
+Comic Creator（`comfyui-comic-creator`）のImageタブから、既存のI2I連携（`window._wfmReceiveImageForI2I`、iframe越しの直接関数呼び出し）と同じ方式でInpaintも呼び出せるようにする依頼を受けて対応。
+
+**対象ファイル:** `static/js/image-edit-tab.js`, `static/js/gallery-tab.js`, `static/js/comfyui-editor.js`
+
+- `image-edit-tab.js`: `_runInpaint()`（UI駆動）から共通処理（LoadImage/MaskEditorOneノードへの反映〜Generate実行〜結果URL取得）を`_runInpaintWithImages()`として切り出し、外部呼び出し専用の`runInpaintExternal(imageBlob, maskBlob, params)`を新設（専用ワークフロー選択は扱わず、常にGenerateUIの現在ロード中ワークフローが対象）。マスクレイヤー選択に`.visible`チェックを追加し、非表示のマスクレイヤーはUI駆動・外部呼び出し双方で対象から除外されるよう修正。
+- `gallery-tab.js`: `window._wfmReceiveImageForI2I`と同じ場所に`window._wfmReceiveInpaintRequest(imageBlob, maskBlob, params, workflowData?, workflowFilename?)`を新設。`workflowData`が渡されればI2Iと同じ手順（接続確認→モデルリスト確保→`loadWorkflowIntoEditor`）でロードしてから`runInpaintExternal`を呼ぶ。
+- **バグ修正（`comfyui-editor.js`）:** `_loadImageElement()`内の`src instanceof Blob`判定が、別ウィンドウ（Comic Creator）で生成されたBlob/Fileに対しては別レルムのコンストラクタ参照になるため常に`false`を返し、`img.src`にBlobオブジェクトがそのまま代入されて`[object Blob]`という文字列がURLとして解釈され404になるバグを発見・修正（`typeof src !== "string"`による実体判定に変更）。Blob自体は`URL.createObjectURL`等でレルムをまたいで問題なく使えるため、チェック方法のみが原因だった。同一オリジンiframe越しに他ウィンドウ生成のBlob/Fileを直接受け渡す連携を実装する際は、受け取り側で`instanceof`ベースの判定を避けること。
+
+**検証**（Kapture、Comic Creator実機 `http://127.0.0.1:8189/ccc`）: Comic Creator側からInpaint実行→本ノードのInpaintが正常に動作し結果が返ることを確認。非表示マスクレイヤーの除外もComic Creator側UIから確認。
+
 ## v0.3.71
 
 ### Inpaint機能の追加（GenerateUI Imageタブ + Image Edit「Inpaint」タブ）

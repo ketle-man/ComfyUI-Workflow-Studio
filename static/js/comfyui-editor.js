@@ -160,7 +160,10 @@ function _syncRawJson() {
 // ComfyUIネイティブのLoadImageはアルファチャンネルから mask = 1 - alpha を抽出するため、
 // 合成後の alpha は 255 - maskGray とする。
 async function _loadImageElement(src) {
-    const isBlobLike = src instanceof Blob;
+    // `instanceof Blob` は別レルム（他ウィンドウ/iframe）で生成されたBlob/Fileでは
+    // falseになる（コンストラクタの参照が異なるため）。Comic CreaterからiframeへBlobを
+    // 直接渡すInpaint連携で発生するため、実体で判定する（文字列URLかどうかだけを見る）。
+    const isBlobLike = typeof src !== "string";
     const url = isBlobLike ? URL.createObjectURL(src) : src;
     try {
         const img = new Image();

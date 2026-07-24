@@ -1360,10 +1360,11 @@ class ImageEditTab {
         if (this._inpaintRunning) return;
         if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
 
-        const maskLayer = (this._layerMgr.activeLayer?.type === "mask")
+        // 非表示のマスクレイヤーはInpaint対象から除外する（目玉アイコンOFF=対象外）
+        const maskLayer = (this._layerMgr.activeLayer?.type === "mask" && this._layerMgr.activeLayer.visible)
             ? this._layerMgr.activeLayer
-            : this._layerMgr.layers.find(l => l.type === "mask");
-        if (!maskLayer) { showToast("Create a mask layer first (Mask tool)", "info"); return; }
+            : this._layerMgr.layers.find(l => l.type === "mask" && l.visible);
+        if (!maskLayer) { showToast("Create or show a mask layer first (Mask tool)", "info"); return; }
 
         if (this._inpaintUseDedicated) {
             if (!this._inpaintDedicatedFilename) { showToast("Select a dedicated workflow first", "info"); return; }
@@ -1383,8 +1384,7 @@ class ImageEditTab {
         try {
             // 専用ワークフロー使用時は GenerateUI の comfyUI.currentWorkflow/currentAnalysis には
             // 一切触れず、ここでロード・解析したローカルなワークフロー/解析結果だけを使う。
-            let targetWorkflow = null;
-            let targetAnalysis = null;
+            let overrideOpts = {};
 
             if (this._inpaintUseDedicated) {
                 const resp = await fetch(`${comfyUI.baseUrl}/api/wfm/workflows/raw?filename=${encodeURIComponent(this._inpaintDedicatedFilename)}`);
@@ -1396,17 +1396,7 @@ class ImageEditTab {
                 } else if (format !== "api") {
                     throw new Error("Unsupported or unrecognized workflow format");
                 }
-                targetWorkflow = dedicatedWorkflow;
-                targetAnalysis = comfyWorkflow.analyzeWorkflow(dedicatedWorkflow);
-            }
-
-            // LoadImage(の MASK 出力が使われている)スロットを優先し、無ければ Mask Editor One
-            // ノード（LoadImage を介さず画像/マスクを内包する custom node）にフォールバックする
-            const analysisForLookup = targetAnalysis || comfyUI.currentAnalysis;
-            const slotIndex = (analysisForLookup.load_image_nodes || []).findIndex(n => n.mask_used);
-            const meoNode = (analysisForLookup.mask_editor_one_nodes || [])[0];
-            if (slotIndex === -1 && !meoNode) {
-                throw new Error("No inpaint-capable LoadImage or Mask Editor One node found in the workflow");
+                overrideOpts = { workflow: dedicatedWorkflow, analysis: comfyWorkflow.analyzeWorkflow(dedicatedWorkflow) };
             }
 
             setStatus("Compositing...");
@@ -1415,30 +1405,15 @@ class ImageEditTab {
             const maskCanvas = this._exportMaskCanvas(maskLayer);
             const maskBlob   = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
 
-            const overrideOpts = targetWorkflow ? { workflow: targetWorkflow, analysis: targetAnalysis } : {};
-
-            setStatus("Uploading...");
-            if (slotIndex !== -1) {
-                await comfyEditor.applyImageAndMaskToSlot(imageBlob, maskBlob, slotIndex, overrideOpts);
-            } else {
-                await comfyEditor.applyImageAndMaskToMaskEditorOneNode(imageBlob, maskBlob, meoNode.id, overrideOpts);
-            }
-
-            comfyEditor.setPromptText("positive", this._inpaintPositive, overrideOpts);
-            comfyEditor.setPromptText("negative", this._inpaintNegative, overrideOpts);
-            comfyEditor.setInpaintParams({
+            const resultUrl = await this._runInpaintWithImages(imageBlob, maskBlob, {
+                positive: this._inpaintPositive,
+                negative: this._inpaintNegative,
                 growMaskBy: this._inpaintGrowMaskBy,
                 denoise: this._inpaintDenoise,
-                ...overrideOpts,
+                overrideOpts,
+                onStatus: setStatus,
             });
-
-            if (!window._wfmGenerateTab?.generate) throw new Error("GenerateUI is not ready yet");
-
-            setStatus("Generating...");
-            await window._wfmGenerateTab.generate(targetWorkflow || undefined);
-
-            const resultImg = document.getElementById("wfm-gen-result-img");
-            if (resultImg?.src) this._inpaintResultUrl = resultImg.src;
+            if (resultUrl) this._inpaintResultUrl = resultUrl;
 
             setStatus("Done");
             showToast("Inpaint generation complete", "success");
@@ -1448,6 +1423,57 @@ class ImageEditTab {
         } finally {
             this._inpaintRunning = false;
             this._renderInpaintProps();
+        }
+    }
+
+    // 共通処理: 画像+マスクBlobを対象ノード（LoadImage/MaskEditorOne）へ反映し、
+    // プロンプト/grow_mask_by/denoiseを設定してGenerate UIで実行、結果URLを返す。
+    // UI駆動の _runInpaint() と外部（Comic Creator等）向けの runInpaintExternal() の両方から使う。
+    async _runInpaintWithImages(imageBlob, maskBlob, { positive, negative, growMaskBy, denoise, overrideOpts = {}, onStatus } = {}) {
+        const setStatus = onStatus || (() => {});
+
+        // LoadImage(の MASK 出力が使われている)スロットを優先し、無ければ Mask Editor One
+        // ノード（LoadImage を介さず画像/マスクを内包する custom node）にフォールバックする
+        const analysisForLookup = overrideOpts.analysis || comfyUI.currentAnalysis;
+        if (!analysisForLookup) throw new Error("No workflow loaded in GenerateUI");
+        const slotIndex = (analysisForLookup.load_image_nodes || []).findIndex(n => n.mask_used);
+        const meoNode = (analysisForLookup.mask_editor_one_nodes || [])[0];
+        if (slotIndex === -1 && !meoNode) {
+            throw new Error("No inpaint-capable LoadImage or Mask Editor One node found in the workflow");
+        }
+
+        setStatus("Uploading...");
+        if (slotIndex !== -1) {
+            await comfyEditor.applyImageAndMaskToSlot(imageBlob, maskBlob, slotIndex, overrideOpts);
+        } else {
+            await comfyEditor.applyImageAndMaskToMaskEditorOneNode(imageBlob, maskBlob, meoNode.id, overrideOpts);
+        }
+
+        comfyEditor.setPromptText("positive", positive, overrideOpts);
+        comfyEditor.setPromptText("negative", negative, overrideOpts);
+        comfyEditor.setInpaintParams({ growMaskBy, denoise, ...overrideOpts });
+
+        if (!window._wfmGenerateTab?.generate) throw new Error("GenerateUI is not ready yet");
+
+        setStatus("Generating...");
+        await window._wfmGenerateTab.generate(overrideOpts.workflow || undefined);
+
+        const resultImg = document.getElementById("wfm-gen-result-img");
+        return resultImg?.src || null;
+    }
+
+    // Comic Creator等、同一オリジンiframe越しの外部呼び出し専用エントリポイント。
+    // 専用ワークフロー選択(_inpaintUseDedicated)は扱わず、常にGenerate UIに現在
+    // ロード中のワークフロー（comfyUI.currentWorkflow/currentAnalysis）を対象にする。
+    async runInpaintExternal(imageBlob, maskBlob, { positive = "", negative = "", growMaskBy = 6, denoise = 1.0 } = {}) {
+        if (this._inpaintRunning) throw new Error("Inpaint is already running");
+        this._inpaintRunning = true;
+        try {
+            const resultUrl = await this._runInpaintWithImages(imageBlob, maskBlob, { positive, negative, growMaskBy, denoise });
+            if (!resultUrl) throw new Error("No result image produced");
+            return { ok: true, url: resultUrl };
+        } finally {
+            this._inpaintRunning = false;
         }
     }
 
