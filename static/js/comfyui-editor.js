@@ -1482,17 +1482,24 @@ export const comfyEditor = {
         });
     },
 
-    async applyImageToSlot(file, slotIndex = 0) {
-        const loadNodes = comfyUI.currentAnalysis?.load_image_nodes || [];
+    // opts.workflow/opts.analysis を渡すと comfyUI.currentWorkflow/currentAnalysis の代わりに
+    // そちらへ書き込み、DOM更新は行わずアップロード後のファイル名だけを返す
+    // （GenerateUIタブの表示状態には触れない。Chatペインの画像添付I2I連携から利用）。
+    async applyImageToSlot(file, slotIndex = 0, opts = {}) {
+        const workflow = opts.workflow || comfyUI.currentWorkflow;
+        const analysis = opts.analysis || comfyUI.currentAnalysis;
+        const loadNodes = analysis?.load_image_nodes || [];
         const node = loadNodes[slotIndex];
         if (!node) throw new Error("No LoadImage node at slot " + slotIndex);
 
         const result = await comfyUI.uploadImage(file, file.name);
         if (!result.name) throw new Error("Upload returned no filename");
 
-        if (comfyUI.currentWorkflow?.[node.id]) {
-            comfyUI.currentWorkflow[node.id].inputs.image = result.name;
+        if (workflow?.[node.id]) {
+            workflow[node.id].inputs.image = result.name;
         }
+
+        if (opts.workflow) return result.name;
 
         const previewWrap = document.getElementById(`wfm-i2i-preview-wrap-${slotIndex}`);
         const previewImg  = document.getElementById(`wfm-i2i-preview-${slotIndex}`);

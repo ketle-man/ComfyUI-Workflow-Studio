@@ -316,6 +316,10 @@ function applyI18nToHtml() {
     if (aiChatGenTitle) aiChatGenTitle.textContent = t("aiSettingsChatGenTitle");
     const aiChatGenDedicatedLabel = document.getElementById("wfm-ai-chatgen-dedicated-label");
     if (aiChatGenDedicatedLabel) aiChatGenDedicatedLabel.textContent = t("aiSettingsChatGenDedicated");
+    const aiChatGenI2ITitle = document.getElementById("wfm-ai-settings-chatgen-i2i-title");
+    if (aiChatGenI2ITitle) aiChatGenI2ITitle.textContent = t("aiSettingsChatI2IGenTitle");
+    const aiChatGenI2IDedicatedLabel = document.getElementById("wfm-ai-chatgen-i2i-dedicated-label");
+    if (aiChatGenI2IDedicatedLabel) aiChatGenI2IDedicatedLabel.textContent = t("aiSettingsChatGenDedicated");
 
     // Group panel labels
     const propTitle = document.querySelector("#wfm-side-tab-group .wfm-group-section-title");

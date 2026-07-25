@@ -1283,10 +1283,10 @@
                             <ul>
                                 <li id="wfm-help-ai-1">4-pane layout — Translation | Chat | TOOLS | Settings — all panes are always visible simultaneously</li>
                                 <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</li>
-                                <li id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history; if the model supports tool calling and asks for an image ("generate a cat picture", etc.) it will run generation on the workflow currently loaded in GenerateUI and show the result inline; the "Allow image generation" checkbox in the pane header toggles this on/off</li>
-                                <li id="wfm-help-ai-4">TOOLS pane — VLM: drop an image (PNG/JPG/WebP) and select a task (Describe Image, Create Prompt, Create Tags), then click Run to analyze with a vision model; result shown with Copy button</li>
+                                <li id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history; if the model supports tool calling and asks for an image ("generate a cat picture", etc.) it will run generation on the workflow currently loaded in GenerateUI and show the result inline; the "Allow image generation" checkbox in the pane header toggles this on/off; if an image is attached (dropped in the TOOLS pane) it is sent to the LLM as vision input and, when generate_image is called, used as the base for image-to-image generation instead of text-to-image; models verified to work well for tool calling and vision: Gemma 4:e4b, Qwen 3.5:9b, Ministral 3:3b (Ollama)</li>
+                                <li id="wfm-help-ai-4">TOOLS pane — VLM: drop an image (PNG/JPG/WebP) and select a task (Describe Image, Create Prompt, Create Tags), then click Run to analyze with a vision model; result shown with Copy button; the dropped image is also shared with the Chat pane as its attachment (shown there and used for image-to-image generation) until cleared with the ✕ button</li>
                                 <li id="wfm-help-ai-5">TOOLS pane — Wildcards: select "Create wildcards" from the dropdown, enter a category name and count, click Run to generate plain-text wildcard entries one per line</li>
-                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered generation instead of the one currently loaded in GenerateUI; settings are shared with the Library panel's A tab via localStorage</li>
+                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</li>
                             </ul>
                         </div>
                     </div>
@@ -2003,6 +2003,11 @@
                 <div class="wfm-ai-chat-container">
                     <div class="wfm-ai-chat-messages" id="wfm-ai-chat-messages"></div>
                     <div class="wfm-ai-chat-input-area">
+                        <div id="wfm-ai-chat-attachment" class="wfm-ai-chat-attachment" style="display:none;">
+                            <img id="wfm-ai-chat-attachment-thumb" class="wfm-ai-chat-attachment-thumb">
+                            <span id="wfm-ai-chat-attachment-label">Image attached</span>
+                            <button id="wfm-ai-chat-attachment-clear" class="wfm-ai-chat-attachment-clear" title="Close">✕</button>
+                        </div>
                         <textarea id="wfm-ai-chat-input" class="wfm-ai-chat-input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)"></textarea>
                         <div class="wfm-ai-chat-actions">
                             <button id="wfm-ai-chat-send-btn" class="wfm-btn wfm-btn-primary">Send</button>
@@ -2025,6 +2030,7 @@
                         <img id="wfm-ai-vlm-preview" style="display:none;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">
                         <span id="wfm-ai-vlm-label" class="wfm-ai-vlm-label">Drop or click PNG / JPG / WebP</span>
                         <input type="file" id="wfm-ai-vlm-file" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                        <button id="wfm-ai-vlm-clear" class="wfm-ai-vlm-clear" style="display:none;" title="Close">✕</button>
                     </div>
                     <div class="wfm-ai-wc-inputs" id="wfm-ai-wc-inputs" style="display:none">
                         <div class="wfm-ai-wc-row">
@@ -2107,6 +2113,20 @@
                         </div>
                         <div class="wfm-ai-settings-row" id="wfm-ai-chatgen-dedicated-row" style="display:none;">
                             <select id="wfm-ai-chatgen-dedicated-select" class="wfm-select">
+                                <option value="">-- select workflow --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-chatgen-i2i-title">Chat I2I Generation</div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                <input type="checkbox" id="wfm-ai-chatgen-i2i-dedicated-checkbox">
+                                <span id="wfm-ai-chatgen-i2i-dedicated-label">Use dedicated workflow</span>
+                            </label>
+                        </div>
+                        <div class="wfm-ai-settings-row" id="wfm-ai-chatgen-i2i-dedicated-row" style="display:none;">
+                            <select id="wfm-ai-chatgen-i2i-dedicated-select" class="wfm-select">
                                 <option value="">-- select workflow --</option>
                             </select>
                         </div>

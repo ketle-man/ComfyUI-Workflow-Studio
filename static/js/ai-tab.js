@@ -344,7 +344,7 @@ function initSettingsTab() {
     if (freeSrcInput && saved.freeSrcLang) freeSrcInput.value = saved.freeSrcLang;
     if (freeDstInput && saved.freeDstLang) freeDstInput.value = saved.freeDstLang;
 
-    // Chat image generation — dedicated workflow selection
+    // Chat image generation — dedicated workflow selection (T2I)
     const chatGenCheckbox = document.getElementById("wfm-ai-chatgen-dedicated-checkbox");
     const chatGenRow      = document.getElementById("wfm-ai-chatgen-dedicated-row");
     const chatGenSelect   = document.getElementById("wfm-ai-chatgen-dedicated-select");
@@ -356,13 +356,31 @@ function initSettingsTab() {
         if (chatGenRow) chatGenRow.style.display = chatGenCheckbox.checked ? "" : "none";
     });
 
+    // Chat I2I generation — dedicated workflow selection
+    const chatGenI2ICheckbox = document.getElementById("wfm-ai-chatgen-i2i-dedicated-checkbox");
+    const chatGenI2IRow      = document.getElementById("wfm-ai-chatgen-i2i-dedicated-row");
+    const chatGenI2ISelect   = document.getElementById("wfm-ai-chatgen-i2i-dedicated-select");
+
+    if (chatGenI2ICheckbox) chatGenI2ICheckbox.checked = !!saved.chatGenI2IDedicatedEnabled;
+    if (chatGenI2IRow) chatGenI2IRow.style.display = saved.chatGenI2IDedicatedEnabled ? "" : "none";
+
+    chatGenI2ICheckbox?.addEventListener("change", () => {
+        if (chatGenI2IRow) chatGenI2IRow.style.display = chatGenI2ICheckbox.checked ? "" : "none";
+    });
+
     if (chatGenSelect) {
         fetch(`${comfyUI.baseUrl}/api/wfm/workflows`)
             .then((r) => (r.ok ? r.json() : []))
             .then((list) => {
                 const filenames = (list || []).map((w) => w.filename).filter(Boolean);
-                chatGenSelect.innerHTML = `<option value="">-- select workflow --</option>` +
-                    filenames.map((f) => `<option value="${f}" ${f === saved.chatGenDedicatedFilename ? "selected" : ""}>${f}</option>`).join("");
+                const optionsHtml = `<option value="">-- select workflow --</option>` +
+                    filenames.map((f) => `<option value="${f}">${f}</option>`).join("");
+                chatGenSelect.innerHTML = optionsHtml;
+                if (saved.chatGenDedicatedFilename) chatGenSelect.value = saved.chatGenDedicatedFilename;
+                if (chatGenI2ISelect) {
+                    chatGenI2ISelect.innerHTML = optionsHtml;
+                    if (saved.chatGenI2IDedicatedFilename) chatGenI2ISelect.value = saved.chatGenI2IDedicatedFilename;
+                }
             })
             .catch(() => {});
     }
@@ -376,13 +394,19 @@ function initSettingsTab() {
         const freeDstLang = freeDstInput?.value?.trim() || "";
         const chatGenDedicatedEnabled = !!chatGenCheckbox?.checked;
         const chatGenDedicatedFilename = chatGenSelect?.value || "";
+        const chatGenI2IDedicatedEnabled = !!chatGenI2ICheckbox?.checked;
+        const chatGenI2IDedicatedFilename = chatGenI2ISelect?.value || "";
 
         if (url && !isValidBackendUrl(url)) {
             showToast(t("aiToastInvalidUrl"), "error");
             return;
         }
 
-        saveAiSettings({ backend, backendUrl: url, model, freeSrcLang, freeDstLang, chatGenDedicatedEnabled, chatGenDedicatedFilename });
+        saveAiSettings({
+            backend, backendUrl: url, model, freeSrcLang, freeDstLang,
+            chatGenDedicatedEnabled, chatGenDedicatedFilename,
+            chatGenI2IDedicatedEnabled, chatGenI2IDedicatedFilename,
+        });
         showToast(t("aiToastSettingsSaved"), "success");
     });
 
@@ -400,7 +424,7 @@ const IMAGE_GEN_TOOLS = [{
     type: "function",
     function: {
         name: "generate_image",
-        description: "Generate an image using the currently loaded ComfyUI workflow. Call this when the user asks to create, draw, paint, or generate an image.",
+        description: "Generate an image using the currently loaded ComfyUI workflow. If an image is currently attached to the conversation, this performs image-to-image generation using that image as the base; otherwise it performs text-to-image. Call this when the user asks to create, draw, paint, edit, or transform an image.",
         parameters: {
             type: "object",
             properties: {
@@ -412,9 +436,28 @@ const IMAGE_GEN_TOOLS = [{
     },
 }];
 
+// chatHistory の内部共通形式 {role, content, images?:[{base64,mimeType}]} を
+// バックエンドごとのワイヤーフォーマットへ変換する（callVLM() と同じ規約）
+function _formatMessagesForBackend(messages, backend) {
+    return messages.map((m) => {
+        if (!m.images?.length) return { role: m.role, content: m.content };
+        if (backend === "ollama") {
+            return { role: m.role, content: m.content, images: m.images.map((i) => i.base64) };
+        }
+        return {
+            role: m.role,
+            content: [
+                { type: "text", text: m.content },
+                ...m.images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.mimeType};base64,${i.base64}` } })),
+            ],
+        };
+    });
+}
+
 async function callChat(url, backend, model, messages, tools) {
+    const formattedMessages = _formatMessagesForBackend(messages, backend);
     if (backend === "ollama") {
-        const body = { model, messages, stream: false };
+        const body = { model, messages: formattedMessages, stream: false };
         if (tools) body.tools = tools;
         const res = await fetch(`${url}/api/chat`, {
             method: "POST",
@@ -425,7 +468,7 @@ async function callChat(url, backend, model, messages, tools) {
         const message = (await res.json()).message || {};
         return { content: message.content || "", toolCalls: message.tool_calls || null };
     } else {
-        const body = { model, messages, stream: false };
+        const body = { model, messages: formattedMessages, stream: false };
         if (tools) { body.tools = tools; body.tool_choice = "auto"; }
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
@@ -463,14 +506,22 @@ async function generateImageFromChat(prompt, negativePrompt) {
     if (!window._wfmGenerateTab?.generate) throw new Error(t("aiChatGenerateNotReady"));
 
     const settings = loadAiSettings();
+    const isI2I = !!_toolsImage;
     let workflow, analysis;
 
-    if (settings.chatGenDedicatedEnabled && settings.chatGenDedicatedFilename) {
+    if (isI2I && settings.chatGenI2IDedicatedEnabled && settings.chatGenI2IDedicatedFilename) {
+        ({ workflow, analysis } = await _loadDedicatedChatGenWorkflow(settings.chatGenI2IDedicatedFilename));
+    } else if (!isI2I && settings.chatGenDedicatedEnabled && settings.chatGenDedicatedFilename) {
         ({ workflow, analysis } = await _loadDedicatedChatGenWorkflow(settings.chatGenDedicatedFilename));
     } else {
         if (!comfyUI.currentWorkflow || !comfyUI.currentAnalysis) throw new Error(t("aiChatNoWorkflowLoaded"));
         workflow = JSON.parse(JSON.stringify(comfyUI.currentWorkflow));
         analysis = comfyUI.currentAnalysis;
+    }
+
+    if (isI2I) {
+        if (!(analysis.load_image_nodes?.length > 0)) throw new Error(t("aiChatNoLoadImageNode"));
+        await comfyEditor.applyImageToSlot(_toolsImage.file, 0, { workflow, analysis });
     }
 
     comfyEditor.setPromptText("positive", prompt || "", { workflow, analysis });
@@ -492,6 +543,12 @@ function appendChatBubble(messagesEl, role, content, opts = {}) {
         const img = document.createElement("img");
         img.src = opts.imageUrl;
         img.className = "wfm-ai-chat-img";
+        div.appendChild(img);
+    }
+    if (opts.attachThumb) {
+        const img = document.createElement("img");
+        img.src = opts.attachThumb;
+        img.className = "wfm-ai-chat-attach-thumb";
         div.appendChild(img);
     }
     messagesEl.appendChild(div);
@@ -517,6 +574,10 @@ function initChatTab() {
         });
     }
 
+    document.getElementById("wfm-ai-chat-attachment-clear")?.addEventListener("click", () => {
+        _clearToolsImage();
+    });
+
     let chatHistory = [];
 
     async function sendMessage() {
@@ -538,8 +599,10 @@ function initChatTab() {
 
         inputEl.value = "";
         inputEl.style.height = "";
-        chatHistory.push({ role: "user", content: text });
-        appendChatBubble(messagesEl, "user", text);
+        const userEntry = { role: "user", content: text };
+        if (_toolsImage) userEntry.images = [{ base64: _toolsImage.base64, mimeType: _toolsImage.mimeType }];
+        chatHistory.push(userEntry);
+        appendChatBubble(messagesEl, "user", text, _toolsImage ? { attachThumb: `data:${_toolsImage.mimeType};base64,${_toolsImage.base64}` } : {});
 
         sendBtn.disabled = true;
         statusEl.textContent = t("aiStatusChatting");
@@ -601,13 +664,48 @@ function initChatTab() {
 }
 
 // ============================================
+// TOOLS ↔ Chat shared image attachment
+// ============================================
+
+let _toolsImage = null; // { file: File, base64: string, mimeType: string }
+
+function _syncAttachmentUI() {
+    const vlmPreview = document.getElementById("wfm-ai-vlm-preview");
+    const vlmLabel   = document.getElementById("wfm-ai-vlm-label");
+    const vlmClear   = document.getElementById("wfm-ai-vlm-clear");
+    const chatAttach = document.getElementById("wfm-ai-chat-attachment");
+    const chatThumb  = document.getElementById("wfm-ai-chat-attachment-thumb");
+    const chatLabel  = document.getElementById("wfm-ai-chat-attachment-label");
+
+    if (_toolsImage) {
+        const dataUrl = `data:${_toolsImage.mimeType};base64,${_toolsImage.base64}`;
+        if (vlmPreview) { vlmPreview.src = dataUrl; vlmPreview.style.display = "block"; }
+        if (vlmLabel) vlmLabel.style.display = "none";
+        if (vlmClear) vlmClear.style.display = "flex";
+        if (chatAttach) chatAttach.style.display = "flex";
+        if (chatThumb) chatThumb.src = dataUrl;
+        if (chatLabel) chatLabel.textContent = t("aiChatAttachmentLabel");
+    } else {
+        if (vlmPreview) { vlmPreview.src = ""; vlmPreview.style.display = "none"; }
+        if (vlmLabel) vlmLabel.style.display = "";
+        if (vlmClear) vlmClear.style.display = "none";
+        if (chatAttach) chatAttach.style.display = "none";
+        if (chatThumb) chatThumb.src = "";
+    }
+}
+
+function _clearToolsImage() {
+    _toolsImage = null;
+    _syncAttachmentUI();
+}
+
+// ============================================
 // VLM tab
 // ============================================
 
 function initVlmTab() {
     const dropEl    = document.getElementById("wfm-ai-vlm-drop");
-    const previewEl = document.getElementById("wfm-ai-vlm-preview");
-    const labelEl   = document.getElementById("wfm-ai-vlm-label");
+    const clearEl   = document.getElementById("wfm-ai-vlm-clear");
     const fileInput = document.getElementById("wfm-ai-vlm-file");
     const taskSel   = document.getElementById("wfm-ai-vlm-task");
     const runBtn    = document.getElementById("wfm-ai-vlm-run");
@@ -620,8 +718,6 @@ function initVlmTab() {
 
     if (!dropEl) return;
 
-    let vlmImage = null; // { base64, mimeType }
-
     function updateTaskUI() {
         const isWildcard = taskSel?.value === "wildcard";
         dropEl.style.display = isWildcard ? "none" : "";
@@ -632,10 +728,9 @@ function initVlmTab() {
 
     const loadImage = async (file) => {
         if (!file || !file.type.startsWith("image/")) return;
-        vlmImage = await fileToBase64(file);
-        previewEl.src = `data:${vlmImage.mimeType};base64,${vlmImage.base64}`;
-        previewEl.style.display = "block";
-        labelEl.style.display = "none";
+        const { base64, mimeType } = await fileToBase64(file);
+        _toolsImage = { file, base64, mimeType };
+        _syncAttachmentUI();
     };
 
     dropEl.addEventListener("click", () => fileInput.click());
@@ -646,6 +741,11 @@ function initVlmTab() {
         e.preventDefault();
         dropEl.classList.remove("drag-over");
         if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]);
+    });
+    clearEl?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        _clearToolsImage();
+        if (fileInput) fileInput.value = "";
     });
 
     runBtn.addEventListener("click", async () => {
@@ -688,7 +788,7 @@ function initVlmTab() {
             return;
         }
 
-        if (!vlmImage) { showToast(t("aiToastNoImage"), "error"); return; }
+        if (!_toolsImage) { showToast(t("aiToastNoImage"), "error"); return; }
 
         runBtn.disabled = true;
         statusEl.textContent = t("aiStatusRunning");
@@ -696,7 +796,7 @@ function initVlmTab() {
         resultEl.value = "";
 
         try {
-            const result = await callVLM(url, backend, model, VLM_PROMPTS[task], vlmImage.base64, vlmImage.mimeType);
+            const result = await callVLM(url, backend, model, VLM_PROMPTS[task], _toolsImage.base64, _toolsImage.mimeType);
             resultEl.value = result.trim();
             statusEl.textContent = t("aiStatusDone");
             statusEl.className = "wfm-ai-trans-status wfm-ai-status-ok";

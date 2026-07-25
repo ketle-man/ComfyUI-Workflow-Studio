@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.73-green)
+![Version](https://img.shields.io/badge/version-0.3.74-green)
 
 ## Screenshots
 
@@ -274,11 +274,14 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
 - **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
 - **Chat pane** (v0.3.40) — multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for a newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`
-- **Chat pane — image generation via Tool Calling** (v0.3.73) — if the selected model supports tool calling and the user asks for an image, a `generate_image` tool is invoked and the request runs through the same generation pipeline as the GenerateUI Generate button, with the result shown inline in the chat; an "Allow image generation" checkbox in the input row toggles this on/off (default on); the workflow used is the one currently loaded in GenerateUI, or a dedicated saved workflow configured in the Settings pane
+- **Chat pane — image generation via Tool Calling** (v0.3.73) — if the selected model supports tool calling and the user asks for an image, a `generate_image` tool is invoked and the request runs through the same generation pipeline as the GenerateUI Generate button, with the result shown inline in the chat; an "Allow image generation" checkbox in the input row toggles this on/off (default on); the workflow used is the one currently loaded in GenerateUI, or a dedicated saved workflow configured in the Settings pane; models verified to work well for tool calling and vision: **Gemma 4:e4b**, **Qwen 3.5:9b**, **Ministral 3:3b** (Ollama)
 - **TOOLS pane (VLM)** — drop an image into the 110px drop zone, select a task (Describe Image / Create Prompt / Create Tags), and click Run to analyze with a vision model; result shown in the output area with a Copy button
+- **TOOLS pane — shared Chat attachment** (v0.3.74) — an image dropped in the TOOLS drop zone is also usable as the Chat pane's attachment: it's sent to the LLM as vision input, and used as the base image when `generate_image` runs image-to-image; a ✕ button clears it (from either the TOOLS preview or the Chat attachment indicator); it stays attached across turns until explicitly cleared
 - **TOOLS pane (Wildcards)** (v0.3.40) — select "Create wildcards" from the task dropdown; enter a category name and count; click Run to generate plain-text wildcard entries one per line (no markdown, no numbering); result can be copied directly into wildcard `.txt` files
+- **Chat pane — image-to-image (I2I)** (v0.3.74) — when an image is attached and `generate_image` is invoked, the attachment is uploaded and swapped into the target workflow's LoadImage node instead of running text-to-image; the target workflow is the one currently loaded in GenerateUI, or a dedicated I2I workflow configured in the Settings pane
 - **Settings pane** — choose backend (Ollama / LM Studio), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
 - **Settings pane — Chat Image Generation** (v0.3.73) — "Use dedicated workflow" checkbox lets Chat-triggered image generation use a saved workflow of your choice instead of the one currently loaded in GenerateUI, without disturbing what's shown there (same pattern as Image Edit's Inpaint dedicated workflow)
+- **Settings pane — Chat I2I Generation** (v0.3.74) — same "Use dedicated workflow" pattern as above, but for image-to-image generation when an image is attached; independent of the text-to-image dedicated workflow setting
 - **Settings shared** — settings saved to `localStorage` under `wfm_ai_settings`; shared with the Library panel's AI TOOL tab so configuration is consistent across both interfaces
 - **Backend support** — Ollama (`/api/generate` for text, `/api/chat` for conversations, `/api/tags` for model list); LM Studio OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio)
 - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
@@ -400,6 +403,15 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.74
+
+- **AI TOOL Chat — image attachment shared with TOOLS drop zone** — an image dropped in the TOOLS pane's existing drop zone is now also usable as the Chat pane's attachment (no separate drop zone); it is sent to the LLM as vision input (Ollama `images:[]`, LM Studio `image_url` content block) and shown as an indicator (thumbnail + label + ✕) above the Chat input; it persists across turns until explicitly cleared from either pane
+- **AI TOOL Chat — image-to-image (I2I) generation** — when an image is attached and the `generate_image` tool is invoked, the attachment is uploaded and swapped into the target workflow's `LoadImage` node instead of running text-to-image; the `generate_image` tool description was updated so the LLM knows attaching an image switches it to I2I
+- **AI TOOL Settings — Chat I2I Generation dedicated workflow** — same "Use dedicated workflow" pattern as the existing T2I setting, but independent and specific to I2I generation
+- **`comfyui-editor.js` — `applyImageToSlot()` now supports `opts.workflow`/`opts.analysis`** — mirrors the existing pattern in `applyImageAndMaskToSlot()`; lets callers upload+swap an image into a cloned workflow without touching GenerateUI's displayed state (used by the new Chat I2I bridge)
+- **Chat bubble image sizing** — the attached-image echo shown in the user's own message is now a small thumbnail (max 120px) instead of filling the bubble; generated result images are now capped at 20% width instead of 100%
+- **Recommended models** — Gemma 4:e4b, Qwen 3.5:9b, and Ministral 3:3b (Ollama) verified to work well for both tool calling and vision in the Chat pane
 
 ### v0.3.73
 

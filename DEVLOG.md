@@ -2,6 +2,42 @@
 
 ---
 
+## v0.3.74
+
+### AI TOOL Chatペインの画像添付対応 + I2I連携
+
+v0.3.73でChatペインのT2I画像生成（Tool Calling）を実装した直後の依頼。「TOOLSのファイルドロップエリアを使ってChatに画像添付対応させたい、I2Iワークフローとの連携（画像の差し替え）も行いたい」という要望を受けて着手。実装前に設計上の分岐点（添付画像をLLMにも見せるか／I2I用ワークフローをT2Iと共用するか／添付の持続性）をユーザーに確認し、それぞれ「LLMにも見せる（マルチモーダル）」「T2I専用とは別にI2I専用ワークフローを新設」「明示的にクリアするまで保持」で合意して実装した。
+
+**対象ファイル:** `static/js/ai-tab.js`, `static/js/comfyui-editor.js`, `static/css/main.css`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`
+
+**TOOLS↔Chat 共有の添付画像:**
+- 新しいドロップゾーンを作らず、TOOLSペインの既存ドロップエリア（`wfm-ai-vlm-drop`、VLMタスク用）をChatの添付機構としても共用する設計。モジュールレベルの共有state `_toolsImage = { file, base64, mimeType }` を導入し、`initVlmTab()`のローカル変数`vlmImage`を置き換えた
+- `_syncAttachmentUI()`（新規）: TOOLS側プレビューの表示/非表示とChat側の添付インジケーター（サムネイル+ラベル+✕）を1箇所で同期。`document.getElementById`による都度参照のため、`initVlmTab`/`initChatTab`どちらが先に呼ばれても安全
+- クリアは共通の`_clearToolsImage()`。TOOLSプレビュー上の✕ボタン、Chat添付インジケーターの✕ボタンのどちらからでも同じ状態を更新する
+- 添付は合意事項通り、送信後も自動クリアされず明示的にクリアするまで保持される
+
+**マルチモーダルチャット送信:**
+- `chatHistory`のエントリを内部共通形式 `{role, content, images?: [{base64, mimeType}]}` に拡張
+- `callChat()`に`_formatMessagesForBackend(messages, backend)`を追加し、送信直前にバックエンド別のワイヤーフォーマットへ変換（Ollama: `images:[base64...]`、LM Studio: `content`をテキスト+`image_url`のコンテンツブロック配列に変換）。`callVLM()`で既に使われている規約を踏襲
+- `generate_image`ツールの説明文を更新し、画像添付時はT2IでなくI2Iとして動作することをLLMに伝えるようにした（引数スキーマ自体は`prompt`/`negative_prompt`のまま変更なし）
+
+**I2I生成ブリッジ:**
+- `comfyui-editor.js`の`applyImageToSlot(file, slotIndex, opts)`に`opts.workflow`/`opts.analysis`対応を追加（`applyImageAndMaskToSlot`と同一パターン）。渡された場合はDOM更新を行わずアップロード後のファイル名のみ返す非破壊的変更で、既存呼び出し元（GenerateUI Imageタブ）への影響なし
+- `generateImageFromChat(prompt, negativePrompt)`を拡張し、`_toolsImage`がセットされていればI2I分岐へ：対象ワークフロー（GenerateUIの読み込み中ワークフロー、またはI2I専用ワークフロー）に`load_image_nodes`が無ければ明確なエラーを投げ、あればslot 0のLoadImageノードへ添付画像を差し替えてから通常のプロンプト設定・生成へ進む
+
+**SETTINGSペイン — Chat I2I Generation:**
+- 既存の「Chat Image Generation」（T2I専用ワークフロー）セクションと全く同じ構造で「Chat I2I Generation」セクションを新設。`chatGenI2IDedicatedEnabled`/`chatGenI2IDedicatedFilename`として`wfm_ai_settings`に独立して永続化。ワークフロー一覧の取得（`/api/wfm/workflows`）はT2I側のfetchを流用し2つのselectへ同時反映
+
+**表示調整（ユーザーフィードバックにより追加修正）:**
+- Chatバブル内の添付画像エコー（送信したユーザーメッセージに表示される添付プレビュー）が大きすぎたため、`appendChatBubble`に`opts.attachThumb`（新設、max 120px）を追加し、生成結果画像用の`opts.imageUrl`（`.wfm-ai-chat-img`）とスタイルを分離
+- 生成結果画像自体も表示が大きすぎるとのフィードバックを受け、`.wfm-ai-chat-img`の`max-width`を`100%`→`20%`に変更（約80%サイズダウン）
+
+**推奨モデル:** 動作確認の結果、Tool CallingとVision機能の両方が良好に動作したモデルとして Gemma 4:e4b、Qwen 3.5:9b、Ministral 3:3b（Ollama）を確認。ヘルプ（`helpAi3`）とREADMEに記載
+
+**ヘルプ更新（3点セット）:** `templates/index.html`/`static/js/i18n.js`（EN/JA/ZH）/`static/js/app.js`の`helpIdMap` — `helpAi3`（添付画像・I2I・推奨モデルの追記）、`helpAi4`（TOOLSドロップ画像がChatとも共有される旨）、`helpAi6`（Chat I2I Generation設定セクションの追記）。いずれも既存キーへの追記のため`helpIdMap`自体の変更は不要
+
+**検証**（Kapture、実機ブラウザ、Ollama）: TOOLSへの画像ドロップ→Chat添付インジケーター表示、Chatでの画像編集依頼→I2I生成の実行、TOOLS/Chat双方の✕による添付クリア、Chatバブルの画像サイズ調整（添付エコー120px、生成結果`max-width:20%`）を確認。ブラウザ接続（Kapture）が一時的に切断される場面があり、再接続後に検証を継続した。
+
 ## v0.3.73
 
 ### AI TOOL Chatペインからの対話式画像生成（Tool Calling）＋ Checkpoint関連の安全策
