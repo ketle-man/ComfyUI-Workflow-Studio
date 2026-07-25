@@ -6,6 +6,9 @@
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { readJsonStorage } from "./util.js";
+import { comfyUI } from "./comfyui-client.js";
+import { comfyEditor } from "./comfyui-editor.js";
+import { comfyWorkflow } from "./comfyui-workflow.js";
 
 const SETTINGS_KEY = "wfm_ai_settings";
 
@@ -341,6 +344,29 @@ function initSettingsTab() {
     if (freeSrcInput && saved.freeSrcLang) freeSrcInput.value = saved.freeSrcLang;
     if (freeDstInput && saved.freeDstLang) freeDstInput.value = saved.freeDstLang;
 
+    // Chat image generation — dedicated workflow selection
+    const chatGenCheckbox = document.getElementById("wfm-ai-chatgen-dedicated-checkbox");
+    const chatGenRow      = document.getElementById("wfm-ai-chatgen-dedicated-row");
+    const chatGenSelect   = document.getElementById("wfm-ai-chatgen-dedicated-select");
+
+    if (chatGenCheckbox) chatGenCheckbox.checked = !!saved.chatGenDedicatedEnabled;
+    if (chatGenRow) chatGenRow.style.display = saved.chatGenDedicatedEnabled ? "" : "none";
+
+    chatGenCheckbox?.addEventListener("change", () => {
+        if (chatGenRow) chatGenRow.style.display = chatGenCheckbox.checked ? "" : "none";
+    });
+
+    if (chatGenSelect) {
+        fetch(`${comfyUI.baseUrl}/api/wfm/workflows`)
+            .then((r) => (r.ok ? r.json() : []))
+            .then((list) => {
+                const filenames = (list || []).map((w) => w.filename).filter(Boolean);
+                chatGenSelect.innerHTML = `<option value="">-- select workflow --</option>` +
+                    filenames.map((f) => `<option value="${f}" ${f === saved.chatGenDedicatedFilename ? "selected" : ""}>${f}</option>`).join("");
+            })
+            .catch(() => {});
+    }
+
     // Save settings
     document.getElementById("wfm-ai-settings-save-btn")?.addEventListener("click", () => {
         const backend = document.querySelector("input[name='wfm-ai-backend']:checked")?.value || "ollama";
@@ -348,13 +374,15 @@ function initSettingsTab() {
         const model = document.getElementById("wfm-ai-model-select")?.value || "";
         const freeSrcLang = freeSrcInput?.value?.trim() || "";
         const freeDstLang = freeDstInput?.value?.trim() || "";
+        const chatGenDedicatedEnabled = !!chatGenCheckbox?.checked;
+        const chatGenDedicatedFilename = chatGenSelect?.value || "";
 
         if (url && !isValidBackendUrl(url)) {
             showToast(t("aiToastInvalidUrl"), "error");
             return;
         }
 
-        saveAiSettings({ backend, backendUrl: url, model, freeSrcLang, freeDstLang });
+        saveAiSettings({ backend, backendUrl: url, model, freeSrcLang, freeDstLang, chatGenDedicatedEnabled, chatGenDedicatedFilename });
         showToast(t("aiToastSettingsSaved"), "success");
     });
 
@@ -368,30 +396,104 @@ function initSettingsTab() {
 // Chat tab
 // ============================================
 
-async function callChat(url, backend, model, messages) {
+const IMAGE_GEN_TOOLS = [{
+    type: "function",
+    function: {
+        name: "generate_image",
+        description: "Generate an image using the currently loaded ComfyUI workflow. Call this when the user asks to create, draw, paint, or generate an image.",
+        parameters: {
+            type: "object",
+            properties: {
+                prompt: { type: "string", description: "Positive prompt describing the desired image." },
+                negative_prompt: { type: "string", description: "What to avoid in the image. Optional." },
+            },
+            required: ["prompt"],
+        },
+    },
+}];
+
+async function callChat(url, backend, model, messages, tools) {
     if (backend === "ollama") {
+        const body = { model, messages, stream: false };
+        if (tools) body.tools = tools;
         const res = await fetch(`${url}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, messages, stream: false }),
+            body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).message?.content || "";
+        const message = (await res.json()).message || {};
+        return { content: message.content || "", toolCalls: message.tool_calls || null };
     } else {
+        const body = { model, messages, stream: false };
+        if (tools) { body.tools = tools; body.tool_choice = "auto"; }
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, messages, stream: false }),
+            body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).choices?.[0]?.message?.content || "";
+        const message = (await res.json()).choices?.[0]?.message || {};
+        return { content: message.content || "", toolCalls: message.tool_calls || null };
     }
 }
 
-function appendChatBubble(messagesEl, role, content) {
+function _parseToolArgs(toolCall) {
+    const raw = toolCall.function?.arguments ?? toolCall.arguments;
+    if (typeof raw === "string") {
+        try { return JSON.parse(raw); } catch { return {}; }
+    }
+    return raw || {};
+}
+
+async function _loadDedicatedChatGenWorkflow(filename) {
+    const resp = await fetch(`${comfyUI.baseUrl}/api/wfm/workflows/raw?filename=${encodeURIComponent(filename)}`);
+    if (!resp.ok) throw new Error(`Failed to load workflow (HTTP ${resp.status})`);
+    let workflow = await resp.json();
+    const format = comfyWorkflow.detectFormat(workflow, filename);
+    if (format === "ui") {
+        workflow = await comfyWorkflow.convertUiToApi(workflow);
+    } else if (format !== "api") {
+        throw new Error("Unsupported or unrecognized workflow format");
+    }
+    return { workflow, analysis: comfyWorkflow.analyzeWorkflow(workflow) };
+}
+
+async function generateImageFromChat(prompt, negativePrompt) {
+    if (!window._wfmGenerateTab?.generate) throw new Error(t("aiChatGenerateNotReady"));
+
+    const settings = loadAiSettings();
+    let workflow, analysis;
+
+    if (settings.chatGenDedicatedEnabled && settings.chatGenDedicatedFilename) {
+        ({ workflow, analysis } = await _loadDedicatedChatGenWorkflow(settings.chatGenDedicatedFilename));
+    } else {
+        if (!comfyUI.currentWorkflow || !comfyUI.currentAnalysis) throw new Error(t("aiChatNoWorkflowLoaded"));
+        workflow = JSON.parse(JSON.stringify(comfyUI.currentWorkflow));
+        analysis = comfyUI.currentAnalysis;
+    }
+
+    comfyEditor.setPromptText("positive", prompt || "", { workflow, analysis });
+    if (negativePrompt) comfyEditor.setPromptText("negative", negativePrompt, { workflow, analysis });
+
+    const result = await window._wfmGenerateTab.generate(workflow);
+    const images = result?.images || [];
+    if (images.length === 0) throw new Error(t("aiChatNoImageProduced"));
+
+    const img = images[0];
+    return `/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${encodeURIComponent(img.type || "output")}`;
+}
+
+function appendChatBubble(messagesEl, role, content, opts = {}) {
     const div = document.createElement("div");
     div.className = `wfm-ai-chat-msg wfm-ai-chat-msg-${role}`;
-    div.textContent = content;
+    if (content) div.textContent = content;
+    if (opts.imageUrl) {
+        const img = document.createElement("img");
+        img.src = opts.imageUrl;
+        img.className = "wfm-ai-chat-img";
+        div.appendChild(img);
+    }
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return div;
@@ -403,8 +505,17 @@ function initChatTab() {
     const sendBtn    = document.getElementById("wfm-ai-chat-send-btn");
     const clearBtn   = document.getElementById("wfm-ai-chat-clear-btn");
     const statusEl   = document.getElementById("wfm-ai-chat-status");
+    const imgGenToggle = document.getElementById("wfm-ai-chat-imggen-toggle");
 
     if (!messagesEl || !inputEl || !sendBtn) return;
+
+    if (imgGenToggle) {
+        const savedToggle = loadAiSettings();
+        imgGenToggle.checked = savedToggle.chatImageGenEnabled !== false;
+        imgGenToggle.addEventListener("change", () => {
+            saveAiSettings({ chatImageGenEnabled: imgGenToggle.checked });
+        });
+    }
 
     let chatHistory = [];
 
@@ -435,9 +546,29 @@ function initChatTab() {
         statusEl.className = "wfm-ai-trans-status wfm-ai-status-working";
 
         try {
-            const reply = await callChat(url, backend, model, chatHistory);
-            chatHistory.push({ role: "assistant", content: reply });
-            appendChatBubble(messagesEl, "assistant", reply);
+            const tools = imgGenToggle?.checked !== false ? IMAGE_GEN_TOOLS : undefined;
+            const reply = await callChat(url, backend, model, chatHistory, tools);
+            const toolCall = reply.toolCalls?.find(
+                (tc) => (tc.function?.name || tc.name) === "generate_image"
+            );
+
+            if (toolCall) {
+                chatHistory.push({ role: "assistant", content: reply.content || "" });
+                if (reply.content) appendChatBubble(messagesEl, "assistant", reply.content);
+
+                statusEl.textContent = t("aiStatusGeneratingImage");
+                const args = _parseToolArgs(toolCall);
+                try {
+                    const imageUrl = await generateImageFromChat(args.prompt, args.negative_prompt);
+                    appendChatBubble(messagesEl, "assistant", "", { imageUrl });
+                } catch (genErr) {
+                    appendChatBubble(messagesEl, "assistant", `${t("aiToastImageGenFailed")}${genErr.message}`);
+                    showToast(t("aiToastImageGenFailed") + genErr.message, "error");
+                }
+            } else {
+                chatHistory.push({ role: "assistant", content: reply.content });
+                appendChatBubble(messagesEl, "assistant", reply.content);
+            }
             statusEl.textContent = "";
             statusEl.className = "wfm-ai-trans-status";
         } catch (err) {

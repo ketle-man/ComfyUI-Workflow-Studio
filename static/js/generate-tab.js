@@ -218,21 +218,52 @@ async function saveCurrentWorkflow() {
 // Workflow Loading
 // ============================================
 
+// ワークフロー読み込み時、設定タブで有効化されていれば checkpoint loader 系ノード全件の
+// ckpt_name をデフォルトモデルへ強制上書きする（保存済みワークフローのモデルが
+// 環境と合わず生成エラー/不鮮明な画像になるのを防ぐ回避策）。
+// analyzeWorkflow() より前に apiWorkflow 自体を書き換える必要がある — analysis後に
+// 書き換えると Model タブの表示（analysis.checkpoint_nodes 由来）が古い値のまま残るため。
+async function _applyDefaultCheckpointIfEnabled(apiWorkflow) {
+    try {
+        const res = await fetch("/api/wfm/settings");
+        if (!res.ok) return;
+        const settings = await res.json();
+        if (!settings.default_checkpoint_enabled || !settings.default_checkpoint_name) return;
+
+        let applied = false;
+        for (const node of Object.values(apiWorkflow)) {
+            const ct = node?.class_type || "";
+            if (node?.inputs && (ct.includes("CheckpointLoader") || ct === "Checkpoint Loader" || ct === "ImageMetadataPromptLoader")) {
+                node.inputs.ckpt_name = settings.default_checkpoint_name;
+                applied = true;
+            }
+        }
+        if (applied) showToast(t("defaultCheckpointApplied", settings.default_checkpoint_name), "info");
+    } catch { /* non-critical, ignore */ }
+}
+
 export async function loadWorkflowIntoEditor(workflow, filename) {
     let apiWorkflow = workflow;
     const format = comfyWorkflow.detectFormat(workflow, filename);
+    let ckptWarning = null;
 
     if (format === "app") {
         showToast(t("appFormatNotSupported"), "error");
         return false;
     } else if (format === "ui") {
         apiWorkflow = await comfyWorkflow.convertUiToApi(workflow);
+        const ckptSubs = comfyWorkflow.getLastCheckpointSubstitutions();
+        if (ckptSubs.length > 0) {
+            const names = [...new Set(ckptSubs.map((s) => s.original))].join(", ");
+            ckptWarning = t("checkpointSubstitutedWarning", names);
+        }
     } else if (format === "unknown") {
         showToast(t("unknownWorkflowFormat"), "error");
         return false;
     }
 
     comfyUI.currentWorkflow = apiWorkflow;
+    await _applyDefaultCheckpointIfEnabled(apiWorkflow);
     comfyUI.currentAnalysis = comfyWorkflow.analyzeWorkflow(apiWorkflow);
 
     // Render editor tabs
@@ -260,7 +291,11 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
 
     refreshFeederNodeList();
 
-    showToast(t("workflowLoadedName", filename || ""), "success");
+    if (ckptWarning) {
+        showToast(ckptWarning, "error");
+    } else {
+        showToast(t("workflowLoadedName", filename || ""), "success");
+    }
     return true;
 }
 
@@ -1468,6 +1503,8 @@ async function _coreGenerate(silent = false, workflowOverride = null) {
     }
 
     if (!silent) showToast(t("generationComplete"), "success");
+
+    return { images, seed };
 }
 
 // ============================================
@@ -1762,7 +1799,7 @@ async function handleGenerate(workflowOverride = null) {
             await _runBatchGenerate();
         } else {
             try {
-                await _coreGenerate(false, workflowOverride);
+                return await _coreGenerate(false, workflowOverride);
             } catch (err) {
                 const progressText = document.getElementById("wfm-gen-progress-text");
                 if (progressText) progressText.textContent = "Error";

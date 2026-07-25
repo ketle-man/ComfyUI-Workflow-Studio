@@ -1283,10 +1283,10 @@
                             <ul>
                                 <li id="wfm-help-ai-1">4-pane layout — Translation | Chat | TOOLS | Settings — all panes are always visible simultaneously</li>
                                 <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</li>
-                                <li id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history</li>
+                                <li id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history; if the model supports tool calling and asks for an image ("generate a cat picture", etc.) it will run generation on the workflow currently loaded in GenerateUI and show the result inline; the "Allow image generation" checkbox in the pane header toggles this on/off</li>
                                 <li id="wfm-help-ai-4">TOOLS pane — VLM: drop an image (PNG/JPG/WebP) and select a task (Describe Image, Create Prompt, Create Tags), then click Run to analyze with a vision model; result shown with Copy button</li>
                                 <li id="wfm-help-ai-5">TOOLS pane — Wildcards: select "Create wildcards" from the dropdown, enter a category name and count, click Run to generate plain-text wildcard entries one per line</li>
-                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio), set API URL, test connection, select model, configure Free language names; settings are shared with the Library panel's A tab via localStorage</li>
+                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered generation instead of the one currently loaded in GenerateUI; settings are shared with the Library panel's A tab via localStorage</li>
                             </ul>
                         </div>
                     </div>
@@ -1468,6 +1468,7 @@
                                 <li id="wfm-help-trouble-5">LoRA Stack fails with "No such file or directory" error: The LoRA may not be recognized by comfyui-lora-manager (known issue). Try a different LoRA or check if the file appears in Lora Manager's own UI</li>
                                 <li id="wfm-help-trouble-6">Model loading error after moving or deleting models: ComfyUI caches file paths and may still reference old locations. Perform a Hard Reset from the ComfyUI menu (Queue → Hard Reset) or restart ComfyUI to clear the cache.</li>
                                 <li id="wfm-help-trouble-7"></li>
+                                <li id="wfm-help-trouble-8"></li>
                             </ul>
                         </div>
                     </div>
@@ -2007,6 +2008,10 @@
                             <button id="wfm-ai-chat-send-btn" class="wfm-btn wfm-btn-primary">Send</button>
                             <button id="wfm-ai-chat-clear-btn" class="wfm-btn">Clear</button>
                             <span id="wfm-ai-chat-status" class="wfm-ai-trans-status"></span>
+                            <label class="wfm-ai-chat-toggle-label" for="wfm-ai-chat-imggen-toggle">
+                                <input type="checkbox" id="wfm-ai-chat-imggen-toggle" checked>
+                                <span id="wfm-ai-chat-imggen-label-text">Allow image generation</span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -2090,6 +2095,20 @@
                         <div class="wfm-ai-settings-row">
                             <label class="wfm-ai-label" id="wfm-ai-free-dst-label">Target</label>
                             <input type="text" id="wfm-ai-free-dst-lang" class="wfm-input" placeholder="e.g. German">
+                        </div>
+                    </div>
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-chatgen-title">Chat Image Generation</div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                <input type="checkbox" id="wfm-ai-chatgen-dedicated-checkbox">
+                                <span id="wfm-ai-chatgen-dedicated-label">Use dedicated workflow</span>
+                            </label>
+                        </div>
+                        <div class="wfm-ai-settings-row" id="wfm-ai-chatgen-dedicated-row" style="display:none;">
+                            <select id="wfm-ai-chatgen-dedicated-select" class="wfm-select">
+                                <option value="">-- select workflow --</option>
+                            </select>
                         </div>
                     </div>
                     <div class="wfm-ai-settings-section">

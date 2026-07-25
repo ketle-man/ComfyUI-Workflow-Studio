@@ -5,6 +5,7 @@
 import { comfyUI } from "./comfyui-client.js";
 import { syncJsonHighlight } from "./json-highlight.js";
 import { t } from "./i18n.js";
+import { escapeHtml } from "./util.js";
 
 // ── Latent Image preset state ─────────────────────────────
 const _LATENT_PRESET_KEY = "wfm_latent_presets";
@@ -522,6 +523,7 @@ export const comfyEditor = {
             .map((s) => {
                 const models = this.models[s.key] || [];
                 const currentVal = s.nodes?.[0]?.[s.inputKey] || "";
+                const isMissing = !!currentVal && !models.includes(currentVal);
                 const targetOpts = s.nodes
                     .map((n) => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`)
                     .join("");
@@ -540,9 +542,11 @@ export const comfyEditor = {
                 <div class="wfm-form-group" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;">
                     <label>${s.label}</label>
                     <input type="text" class="wfm-input wfm-model-filter" placeholder="Filter..." data-target="wfm-model-${s.key}" style="margin-bottom:4px;">
-                    <select class="wfm-select" id="wfm-model-${s.key}" style="margin-bottom:4px;">
+                    <select class="wfm-select ${isMissing ? "wfm-select-missing" : ""}" id="wfm-model-${s.key}" style="margin-bottom:4px;">
+                        ${isMissing ? `<option value="${escapeHtml(currentVal)}" selected>⚠ ${escapeHtml(currentVal)} (${t("modelNotFound")})</option>` : ""}
                         ${models.map((m) => `<option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>`).join("")}
                     </select>
+                    ${isMissing ? `<div class="wfm-model-missing-hint">${t("modelNotFoundHint")}</div>` : ""}
                     ${extrasHtml}
                     <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
                         <select class="wfm-select" id="wfm-model-${s.key}-target" style="flex:1;">${targetOpts}</select>

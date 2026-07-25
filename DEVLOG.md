@@ -2,6 +2,42 @@
 
 ---
 
+## v0.3.73
+
+### AI TOOL Chatペインからの対話式画像生成（Tool Calling）＋ Checkpoint関連の安全策
+
+ユーザーからの「OpenWebUIのような対話式画像生成をこのプラグインで実現できないか」という相談から着手。既存のOllama/LM Studioチャット機能（`static/js/ai-tab.js`）とGenerateUIタブの生成機能（`static/js/generate-tab.js`）は別々に存在していたが、両者をLLM Tool Calling経由で接続した。実装・検証の過程で、GenerateUIのModelタブに以前から存在した「保存済みワークフローのCheckpointが実在しない場合、無警告で別モデルに差し替わる」という表示バグも発見・修正した。
+
+**対象ファイル:** `static/js/ai-tab.js`, `static/js/generate-tab.js`, `static/js/settings-tab.js`, `static/js/comfyui-editor.js`, `static/js/comfyui-workflow.js`, `static/css/main.css`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`
+
+**Chatペイン画像生成（Tool Calling）:**
+- `generate_image`ツール（`prompt`/`negative_prompt`引数）をOllama/LM Studio双方のchat APIに渡し、呼び出すかどうかはLLM自身が判断する設計（合意事項: 画像生成後、結果はLLMに送り返さず会話は一旦区切る／SPA版のみ対応、サイドパネル版は対象外）
+- `callChat()`の戻り値を`string`から`{content, toolCalls}`へ変更。Ollamaの`tool_calls[].function.arguments`はオブジェクト、LM Studio(OpenAI互換)はJSON文字列という差異は`_parseToolArgs()`で吸収
+- 生成処理は既存の`window._wfmGenerateTab.generate(workflowOverride)`（Image Edit「Inpaint」の外部呼び出しと同じ橋渡しパターン）をそのまま再利用。ワークフローはディープクローンしてから`comfyEditor.setPromptText()`で書き込むため、GenerateUIタブの表示状態は一切汚染しない
+- **既存コードの欠落を修正:** `_coreGenerate`/`handleGenerate`（`generate-tab.js`）が生成結果`{images, seed}`を計算していながら`return`していなかったため、戻り値を追加（既存呼び出し元は戻り値を使っていないため影響なし）
+- Chatペイン下部（Send/Clearボタンの隣）に「画像生成を許可する」チェックボックス（デフォルトON、`wfm_ai_settings`に永続化）。OFF時は`callChat()`に`tools`を渡さずLLMには一切提示しない
+
+**SETTINGSペイン — Chat画像生成の専用ワークフロー:**
+- Image Edit「Inpaint」の「Use dedicated workflow」と同一パターンを踏襲。OFF（デフォルト）はGenerateUIの読み込み中ワークフロー、ONは選択した保存済みワークフローを`/api/wfm/workflows/raw`経由でその都度ロード・変換（`comfyWorkflow.detectFormat`/`convertUiToApi`/`analyzeWorkflow`）して使用
+
+**バグ修正: Checkpoint未一致時の無警告差し替え（`comfyui-workflow.js`）:**
+- `convertUiToApi()`のCOMBO値フォールバック処理（Impact Packのワイルドカード等、動的な選択肢がインスタンス間でズレて生成エラーになるのを防ぐため既存）が、`ckpt_name`にも無差別に適用されており、保存されたCheckpointパスが現在の環境に存在しない場合、無警告でCombo選択肢の先頭（たまたまアルファベット順で最初のFluxモデル）に差し替えられていた。この製品の「なぜかいつもFluxが表示される」という混乱の直接的な原因だった
+- `getLastCheckpointSubstitutions()`を追加し、`ckpt_name`の差し替えが発生した場合のみ元の値・ノードIDを記録。`loadWorkflowIntoEditor`（`generate-tab.js`）で検知し、通常の「読み込み完了」トーストの代わりに、差し替え前のモデル名を含む警告トースト（`error`スタイル）を表示する
+- GenerateUI Modelタブ（`comfyui-editor.js`の`renderModelTab`）にも、保存値が現在のモデル一覧に存在しない場合に警告付きの選択肢を先頭表示する対応を追加（API形式で保存され`convertUiToApi`を経由しないワークフローに対して有効。UI形式ワークフローは上記の差し替えにより「一致している」ように見えるため、この表示だけでは検知できないケースがある）
+
+**設定タブ — デフォルトCheckpoint:**
+- チェックボックスで有効化すると、GenerateUIへのワークフロー読み込み時に全Checkpointローダー系ノード（`CheckpointLoaderSimple`/`CheckpointLoader`/`ImageMetadataPromptLoader`）の`ckpt_name`を指定モデルへ強制上書き。サーバー側`/api/wfm/settings`に永続化（複数ブラウザ間で共有）
+- **実装中に判明した順序依存の不具合:** 上書き処理を`analyzeWorkflow()`実行後に行っていたため、Raw JSON上のデータは正しく上書きされてもModelタブの表示（`analysis.checkpoint_nodes`由来）が古い値のまま残る不具合があった。`analyzeWorkflow()`実行前に上書きする順序に修正
+
+**ヘルプ更新（3点セット）:** `templates/index.html`/`static/js/i18n.js`（EN/JA/ZH）/`static/js/app.js`の`helpIdMap` — `helpAi3`（Chat画像生成機能＋許可トグルの説明を追記）、`helpAi6`（SETTINGSペインの専用ワークフロー設定を追記）、`helpTrouble8`（新規: 「ModelタブのCheckpointが想定と違う」症状の原因と対処法）
+
+**検証**（Kapture、実機ブラウザ + Ollama qwen3.5:9b）:
+- Chatペインから「〜の画像を生成して」で`generate_image`が呼ばれ、実際に画像が生成されチャット内に表示されることを確認（初回は無関係のワークフロー設定に起因するVAEチャンネル数不一致エラーが発生したが、ワークフロー側の修正後に正常動作を確認）
+- SETTINGSペインの専用ワークフロー機能: 選択したワークフロー（UI形式、`ws_sdxl_t2i_basic.json`）が正しくロード・変換され、Chat経由の生成に使われることを確認
+- 「画像生成を許可する」チェックボックスの位置変更（ヘッダー→下部の操作行）を反映
+- デフォルトCheckpointのON/OFF切り替えでModelタブの表示が正しく変わることを確認（ON: 指定モデル、OFF: 元の壊れた表示に復帰）
+- 実際に不一致のあるワークフロー（`op_sdxl_ill_lora.json`、保存値`anime\animozalyca_v10.safetensors`が未インストール）で、差し替え警告トーストが元のモデル名を含めて正しく表示されることを確認
+
 ## v0.3.72
 
 ### Comic Creator連携用の外部Inpaintエントリポイントを追加

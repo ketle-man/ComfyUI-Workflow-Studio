@@ -310,6 +310,12 @@ function applyI18nToHtml() {
     if (aiFreeDstLabel) aiFreeDstLabel.textContent = t("aiSettingsOutputLang");
     const aiSaveBtn = document.getElementById("wfm-ai-settings-save-btn");
     if (aiSaveBtn) aiSaveBtn.textContent = t("aiSettingsSaveBtn");
+    const aiChatImgGenLabel = document.getElementById("wfm-ai-chat-imggen-label-text");
+    if (aiChatImgGenLabel) aiChatImgGenLabel.textContent = t("aiChatImgGenToggle");
+    const aiChatGenTitle = document.getElementById("wfm-ai-settings-chatgen-title");
+    if (aiChatGenTitle) aiChatGenTitle.textContent = t("aiSettingsChatGenTitle");
+    const aiChatGenDedicatedLabel = document.getElementById("wfm-ai-chatgen-dedicated-label");
+    if (aiChatGenDedicatedLabel) aiChatGenDedicatedLabel.textContent = t("aiSettingsChatGenDedicated");
 
     // Group panel labels
     const propTitle = document.querySelector("#wfm-side-tab-group .wfm-group-section-title");
@@ -482,7 +488,7 @@ function applyI18nToHtml() {
         "wfm-help-trouble-1": "helpTrouble1", "wfm-help-trouble-2": "helpTrouble2",
         "wfm-help-trouble-3": "helpTrouble3", "wfm-help-trouble-4": "helpTrouble4",
         "wfm-help-trouble-5": "helpTrouble5", "wfm-help-trouble-6": "helpTrouble6",
-        "wfm-help-trouble-7": "helpTrouble7",
+        "wfm-help-trouble-7": "helpTrouble7", "wfm-help-trouble-8": "helpTrouble8",
         "wfm-help-support-title": "helpSupportTitle",
         "wfm-help-support-desc": "helpSupportDesc",
         "wfm-help-github-desc": "helpGithubDesc",

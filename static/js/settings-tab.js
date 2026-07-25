@@ -637,6 +637,30 @@ export async function initSettingsTab() {
             <div id="wfm-settings-url-status" style="font-size:12px;margin-top:4px;"></div>
         </details>
 
+        <!-- Default Checkpoint -->
+        <details class="wfm-settings-section">
+            <summary class="wfm-settings-summary">${t("defaultCheckpointSettings")}</summary>
+            <div class="wfm-form-group">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="checkbox" id="wfm-settings-default-ckpt-enabled" ${serverSettings.default_checkpoint_enabled ? "checked" : ""}>
+                    <span id="wfm-settings-default-ckpt-enable-label">${t("defaultCheckpointEnable")}</span>
+                </label>
+            </div>
+            <div class="wfm-form-group">
+                <label id="wfm-settings-default-ckpt-model-label">${t("defaultCheckpointModel")}</label>
+                <div style="display:flex;gap:8px;">
+                    <select class="wfm-select" id="wfm-settings-default-ckpt-select" style="flex:1;">
+                        <option value="">${t("selectModel")}</option>
+                    </select>
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-settings-default-ckpt-refresh">${t("refresh")}</button>
+                </div>
+                <small id="wfm-settings-default-ckpt-hint" style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-top:4px;">
+                    ${t("defaultCheckpointHint")}
+                </small>
+            </div>
+            <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-default-ckpt-save">${t("save")}</button>
+        </details>
+
         <!-- AI Assistant Settings (Prompt Tab) -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">${t("ollamaSettings")}</summary>
@@ -1208,6 +1232,35 @@ export async function initSettingsTab() {
         const ok = await comfyUI.checkConnection();
         statusEl.textContent = ok ? t("connectedCheck") : t("failedConnect");
         statusEl.style.color = ok ? "var(--wfm-success)" : "var(--wfm-danger)";
+    });
+
+    // Default Checkpoint
+    const defaultCkptSelect = document.getElementById("wfm-settings-default-ckpt-select");
+
+    async function loadDefaultCkptOptions() {
+        if (!defaultCkptSelect) return;
+        try {
+            const list = await comfyUI.fetchCheckpoints();
+            const saved = serverSettings.default_checkpoint_name || "";
+            defaultCkptSelect.innerHTML = `<option value="">${t("selectModel")}</option>` +
+                (list || []).map((m) => `<option value="${m}" ${m === saved ? "selected" : ""}>${m}</option>`).join("");
+        } catch { /* ignore */ }
+    }
+    loadDefaultCkptOptions();
+
+    document.getElementById("wfm-settings-default-ckpt-refresh")?.addEventListener("click", loadDefaultCkptOptions);
+
+    document.getElementById("wfm-settings-default-ckpt-save")?.addEventListener("click", async () => {
+        const enabled = !!document.getElementById("wfm-settings-default-ckpt-enabled")?.checked;
+        const ckptName = defaultCkptSelect?.value || "";
+        try {
+            await saveServerSettings({ default_checkpoint_enabled: enabled, default_checkpoint_name: ckptName });
+            serverSettings.default_checkpoint_enabled = enabled;
+            serverSettings.default_checkpoint_name = ckptName;
+            showToast(t("aiToastSettingsSaved"), "success");
+        } catch (err) {
+            showToast(`${t("saveError")}: ${err.message}`, "error");
+        }
     });
 
     // Test Eagle URL (via server proxy to avoid CORS)

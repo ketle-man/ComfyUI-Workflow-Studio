@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.71-green)
+![Version](https://img.shields.io/badge/version-0.3.73-green)
 
 ## Screenshots
 
@@ -164,6 +164,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **CivitAI Host** — choose which site opens when clicking a model link: `civitai.com` (SFW only) or `civitai.red` (unrestricted); saved to `settings.json` and synced to `localStorage` for the Models tab to use without extra fetches
 - **CivitAI API Key** — optional Bearer token for authenticated CivitAI access; stored in `settings.json` (excluded from data exports); environment variable `CIVITAI_API_KEY` takes priority if set
 - **Default workflow** — set a workflow to auto-load on startup
+- **Default Checkpoint** (v0.3.73) — optional checkbox to force every checkpoint loader node's model to a chosen default whenever a workflow is loaded into GenerateUI; a safeguard against generation errors or garbled images from a stale/mismatched checkpoint saved in the workflow file
 - **Data Management** — export all plugin data (settings, metadata, prompts, etc.) to a single JSON file; import to restore data (useful when migrating or reinstalling); API keys are excluded from exports for security
 - **Text Size** — one slider (10–28 px) adjusts font size for all prompt and chat textareas at once: Generate UI positive/negative prompts, AI Assistant chat input, Preset prompts, Wildcard prompt and file editor, and Metadata prompt full preview; takes effect immediately and saved with Save Settings
 - **RAW JSON Colors** — customize the 6 syntax highlight colors for the Raw JSON editor in Generate UI: Default Text (base), Name/Scheduler (yellow), Title (pink), Width/Height (green), Prompt/Text (cyan), Image/File (red); changes apply immediately on color pick; Reset Defaults restores the original scheme; saved to `localStorage` under `wfm_settings.jsonColors` and applied on startup
@@ -273,9 +274,11 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
 - **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
 - **Chat pane** (v0.3.40) — multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for a newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`
+- **Chat pane — image generation via Tool Calling** (v0.3.73) — if the selected model supports tool calling and the user asks for an image, a `generate_image` tool is invoked and the request runs through the same generation pipeline as the GenerateUI Generate button, with the result shown inline in the chat; an "Allow image generation" checkbox in the input row toggles this on/off (default on); the workflow used is the one currently loaded in GenerateUI, or a dedicated saved workflow configured in the Settings pane
 - **TOOLS pane (VLM)** — drop an image into the 110px drop zone, select a task (Describe Image / Create Prompt / Create Tags), and click Run to analyze with a vision model; result shown in the output area with a Copy button
 - **TOOLS pane (Wildcards)** (v0.3.40) — select "Create wildcards" from the task dropdown; enter a category name and count; click Run to generate plain-text wildcard entries one per line (no markdown, no numbering); result can be copied directly into wildcard `.txt` files
 - **Settings pane** — choose backend (Ollama / LM Studio), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
+- **Settings pane — Chat Image Generation** (v0.3.73) — "Use dedicated workflow" checkbox lets Chat-triggered image generation use a saved workflow of your choice instead of the one currently loaded in GenerateUI, without disturbing what's shown there (same pattern as Image Edit's Inpaint dedicated workflow)
 - **Settings shared** — settings saved to `localStorage` under `wfm_ai_settings`; shared with the Library panel's AI TOOL tab so configuration is consistent across both interfaces
 - **Backend support** — Ollama (`/api/generate` for text, `/api/chat` for conversations, `/api/tags` for model list); LM Studio OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio)
 - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
@@ -397,6 +400,21 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.73
+
+- **AI TOOL Chat — image generation via Tool Calling** — if the selected Ollama/LM Studio model supports tool calling, asking Chat for an image (e.g. "generate a picture of a cat") invokes a `generate_image` tool and runs the request through the same generation pipeline as the GenerateUI Generate button (`window._wfmGenerateTab.generate()`); the result is shown inline in the chat as an image bubble; the conversation is not sent back to the LLM after generation
+- **AI TOOL Chat — "Allow image generation" toggle** — checkbox next to the Send/Clear buttons (default on, persisted to `wfm_ai_settings`); when off, the `generate_image` tool is not offered to the LLM at all
+- **AI TOOL Settings — Chat Image Generation dedicated workflow** — "Use dedicated workflow" checkbox + saved-workflow picker; when off (default), Chat-triggered generation uses the workflow currently loaded in GenerateUI; when on, it loads the selected saved workflow fresh each time via `/api/wfm/workflows/raw`, without touching what's shown in GenerateUI (same pattern as Image Edit's Inpaint dedicated workflow)
+- **Settings — Default Checkpoint** — optional checkbox to force every checkpoint loader node (`CheckpointLoaderSimple` / `CheckpointLoader` / `ImageMetadataPromptLoader`) to a chosen model whenever a workflow is loaded into GenerateUI; a safeguard for environments with many saved workflows referencing models that were later moved/renamed
+- **Bug fix — silent checkpoint substitution now surfaced** — `convertUiToApi()`'s COMBO-value fallback (originally added to tolerate drifting Impact Pack wildcard options) was silently replacing *any* unrecognized `ckpt_name` with the first entry in the installed-checkpoints list, making the Model tab show an unrelated model with no indication anything was wrong; workflow loading now detects this specific case and shows a warning toast naming the missing checkpoint instead of the usual "workflow loaded" toast
+- **GenerateUI — return value for programmatic generation** — `_coreGenerate`/`handleGenerate` now return `{images, seed}` on success (previously void); existing callers are unaffected, and this enables features like the new Chat image bridge to retrieve the generated image without scraping the DOM
+
+### v0.3.72
+
+- **Comic Creator integration — Inpaint via external entry point** — the Image tab in Comic Creator (`comfyui-comic-creator`) can now trigger Inpaint the same way it already triggers I2I, via `window._wfmReceiveInpaintRequest(imageBlob, maskBlob, params, workflowData?, workflowFilename?)` called across the same-origin iframe boundary; common Inpaint logic was factored out into `_runInpaintWithImages()` and shared by the UI-driven flow and this new external entry point
+- **Bug fix — cross-realm Blob detection** — images/masks generated in a different window (Comic Creator) failed to load (`[object Blob]` was interpreted as a URL string, causing a 404) because `instanceof Blob` checks fail across window realms; switched to a `typeof src !== "string"` check
+- Hidden mask layers are now excluded from Inpaint in both the UI-driven and external-call paths
 
 ### v0.3.71
 

@@ -5,6 +5,11 @@
 // Cache for /object_info (loaded once, shared)
 let _objectInfoCache = null;
 
+// convertUiToApi() の COMBO フォールバック（未一致時に選択肢の先頭へ無警告で差し替え）が
+// ckpt_name に対して発生した場合の記録。呼び出し元が読み込み直後に確認して警告表示できるよう、
+// 直近の convertUiToApi() 呼び出し分だけを保持する。
+let _lastCheckpointSubstitutions = [];
+
 async function _loadObjectInfo() {
     if (_objectInfoCache) return _objectInfoCache;
     try {
@@ -267,7 +272,12 @@ export const comfyWorkflow = {
     /**
      * Convert UI-format workflow to API-format using /object_info for accurate widget mapping.
      */
+    getLastCheckpointSubstitutions() {
+        return _lastCheckpointSubstitutions;
+    },
+
     async convertUiToApi(workflow) {
+        _lastCheckpointSubstitutions = [];
         if (!workflow.nodes || !workflow.links) return {};
 
         // Flatten subgraphs before conversion
@@ -379,6 +389,14 @@ export const comfyWorkflow = {
                             if (spec) {
                                 const choices = Array.isArray(spec[0]) ? spec[0] : null;
                                 if (choices && choices.length > 0 && !choices.includes(val)) {
+                                    if (name === "ckpt_name") {
+                                        _lastCheckpointSubstitutions.push({
+                                            nodeId: String(node.id),
+                                            title: node.title || node.type,
+                                            original: val,
+                                            replaced: choices[0],
+                                        });
+                                    }
                                     val = choices[0];
                                 }
                             }
