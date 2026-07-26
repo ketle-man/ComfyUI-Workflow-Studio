@@ -1056,6 +1056,17 @@ body {
     height: auto !important;
 }
 
+/* Bypass/Mute node indicator (shown above the Raw JSON search bar when present) */
+.wfm-gen-rawjson-bypass-note {
+    padding: 6px 10px;
+    background: rgba(255, 165, 2, 0.12);
+    border-bottom: 1px solid var(--wfm-border);
+    color: var(--wfm-warning);
+    font-size: 11px;
+    line-height: 1.5;
+    flex-shrink: 0;
+}
+
 /* RAW JSON search bar */
 .wfm-rawjson-search {
     display: flex;

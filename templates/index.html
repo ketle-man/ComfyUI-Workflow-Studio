@@ -751,6 +751,7 @@
                     <span class="wfm-gen-rawjson-label">Raw JSON</span>
                     <button id="wfm-gen-apply-raw-btn" class="wfm-btn wfm-btn-sm">Apply</button>
                 </div>
+                <div id="wfm-gen-rawjson-bypass-note" class="wfm-gen-rawjson-bypass-note" style="display:none;"></div>
                 <div class="wfm-rawjson-search">
                     <input type="text" id="wfm-gen-raw-search" class="wfm-rawjson-search-input" placeholder="Search...">
                     <span id="wfm-gen-raw-search-count" class="wfm-rawjson-search-count"></span>
@@ -1091,7 +1092,7 @@
                                 <li id="wfm-help-gen-4">Input tab: inner tabs — <b>Prompt</b> and <b>Image</b> (drag-and-drop upload); Prompt tab has Positive Prompt, Negative Prompt, and an <b>Embeddings</b> selector at the bottom — select a model, set Weight (default 1.0), then click <b>Paste</b> to insert <code>(embedding:Name:weight)</code> at the cursor position of the last focused textarea (defaults to Positive if neither is focused); a <b>↺</b> button next to each Apply button reverts the textarea to the node's currently applied value; select text (or just place the cursor on a word/parenthesis block) and press <b>Ctrl+↑/↓</b> to adjust its emphasis weight in <code>(text:weight)</code> syntax by ±0.05 — the parentheses are removed automatically when the weight returns to 1.0</li>
                                 <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA (Single/Stack tabs), ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors), Hypernetwork (with Strength field) selectors with filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones</li>
                                 <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
-                                <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow</li>
+                                <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow; if the loaded workflow has Bypass or Mute nodes, a note listing them appears above the search bar (Bypass nodes are excluded with their wires reconnected around them; Mute nodes are excluded with no reconnection, matching ComfyUI itself)</li>
                                 <li id="wfm-help-gen-8">Seed control: random, fixed, increment, decrement — seed input and mode selector stacked vertically for readability</li>
                                 <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
                                 <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle</li>
@@ -1271,7 +1272,7 @@
                                 <li id="wfm-help-sidepanel-13">I tab (Information): drop a ComfyUI PNG/WebP/JSON to inspect model, LoRA, and prompt metadata in the side panel — sub-tabs: model / lora / Prompts; supports UnetLoaderGGUF and QuadrupleCLIPLoader node types</li>
                                 <li id="wfm-help-sidepanel-14">Information tab — drag items to canvas: model sub-tab places the loader node (Checkpoint → CheckpointLoaderSimple, VAE → VAELoader, Diffusion Model → UNETLoader, Text Encoder → CLIPLoader); double-click also places at canvas center</li>
                                 <li id="wfm-help-sidepanel-15">Information tab — LoRA sub-tab: drag individual LoRA to place LoraLoader; "Multiple LORA" section at bottom places all LoRAs in a single Lora Loader (LoraManager) node; Prompts sub-tab: drag a prompt to place CLIPTextEncode node with text pre-filled; click prompt to view full text and copy</li>
-                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama or LM Studio; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage</li>
+                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, or Lemonade; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage</li>
                                 <li id="wfm-help-sidepanel-17">Title drag (Send to Canvas): after clicking 'Send to Canvas' (Workflow tab) or 'Copy &amp; Send Canvas' (Gallery tab), the 'Workflow Studio Library' title turns blue with a green ● — drag it onto the canvas to load the workflow; title resets automatically after loading</li>
                             </ul>
                         </div>
@@ -1282,11 +1283,11 @@
                             <h3 id="wfm-help-ai-title">AI TOOL Tab</h3>
                             <ul>
                                 <li id="wfm-help-ai-1">4-pane layout — Translation | Chat | TOOLS | Settings — all panes are always visible simultaneously</li>
-                                <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</li>
+                                <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama, LM Studio, or Lemonade; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</li>
                                 <li id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history; if the model supports tool calling and asks for an image ("generate a cat picture", etc.) it will run generation on the workflow currently loaded in GenerateUI and show the result inline; the "Allow image generation" checkbox in the pane header toggles this on/off; if an image is attached (dropped in the TOOLS pane) it is sent to the LLM as vision input and, when generate_image is called, used as the base for image-to-image generation instead of text-to-image; models verified to work well for tool calling and vision: Gemma 4:e4b, Qwen 3.5:9b, Ministral 3:3b (Ollama)</li>
                                 <li id="wfm-help-ai-4">TOOLS pane — VLM: drop an image (PNG/JPG/WebP) and select a task (Describe Image, Create Prompt, Create Tags), then click Run to analyze with a vision model; result shown with Copy button; the dropped image is also shared with the Chat pane as its attachment (shown there and used for image-to-image generation) until cleared with the ✕ button</li>
                                 <li id="wfm-help-ai-5">TOOLS pane — Wildcards: select "Create wildcards" from the dropdown, enter a category name and count, click Run to generate plain-text wildcard entries one per line</li>
-                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</li>
+                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</li>
                             </ul>
                         </div>
                     </div>
@@ -2069,6 +2070,9 @@
                             </label>
                             <label class="wfm-ai-radio-label">
                                 <input type="radio" name="wfm-ai-backend" value="lmstudio"> LM Studio
+                            </label>
+                            <label class="wfm-ai-radio-label">
+                                <input type="radio" name="wfm-ai-backend" value="lemonade"> Lemonade
                             </label>
                         </div>
                     </div>

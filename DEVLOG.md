@@ -2,6 +2,77 @@
 
 ---
 
+## v0.3.75
+
+### Lemonadeバックエンド追加(3つ目のAIバックエンド)
+
+「LLMのバックエンドにlemonadeも追加したい」という依頼を受け、lemonade-server.ai のAPIドキュメント(OpenAI互換API・Ollama互換API等)を確認した上で実装。既存のバックエンド切替は`ai-tab.js`(SPA AI TOOLタブ)・`prompt-tab.js`/`settings-tab.js`(Promptタブ設定)・`node_sets_menu.js`(サイドパネル)の3箇所に独立実装されており、いずれも`if (backend === "ollama") {...} else {...}`という2値決め打ちで、elseがLM Studio(OpenAI互換API: `/v1/models`, `/v1/chat/completions`)を指す構造だった。Lemonadeのデフォルト(OpenAI互換モード)は`http://localhost:13305`でLM Studioと全く同じエンドポイント形状のため、fetch系関数(`fetchModels`/`callLLM`/`callChat`/`callVLM`等)は変更不要で、ラジオボタンの選択肢追加とデフォルトURL解決部分の3値対応のみで済んだ。
+
+**対象範囲・接続方式は事前にユーザーに確認:** 3箇所すべてに追加するか/SPA AI TOOLタブのみ先行導入するか、接続方式はOpenAI互換モード既定かOllama互換モードも選択肢に含めるかを質問し、「3箇所すべて」「OpenAI互換モード既定」で合意して実装した。
+
+**デフォルトURL解決の共通化:**
+- `static/js/util.js`に`AI_BACKEND_DEFAULT_URLS`(ollama/lmstudio/lemonade)と`getAiBackendDefaultUrl(backend)`を新設し、`ai-tab.js`・`prompt-tab.js`・`settings-tab.js`(いずれもESモジュールで`util.js`をimport済み)の計8箇所の三項演算子を置き換え
+- `web/comfyui/node_sets_menu.js`(ComfyUI拡張側、`static/js`とは別スコープのESモジュールでimport不可)は同名のヘルパーをローカルに複製(既存の重複実装パターンを踏襲)
+
+**UI・ヘルプ更新:**
+- ラジオボタン`value="lemonade"`を`templates/index.html`(SPA)・`static/js/settings-tab.js`(Promptタブ設定)・`web/comfyui/node_sets_menu.js`(サイドパネル)の3箇所に追加
+- ヘルプ文言3点セット(`index.html`/`i18n.js`のEN・JA・ZH/`app.js`の`helpIdMap`)のうち、`helpIdMap`は既存キーへの追記のみで変更不要。「Ollama or/または/或 LM Studio」を列挙している9キー(`helpPrompt1`, `helpSettings5`, `helpSidepanel16`, `helpAi2`, `helpAi5`, `helpAi6`, `helpTrouble2` の各ロケール)すべてにLemonadeを追記
+- README.mdの現行機能セクション(Changelogではなくpresent-tense説明部分)とRequirementsセクションにLemonade関連の記載を追加。過去バージョンのChangelogエントリ(v0.3.40〜v0.3.74)は当時の実装を正しく記述しているため変更していない
+
+**検証:** 変更した5つのJSファイル(`util.js`, `ai-tab.js`, `prompt-tab.js`, `settings-tab.js`, `node_sets_menu.js`)を`node --check`で構文チェック(全て成功)。実行中のComfyUIインスタンス(Kapture経由)で3箇所すべてを確認 — SPA AI TOOLタブSettings・SPA 設定タブ(Prompt tab AI Assistant)・サイドパネルAIタブのBackendラジオがいずれも`["ollama","lmstudio","lemonade"]`の3値で表示されることを確認、`getAiBackendDefaultUrl()`をブラウザ上で直接呼び出しollama/lmstudio/lemonade/未知の値それぞれで正しいデフォルトURL(`lemonade`→`http://localhost:13305`)を返すことを確認した。
+
+### 追加修正: バックエンド切替時にURLを常にデフォルト値へ切り替え
+
+上記の初回実装では、URL欄は「未保存の場合のみ」デフォルト値を補完する仕様(ラジオ切替時に`if (!saved.backendUrl) urlInput.value = defaultUrl`)だったため、一度どれかのURLを保存済みのユーザーがバックエンドを切り替えても欄が変わらなかった。「LMStudio、Lemonadeに切り替えた際それぞれデフォルトのURLに変更したい」というフィードバックを受け、3箇所すべてで無条件にデフォルトURLへ切り替える仕様に変更:
+
+- `ai-tab.js`: `change`ハンドラの`if (!saved.backendUrl)`ガードを削除し、常に`urlInput.value = getAiBackendDefaultUrl(r.value)`
+- `settings-tab.js`: 従来`change`時に`placeholder`のみ更新していた(欄に既存の値があると効果が見えない実質バグ)のを、`value`を直接書き換えるよう修正
+- `node_sets_menu.js`: `change`リスナー自体が存在しなかった(バックエンド切替時にURLを更新する仕組みがそもそも未実装)ため新規追加
+
+いずれもDOM上の表示値を書き換えるのみで、実際の永続化は各画面の「Save」ボタン押下時のまま変更なし。Kaptureで3箇所(SPA AI TOOLタブ・SPA 設定タブ・サイドパネル)すべて、ollama⇄lmstudio⇄lemonadeの切替でURL欄がそれぞれ`http://localhost:11434`/`http://localhost:1234`/`http://localhost:13305`に変わることを確認。テスト中に実際の保存設定(`wfm_ai_settings`)を上書きしないよう、Saveボタンは押さずページリロードで検証用の一時入力を破棄した。
+
+### 検討事項: Lemonadeの画像生成・音声機能への対応可否(質問への回答のみ、実装保留)
+
+ユーザーから「lemonadeでは画像生成や音声出力、テキスト読み上げなどに対応しているが、これに対応させることは可能か」と質問(実装依頼ではなく質問のみと明言)された。Lemonadeは`/v1/images/generations`(画像生成)・`/v1/audio/speech`(読み上げ)・`/v1/audio/transcriptions`(音声認識)をOpenAI互換の独立エンドポイントとして提供しており技術的には対応可能だが、以下の理由で「既存バックエンド切替の自然な延長」ではなく別枠の機能追加になる旨を回答した:
+
+- **画像生成**: 本プラグインの画像生成はChatのTool Calling(`generate_image`)からComfyUIワークフロー自体を実行する設計であり、Lemonade側の画像生成APIを追加すると生成経路が2系統になり紛らわしい
+- **音声読み上げ/文字起こし**: AI TOOLタブに該当UI(再生プレイヤー、マイク入力等)が現状一切なく、既存キーの拡張ではなく新規機能追加になる
+
+ユーザーは「検討したいと思います」として今回は実装せず保留。README.mdの「Backend support」直後に「Lemonade's other endpoints (not integrated)」として上記を明記し、将来検討時の起点として残した。
+
+### バグ修正: Bypass(バイパス)ノードを含むワークフローの生成失敗
+
+ユーザーがミュートしているノードを含むワークフロー(`chat_i2i_anima.json`、ComfyUI保存済み)をGenerateUIタブで読み込んで生成したところ、以下のエラーで失敗した:
+
+```
+[ERROR] Failed to validate prompt for output 46:
+[ERROR] * CLIPTextEncode 73:
+[ERROR]   - Exception when validating inner node: '74'
+[ERROR] * KSampler 66:
+[ERROR]   - Exception when validating inner node: '74'
+```
+
+**原因調査:** 実際のワークフローjsonを確認したところ、ノード74(LoraLoader)は`mode: 4`(ComfyUI独自のBypassモード。litegraph標準の`mode: 2`=Never/Muteとは別物)だった。`static/js/comfyui-workflow.js`の`convertUiToApi()`は`if (node.mode === 4) continue;`でBypassノードをAPI出力から単純に除外するだけで、そのノードを経由していた配線(CLIPLoader→LoraLoader.clip→CLIPTextEncode(73).clip、UNETLoader→LoraLoader.model→KSampler(66).model)を繋ぎ直しておらず、73番・66番が存在しないノード74を参照したまま出力されてバリデーションエラーになっていた。ComfyUI本体はBypassノードを「入力と出力を同じ型のスロット同士でパススルー接続してから除去」する仕様のため、この動作の再現が必要と判断。
+
+**実装:**
+- `_resolveBypassSource(nodeById, linkMap, nodeId, slot, visited)`(新規ヘルパー)を追加。リンクの参照先がBypassノードの場合、その出力スロットと同じ型の入力スロットを探し(同インデックス優先、なければ型一致する最初の入力)、その入力の配線元を再帰的に辿る(連鎖バイパスにも対応、循環ガード付き)。マッチする入力が無ければ`null`を返しリンク無し扱いにする
+- `convertUiToApi()`内の全リンク解決箇所をこの関数経由に変更。バイパスされていないノードが参照先の場合は即座にそのまま返るため、既存の非バイパス経路への影響はない
+- ついでに`mode: 2`(真のMute)も除外対象に追加(従来は一切スキップされておらず、ミュートしても実行時は普通に動いていた)。ただしMuteはパススルーせず単純除外 — ComfyUI本体でも「必須の下流依存があるノードをMuteすると壊れる」のが仕様通りの挙動のため、あえて救済しない
+
+**検証:** `chat_i2i_anima.json`を実際のComfyUIサーバー(`/object_info`)に接続したNodeスクリプトで`convertUiToApi()`に直接通し、KSampler(66).model→`["68",0]`(UNETLoader直結)、CLIPTextEncode(73).clip→`["61",0]`(CLIPLoader直結)、ノード74自体は出力に存在しない、ことを確認。さらに変換結果を実際に`/prompt`へPOSTし`node_errors: {}`(バリデーション成功)を確認。キューに入った時点で`/interrupt`により即座に中断し、無駄なGPU生成は行っていない。
+
+### 追加機能: GenerateUIのRaw JSON上部にBypass/Muteノード表示
+
+ユーザーから「生成UIタブのInput、Model、SettingsのRAW JSONペインの上部にバイパスノードの存在を示す表示を行いたい」と依頼。API形式のJSONには`mode`情報が残らないため、Raw JSON表示だけではBypass/Muteの有無が分からなくなる点への対応。
+
+- `comfyui-workflow.js`に`_lastBypassedNodes`/`_lastMutedNodes`(モジュールスコープ、`_lastCheckpointSubstitutions`と同じパターン)を追加し、`convertUiToApi()`実行中にBypass/Muteで除外したノードの`{nodeId, title}`を記録。`getLastBypassedNodes()`/`getLastMutedNodes()`で呼び出し元から取得可能にした
+- `templates/index.html`の共有Raw JSONウィジェット(`#wfm-gen-rawjson-widget`、Input/Model/Settingsタブ間をJSで移動する仕組み — 既存のsearch barと同じ場所)に`#wfm-gen-rawjson-bypass-note`を追加。3タブ共通のヘッダーに置くことで「Input/Model/Settingsそれぞれの上部」という要望を1箇所の実装で満たせる
+- `generate-tab.js`の`loadWorkflowIntoEditor()`で、UI形式からの変換時(`format === "ui"`)のみ上記2つのgetterを読み、該当ノードがあれば`t("rawJsonBypassNote", list)`/`t("rawJsonMutedNote", list)`(新規i18nキー、EN/JA/ZH追加)を`escapeHtml`経由でnote要素に表示、無ければ`display:none`
+- CSS: `--wfm-warning`色のアンバー背景バーとして`main.css`に追加
+- ヘルプ: `helpGen7`(index.html + i18n.js全ロケール、既存キーへの追記のため`app.js`のhelpIdMapは変更不要)にBypass/Mute注記の説明を追加
+
+**検証**(Kapture、実機ブラウザ): Workflowタブから`chat_i2i_anima`を検索→「生成UIに読み込み」ボタンで読み込み、Input/Model/Settingsいずれのサブタブでも`#wfm-gen-rawjson-bypass-note`に「バイパス中(除外・配線は再接続済み): LoraLoader (74)」が表示されることを確認。Bypass/Muteノードを含まない別ワークフロー(`04031-lora.json`)を読み込んだ場合は`display: none`で非表示になることも確認。
+
 ## v0.3.74
 
 ### AI TOOL Chatペインの画像添付対応 + I2I連携

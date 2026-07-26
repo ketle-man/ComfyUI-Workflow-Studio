@@ -10,6 +10,45 @@ let _objectInfoCache = null;
 // 直近の convertUiToApi() 呼び出し分だけを保持する。
 let _lastCheckpointSubstitutions = [];
 
+// convertUiToApi() で除外された Bypass(mode:4) / Mute(mode:2) ノードの記録。
+// API形式には mode 情報が残らないため、呼び出し元がRaw JSON表示時に
+// 「このワークフローにはバイパス/ミュート中のノードがあった」と伝えられるよう、
+// 直近の convertUiToApi() 呼び出し分だけを保持する。
+let _lastBypassedNodes = [];
+let _lastMutedNodes = [];
+
+/**
+ * Trace a link's source through any Bypass-mode (mode 4) nodes, matching each bypassed
+ * node's output slot to an input slot of the same type and following the connection
+ * upstream (recursively, for chained bypasses). Mirrors ComfyUI's own Bypass behavior,
+ * where a bypassed node is removed but its wires are reconnected end-to-end.
+ * Returns null when no pass-through source exists (the matching input is unconnected),
+ * in which case the caller should treat the input as unlinked.
+ */
+function _resolveBypassSource(nodeById, linkMap, nodeId, slot, visited) {
+    const idStr = String(nodeId);
+    const node = nodeById[idStr];
+    if (!node || node.mode !== 4) return [idStr, slot];
+    if (visited.has(idStr)) return null; // circular bypass chain guard
+
+    visited.add(idStr);
+    const outputs = node.outputs || [];
+    const inputs = node.inputs || [];
+    const outType = outputs[slot]?.type;
+
+    let inIdx = -1;
+    if (inputs[slot]?.type === outType && linkMap[idStr]?.[slot]) {
+        inIdx = slot;
+    } else {
+        inIdx = inputs.findIndex((inp, i) => inp.type === outType && linkMap[idStr]?.[i]);
+    }
+    if (inIdx === -1) return null;
+
+    const upstream = linkMap[idStr][inIdx];
+    if (!upstream) return null;
+    return _resolveBypassSource(nodeById, linkMap, upstream[0], upstream[1], visited);
+}
+
 async function _loadObjectInfo() {
     if (_objectInfoCache) return _objectInfoCache;
     try {
@@ -276,8 +315,18 @@ export const comfyWorkflow = {
         return _lastCheckpointSubstitutions;
     },
 
+    getLastBypassedNodes() {
+        return _lastBypassedNodes;
+    },
+
+    getLastMutedNodes() {
+        return _lastMutedNodes;
+    },
+
     async convertUiToApi(workflow) {
         _lastCheckpointSubstitutions = [];
+        _lastBypassedNodes = [];
+        _lastMutedNodes = [];
         if (!workflow.nodes || !workflow.links) return {};
 
         // Flatten subgraphs before conversion
@@ -292,10 +341,23 @@ export const comfyWorkflow = {
             if (!linkMap[dstNode]) linkMap[dstNode] = {};
             linkMap[dstNode][dstSlot] = [String(srcNode), srcSlot];
         }
+        const nodeById = {};
+        for (const n of flatWorkflow.nodes) nodeById[String(n.id)] = n;
 
         const api = {};
         for (const node of flatWorkflow.nodes) {
-            if (node.mode === 4) continue; // muted/bypassed
+            // Mute (mode 2): excluded, no pass-through — matches ComfyUI itself, where
+            // muting a node with required downstream dependents is expected to error.
+            // Bypass (mode 4): excluded here too, but its wires are rerouted below via
+            // _resolveBypassSource() so downstream nodes reconnect to its upstream source.
+            if (node.mode === 2) {
+                _lastMutedNodes.push({ nodeId: String(node.id), title: node.title || node.type });
+                continue;
+            }
+            if (node.mode === 4) {
+                _lastBypassedNodes.push({ nodeId: String(node.id), title: node.title || node.type });
+                continue;
+            }
             // Skip note/display-only nodes that are unknown to ComfyUI backend
             if (!objectInfo[node.type] && _isDisplayOnlyNode(node)) continue;
             const nodeId = String(node.id);
@@ -311,7 +373,9 @@ export const comfyWorkflow = {
             const linkedSlotNames = new Set();
             inputDefs.forEach((inp, idx) => {
                 if (nodeLinks[idx]) {
-                    inputs[inp.name] = nodeLinks[idx];
+                    const resolved = _resolveBypassSource(nodeById, linkMap, nodeLinks[idx][0], nodeLinks[idx][1], new Set());
+                    if (!resolved) return; // Bypass chain with no upstream source — leave unlinked
+                    inputs[inp.name] = resolved;
                     linkedInputNames.add(inp.name);
                     linkedSlotNames.add(inp.name);
                 }

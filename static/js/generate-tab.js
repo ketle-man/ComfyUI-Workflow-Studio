@@ -9,7 +9,7 @@ import { comfyEditor } from "./comfyui-editor.js";
 import { t } from "./i18n.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js";
-import { getSettings, readJsonStorage } from "./util.js";
+import { getSettings, readJsonStorage, escapeHtml } from "./util.js";
 
 // ============================================
 // Eagle Auto-Save
@@ -276,6 +276,30 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
         const jsonStr = JSON.stringify(apiWorkflow, null, 2);
         rawTextarea.value = jsonStr;
         syncJsonHighlight(rawHighlight, jsonStr);
+    }
+
+    // Update Bypass/Mute node indicator (shared Raw JSON widget header, visible on
+    // Input/Model/Settings tabs). API-format JSON has no mode field, so this info is
+    // only available right after a UI→API conversion — captured via comfyWorkflow's
+    // getLastBypassedNodes()/getLastMutedNodes() before it's discarded.
+    const bypassNote = document.getElementById("wfm-gen-rawjson-bypass-note");
+    if (bypassNote) {
+        const bypassed = format === "ui" ? comfyWorkflow.getLastBypassedNodes() : [];
+        const muted = format === "ui" ? comfyWorkflow.getLastMutedNodes() : [];
+        const lines = [];
+        if (bypassed.length > 0) {
+            lines.push(t("rawJsonBypassNote", bypassed.map((n) => `${n.title} (${n.nodeId})`).join(", ")));
+        }
+        if (muted.length > 0) {
+            lines.push(t("rawJsonMutedNote", muted.map((n) => `${n.title} (${n.nodeId})`).join(", ")));
+        }
+        if (lines.length > 0) {
+            bypassNote.innerHTML = lines.map((l) => escapeHtml(l)).join("<br>");
+            bypassNote.style.display = "";
+        } else {
+            bypassNote.textContent = "";
+            bypassNote.style.display = "none";
+        }
     }
 
     // Update workflow name display

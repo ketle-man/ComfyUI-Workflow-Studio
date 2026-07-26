@@ -1,11 +1,11 @@
 /**
  * AI Tab - Translation, VLM, Settings
- * Supports Ollama and LM Studio as backends
+ * Supports Ollama, LM Studio, and Lemonade as backends
  */
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { readJsonStorage } from "./util.js";
+import { readJsonStorage, getAiBackendDefaultUrl } from "./util.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
@@ -199,7 +199,7 @@ function initTranslateTab() {
 
         const settings = loadAiSettings();
         const { backend = "ollama", backendUrl, model } = settings;
-        const url = backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const url = backendUrl || getAiBackendDefaultUrl(backend);
 
         if (!isValidBackendUrl(url)) {
             showToast(t("aiToastInvalidUrl"), "error");
@@ -288,12 +288,11 @@ function initSettingsTab() {
     const urlInput = document.getElementById("wfm-ai-backend-url");
     if (urlInput && saved.backendUrl) urlInput.value = saved.backendUrl;
 
-    // Update URL placeholder when backend changes
+    // Switch URL to the new backend's default when the user changes backend
     backendRadios.forEach((r) => {
         r.addEventListener("change", () => {
             if (!urlInput) return;
-            const defaultUrl = r.value === "ollama" ? "http://localhost:11434" : "http://localhost:1234";
-            if (!saved.backendUrl) urlInput.value = defaultUrl;
+            urlInput.value = getAiBackendDefaultUrl(r.value);
         });
     });
 
@@ -586,7 +585,7 @@ function initChatTab() {
 
         const settings = loadAiSettings();
         const { backend = "ollama", backendUrl, model } = settings;
-        const url = backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const url = backendUrl || getAiBackendDefaultUrl(backend);
 
         if (!isValidBackendUrl(url)) {
             showToast(t("aiToastInvalidUrl"), "error");
@@ -752,7 +751,7 @@ function initVlmTab() {
         const task = taskSel?.value || "describe";
         const settings = loadAiSettings();
         const { backend = "ollama", backendUrl, model } = settings;
-        const url = backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const url = backendUrl || getAiBackendDefaultUrl(backend);
 
         if (!isValidBackendUrl(url)) { showToast(t("aiToastInvalidUrl"), "error"); return; }
         if (!model) { showToast(t("aiToastNoModel"), "error"); return; }

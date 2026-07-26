@@ -4,7 +4,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { readJsonStorage } from "./util.js";
+import { readJsonStorage, getAiBackendDefaultUrl } from "./util.js";
 
 // ============================================
 // State
@@ -390,7 +390,7 @@ let _promptAiBackendForModels = null;
 function getPromptAiConfig() {
     const s = loadPromptAiSettings();
     const backend = s.backend || "ollama";
-    const url = (s.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234")).replace(/\/$/, "");
+    const url = (s.backendUrl || getAiBackendDefaultUrl(backend)).replace(/\/$/, "");
     return { backend, url };
 }
 
@@ -418,7 +418,7 @@ async function chatWithAi(model, messages) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return (await res.json()).message?.content || "";
     } else {
-        // LM Studio: convert Ollama-style messages (with .images) to OpenAI content arrays
+        // LM Studio / Lemonade (OpenAI-compatible): convert Ollama-style messages (with .images) to OpenAI content arrays
         const openAiMessages = messages.map(msg => {
             if (msg.images?.length) {
                 return {

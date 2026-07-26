@@ -27,6 +27,17 @@ export function getSettings() {
     return readJsonStorage("wfm_settings");
 }
 
+// AIバックエンド(Ollama/LM Studio/Lemonade)ごとのデフォルトURL
+export const AI_BACKEND_DEFAULT_URLS = {
+    ollama: "http://localhost:11434",
+    lmstudio: "http://localhost:1234",
+    lemonade: "http://localhost:13305",
+};
+
+export function getAiBackendDefaultUrl(backend) {
+    return AI_BACKEND_DEFAULT_URLS[backend] || AI_BACKEND_DEFAULT_URLS.ollama;
+}
+
 /**
  * 検索inputにオーバーレイXボタンを設定する。
  * @param {string} inputId - 検索inputのID

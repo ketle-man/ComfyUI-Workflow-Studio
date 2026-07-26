@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.74-green)
+![Version](https://img.shields.io/badge/version-0.3.75-green)
 
 ## Screenshots
 
@@ -89,6 +89,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — single clip: type + device; dual clip: two clip selectors + type + device), **Hypernetwork** (with Strength field) selectors with filter; Raw JSON on the right
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
+- **Bypass/Mute node handling** (v0.3.75) — loading a UI-format workflow with Bypass-mode nodes now reroutes their wires to the upstream source (matching same-type input/output slots, recursively through chained bypasses) instead of leaving a dangling reference that failed validation; Mute-mode nodes are excluded without rerouting, same as ComfyUI itself; when either is present, a note listing the affected nodes appears above the Raw JSON search bar in the Input/Model/Settings tabs
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
 - **Style selector** — checkbox and dropdown next to the Reset Workflow button; enable to apply a Fooocus-style JSON to positive and negative prompts at generation time; style files (`*.json`) are loaded from `user/default/Workflow-Studio/style/`; the style's `{prompt}` placeholder is replaced with the original prompt text, or the style is appended if no placeholder exists; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation copy and do not modify the loaded workflow
@@ -272,19 +273,20 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 ### AI TOOL Tab (v0.3.14)
 
 - **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
-- **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama or LM Studio; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
-- **Chat pane** (v0.3.40) — multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for a newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio uses `/v1/chat/completions`
+- **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama, LM Studio, or Lemonade; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
+- **Chat pane** (v0.3.40) — multi-turn conversation with the LLM; full conversation history sent each turn for context; Enter to send, Shift+Enter for a newline; Clear button resets history; Ollama uses `/api/chat`, LM Studio and Lemonade use `/v1/chat/completions`
 - **Chat pane — image generation via Tool Calling** (v0.3.73) — if the selected model supports tool calling and the user asks for an image, a `generate_image` tool is invoked and the request runs through the same generation pipeline as the GenerateUI Generate button, with the result shown inline in the chat; an "Allow image generation" checkbox in the input row toggles this on/off (default on); the workflow used is the one currently loaded in GenerateUI, or a dedicated saved workflow configured in the Settings pane; models verified to work well for tool calling and vision: **Gemma 4:e4b**, **Qwen 3.5:9b**, **Ministral 3:3b** (Ollama)
 - **TOOLS pane (VLM)** — drop an image into the 110px drop zone, select a task (Describe Image / Create Prompt / Create Tags), and click Run to analyze with a vision model; result shown in the output area with a Copy button
 - **TOOLS pane — shared Chat attachment** (v0.3.74) — an image dropped in the TOOLS drop zone is also usable as the Chat pane's attachment: it's sent to the LLM as vision input, and used as the base image when `generate_image` runs image-to-image; a ✕ button clears it (from either the TOOLS preview or the Chat attachment indicator); it stays attached across turns until explicitly cleared
 - **TOOLS pane (Wildcards)** (v0.3.40) — select "Create wildcards" from the task dropdown; enter a category name and count; click Run to generate plain-text wildcard entries one per line (no markdown, no numbering); result can be copied directly into wildcard `.txt` files
 - **Chat pane — image-to-image (I2I)** (v0.3.74) — when an image is attached and `generate_image` is invoked, the attachment is uploaded and swapped into the target workflow's LoadImage node instead of running text-to-image; the target workflow is the one currently loaded in GenerateUI, or a dedicated I2I workflow configured in the Settings pane
-- **Settings pane** — choose backend (Ollama / LM Studio), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
+- **Settings pane** — choose backend (Ollama / LM Studio / Lemonade), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
 - **Settings pane — Chat Image Generation** (v0.3.73) — "Use dedicated workflow" checkbox lets Chat-triggered image generation use a saved workflow of your choice instead of the one currently loaded in GenerateUI, without disturbing what's shown there (same pattern as Image Edit's Inpaint dedicated workflow)
 - **Settings pane — Chat I2I Generation** (v0.3.74) — same "Use dedicated workflow" pattern as above, but for image-to-image generation when an image is attached; independent of the text-to-image dedicated workflow setting
 - **Settings shared** — settings saved to `localStorage` under `wfm_ai_settings`; shared with the Library panel's AI TOOL tab so configuration is consistent across both interfaces
-- **Backend support** — Ollama (`/api/generate` for text, `/api/chat` for conversations, `/api/tags` for model list); LM Studio OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio)
+- **Backend support** — Ollama (`/api/generate` for text, `/api/chat` for conversations, `/api/tags` for model list); LM Studio and Lemonade via the OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`); VLM images sent as base64 (`images:[]` for Ollama, `image_url` content block for LM Studio/Lemonade)
 - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
+- **Lemonade's other endpoints (not integrated)** — Lemonade Server also exposes OpenAI-compatible image generation (`/v1/images/generations`), text-to-speech (`/v1/audio/speech`), and transcription (`/v1/audio/transcriptions`) endpoints; these are not wired up — image generation would duplicate the existing ComfyUI-workflow-based `generate_image` tool call, and audio/TTS has no corresponding UI yet, so both are future considerations rather than a natural extension of the current backend switch
 
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
 
@@ -296,7 +298,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs); LoRA groups show an **All N LoRAs** item — drag to canvas to place a `Lora Loader (LoraManager)` node with all LoRAs pre-loaded
 - **P — Prompts tab** — browse prompt presets with All / ★ Favorites / Categories sub-tabs; **Groups sub-tab** (row 2) — view presets by group (shared with the Batch tab's `wfm_prompt_preset_groups`)
 - **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON in the side panel to view its metadata; detects LoRAs from `LoraLoader`, `LoraLoaderModelOnly`, and `Lora Loader (LoraManager)` nodes (API format supported); supports `UnetLoaderGGUF` and `QuadrupleCLIPLoader` node types; preview area fixed at 110px
-- **A — AI TOOL tab** — Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama or LM Studio; Chat supports multi-turn conversations (full history sent each turn); TOOLS includes VLM image analysis and wildcard generation; settings (backend, URL, model) shared with the SPA AI TOOL tab via `localStorage`
+- **A — AI TOOL tab** — Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, or Lemonade; Chat supports multi-turn conversations (full history sent each turn); TOOLS includes VLM image analysis and wildcard generation; settings (backend, URL, model) shared with the SPA AI TOOL tab via `localStorage`
   - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder; drag items to canvas to place the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`); double-click also places at canvas center
   - **lora sub-tab** — detects LoRAs from `LoraLoader`, `LoraLoaderModelOnly`, and `Lora Loader (LoraManager)` nodes (API format `inputs.loras.__value__` supported); shows `strength_model / strength_clip` values; drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (appears for 1+ LoRAs) drags all LoRAs into a single `Lora Loader (LoraManager)` node with LoRA syntax pre-filled
   - **Prompts sub-tab** — POS / NEG badge list; drag a prompt to place `CLIPTextEncode` with text pre-filled; click any entry to view full text + Copy button
@@ -387,6 +389,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 - **[Ollama](https://ollama.com/)** — for AI chat assistant, translation, and VLM features
 - **[LM Studio](https://lmstudio.ai/)** — alternative backend for translation and VLM (OpenAI-compatible API)
+- **[Lemonade Server](https://lemonade-server.ai/)** — alternative backend for translation, chat, and VLM (OpenAI-compatible API)
 - **[Eagle](https://eagle.cool/)** — for auto-saving generated images with metadata
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one) (v0.1.9+)** — enables BiRefNet background removal, SAM3 text-prompt segmentation, and ABR stamp-brush library in the Image Edit Mask tool; `birefnet.safetensors` must be placed in `ComfyUI/models/background_removal/` for BiRefNet
 
@@ -403,6 +406,14 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.75
+
+- **Lemonade Server support — third AI backend** — added [Lemonade Server](https://lemonade-server.ai/) alongside Ollama and LM Studio as a selectable backend for Translation, Chat, TOOLS (VLM/Wildcards), and the Prompt tab's AI Assistant, in both the SPA and the Library side panel; Lemonade's OpenAI-compatible API (`/v1/models`, `/v1/chat/completions`) reuses the same request/response handling already used for LM Studio, so no new wire-format code was needed
+- **Shared default-URL lookup** — `static/js/util.js` gains `getAiBackendDefaultUrl(backend)` (`AI_BACKEND_DEFAULT_URLS`: Ollama `http://localhost:11434`, LM Studio `http://localhost:1234`, Lemonade `http://localhost:13305`), replacing the previous two-way ternary in `ai-tab.js`, `prompt-tab.js`, and `settings-tab.js`; the ComfyUI side panel (`node_sets_menu.js`) keeps its own local copy since it can't import from the SPA's `static/js` modules
+- **Backend switch now always resets the URL field** — switching the backend radio (Ollama / LM Studio / Lemonade) in any of the three UIs now unconditionally fills the URL field with that backend's default, instead of only when the field was empty; the side panel previously had no such handler at all
+- **Bug fix — Bypass-mode nodes broke generation with a dangling-reference validation error** — `convertUiToApi()` used to drop Bypass-mode (`mode: 4`) nodes without reconnecting the links that ran through them, so any node downstream of a bypassed node's output referenced a node ID that no longer existed in the API graph, and ComfyUI rejected the prompt (`Exception when validating inner node: 'N'`). Bypassed nodes' wires are now traced through to their upstream source (matching same-type input/output slots, recursively for chained bypasses) before being dropped, exactly like ComfyUI's own Bypass behavior. Mute-mode nodes (`mode: 2`) are now also excluded from the API graph (previously they were sent as if fully active); unlike Bypass they are not rerouted, matching ComfyUI's own behavior where muting a node with required downstream dependents is expected to error.
+- **GenerateUI — Bypass/Mute indicator above Raw JSON** — when a loaded workflow has Bypass or Mute nodes, a note listing them (title + node ID) now appears above the Raw JSON search bar in the Input/Model/Settings tabs, since the API-format JSON shown there has no `mode` field and can no longer reveal this on its own
 
 ### v0.3.74
 

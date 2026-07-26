@@ -6,7 +6,7 @@ import { showToast } from "./app.js";
 import { comfyUI } from "./comfyui-client.js";
 import { t, getLang, getSummaryLang, setLang, setSummaryLang, getLanguageOptions, getSummaryLanguageOptions } from "./i18n.js";
 
-import { getSettings, readJsonStorage } from "./util.js";
+import { getSettings, readJsonStorage, getAiBackendDefaultUrl } from "./util.js";
 
 const SETTINGS_KEY = "wfm_settings";
 
@@ -673,6 +673,9 @@ export async function initSettingsTab() {
                     <label class="wfm-ai-radio-label">
                         <input type="radio" name="wfm-prompt-ai-backend" value="lmstudio"> LM Studio
                     </label>
+                    <label class="wfm-ai-radio-label">
+                        <input type="radio" name="wfm-prompt-ai-backend" value="lemonade"> Lemonade
+                    </label>
                 </div>
             </div>
             <div class="wfm-form-group">
@@ -1125,14 +1128,14 @@ export async function initSettingsTab() {
     const promptAiUrlEl = document.getElementById("wfm-settings-prompt-ai-url");
     if (promptAiUrlEl) {
         promptAiUrlEl.value = promptAiSaved.backendUrl || "";
-        promptAiUrlEl.placeholder = promptAiBackendSaved === "ollama" ? "http://localhost:11434" : "http://localhost:1234";
+        promptAiUrlEl.placeholder = getAiBackendDefaultUrl(promptAiBackendSaved);
     }
 
-    // Backend change → update URL placeholder
+    // Backend change → switch URL to the new backend's default
     document.querySelectorAll('input[name="wfm-prompt-ai-backend"]').forEach(r => {
         r.addEventListener("change", () => {
             const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
-            if (promptAiUrlEl) promptAiUrlEl.placeholder = backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234";
+            if (promptAiUrlEl) promptAiUrlEl.value = getAiBackendDefaultUrl(backend);
         });
     });
 
@@ -1141,7 +1144,7 @@ export async function initSettingsTab() {
         const select = document.getElementById("wfm-settings-prompt-ai-model");
         if (!select) return;
         const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
-        const url = (promptAiUrlEl?.value.trim() || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234")).replace(/\/$/, "");
+        const url = (promptAiUrlEl?.value.trim() || getAiBackendDefaultUrl(backend)).replace(/\/$/, "");
         try {
             let models = [];
             if (backend === "ollama") {
@@ -1166,7 +1169,7 @@ export async function initSettingsTab() {
     document.getElementById("wfm-settings-prompt-ai-test")?.addEventListener("click", async () => {
         const statusEl = document.getElementById("wfm-settings-prompt-ai-status");
         const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
-        const url = (promptAiUrlEl?.value.trim() || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234")).replace(/\/$/, "");
+        const url = (promptAiUrlEl?.value.trim() || getAiBackendDefaultUrl(backend)).replace(/\/$/, "");
         if (statusEl) { statusEl.textContent = t("aiStatusConnecting"); statusEl.style.color = "var(--wfm-text-secondary)"; }
         try {
             let count = 0;

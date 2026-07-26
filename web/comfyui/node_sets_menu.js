@@ -3003,6 +3003,14 @@ const renderInfoTab = (container) => {
 
 const AI_SETTINGS_KEY = "wfm_ai_settings";
 const AI_LANG_NAMES = { ja: "Japanese", en: "English", zh: "Chinese" };
+const AI_BACKEND_DEFAULT_URLS = {
+    ollama: "http://localhost:11434",
+    lmstudio: "http://localhost:1234",
+    lemonade: "http://localhost:13305",
+};
+function getAiBackendDefaultUrl(backend) {
+    return AI_BACKEND_DEFAULT_URLS[backend] || AI_BACKEND_DEFAULT_URLS.ollama;
+}
 
 function isValidAiUrl(url) {
     try {
@@ -3184,6 +3192,7 @@ const renderAiTab = (container) => {
                         <div class="wfm-nlp-ai-radio-row">
                             <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="ollama"> Ollama</label>
                             <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="lmstudio"> LM Studio</label>
+                            <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="lemonade"> Lemonade</label>
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">
@@ -3244,6 +3253,13 @@ const setupAiHandlers = (container) => {
     if (urlInput && cfg.backendUrl) urlInput.value = cfg.backendUrl;
     else if (urlInput) urlInput.value = "http://localhost:11434";
 
+    // Backend change → switch URL to the new backend's default
+    backendRadios.forEach(r => {
+        r.addEventListener("change", () => {
+            if (urlInput) urlInput.value = getAiBackendDefaultUrl(r.value);
+        });
+    });
+
     const freeSrcInput = container.querySelector("#wfm-nlp-ai-free-src");
     const freeDstInput = container.querySelector("#wfm-nlp-ai-free-dst");
     if (freeSrcInput && cfg.freeSrcLang) freeSrcInput.value = cfg.freeSrcLang;
@@ -3273,7 +3289,7 @@ const setupAiHandlers = (container) => {
 
         const c = loadAiCfg();
         const backend = c.backend || "ollama";
-        const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const url = c.backendUrl || getAiBackendDefaultUrl(backend);
         const model = c.model;
         if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
         if (!model) { showToast("Please select a model in Settings", "error"); return; }
@@ -3403,7 +3419,7 @@ const setupAiHandlers = (container) => {
         if (!text) return;
         const c = loadAiCfg();
         const backend = c.backend || "ollama";
-        const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const url = c.backendUrl || getAiBackendDefaultUrl(backend);
         const model = c.model;
         if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
         if (!model) { showToast("Please select a model in Settings", "error"); return; }
@@ -3497,7 +3513,7 @@ const setupAiHandlers = (container) => {
         const task = vlmTaskSel?.value || "describe";
         const c = loadAiCfg();
         const backend = c.backend || "ollama";
-        const url = c.backendUrl || (backend === "ollama" ? "http://localhost:11434" : "http://localhost:1234");
+        const url = c.backendUrl || getAiBackendDefaultUrl(backend);
         const model = c.model;
         if (!isValidAiUrl(url)) { showToast("URLは http:// または https:// で始まる必要があります", "error"); return; }
         if (!model) { showToast("Please select a model in Settings", "error"); return; }
