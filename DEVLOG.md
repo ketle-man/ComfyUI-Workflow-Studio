@@ -981,7 +981,7 @@ v0.3.60 で実装した G'MIC-Qt 連携の動作修正・セキュリティ強�
 Windows でバックグラウンドプロセス（ComfyUI）からGUIウィンドウを表示するために必須のフラグ。一度削除したが eagle_comic_creater_web の参考実装を確認して再追加した。
 
 #### 設定パスのプレースホルダー修正
-`settings-tab.js` の G'MIC-Qt パス入力フィールドのデフォルト値とプレースホルダーからユーザー固有のパス（`statsu-11`）を削除し、汎用的な `C:\path\to\gmic_qt.exe` に変更。`gmic_routes.py` のフォールバック値も同様に空文字に変更。
+`settings-tab.js` の G'MIC-Qt パス入力フィールドのデフォルト値とプレースホルダーからユーザー固有のパスを削除し、汎用的な `C:\path\to\gmic_qt.exe` に変更。`gmic_routes.py` のフォールバック値も同様に空文字に変更。
 
 ---
 
@@ -1049,7 +1049,7 @@ G'MIC-Qt 連携用の API ルートを新規作成。
 | `GET /api/wfm/gmic/status/{job_id}` | ジョブの進行状況（`pending` / `processing` / `completed` / `failed`）を返す |
 | `POST /api/wfm/gmic/result` | `result_path` を受け取り、処理済み画像を base64 エンコードして返す |
 
-- G'MIC-Qt の実行パスは Settings に保存された `gmic_qt_path` を参照。未設定の場合はデフォルトパス `C:\Users\statsu-11\gmic-3.6.5-qt-win64\gmic_qt.exe` にフォールバック。
+- G'MIC-Qt の実行パスは Settings に保存された `gmic_qt_path` を参照。未設定の場合はデフォルトパス `C:\path\to\gmic_qt.exe` にフォールバック。
 - プロセスは `subprocess.Popen` + `CREATE_NEW_CONSOLE` でノンブロッキングに起動し、スレッド内でポーリングして完了を検出。
 
 #### `py/wfm.py`
