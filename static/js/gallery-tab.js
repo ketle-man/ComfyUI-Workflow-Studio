@@ -103,6 +103,29 @@ window._wfmReceiveInpaintRequest = async (imageBlob, maskBlob, params, workflowD
     }
 };
 
+// ComfyUI Comic Creater からiframe越しに画像を受け取り、Image Edit タブの
+// Select I2I機能をUIを開かずに直接実行して結果URLを返す（I2I連携、マスク不要）。
+// Comic Creater側の Image タブ「Select→I2I」から
+// iframe.contentWindow._wfmReceiveI2IRunRequest(imageBlob, params, workflowData?, workflowFilename?) として呼ばれる。
+// workflowData が渡された場合（Comic Creater側のI2I設定でデフォルトワークフローが有効な時）は、
+// 実行前にそのワークフローを読み込む。渡されない場合はGenerate UIに現在ロード中のワークフローをそのまま使う。
+window._wfmReceiveI2IRunRequest = async (imageBlob, params, workflowData, workflowFilename) => {
+    try {
+        if (workflowData) {
+            if (!comfyUI.connected) {
+                await comfyUI.checkConnection();
+            }
+            if (comfyUI.connected && (!comfyEditor.models.checkpoints || comfyEditor.models.checkpoints.length === 0)) {
+                await comfyEditor.loadModelLists();
+            }
+            await loadWorkflowIntoEditor(workflowData, workflowFilename || "workflow.json");
+        }
+        return await window._wfmImageEditTab.runI2IExternal(imageBlob, params);
+    } catch (e) {
+        return { ok: false, message: e.message };
+    }
+};
+
 // ── ページング ────────────────────────────────────────────────
 const PAGE_SIZE = 50;
 let _renderedCount = 0;

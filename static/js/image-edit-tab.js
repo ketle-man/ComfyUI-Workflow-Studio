@@ -118,6 +118,8 @@ class ImageEditTab {
         this._inpaintDenoise    = null;  // null = 未初期化（ワークフローの現在値から初期化）
         this._inpaintRunning    = false;
         this._inpaintResultUrl  = null;
+        // Select I2I（Comic Creator連携、マスク不要のI2I外部実行）
+        this._i2iExternalRunning = false;
         // Inpaint 専用ワークフロー（OFF時は GenerateUI で読み込み中のワークフローを使用）
         this._inpaintUseDedicated     = false;
         this._inpaintDedicatedFilename = null;
@@ -1474,6 +1476,49 @@ class ImageEditTab {
             return { ok: true, url: resultUrl };
         } finally {
             this._inpaintRunning = false;
+        }
+    }
+
+    // 共通処理: 画像Blob（マスクなし）を対象LoadImageノード(slot 0)へ反映し、
+    // プロンプト/denoiseを設定してGenerate UIで実行、結果URLを返す。
+    // _runInpaintWithImages のマスクなし版（Comic CreatorのSelect I2I連携専用）。
+    async _runI2IWithImage(imageBlob, { positive, negative, denoise, overrideOpts = {}, onStatus } = {}) {
+        const setStatus = onStatus || (() => {});
+
+        const analysisForLookup = overrideOpts.analysis || comfyUI.currentAnalysis;
+        if (!analysisForLookup) throw new Error("No workflow loaded in GenerateUI");
+        if (!(analysisForLookup.load_image_nodes?.length > 0)) {
+            throw new Error("No LoadImage node found in the workflow");
+        }
+
+        setStatus("Uploading...");
+        const file = new File([imageBlob], `i2i_${Math.random().toString(36).slice(2, 10)}.png`, { type: "image/png" });
+        await comfyEditor.applyImageToSlot(file, 0, overrideOpts);
+
+        comfyEditor.setPromptText("positive", positive, overrideOpts);
+        comfyEditor.setPromptText("negative", negative, overrideOpts);
+        comfyEditor.setInpaintParams({ denoise, ...overrideOpts });
+
+        if (!window._wfmGenerateTab?.generate) throw new Error("GenerateUI is not ready yet");
+
+        setStatus("Generating...");
+        await window._wfmGenerateTab.generate(overrideOpts.workflow || undefined);
+
+        const resultImg = document.getElementById("wfm-gen-result-img");
+        return resultImg?.src || null;
+    }
+
+    // Comic Creator等、同一オリジンiframe越しの外部呼び出し専用エントリポイント（I2I版）。
+    // runInpaintExternal と対になる、マスク不要のシンプルなI2I実行。
+    async runI2IExternal(imageBlob, { positive = "", negative = "", denoise = 1.0 } = {}) {
+        if (this._i2iExternalRunning) throw new Error("I2I is already running");
+        this._i2iExternalRunning = true;
+        try {
+            const resultUrl = await this._runI2IWithImage(imageBlob, { positive, negative, denoise });
+            if (!resultUrl) throw new Error("No result image produced");
+            return { ok: true, url: resultUrl };
+        } finally {
+            this._i2iExternalRunning = false;
         }
     }
 

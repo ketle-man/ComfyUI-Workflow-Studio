@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.75-green)
+![Version](https://img.shields.io/badge/version-0.3.76-green)
 
 ## Screenshots
 
@@ -406,6 +406,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.76
+
+- **Comic Creator — I2I execution bridge** — added `window._wfmReceiveI2IRunRequest` (`gallery-tab.js`) and `runI2IExternal()`/`_runI2IWithImage()` (`image-edit-tab.js`), a mask-free counterpart to the existing Inpaint bridge (`_wfmReceiveInpaintRequest`/`runInpaintExternal`); lets Comic Creator's Image tab send an image with Positive/Negative prompts and Denoise, run generation in place, and get the result image URL back without opening the Workflow Studio UI
 
 ### v0.3.75
 

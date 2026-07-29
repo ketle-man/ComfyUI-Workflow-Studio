@@ -2,6 +2,19 @@
 
 ---
 
+## v0.3.76
+
+### 追加機能: Comic Creator向けI2I実行ブリッジ`_wfmReceiveI2IRunRequest`
+
+Comic Creator（`comfyui-comic-creator`、本アプリをiframe埋め込みで連携する別アプリ）から、「マスク不要のI2I実行をその場で行い結果を受け取りたい」という依頼を受けて追加。既存のInpaint連携ブリッジ(`gallery-tab.js`の`_wfmReceiveInpaintRequest` → `image-edit-tab.js`の`runInpaintExternal`/`_runInpaintWithImages`)と対称的な、マスク版の無いI2I専用ルートを新設した。
+
+- `image-edit-tab.js`: `_runI2IWithImage(imageBlob, {positive, negative, denoise, overrideOpts, onStatus})`を新規実装。`comfyEditor.applyImageToSlot(file, 0)`(マスクなし版アップロード)→`comfyEditor.setPromptText("positive"/"negative", ...)`→`comfyEditor.setInpaintParams({denoise, ...overrideOpts})`→`window._wfmGenerateTab.generate()`→`#wfm-gen-result-img`のsrcを返す、という`_runInpaintWithImages()`と同型の流れ。`setInpaintParams()`は`growMaskBy`未指定時に自動でスキップする既存実装だったため、denoise単体用の新規セッターは追加せずそのまま流用できた。外部エントリポイント`runI2IExternal(imageBlob, {positive, negative, denoise})`（多重実行ガード`_i2iExternalRunning`付き）を追加。
+- `gallery-tab.js`: `window._wfmReceiveI2IRunRequest = async (imageBlob, params, workflowData, workflowFilename) => {...}`を追加。`_wfmReceiveInpaintRequest`と同じく、`workflowData`が渡されれば実行前に`loadWorkflowIntoEditor()`でロードしてから`window._wfmImageEditTab.runI2IExternal(imageBlob, params)`を呼び、結果`{ok, url}`をそのまま返す。既存の`_wfmReceiveImageForI2I`（画像をI2Iスロットへセットするだけ、Comic Creatorのレイアウトタブが使用）は無改造。
+
+**検証**: 変更した2ファイルを`node --check`で構文チェック。Comic Creator側（Imageタブの新規「Select I2I」パネル）からKapture経由で実際に呼び出し、Positive/Negative Prompt・Denoiseがワークフローへ反映された上でキュー実行され、結果画像URLが返ることを確認（Comic Creator側DEVLOG参照）。
+
+**How to apply**: 「画像をComfyUIのワークフローに自動セットしてキュー実行し、結果を返す」という外部連携パターンを新設する際は、`comfyEditor.applyImageToSlot`/`setPromptText`/`setInpaintParams`/`window._wfmGenerateTab.generate`が既にマスクなし用途にも流用できる設計になっている（オプション引数は未指定なら書き込みをスキップする）。Inpaint版と重複する新規プリミティブをWorkflow Studio側に増やす必要は薄く、`_runInpaintWithImages`と同型の薄いラッパーを追加するだけで足りる。
+
 ## v0.3.75
 
 ### Lemonadeバックエンド追加(3つ目のAIバックエンド)
