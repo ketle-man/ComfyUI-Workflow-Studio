@@ -15,6 +15,36 @@ Comic Creator（`comfyui-comic-creator`、本アプリをiframe埋め込みで�
 
 **How to apply**: 「画像をComfyUIのワークフローに自動セットしてキュー実行し、結果を返す」という外部連携パターンを新設する際は、`comfyEditor.applyImageToSlot`/`setPromptText`/`setInpaintParams`/`window._wfmGenerateTab.generate`が既にマスクなし用途にも流用できる設計になっている（オプション引数は未指定なら書き込みをスキップする）。Inpaint版と重複する新規プリミティブをWorkflow Studio側に増やす必要は薄く、`_runInpaintWithImages`と同型の薄いラッパーを追加するだけで足りる。
 
+## v0.3.77
+
+### 追加機能: GalleryタブでSVGファイルの表示・管理に対応
+
+「ギャラリータブでSVGファイル表示対応させたい」という依頼を受けて調査したところ、`gallery_service.py`の`IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}`にSVGが含まれておらず、フォルダスキャン・一覧取得・削除・移動・配信のすべてで一律に除外されていたことが原因だった。フロントエンド（`gallery-tab.js`）側は拡張子フィルタを一切持たず、サムネイル・詳細プレビュー・ライトボックスすべて`<img>`タグで描画する設計だったため、バックエンドの許可リストにSVGを追加するだけで表示系は無改造で対応できた。
+
+- `gallery_service.py`: `IMAGE_EXTENSIONS`に`.svg`を追加。`serve_thumbnail()`にSVG分岐を新設し、GIF（アニメーション保持のため元ファイルを返す既存分岐）と同じ扱いで元ファイルをそのまま返すようにした。SVGはベクター画像でPillowが`Image.open()`できないため、そもそもラスタライズ縮小の意味がなく、`<img>`タグ側でブラウザが任意サイズにスケーリングして表示する前提。
+- `gallery_routes.py`: `serve_image`/`serve_thumb`のContent-Type判定は変更不要だった。Pythonの`mimetypes.guess_type()`が標準で`.svg`→`image/svg+xml`を解決するため、既存の`mimetypes.guess_type()`フォールバック分岐がそのまま機能する。
+
+**セキュリティ**: `<img src="...">`によるSVG表示は、ブラウザが`<script>`要素の実行や外部リソース読み込みを無効化する仕様のため、悪意あるSVG（埋め込みJS等）が混入していてもXSSリスクはない。`<object>`/`<iframe>`/`iframe.srcdoc`のような埋め込み方式（スクリプトが実行され得る）は使っていない。
+
+**検証**: 変更した`gallery_service.py`を`ast.parse()`で構文チェック。開発リポジトリと実行時`custom_nodes`フォルダへ同期し`__pycache__`をクリアした上でComfyUIを再起動し、実際にoutputフォルダへ配置したSVGファイルがGalleryタブでサムネイル・詳細プレビューとも正しく表示されることをユーザーが確認。
+
+**How to apply**: [[project_next_release_docs]]のような「フォーマット追加」系の変更は、フロントエンドがフォーマット非依存の`<img>`/`<video>`等で描画する設計になっている場合、バックエンドの許可拡張子リスト（`IMAGE_EXTENSIONS`）に追加するだけで大半のUIパスに波及する。逆に言えば、新形式を追加する際はこのリストが唯一のゲートになっている前提を崩さないよう注意する。
+
+### 追加機能: AI TOOL Chatでワークフロー不要のSVG生成・表示・Gallery保存
+
+Gallery SVG対応の直後、「AI TOOLのチャット機能でワークフローを使用せずにSVGを作成することは可能か」と質問された。既存のChat画像生成（`generate_image`ツールコール→ComfyUIのT2I/I2Iワークフロー実行）とは別に、SVGはXMLテキストに過ぎずLLMのテキスト生成だけで完結するため、ComfyUIワークフローもTool Calling機能も不要である旨を回答した上で、「実装する（表示+Gallery保存）」の合意を得て実装した。
+
+- `ai-tab.js`: `_extractSvgCode(text)`を新設。アシスタント応答からマークダウンのコードフェンスで囲まれたSVGコードブロック、または生の`<svg>...</svg>`タグを正規表現で抽出する。`appendChatBubble()`の`role === "assistant"`分岐に組み込み、検出時は`_appendSvgPreview()`を呼ぶ。抽出ロジックは`reply.content`（プレーンテキスト）のみを見ており、`reply.toolCalls`は一切参照しないため、モデルがtool calling（function calling）に対応していなくても動作する——「画像生成を許可する」トグルがONの場合のみ送信される`tools`パラメータとは完全に独立した経路。
+- `_appendSvgPreview()`: 抽出したSVGコードを`btoa(unescape(encodeURIComponent(svgCode)))`でBase64化し、`<img src="data:image/svg+xml;base64,...">`としてプレビュー表示（`<img>`経由のためスクリプト実行はブラウザ側で無効化され安全）。「Galleryに保存」ボタンを併設し、クリックで`/wfm/gallery/image/save`へ`{filename: "chat_svg_<timestamp>.svg", imageData: dataUrl}`をPOSTする。
+- `gallery_routes.py`の`save_image_to_gallery`: 従来は`imageData`を無条件にPNGとして扱い拡張子`.png`を強制していたが、data URLのヘッダ(`data:<mime>;base64,`)からMIMEタイプを判定し`_SAVE_EXT_BY_MIME`（png/jpeg/webp/gif/svg+xml）で拡張子を決定する汎用処理に変更。Image Edit Tabの既存呼び出し（`canvas.toDataURL("image/png")`）は引き続き`.png`として保存され後方互換。
+- CSS（`main.css`）に`.wfm-ai-chat-svg-wrapper`/`.wfm-ai-chat-svg-img`を追加（白背景パディング付きプレビュー枠、透過SVGでも視認できるように）。
+- i18n（`i18n.js`）に`aiChatSaveSvgToGallery`/`aiChatSvgSaved`/`aiChatSvgSaveFailed`を英日中3言語で追加。
+- ヘルプ文言3点セット（`templates/index.html`の`wfm-help-ai-7`、`i18n.js`の`helpAi7`英日中3言語、`app.js`の`helpIdMap`）でこの機能を追記。
+
+**検証**: 変更した`ai-tab.js`/`i18n.js`/`app.js`を`node --check`で構文チェック、`gallery_routes.py`を`ast.parse()`で構文チェック。開発リポジトリと実行時`custom_nodes`フォルダへ全ファイル同期し`__pycache__`をクリア。ユーザーがComfyUI再起動後、Chatで実際にSVGを生成させてプレビュー表示とGallery保存を確認済み。
+
+**How to apply**: LLMチャット機能に新しい出力形式（SVG、Mermaid図など、テキストとして表現できるフォーマット）を追加検討する際は、まず「ラスター画像生成のようにComfyUIワークフロー実行が本当に必要か、それともLLMのテキスト生成だけで完結するか」を切り分ける。後者であれば`reply.content`に対する検出・抽出ロジックのみで実装でき、Tool Calling対応可否に依存しない機能として提供できる。
+
 ## v0.3.75
 
 ### Lemonadeバックエンド追加(3つ目のAIバックエンド)

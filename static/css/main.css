@@ -5624,6 +5624,23 @@ body {
     object-fit: cover;
 }
 
+.wfm-ai-chat-svg-wrapper {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.wfm-ai-chat-svg-img {
+    max-width: 240px;
+    max-height: 240px;
+    border-radius: 6px;
+    border: 1px solid var(--wfm-border);
+    background: #fff;
+    padding: 6px;
+}
+
 .wfm-ai-chat-attachment {
     display: flex;
     align-items: center;

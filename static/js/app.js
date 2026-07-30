@@ -433,6 +433,7 @@ function applyI18nToHtml() {
         "wfm-help-ai-title": "helpAiTitle",
         "wfm-help-ai-1": "helpAi1", "wfm-help-ai-2": "helpAi2", "wfm-help-ai-3": "helpAi3",
         "wfm-help-ai-4": "helpAi4", "wfm-help-ai-5": "helpAi5", "wfm-help-ai-6": "helpAi6",
+        "wfm-help-ai-7": "helpAi7",
         "wfm-help-imageedit-title": "helpImageEditTitle",
         "wfm-help-imageedit-tools-title": "helpImageEditToolsTitle",
         "wfm-help-imageedit-layer-title": "helpImageEditLayerTitle",

@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.76-green)
+![Version](https://img.shields.io/badge/version-0.3.77-green)
 
 ## Screenshots
 
@@ -197,6 +197,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, tag filter, group filter, and favorites filter in one click (sort order is preserved)
 - **Workflow auto-save** — images generated from the Generate UI tab have their workflow automatically saved to gallery metadata
 - **Output folder configurable** — set the scanned output folder from Settings tab
+- **SVG file support** (v0.3.77) — `.svg` files are browsable, previewable (detail panel and lightbox), and included in favorites/tags/groups/move/delete/export alongside raster formats; served as-is with no rasterized thumbnail, since `<img>` scales vector graphics natively at any size
 - **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
 
 ### Nodes Tab (v0.1.7)
@@ -280,6 +281,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **TOOLS pane — shared Chat attachment** (v0.3.74) — an image dropped in the TOOLS drop zone is also usable as the Chat pane's attachment: it's sent to the LLM as vision input, and used as the base image when `generate_image` runs image-to-image; a ✕ button clears it (from either the TOOLS preview or the Chat attachment indicator); it stays attached across turns until explicitly cleared
 - **TOOLS pane (Wildcards)** (v0.3.40) — select "Create wildcards" from the task dropdown; enter a category name and count; click Run to generate plain-text wildcard entries one per line (no markdown, no numbering); result can be copied directly into wildcard `.txt` files
 - **Chat pane — image-to-image (I2I)** (v0.3.74) — when an image is attached and `generate_image` is invoked, the attachment is uploaded and swapped into the target workflow's LoadImage node instead of running text-to-image; the target workflow is the one currently loaded in GenerateUI, or a dedicated I2I workflow configured in the Settings pane
+- **Chat pane — SVG generation, no ComfyUI workflow involved** (v0.3.77) — the LLM can also produce SVG graphics directly as text; if a reply contains SVG code (wrapped in a markdown code fence or written directly as a bare `<svg>...</svg>`), it's rendered inline as a preview and a "Save to Gallery" button writes it as a `.svg` file to the Gallery tab's output folder; unlike the Tool Calling image generation flow above, this is plain text pattern matching, so it works with any model regardless of tool-calling support
 - **Settings pane** — choose backend (Ollama / LM Studio / Lemonade), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
 - **Settings pane — Chat Image Generation** (v0.3.73) — "Use dedicated workflow" checkbox lets Chat-triggered image generation use a saved workflow of your choice instead of the one currently loaded in GenerateUI, without disturbing what's shown there (same pattern as Image Edit's Inpaint dedicated workflow)
 - **Settings pane — Chat I2I Generation** (v0.3.74) — same "Use dedicated workflow" pattern as above, but for image-to-image generation when an image is attached; independent of the text-to-image dedicated workflow setting
@@ -406,6 +408,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.77
+
+- **Gallery Tab — SVG file support** — `.svg` added to `IMAGE_EXTENSIONS` (`gallery_service.py`), covering folder scanning, listing, move/delete, and serving; `serve_thumbnail()` returns the original file for SVG (same as the existing GIF case) since Pillow can't open vector images and the browser scales them natively; no frontend changes needed since `gallery-tab.js` renders every image through plain `<img>` tags
+- **AI TOOL Chat — SVG generation without a ComfyUI workflow** — assistant replies are now scanned for SVG code (wrapped in a markdown code fence or written directly as a bare `<svg>...</svg>`); when found, it's rendered inline via `<img src="data:image/svg+xml;base64,...">` (script execution is disabled by the browser for SVG loaded through `<img>`) with a "Save to Gallery" button; `/wfm/gallery/image/save` (`gallery_routes.py`) was generalized to detect the target format from the data URL's MIME type instead of assuming PNG, so both Image Edit Tab's PNG saves and Chat's SVG saves go through the same endpoint
 
 ### v0.3.76
 

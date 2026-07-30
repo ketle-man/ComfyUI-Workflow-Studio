@@ -16,7 +16,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # サポートする画像拡張子
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 
 # メタデータ保存ファイル (gallery専用)
 from .gallery_metadata import GalleryMetadataStore
@@ -682,6 +682,11 @@ class GalleryService:
 
         # GIF はアニメーション保持のためそのまま返す
         if p.suffix.lower() == ".gif":
+            return p
+
+        # SVG はベクター画像でPillowが開けないため、元ファイルをそのまま返す
+        # (<img>タグはブラウザ側で任意サイズにスケーリングして表示する)
+        if p.suffix.lower() == ".svg":
             return p
 
         try:

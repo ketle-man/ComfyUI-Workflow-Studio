@@ -534,6 +534,55 @@ async function generateImageFromChat(prompt, negativePrompt) {
     return `/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${encodeURIComponent(img.type || "output")}`;
 }
 
+// アシスタント応答からSVGコードを抽出する（```svg フェンス or 生の <svg>...</svg>）
+function _extractSvgCode(text) {
+    if (!text) return null;
+    const fenced = text.match(/```(?:svg|xml)?\s*([\s\S]*?<svg[\s\S]*?<\/svg>)[\s\S]*?```/i);
+    if (fenced) return fenced[1].trim();
+    const bare = text.match(/<svg[\s\S]*?<\/svg>/i);
+    if (bare) return bare[0].trim();
+    return null;
+}
+
+// SVGコードをプレビュー表示し、Galleryへ保存するボタンを追加する。
+// <img src="data:..."> でのレンダリングはブラウザがスクリプト実行を無効化するため安全。
+function _appendSvgPreview(container, svgCode) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "wfm-ai-chat-svg-wrapper";
+
+    const dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgCode)))}`;
+
+    const img = document.createElement("img");
+    img.src = dataUrl;
+    img.className = "wfm-ai-chat-svg-img";
+    img.alt = "Generated SVG";
+    wrapper.appendChild(img);
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "wfm-btn wfm-btn-sm";
+    saveBtn.textContent = t("aiChatSaveSvgToGallery");
+    saveBtn.addEventListener("click", async () => {
+        saveBtn.disabled = true;
+        try {
+            const res = await fetch("/wfm/gallery/image/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: `chat_svg_${Date.now()}.svg`, imageData: dataUrl }),
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+            showToast(t("aiChatSvgSaved"), "success");
+        } catch (e) {
+            showToast(t("aiChatSvgSaveFailed") + e.message, "error");
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+    wrapper.appendChild(saveBtn);
+
+    container.appendChild(wrapper);
+}
+
 function appendChatBubble(messagesEl, role, content, opts = {}) {
     const div = document.createElement("div");
     div.className = `wfm-ai-chat-msg wfm-ai-chat-msg-${role}`;
@@ -549,6 +598,10 @@ function appendChatBubble(messagesEl, role, content, opts = {}) {
         img.src = opts.attachThumb;
         img.className = "wfm-ai-chat-attach-thumb";
         div.appendChild(img);
+    }
+    if (role === "assistant" && content) {
+        const svgCode = _extractSvgCode(content);
+        if (svgCode) _appendSvgPreview(div, svgCode);
     }
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;

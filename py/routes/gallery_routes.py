@@ -260,8 +260,18 @@ async def toggle_favorite(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+_SAVE_EXT_BY_MIME = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+}
+
+
 async def save_image_to_gallery(request: web.Request) -> web.Response:
-    """Image Edit Tab からの PNG をギャラリーのルートフォルダに保存する。"""
+    """Image Edit Tab / AI Chat からの画像(PNG等)やSVGをギャラリーのルートフォルダに保存する。
+    imageData は data URL (data:<mime>;base64,<data>) を想定。ヘッダがなければPNG扱い（旧互換）。"""
     try:
         body = await request.json()
         filename   = body.get("filename", "").strip()
@@ -273,15 +283,21 @@ async def save_image_to_gallery(request: web.Request) -> web.Response:
         if _service._allowed_root is None:
             return web.json_response({"error": "Gallery root not configured. Open Gallery tab and set output folder first."}, status=500)
 
+        # data URL から MIME タイプを判定し、拡張子を決定する
+        raw = image_data
+        mime = "image/png"
+        if raw.startswith("data:"):
+            header, _, raw = raw.partition(",")
+            m = re.match(r"data:([^;]+)", header)
+            if m:
+                mime = m.group(1)
+        ext = _SAVE_EXT_BY_MIME.get(mime, ".png")
+
         # ファイル名サニタイズ（OSで使えない文字を除去）
         safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", filename)
-        if not safe.lower().endswith(".png"):
-            safe += ".png"
+        if not safe.lower().endswith(ext):
+            safe += ext
 
-        # base64 data URL をデコード
-        raw = image_data
-        if "," in raw:
-            raw = raw.split(",", 1)[1]
         image_bytes = base64.b64decode(raw)
 
         save_path = _service._allowed_root / safe
