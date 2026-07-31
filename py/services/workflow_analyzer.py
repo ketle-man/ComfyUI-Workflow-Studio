@@ -3,6 +3,17 @@
 import os
 import re
 
+# プロンプトを直接持つノードタイプ（CLIPTextEncode以外の複合ノード含む）
+_PROMPT_NODE_TYPES = {
+    "CLIPTextEncode", "CLIPTextEncodeSDXL", "CLIPTextEncodeSDXLRefiner",
+    "CLIPTextEncodeEditPlus", "TextEncodeQwenImageEditPlus", "TextEncodeMageFlowEdit",
+    "SDXLPromptStyler", "SDXLPromptStylerAdvanced", "ImageMetadataPromptLoader",
+    "WFS_PromptText", "ImpactWildcardEncode", "ImpactWildcardProcessor",
+}
+
+# 画像を最終出力として保存するノードタイプ
+_OUTPUT_IMAGE_NODE_TYPES = {"SaveImage", "SaveImageAdvanced"}
+
 # CLIPLoader / DualCLIPLoader の type フィールド → モデル種別マッピング
 _CLIP_TYPE_TO_MODEL = {
     "flux": "Flux",
@@ -181,25 +192,27 @@ def analyze_workflow(workflow_data, filename=""):
         if "hidream" in title:
             model_types.add("HiDream")
 
-        if ntype == "CLIPTextEncode" or "prompt" in title:
+        if ntype in _PROMPT_NODE_TYPES or "prompt" in title:
             inputs["prompts"] += 1
         if ntype in ("LoadImage", "LoadImageMask"):
             inputs["images"] += 1
         if ntype == "LoadVideo" or "load video" in title:
             inputs["videos"] += 1
-        if ntype == "SaveImage":
+        if ntype in _OUTPUT_IMAGE_NODE_TYPES:
             outputs["images"] += 1
         if ntype in ("SaveVideo", "VH_VideoCombine"):
             outputs["videos"] += 1
 
     # Detect workflow format
     if raw_nodes is not None:
-        # App format: UI-based structure with definitions (subgraphs) or linearMode
+        # App format: simplified web-app-style UI (linearMode) or .app.json filename.
+        # A workflow that merely *contains* subgraphs (definitions.subgraphs) is still a
+        # normal node graph (comfyui-workflow.js's convertUiToApi flattens subgraphs before
+        # conversion), so it's treated as "ui" here too — must match detectFormat() in
+        # static/js/comfyui-workflow.js or the App/UI badge shown to the user disagrees
+        # with what GenerateUI actually does with the file.
         extra = workflow_data.get("extra", {})
-        if (
-            "definitions" in workflow_data
-            or extra.get("linearMode") is True
-        ):
+        if extra.get("linearMode") is True:
             wf_format = "app"
         elif filename and filename.lower().endswith(".app.json"):
             wf_format = "app"

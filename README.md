@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.77-green)
+![Version](https://img.shields.io/badge/version-0.3.78-green)
 
 ## Screenshots
 
@@ -408,6 +408,14 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.78
+
+- **Eagle integration — SVG support** — auto-save now handles SVG output alongside raster images: the standard `SaveSVGNode` (via `images`-key detection with correct `image/svg+xml` MIME re-tagging) and `comfyui-tosvg`'s `Save SVG String` node (via its `saved_svg`/`path` UI keys, including a fix for ComfyUI's execution engine splitting single-string UI values into per-character arrays); SVGs are sent to Eagle through `addFromPath` (resolved to a real on-disk path, restricted to ComfyUI's managed directories) instead of `addFromURL`, since `/view` forces `application/octet-stream` for SVG as an XSS guard; temp-only preview images (e.g. `SVG String Preview`) are excluded from both auto-save and the GenerateUI result display, which now shows the actual saved SVG file instead of a stale pre-vectorized preview
+- **GenerateUI / Metadata tabs — subgraph workflow support (Mage-Flow, and any similar template)** — workflows that merely contain ComfyUI subgraphs (`definitions.subgraphs`) are no longer blocked as unsupported "App format"; only true simplified-UI App-mode workflows (Linear Mode / `.app.json`) still are. `convertUiToApi()` now correctly injects the outer subgraph node's actual widget values (prompt text, seed, model names, etc. — what the user actually sees in the collapsed subgraph form) into the internal template nodes, which previously kept stale placeholder values from when the subgraph was authored; added support for `TextEncodeMageFlowEdit` (prompt analysis) and ComfyUI's new DynamicCombo widget type (e.g. `SaveImageAdvanced`'s format selector)
+- **Workflow tab — structured AI summary** — the "Summarize" button now extracts model names, LoRAs, prompts, and sampler settings via `analyzeWorkflow()` instead of dumping the raw workflow JSON's first 4000 characters, which used to get crowded out by long `MarkdownNote` text or UI position data on complex/subgraph workflows
+- **Workflow tab — accurate node counts and format badge** — the side panel's "P:/I:/→" counts and the API/App format badge now recognize `TextEncodeMageFlowEdit`/`SaveImageAdvanced` and other newer node types, and use the same "App means Linear Mode, not just subgraphs" rule as GenerateUI
+- **Workflow/Gallery tabs — clearer "Send to Canvas" toast** — the toast previously always said "drag the title to canvas" even when the workflow was sent directly via `window.opener` (no drag needed); it now only shows the drag instruction for the actual drag-required fallback path
 
 ### v0.3.77
 

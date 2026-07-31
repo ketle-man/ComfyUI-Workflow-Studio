@@ -6,6 +6,7 @@
 
 import { t } from "./i18n.js";
 import { escapeHtml } from "./util.js";
+import { comfyWorkflow } from "./comfyui-workflow.js";
 
 // ── File size limit ───────────────────────────────────────────
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -244,11 +245,22 @@ function extractPromptsFromNodeSet(nodes, links) {
             if (!inp || inp.link == null) continue;
             const originId = linkOrigin.get(inp.link);
             if (originId == null) continue;
+            const name = inp.name ?? "";
+            const isPos = name === "positive" || name.startsWith("positive");
+            const isNeg = name === "negative" || name.startsWith("negative");
+            if (!isPos && !isNeg) continue;
+            // TextEncodeMageFlowEdit — one node carries both prompt & negative_prompt
+            // directly, so textMap (single text per node) can't represent both roles.
+            const srcNode = nodeMap.get(originId);
+            if (srcNode?.type === "TextEncodeMageFlowEdit") {
+                const widgetIdx = isPos ? 0 : 1; // widgets_values: [prompt, negative_prompt, ...]
+                const text = srcNode.widgets_values?.[widgetIdx];
+                if (text && typeof text === "string") { if (isPos) pos.add(text); else neg.add(text); }
+                continue;
+            }
             const text = textMap.get(originId);
             if (!text) continue;
-            const name = inp.name ?? "";
-            if (name === "positive" || name.startsWith("positive")) pos.add(text);
-            else if (name === "negative" || name.startsWith("negative")) neg.add(text);
+            if (isPos) pos.add(text); else neg.add(text);
         }
     }
     if (!foundSampler) return null;
@@ -346,10 +358,20 @@ function extractPromptsAPI(wf) {
         foundSampler = true;
         for (const [key, val] of Object.entries(n.inputs ?? {})) {
             if (!Array.isArray(val)) continue;
+            const isPos = key === "positive" || key.startsWith("positive");
+            const isNeg = key === "negative" || key.startsWith("negative");
+            if (!isPos && !isNeg) continue;
+            // TextEncodeMageFlowEdit — one node carries both prompt & negative_prompt
+            // directly, so textMap (single text per node) can't represent both roles.
+            const srcNode = wf[String(val[0])];
+            if (srcNode?.class_type === "TextEncodeMageFlowEdit") {
+                const text = isPos ? srcNode.inputs?.prompt : srcNode.inputs?.negative_prompt;
+                if (text && typeof text === "string") { if (isPos) pos.add(text); else neg.add(text); }
+                continue;
+            }
             const text = textMap.get(String(val[0]));
             if (!text) continue;
-            if (key === "positive" || key.startsWith("positive")) pos.add(text);
-            else if (key === "negative" || key.startsWith("negative")) neg.add(text);
+            if (isPos) pos.add(text); else neg.add(text);
         }
     }
     if (!foundSampler || (pos.size === 0 && neg.size === 0)) { const all = [...textMap.values()].filter(t => t && t.trim()); return { positives: [], negatives: [], texts: all }; }
@@ -451,10 +473,22 @@ async function extractAllMetadata(file) {
     const isJSON = file.type === "application/json" || name.endsWith(".json");
     const isWebP = file.type === "image/webp" || name.endsWith(".webp");
 
-    function fromWorkflow(wf, source) {
+    async function fromWorkflow(originalWf, source) {
+        let wf = originalWf;
+        // サブグラフを持つワークフローは、外側のサブグラフノードに実際に設定された値
+        // (ユーザーが見ている値)が内部ノードのwidgets_valuesへ反映されていないことがある
+        // (テンプレートの古いデフォルト値のまま)。convertUiToApi() はこの注入も含めて
+        // 正しく解決するため、そちらを経由してから抽出する。通常のワークフローには影響しない。
+        if (Array.isArray(wf?.nodes) && wf.definitions?.subgraphs?.length > 0) {
+            try {
+                const apiWf = await comfyWorkflow.convertUiToApi(wf);
+                if (apiWf && Object.keys(apiWf).length > 0) wf = apiWf;
+            } catch { /* 変換失敗時は元のUI形式のまま抽出（既存ロジックにフォールバック） */ }
+        }
         const base = { source, checkpoints: extractCheckpoints(wf), vaes: extractVAEs(wf), diffusionModels: extractDiffusionModels(wf), textEncoders: extractTextEncoders(wf), loras: extractLoRAs(wf), ...extractPrompts(wf) };
-        // MarkdownNote からモデル情報を補完（subgraph形式の flux/qwen/z-image など）
-        const mdm = extractMarkdownNoteModels(wf);
+        // MarkdownNote からモデル情報を補完（subgraph形式の flux/qwen/z-image など）。
+        // API変換後は nodes 情報が失われるため、常に元のUI形式ワークフローから抽出する。
+        const mdm = extractMarkdownNoteModels(originalWf);
         if (mdm) {
             if (!base.checkpoints.length) base.checkpoints = mdm.checkpoints;
             if (!base.vaes.length) base.vaes = mdm.vaes;
@@ -467,20 +501,20 @@ async function extractAllMetadata(file) {
 
     if (isJSON) {
         let wf; try { wf = JSON.parse(sanitizeJSON(await file.text())); } catch { return null; }
-        return wf ? fromWorkflow(wf, "comfyui") : null;
+        return wf ? await fromWorkflow(wf, "comfyui") : null;
     }
     if (isWebP) {
         const exif = await readWebPEXIFChunk(file);
         if (!exif) return null;
         const wf = extractWorkflowFromEXIF(exif);
-        return wf ? fromWorkflow(wf, "comfyui") : null;
+        return wf ? await fromWorkflow(wf, "comfyui") : null;
     }
     // PNG
     const chunks = await readAllPNGTextChunks(file);
     if (!chunks) return null;
 
-    if (chunks.prompt) { let wf; try { wf = JSON.parse(sanitizeJSON(chunks.prompt)); } catch { return null; } return wf ? fromWorkflow(wf, "comfyui") : null; }
-    if (chunks.workflow) { let wf; try { wf = JSON.parse(sanitizeJSON(chunks.workflow)); } catch { return null; } return wf ? fromWorkflow(wf, "comfyui") : null; }
+    if (chunks.prompt) { let wf; try { wf = JSON.parse(sanitizeJSON(chunks.prompt)); } catch { return null; } return wf ? await fromWorkflow(wf, "comfyui") : null; }
+    if (chunks.workflow) { let wf; try { wf = JSON.parse(sanitizeJSON(chunks.workflow)); } catch { return null; } return wf ? await fromWorkflow(wf, "comfyui") : null; }
 
     if (chunks.fooocus_scheme === "fooocus" && chunks.parameters) {
         const f = parseFooocusMetadata(chunks.parameters);

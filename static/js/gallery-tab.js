@@ -1736,7 +1736,7 @@ function bindEvents() {
             if (window.opener && typeof window.opener.wfmReceiveWorkflow === "function") {
                 window.opener.wfmReceiveWorkflow(state.embeddedWorkflow);
                 await navigator.clipboard.writeText(JSON.stringify(state.embeddedWorkflow, null, 2)).catch(() => {});
-                showToast(t("workflowSentToCanvas"), "success");
+                showToast(t("workflowSentToCanvasDirect"), "success");
                 return;
             }
             // フォールバック: localStorage + タイトルドラッグ（UI形式のみ）

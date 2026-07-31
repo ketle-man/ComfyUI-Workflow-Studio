@@ -23,7 +23,7 @@ function getEagleSettings() {
     };
 }
 
-async function saveToEagle(imageUrl, name, tags = []) {
+async function saveToEagle(imageUrl, name, tags = [], fileInfo = null) {
     const eagle = getEagleSettings();
     if (!eagle.autoSave) return;
     try {
@@ -35,6 +35,12 @@ async function saveToEagle(imageUrl, name, tags = []) {
                 url: imageUrl,
                 name,
                 tags: ["wfm-comfyui", ...tags],
+                // SVG はサーバー側でローカルパス解決(addFromPath)するために必要
+                filename: fileInfo?.filename || "",
+                subfolder: fileInfo?.subfolder || "",
+                type: fileInfo?.type || "output",
+                // comfyui-tosvg の Save SVG String など、絶対パスが既知の場合に渡す
+                localPath: fileInfo?.localPath || "",
             }),
         });
         const data = await res.json();
@@ -1471,7 +1477,7 @@ async function _coreGenerate(silent = false, workflowOverride = null) {
     const baseWorkflow = workflowOverride || comfyUI.currentWorkflow;
     const workflowExpanded = await _expandWildcardsInWorkflow({ ...baseWorkflow });
     const workflowForGenerate = _applyStyleToWorkflow(workflowExpanded);
-    const { images, seed } = await comfyUI.generate(
+    const { images, seed, svgOutputs } = await comfyUI.generate(
         workflowForGenerate,
         {
             seedMode,
@@ -1489,18 +1495,49 @@ async function _coreGenerate(silent = false, workflowOverride = null) {
     if (progressText) progressText.textContent = `Done (${images.length} image${images.length !== 1 ? "s" : ""})`;
     if (progressBar) progressBar.style.width = "100%";
 
-    if (images.length > 0) {
-        const blob = await comfyUI.getImageBlob(images[0]);
+    // type=temp はプレビュー用の一時画像 (PreviewImage, SVG String Preview など) のため
+    // 生成結果表示からは除外し、実際に保存された成果物のみを表示する
+    const outputImages = images.filter((img) => img.type !== "temp");
+
+    if (svgOutputs?.length > 0) {
+        // comfyui-tosvg の Save SVG String は images ではなく saved_svg/path で返すため、
+        // images配列には(あれば)プレビュー用の一時PNGしか入らず実際の保存物と食い違う。
+        // 実際に保存されたSVGファイルをそのままプレビューに表示する。
+        // /view はSVGをセキュリティ上application/octet-streamで返すため使えず、
+        // 代わりにGalleryタブの配信エンドポイント(絶対パス指定・正しいContent-Type)を使う。
+        const svgUrl = (svg) => `/wfm/gallery/image/serve?path=${encodeURIComponent(svg.path)}`;
+        if (resultImg && svgOutputs[0].path) {
+            resultImg.src = svgUrl(svgOutputs[0]);
+            resultImg.style.display = "block";
+        }
+
+        if (resultThumbs && svgOutputs.length > 1) {
+            resultThumbs.innerHTML = "";
+            svgOutputs.forEach((svg, i) => {
+                if (!svg.path) return;
+                const thumb = document.createElement("img");
+                thumb.src = svgUrl(svg);
+                thumb.className = `wfm-gen-thumb ${i === 0 ? "active" : ""}`;
+                thumb.addEventListener("click", () => {
+                    resultImg.src = thumb.src;
+                    resultThumbs.querySelectorAll(".wfm-gen-thumb").forEach((t) => t.classList.remove("active"));
+                    thumb.classList.add("active");
+                });
+                resultThumbs.appendChild(thumb);
+            });
+        }
+    } else if (outputImages.length > 0) {
+        const blob = await comfyUI.getImageBlob(outputImages[0]);
         const url = URL.createObjectURL(blob);
         if (resultImg) {
             resultImg.src = url;
             resultImg.style.display = "block";
         }
 
-        if (resultThumbs && images.length > 1) {
+        if (resultThumbs && outputImages.length > 1) {
             resultThumbs.innerHTML = "";
-            for (let i = 0; i < images.length; i++) {
-                const b = i === 0 ? blob : await comfyUI.getImageBlob(images[i]);
+            for (let i = 0; i < outputImages.length; i++) {
+                const b = i === 0 ? blob : await comfyUI.getImageBlob(outputImages[i]);
                 const u = i === 0 ? url : URL.createObjectURL(b);
                 const thumb = document.createElement("img");
                 thumb.src = u;
@@ -1515,10 +1552,18 @@ async function _coreGenerate(silent = false, workflowOverride = null) {
         }
     }
 
-    if (getEagleSettings().autoSave && images.length > 0) {
-        for (const img of images) {
+    if (getEagleSettings().autoSave && outputImages.length > 0) {
+        for (const img of outputImages) {
             const viewUrl = `/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${encodeURIComponent(img.type || "output")}`;
-            saveToEagle(viewUrl, img.filename);
+            saveToEagle(viewUrl, img.filename, [], img);
+        }
+    }
+
+    if (getEagleSettings().autoSave && svgOutputs?.length > 0) {
+        // comfyui-tosvg の "Save SVG String" は絶対パスを直接返すため、/view を介さず
+        // サーバー側でそのパスを検証した上で addFromPath させる
+        for (const svg of svgOutputs) {
+            saveToEagle("", svg.filename, [], { filename: svg.filename, localPath: svg.path });
         }
     }
 

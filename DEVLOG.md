@@ -2,6 +2,63 @@
 
 ---
 
+## v0.3.78
+
+### 追加機能: Eagle自動保存のSVG対応
+
+「画像管理ソフトEagleとの連携機能（Eagleへ自動保存）をSVGに対応させたい」という依頼を受けて実装。既存のEagle自動保存(`generate-tab.js`のEagle送信ループ)は`history.outputs`の`images`キーのみを走査しており、SVG出力ノードには2系統あってそれぞれ挙動が異なることが判明した。
+
+- **標準`SaveSVGNode`（ComfyUI本体）**: 通常の`images`キー(`{filename, subfolder, type}`)で結果を返すため既存の収集ロジックに拾われるが、ComfyUIの`/view`エンドポイントはSVGをXSS対策として`Content-Type: application/octet-stream` + `Content-Disposition: attachment`で強制返却するため、`<img>`表示にもEagleの`addFromURL`にも正しく使えない。`comfyui-client.js`の`getImageBlob()`で拡張子`.svg`を検出し`blob.slice(0, blob.size, "image/svg+xml")`でMIMEタイプを付け替えることで`<img>`表示を解決し、Eagle送信は`eagle_routes.py`側でローカルファイルパスを解決して`addFromPath`を使うルートに切り替えた。
+- **`comfyui-tosvg`の`Save SVG String`ノード**: `images`キーではなく独自の`saved_svg`(ファイル名)/`path`(絶対パス)キーで返す。さらに、ComfyUIの実行エンジン(`execution.py`の`get_output_from_returns`)は`ui`辞書の各値をイテラブルとして連結する仕様のため、このノードが単一文字列を返すと1文字ずつ分解された配列になる(`"a.svg"` → `["a",".","s","v","g"]`)。`comfyui-client.js`側でこの文字配列を検出し`join("")`で復元する対応を追加。絶対パスが既知なため、Eagle送信は`_resolve_absolute_svg_path()`(output/temp/inputディレクトリ配下限定の検証つき)経由で直接`addFromPath`する。
+- **プレビュー用一時画像の除外**: `SVG String Preview`や`PreviewImage`など`type: "temp"`の画像は、Eagle自動保存からもGenerateUI結果表示からも除外(`outputImages = images.filter(img => img.type !== "temp")`に統一)。SVG出力があるワークフローでは、GenerateUIの結果プレビューを実際に保存されたSVGファイルに切り替え、`/view`が使えないためGalleryタブの配信エンドポイント(`/wfm/gallery/image/serve?path=...`、絶対パス指定・正しいContent-Type)を再利用した。
+
+**セキュリティ**: `_resolve_absolute_svg_path()`は任意の絶対パスをそのまま信頼せず、ComfyUIのoutput/temp/inputディレクトリ配下の実在するファイルのみ許可する(外部からこのAPIを叩かれてローカル任意ファイルを送信させられるリスクの回避)。Windowsのパス比較は大文字小文字を区別しないため`os.path.normcase`で正規化してから比較。
+
+**検証**: Node.jsスクリプトで`comfyui-client.js`/`eagle_routes.py`のロジックを直接テストし、両ノードタイプでファイルが正しい形式でEagleへ送信されることを確認。ユーザーが実際にComfyUI上で`svg_1.json`/`svg_5.json`/`svg_7.json`の3種類のワークフローを実行し、Eagle保存・プレビュー表示それぞれで動作確認。
+
+**How to apply**: [[project_v0342_gallery_feeder]]のSVG関連対応と合わせ、SVGはComfyUI本体がXSS対策で`/view`から生配信しない前提で設計する必要がある。新しいSVG出力ノードに対応する際は、まず`ui`辞書がどのキー名で結果を返すか(`images` vs 独自キー)、絶対パスが取得できるか、を確認してから送信経路(`addFromURL` vs `addFromPath`)を選ぶ。
+
+### 追加機能: GenerateUI/MetadataタブでComfyUIサブグラフワークフロー対応（Mage-Flow等）
+
+「mageflow_1.jsonをGenerateUIタブ、メタデータタブに対応させたい」という依頼を受けて調査したところ、`comfyui-workflow.js`の`detectFormat()`が`definitions.subgraphs`を持つワークフロー全般を一律「App形式」と判定し、GenerateUIタブが読み込みを拒否する設計になっていたことが判明した(`generate-tab.js`の`loadWorkflowIntoEditor()`が`format === "app"`で即エラー)。サブグラフ展開自体は`_flattenSubgraphs()`に既に実装済みで`convertUiToApi()`から呼ばれていたが、GenerateUIの通常フローには到達しない状態だった。
+
+- **`detectFormat()`の判定基準を訂正**: 「サブグラフを含む」ことと「真のApp形式(ComfyUIの簡略化Webアプリ風UI)」は別軸であるべきところ、後者の判定条件に前者が混入していた。`extra.linearMode === true`または`.app.json`拡張子の場合のみ"app"、それ以外(サブグラフを含むだけの通常ノードグラフ)は"ui"として扱うよう修正。`workflow_analyzer.py`(Python側、サイドパネルのAPI/APPバッジ表示に使われる)にも同じ判定基準の食い違いがあり、揃えて修正。
+- **サブグラフ外側ウィジェット値の内部ノードへの注入（`_flattenSubgraphs()`）**: 最大の落とし穴だった。サブグラフの「外側ノード」(折りたたみ表示、ユーザーが実際に編集する値)のwidgets_valuesと、`definitions.subgraphs[].nodes`内の「内部ノード」(サブグラフ編集画面を開いた時のテンプレート初期値)のwidgets_valuesは、ComfyUIが保存時に同期しない場合があり、実データで検証すると別内容のプロンプトが入っていた。既存の`_flattenSubgraphs()`はリンクのリダイレクトのみ行い、ウィジェット値の注入は一切していなかったため、そのままではGenerateUIが古いテンプレートのデフォルト値で生成してしまう。外側ノードのinputs配列(`widget`かつ`link`なしの要素)を走査し、サブグラフ入力ポート経由で対応する内部ノードのwidgets_values配列へ値を上書きするロジックを新設。内部ノードのwidgets_values配列がリンク済み入力の分もエントリを持つ「legacy full形式」の場合があり、`convertUiToApi()`本体が前提とする「リンク済みwidgetにはエントリがない」形式との食い違いでインデックスがずれるバグも合わせて修正(リダイレクトされた実リンク先スロットのみをエントリから除去する形に変更)。
+- **`analyzeWorkflow()`に`TextEncodeMageFlowEdit`対応**: 1ノードでprompt/negative_prompt両方を直接持つ複合ノードのため、SDXLPromptStylerパターンを参考にrole固定(positive/negative)で個別登録。width/height/batch_sizeも内包しているため`latent_nodes`にも登録(EmptyLatentImage相当)。
+- **DynamicCombo型(`COMFY_DYNAMICCOMBO_V3`)対応**: `SaveImageAdvanced`の`format`入力(選択値に応じて`bit_depth`/`input_color_space`等のサブフィールドが動的に変わる新しいComfyUI V3 API機能)が未対応で、`inputs`から丸ごと欠落し`TypeError: missing 1 required positional argument: 'format'`が発生した。最初は`{"format": "png", "bit_depth": ..., ...}`という単一辞書にまとめて渡す実装を試みたが実機で同じエラーが再現し、ComfyUI本体の`comfy_api/latest/_io.py`の`DynamicCombo._expand_schema_for_dynamic`を読んだところ、バックエンドは`"format"`/`"format.bit_depth"`のような**フラットなドット区切りキー**を`inputs`辞書に個別に期待しており、実行エンジン自身(`build_nested_inputs()`)が実行時にネストした辞書へ自動組み立てる設計だったため、辞書化をやめてフラットキーをそのまま`inputs`へ設定する実装に修正。
+- **`metadata-tab.js`のサブグラフ対応強化**: 既存の`collectAllNodes()`ベースの抽出(トップレベル+サブグラフ内nodesを単純結合)はモデル名・プロンプンとも「内部テンプレートの古い値」を拾ってしまう同じ問題を抱えていたため、サブグラフを検出した場合は`comfyWorkflow.convertUiToApi()`を経由してAPI形式(外側ウィジェット値が注入済み)に正規化してから抽出するよう変更。`extractPromptsAPI`/`extractPromptsFromNodeSet`双方に`TextEncodeMageFlowEdit`のpositive/negative個別抽出(1ノードにつき2つのwidgets_valuesスロット)対応を追加。
+
+**検証**: Node.jsで`comfyui-workflow.js`をブラウザ実行と同一ロジックのままimportし(`/object_info`はローカルComfyUIサーバーへのfetchで取得)、`mageflow_1.json`の変換結果を全項目突き合わせ。外側と内部でテキストが異なる実データを使い、正しく外側の値が採用されることを確認。既存のFlux2/Qwen/Ernie/Krea2等、サブグラフを持つ8ワークフローで`git stash`によるビフォーアフター比較を実施し回帰なしを確認(変更前は全て"app"判定で一律ブロックされていたため、影響は純増)。ユーザーが実機でGenerateUI実行・Eagle送信・Metadata抽出それぞれ確認。
+
+**How to apply**: ComfyUIのサブグラフは「外側の折りたたみ表示ウィジェット値」と「内部テンプレート定義のwidgets_values」が別データであり、保存時に同期される保証がないという前提を忘れないこと。サブグラフを扱うロジックを新設・修正する際は、実データ(必ずしもテンプレートそのままでない、ユーザーが値を変更済みのワークフローファイル)で外側/内部の値を突き合わせて検証する。またComfyUIの新しいV3 API機能(DynamicCombo等)に遭遇したら、まず`comfy_api/latest/_io.py`の該当実装を読んでバックエンドが実際に何を期待しているかを確認してから実装する方が、推測で実装してハマるより早い。
+
+### 改善: Workflowタブ Summarize機能を構造化データベースに変更
+
+上記のサブグラフ対応の流れで、「ワークフロータブの要約、解析ができるようにしたい」という依頼を受けた。調査の結果、既存の「AI要約」ボタン(`workflow-tab.js`)は生ワークフローJSON全体を`JSON.stringify(wf).substring(0, 4000)`で先頭4000文字に切り詰めてLLM(Ollama)へ渡すだけの実装で、`MarkdownNote`の長文説明やUI座標情報が先頭を占有し、複雑なワークフロー(特にサブグラフ入り)では肝心のノード構成情報が切り捨てられて有効な要約ができない状態だった。「要約機能の修正」「解析結果表示の新規UI追加」のどちらを優先するか確認し、前者を選択。
+
+- `_buildSummarySourceText()`を新設。既存の`comfyWorkflow.detectFormat()`/`convertUiToApi()`/`analyzeWorkflow()`(上記のMage-Flow対応で強化済み)を再利用し、Checkpoint/Diffusion Model/Text Encoder/VAE/LoRA/ControlNet/Hypernetwork/Positive・Negative Prompt/Sampler設定/使用ノード種別一覧をコンパクトなテキストに整形してからLLMへ渡すよう変更。変換・解析に失敗した場合は従来の生JSON切り詰め方式へ自動フォールバック。
+
+**検証**: Node.jsで`_buildStructuredSummaryText()`相当のロジックを`analyzeWorkflow()`の実出力に対して実行し、`mageflow_1.json`(1183文字)・`qwen-image-edit_controlnet.json`(694文字)など、旧実装の4000文字切り詰めより大幅にコンパクトかつ正確な出力になることを確認。サブグラフを持たない通常ワークフロー3件でも正しく動作することを確認。
+
+**How to apply**: LLMへワークフロー情報を渡す用途では、生JSONダンプではなく既存の解析結果(`analyzeWorkflow()`)を再利用してテキスト化する方が、トークン数を抑えつつ精度も上がる。生JSONは`MarkdownNote`やUI座標などLLMにとってノイズになる情報を大量に含む。
+
+### バグ修正: Workflowタブ詳細パネルのP:/I:/→カウントとフォーマットバッジ
+
+上記のMage-Flow対応の実機確認中、Workflowタブのサイドパネルで新しいノードタイプを使うワークフローの入出力カウントが「P:0 I:0 → 0」と表示される問題が見つかった。原因は`workflow_analyzer.py`の`analyze_workflow()`がノードタイプ名の完全一致(`ntype == "CLIPTextEncode"`、`ntype == "SaveImage"`)でカウントしており、`TextEncodeMageFlowEdit`(プロンプト)や`SaveImageAdvanced`(画像出力)のような新しいノードタイプを認識できていなかったため。
+
+- プロンプト検出を`_PROMPT_NODE_TYPES`集合(`TextEncodeMageFlowEdit`/`TextEncodeQwenImageEditPlus`/`SDXLPromptStyler`等)に、出力画像検出を`_OUTPUT_IMAGE_NODE_TYPES`集合(`SaveImageAdvanced`追加)にそれぞれ拡張。
+- 副次的に、この関数のフォーマット判定が上記で修正したJS側`detectFormat()`と食い違っていること(`"definitions" in workflow_data`だけで"app"と判定する古い基準のまま)を発見し、同じ基準(`linearMode`のみ"app")に統一。これはComfyUIキャンバスのサイドパネル(`node_sets_menu.js`)のAPI/APPバッジ表示に使われており、放置するとMage-Flow系ワークフローに誤って「APP」バッジが付き続ける状態だった。
+
+**検証**: Pythonで`analyze_workflow()`を直接呼び出し、`mageflow_1.json`で`prompts: 1`/`outputs.images: 1`/`format: "ui"`が正しく出ることを確認。ユーザーからの追加確認依頼を受け、真にlinearModeを持つワークフロー(`wf_20260322113657.json`等、サブグラフを含むケースも含む)では引き続き"app"、Mage-Flow等のサブグラフのみのワークフローは"ui"と、両者が正しく区別されることをJS/Python両実装で突き合わせ検証。既存の複数ワークフローでリグレッションがないことも確認。
+
+### 改善: Send to Canvasトーストメッセージの区別
+
+「ワークフロータブでUI形式のワークフローをキャンバスへ送るボタン押下時、『ワークフロー準備完了 タイトルをキャンバスにドラッグ』のトーストは現在ドラッグの必要がないためメッセージを変えたい」という依頼。`workflow-tab.js`/`gallery-tab.js`の「キャンバスへ送る」処理は、`window.opener`経由で直接ロードされる場合(ドラッグ不要)と、`localStorage`+タイトルドラッグのフォールバック(ドラッグ必要)の2経路があるが、両方が同じ`workflowSentToCanvas`(「タイトルをドラッグ」)トーストを共有していたため、直接ロードされた場合にも実際には不要なドラッグ手順が案内されていた。
+
+- 新しいi18nキー`workflowSentToCanvasDirect`(「ワークフローをキャンバスへ送信しました」)を英日中3言語で追加し、`window.opener`経由の成功時のみこちらを使うよう変更。ドラッグが実際に必要なフォールバック側は既存メッセージのまま維持。
+
+**検証**: `node --check`で構文チェック。ユーザーがComfyUIツールバーから開いた状態で実機確認。
+
 ## v0.3.76
 
 ### 追加機能: Comic Creator向けI2I実行ブリッジ`_wfmReceiveI2IRunRequest`

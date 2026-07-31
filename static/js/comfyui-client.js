@@ -240,7 +240,13 @@ export const comfyUI = {
         });
         const res = await fetch(`${this.baseUrl}/view?${params}`);
         if (!res.ok) throw new Error(`Failed to fetch image: HTTP ${res.status}`);
-        return await res.blob();
+        const blob = await res.blob();
+        // /view はSVGをセキュリティ上application/octet-streamで返すため、
+        // <img>で表示できるよう拡張子から正しいMIMEタイプへ付け替える
+        if (imageData.filename?.toLowerCase().endsWith(".svg") && blob.type !== "image/svg+xml") {
+            return blob.slice(0, blob.size, "image/svg+xml");
+        }
+        return blob;
     },
 
     async uploadImage(file, filename, overwrite = true) {
@@ -300,6 +306,9 @@ export const comfyUI = {
 
             // Extract images from SaveImage outputs only
             const images = [];
+            // comfyui-tosvg の "Save SVG String" ノードは images ではなく
+            // saved_svg(ファイル名) / path(絶対パス) という独自キーで返す
+            const svgOutputs = [];
             const outputs = history.outputs || {};
             for (const nodeOutput of Object.values(outputs)) {
                 if (nodeOutput.images) {
@@ -307,10 +316,23 @@ export const comfyUI = {
                         images.push(img);
                     }
                 }
+                if (nodeOutput.saved_svg) {
+                    // ComfyUI の実行エンジンは ui 出力の各値をイテラブルとして連結するため、
+                    // ノード側が単一文字列で返すと 1 文字ずつ分解された配列になってしまう。
+                    // (例: "a.svg" -> ["a",".","s","v","g"]) 文字配列を検出したら結合して復元する。
+                    const joinIfCharArray = (v) =>
+                        Array.isArray(v) && v.every((c) => typeof c === "string" && c.length === 1)
+                            ? v.join("")
+                            : v;
+                    svgOutputs.push({
+                        filename: joinIfCharArray(nodeOutput.saved_svg),
+                        path: joinIfCharArray(nodeOutput.path) || "",
+                    });
+                }
             }
 
             onComplete?.(images, seed);
-            return { images, seed };
+            return { images, seed, svgOutputs };
         } catch (err) {
             onError?.(err);
             throw err;

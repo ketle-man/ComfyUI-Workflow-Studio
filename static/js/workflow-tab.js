@@ -51,7 +51,7 @@ function sendToCanvas(workflowData) {
         // window.opener経由でComfyUIキャンバスに直接ロード（推奨）
         if (window.opener && typeof window.opener.wfmReceiveWorkflow === "function") {
             window.opener.wfmReceiveWorkflow(workflowData);
-            showToast(t("workflowSentToCanvas"), "success");
+            showToast(t("workflowSentToCanvasDirect"), "success");
             return;
         }
         // フォールバック: localStorage + タイトルドラッグ（UI形式のみ）
@@ -268,6 +268,85 @@ async function getRawWorkflow(filename) {
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
+}
+
+// ============================================
+// AI Summary — structured extraction (not raw JSON dump)
+// ============================================
+
+// analyzeWorkflow() の結果をコンパクトなテキストに整形する。
+// 生JSONをそのままLLMに渡すと、MarkdownNoteの長文やUI座標情報などのノイズで
+// 文字数制限に達し、肝心のノード構成情報(サブグラフ内含む)が切り捨てられやすい。
+function _buildStructuredSummaryText(analysis) {
+    const lines = [];
+
+    if (analysis.checkpoint_nodes.length) {
+        lines.push(`Checkpoint: ${analysis.checkpoint_nodes.map((n) => n.ckpt_name).filter(Boolean).join(", ")}`);
+    }
+    if (analysis.diffusion_model_nodes.length) {
+        lines.push(`Diffusion Model (UNET): ${analysis.diffusion_model_nodes.map((n) => n.unet_name).filter(Boolean).join(", ")}`);
+    }
+    if (analysis.text_encoder_nodes.length) {
+        lines.push(`Text Encoder (CLIP): ${analysis.text_encoder_nodes.map((n) => [n.clip_name1, n.clip_name2].filter(Boolean).join("+")).join(", ")}`);
+    }
+    if (analysis.vae_nodes.length) {
+        lines.push(`VAE: ${analysis.vae_nodes.map((n) => n.vae_name).filter(Boolean).join(", ")}`);
+    }
+    if (analysis.lora_nodes.length) {
+        lines.push(`LoRA: ${analysis.lora_nodes.map((n) => {
+            if (n.is_lora_manager) return "(LoraManager)";
+            const strengths = n.strength_clip !== undefined
+                ? `model:${n.strength_model}, clip:${n.strength_clip}`
+                : `model:${n.strength_model}`;
+            return `${n.lora_name} (${strengths})`;
+        }).join(", ")}`);
+    }
+    if (analysis.controlnet_nodes.length) {
+        lines.push(`ControlNet: ${analysis.controlnet_nodes.map((n) => n.control_net_name).filter(Boolean).join(", ")}`);
+    }
+    if (analysis.hypernetwork_nodes.length) {
+        lines.push(`Hypernetwork: ${analysis.hypernetwork_nodes.map((n) => n.hypernetwork_name).filter(Boolean).join(", ")}`);
+    }
+
+    const positives = analysis.prompt_nodes.filter((n) => n.role === "positive").map((n) => n.text).filter(Boolean);
+    const negatives = analysis.prompt_nodes.filter((n) => n.role === "negative").map((n) => n.text).filter(Boolean);
+    if (positives.length) lines.push(`Positive Prompt: ${positives.join(" / ")}`);
+    if (negatives.length) lines.push(`Negative Prompt: ${negatives.join(" / ")}`);
+
+    if (analysis.sampler_nodes.length) {
+        const s = analysis.sampler_nodes[0];
+        lines.push(`Sampler: steps=${s.steps}, cfg=${s.cfg}, sampler=${s.sampler_name}, scheduler=${s.scheduler}, denoise=${s.denoise}`);
+    }
+    if (analysis.latent_nodes.length) {
+        const l = analysis.latent_nodes[0];
+        lines.push(`Latent size: ${l.width ?? "?"}x${l.height ?? "?"}, batch=${l.batch_size ?? "?"}`);
+    }
+
+    if (analysis.all_nodes.length) {
+        const nodeTypes = [...new Set(analysis.all_nodes.map((n) => n.type))];
+        lines.push(`Node types used (${analysis.all_nodes.length} nodes total): ${nodeTypes.join(", ")}`);
+    }
+
+    return lines.join("\n");
+}
+
+// ワークフロー(UI/API/サブグラフ入りいずれの形式でも)から要約用テキストを組み立てる。
+// 変換・解析に失敗した場合は、従来通り生JSON先頭部分にフォールバックする。
+async function _buildSummarySourceText(wfJson, filename) {
+    try {
+        const fmt = comfyWorkflow.detectFormat(wfJson, filename);
+        let apiWf = wfJson;
+        if (fmt === "ui") {
+            apiWf = await comfyWorkflow.convertUiToApi(wfJson);
+        } else if (fmt !== "api") {
+            return JSON.stringify(wfJson).substring(0, 4000);
+        }
+        const analysis = comfyWorkflow.analyzeWorkflow(apiWf);
+        const text = _buildStructuredSummaryText(analysis);
+        return text || JSON.stringify(wfJson).substring(0, 4000);
+    } catch {
+        return JSON.stringify(wfJson).substring(0, 4000);
+    }
 }
 
 // ============================================
@@ -1128,7 +1207,8 @@ function openDetailModal(wf) {
         btn.textContent = t("summarizing");
         try {
             const wfJson = await getRawWorkflow(wf.filename);
-            const promptText = getSummaryPrompt() + JSON.stringify(wfJson).substring(0, 4000);
+            const sourceText = await _buildSummarySourceText(wfJson, wf.filename);
+            const promptText = getSummaryPrompt() + sourceText;
             const aiCfg = readJsonStorage("wfm_prompt_ai_settings", {});
             if (aiCfg.backend && aiCfg.backend !== "ollama") {
                 throw new Error(t("summarizeOllamaOnly"));

@@ -81,7 +81,7 @@ function _getWidgetInputNames(objectInfo, classType) {
             names.push(name);
         } else if (typeof type === "string") {
             const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO") {
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
                 names.push(name);
             }
             // Other uppercase types (MODEL, CLIP, etc.) are link inputs, skip
@@ -95,7 +95,7 @@ function _getWidgetInputNames(objectInfo, classType) {
             names.push(name);
         } else if (typeof type === "string") {
             const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN") {
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMFY_DYNAMICCOMBO_V3") {
                 names.push(name);
             }
         }
@@ -106,7 +106,7 @@ function _getWidgetInputNames(objectInfo, classType) {
 
 /**
  * Get ordered widget input types for a node class (parallel to _getWidgetInputNames).
- * Returns type info: "INT", "FLOAT", "STRING", "BOOLEAN", or "COMBO".
+ * Returns type info: "INT", "FLOAT", "STRING", "BOOLEAN", "COMBO", or "COMFY_DYNAMICCOMBO_V3".
  */
 function _getWidgetInputTypes(objectInfo, classType) {
     const info = objectInfo[classType];
@@ -121,7 +121,7 @@ function _getWidgetInputTypes(objectInfo, classType) {
             types.push("COMBO");
         } else if (typeof type === "string") {
             const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO") {
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
                 types.push(upper);
             }
         }
@@ -132,12 +132,25 @@ function _getWidgetInputTypes(objectInfo, classType) {
             types.push("COMBO");
         } else if (typeof type === "string") {
             const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO") {
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
                 types.push(upper);
             }
         }
     }
     return types;
+}
+
+/**
+ * Resolve the sub-input names for a DynamicCombo's currently-selected option.
+ * objectInfo spec shape: ["COMFY_DYNAMICCOMBO_V3", { options: [{ key, inputs: { required: {...} } }, ...] }]
+ */
+function _getDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey) {
+    const info = objectInfo[classType];
+    const spec = info?.input?.required?.[widgetName] || info?.input?.optional?.[widgetName];
+    const options = spec?.[1]?.options;
+    if (!Array.isArray(options)) return [];
+    const opt = options.find((o) => o.key === selectedKey) || options[0];
+    return Object.keys(opt?.inputs?.required || {});
 }
 
 /**
@@ -167,10 +180,17 @@ function _isExtraWidgetValue(val, expectedType) {
  *
  * Strategy: expand internal nodes into the parent, redirect parent links through
  * the boundary ports, and convert internal links from object to array format.
- * Widget values in internal nodes are preserved as-is (they are synced at save time
- * by ComfyUI frontend). convertUiToApi handles widget mapping via object_info.
+ *
+ * Widget values: the outer subgraph node's own widgets_values hold the values actually
+ * set via the subgraph's collapsed form (what the user sees/edits). The internal nodes'
+ * widgets_values, stored in the subgraph template (definitions.subgraphs[].nodes), are
+ * only stale defaults from when the template was authored — ComfyUI does NOT keep them
+ * synced in saved workflow JSON. Un-linked outer widget inputs are therefore copied onto
+ * the matching internal node's widgets_values (via objectInfo to get the correct index,
+ * since the internal node's real class type is known). Linked outer inputs are left to
+ * the "Redirect parent links" step above, which takes priority.
  */
-function _flattenSubgraphs(workflow) {
+function _flattenSubgraphs(workflow, objectInfo) {
     const defs = workflow.definitions?.subgraphs;
     if (!defs || defs.length === 0) return workflow;
 
@@ -236,6 +256,12 @@ function _flattenSubgraphs(workflow) {
         }
 
         // === Redirect parent links ===
+        // Track which {internal node, input slot} pairs end up resolved by a real outer
+        // link after redirection — needed below to tell apart "boundary-only" links
+        // (prompt/model-name ports that are actually widget values, see injection step)
+        // from ports that truly carry a link end-to-end (e.g. width/height wired to a
+        // ResolutionSelector node).
+        const redirectedTargets = new Set();
         for (const link of wf.links) {
             if (link[3] === node.id) {
                 const dstSlot = link[4];
@@ -248,6 +274,7 @@ function _flattenSubgraphs(workflow) {
                 if (target) {
                     link[3] = target.targetNodeId;
                     link[4] = target.targetSlot;
+                    redirectedTargets.add(`${target.targetNodeId}:${target.targetSlot}`);
                 }
             }
             if (link[1] === node.id) {
@@ -261,11 +288,81 @@ function _flattenSubgraphs(workflow) {
         }
 
         // === Add internal nodes (remapped IDs) ===
+        const remappedByOrigId = {};
+        const normalizedNodeIds = new Set();
         for (const iNode of sgDef.nodes) {
             const remapped = JSON.parse(JSON.stringify(iNode));
             remapped.id = nodeIdRemap[iNode.id];
+
+            // Some subgraph-template nodes store widgets_values in the "legacy full" format
+            // (one entry per widget input, including linked ones), while convertUiToApi's
+            // widget-mapping loop assumes the "modern" format (linked widget inputs have no
+            // entry at all). Detect the full format by comparing lengths and strip the
+            // entries belonging to inputs that are *actually* linked end-to-end (per
+            // redirectedTargets above) so downstream mapping stays index-aligned. Boundary
+            // links that terminate in a plain widget value (e.g. prompt text) are NOT
+            // stripped — their value lives in the outer node's widgets_values instead and
+            // is injected below.
+            const allWidgetInputs = (remapped.inputs || []).filter((i) => i.widget);
+            if (remapped.widgets_values && remapped.widgets_values.length === allWidgetInputs.length) {
+                const linkedIdx = new Set();
+                allWidgetInputs.forEach((inp, i) => {
+                    const slotIdx = remapped.inputs.indexOf(inp);
+                    if (redirectedTargets.has(`${remapped.id}:${slotIdx}`)) linkedIdx.add(i);
+                });
+                if (linkedIdx.size > 0) {
+                    remapped.widgets_values = remapped.widgets_values.filter((_, i) => !linkedIdx.has(i));
+                    normalizedNodeIds.add(remapped.id);
+                }
+            }
+
             addedNodes.push(remapped);
+            remappedByOrigId[iNode.id] = remapped;
         }
+
+        // === Inject outer subgraph-node widget values into internal nodes ===
+        // Only un-linked widget inputs — linked ones are already redirected above.
+        const outerWidgetInputs = (node.inputs || []).filter((inp) => inp.widget);
+        outerWidgetInputs.forEach((inp, widgetIdx) => {
+            if (inp.link != null) return;
+            if (widgetIdx >= (node.widgets_values || []).length) return;
+            const outerValue = node.widgets_values[widgetIdx];
+
+            const portIdx = (sgDef.inputs || []).findIndex((p) => p.name === inp.name);
+            if (portIdx === -1) return;
+            const target = inputPortTargets[portIdx];
+            if (!target) return;
+
+            const origInternalId = String(target.targetNodeId).split(":").pop();
+            const remappedNode = remappedByOrigId[origInternalId];
+            if (!remappedNode) return;
+
+            const targetInputDef = (remappedNode.inputs || [])[target.targetSlot];
+            if (!targetInputDef?.widget) return;
+
+            // When the internal node's widgets_values was normalized above (stripped of
+            // linked-slot entries), the index must be computed against that same reduced
+            // set of widget names — object_info's full name order (which still includes
+            // e.g. width/height) would be off by however many entries were stripped.
+            let iWidgetIdx;
+            if (normalizedNodeIds.has(remappedNode.id)) {
+                const remainingNames = (remappedNode.inputs || [])
+                    .filter((i) => i.widget)
+                    .filter((i) => {
+                        const slotIdx = remappedNode.inputs.indexOf(i);
+                        return !redirectedTargets.has(`${remappedNode.id}:${slotIdx}`);
+                    })
+                    .map((i) => i.name);
+                iWidgetIdx = remainingNames.indexOf(targetInputDef.name);
+            } else {
+                const widgetNames = _getWidgetInputNames(objectInfo, remappedNode.type);
+                iWidgetIdx = widgetNames.indexOf(targetInputDef.name);
+            }
+            if (iWidgetIdx === -1) return;
+
+            if (!remappedNode.widgets_values) remappedNode.widgets_values = [];
+            remappedNode.widgets_values[iWidgetIdx] = outerValue;
+        });
 
         // === Add internal links (object format → array format) ===
         for (const iLink of (sgDef.links || [])) {
@@ -297,8 +394,11 @@ export const comfyWorkflow = {
     detectFormat(workflow, filename) {
         if (!workflow || typeof workflow !== "object") return "unknown";
         if (Array.isArray(workflow.nodes) && workflow.links !== undefined) {
-            // App format: UI-based structure with definitions (subgraphs) or linearMode
-            if (workflow.definitions || workflow.extra?.linearMode === true) return "app";
+            // App format: simplified web-app-style UI (linearMode) or .app.json filename.
+            // A workflow that merely *contains* subgraphs (definitions.subgraphs) is still
+            // a normal node graph — convertUiToApi() flattens subgraphs before conversion,
+            // so it's treated as "ui" rather than blocked as unsupported "app" format.
+            if (workflow.extra?.linearMode === true) return "app";
             if (filename && /\.app\.json$/i.test(filename)) return "app";
             return "ui";
         }
@@ -329,10 +429,11 @@ export const comfyWorkflow = {
         _lastMutedNodes = [];
         if (!workflow.nodes || !workflow.links) return {};
 
-        // Flatten subgraphs before conversion
-        const flatWorkflow = _flattenSubgraphs(workflow);
-
         const objectInfo = await _loadObjectInfo();
+
+        // Flatten subgraphs before conversion (needs objectInfo to correctly map outer
+        // subgraph-node widget values onto internal nodes' widgets_values indices)
+        const flatWorkflow = _flattenSubgraphs(workflow, objectInfo);
 
         // Build link map: dstNode -> { dstSlot -> [srcNodeId, srcSlot] }
         const linkMap = {};
@@ -438,6 +539,22 @@ export const comfyWorkflow = {
                                 val = widgets[wIdx];
                                 wIdx++;
                             }
+                        }
+                        // DynamicCombo (e.g. SaveImageAdvanced's "format"): val is the selected
+                        // option's key (e.g. "png"). Per comfy_api/latest/_io.py
+                        // DynamicCombo._expand_schema_for_dynamic, the backend looks up flat
+                        // dot-prefixed keys ("format", "format.bit_depth", ...) in the raw
+                        // inputs dict and assembles them into a single dict itself at execution
+                        // time — it does NOT accept a pre-built dict under the "format" key.
+                        if (expectedType === "COMFY_DYNAMICCOMBO_V3") {
+                            inputs[name] = val;
+                            const subNames = _getDynamicComboSubNames(objectInfo, node.type, name, val);
+                            for (const subName of subNames) {
+                                if (wIdx >= widgets.length) break;
+                                inputs[`${name}.${subName}`] = widgets[wIdx];
+                                wIdx++;
+                            }
+                            continue;
                         }
                         // For COMBO inputs, validate the value against the available choices.
                         // Dynamic COMBO options (e.g. Impact Pack's "Select to add Wildcard") may
@@ -770,6 +887,23 @@ export const comfyWorkflow = {
                 });
             }
 
+            // Mage-Flow text encoder — prompt + negative_prompt in one node (fixed roles,
+            // unlike KSampler-derived getRole() since both wires originate from this node)
+            if (ct === "TextEncodeMageFlowEdit") {
+                if (typeof inputs.prompt === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [positive]`, role: "positive",
+                        text: inputs.prompt, textKey: "prompt",
+                    });
+                }
+                if (typeof inputs.negative_prompt === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [negative]`, role: "negative",
+                        text: inputs.negative_prompt, textKey: "negative_prompt",
+                    });
+                }
+            }
+
             // SDXLPromptStyler / SDXLPromptStylerAdvanced — contains both pos & neg in one node
             if (ct === "SDXLPromptStyler" || ct === "SDXLPromptStylerAdvanced") {
                 if (inputs.text_positive !== undefined) {
@@ -827,6 +961,20 @@ export const comfyWorkflow = {
                 result.latent_nodes.push({
                     id, type: ct, title,
                     width: inputs.width, height: inputs.height,
+                    batch_size: inputs.batch_size,
+                });
+            }
+
+            // TextEncodeMageFlowEdit also carries width/height/batch_size directly
+            // (it builds the latent internally instead of a separate EmptyLatentImage node).
+            // width/height are commonly wired to a ResolutionSelector-style helper node
+            // (array link ref) rather than a direct number — leave those as undefined so
+            // the settings-tab UI falls back to its default instead of rendering a link ref.
+            if (ct === "TextEncodeMageFlowEdit") {
+                result.latent_nodes.push({
+                    id, type: ct, title,
+                    width: typeof inputs.width === "number" ? inputs.width : undefined,
+                    height: typeof inputs.height === "number" ? inputs.height : undefined,
                     batch_size: inputs.batch_size,
                 });
             }
