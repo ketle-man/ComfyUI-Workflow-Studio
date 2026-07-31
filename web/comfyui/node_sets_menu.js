@@ -2394,6 +2394,461 @@ async function _readAllPNGTextChunks(file) {
     return chunks;
 }
 
+// ============================================
+// UI→API変換（static/js/comfyui-workflow.js の convertUiToApi() 相当ロジックの複製）
+// web/comfyui/ は static/js/ と配信URLが異なりESモジュールをimportできないため、
+// AI backend URL解決等の既存パターンと同じくローカルに複製している。
+// サブグラフ(definitions.subgraphs)を含むワークフローは、外側の折りたたみ表示
+// ウィジェット値(実際にユーザーが編集する値)が定義テンプレート内のノードの
+// widgets_valuesへ反映されているとは限らないため、この変換を経由してから
+// モデル名・プロンプトを抽出する。ロジックを変更する場合は
+// static/js/comfyui-workflow.js の convertUiToApi()/_flattenSubgraphs() 側も
+// 同期すること。GenerateUIタブと異なりIタブは読み取り専用表示のため、
+// Checkpoint代替やBypass/Muteノードの記録機能は省いている。
+// ============================================
+
+let _wfmObjectInfoCache = null;
+async function _wfmLoadObjectInfo() {
+    if (_wfmObjectInfoCache) return _wfmObjectInfoCache;
+    try {
+        const res = await fetch("/object_info");
+        if (res.ok) _wfmObjectInfoCache = await res.json();
+    } catch {}
+    return _wfmObjectInfoCache || {};
+}
+
+function _wfmResolveBypassSource(nodeById, linkMap, nodeId, slot, visited) {
+    const idStr = String(nodeId);
+    const node = nodeById[idStr];
+    if (!node || node.mode !== 4) return [idStr, slot];
+    if (visited.has(idStr)) return null;
+    visited.add(idStr);
+    const outputs = node.outputs || [];
+    const inputs = node.inputs || [];
+    const outType = outputs[slot]?.type;
+    let inIdx = -1;
+    if (inputs[slot]?.type === outType && linkMap[idStr]?.[slot]) {
+        inIdx = slot;
+    } else {
+        inIdx = inputs.findIndex((inp, i) => inp.type === outType && linkMap[idStr]?.[i]);
+    }
+    if (inIdx === -1) return null;
+    const upstream = linkMap[idStr][inIdx];
+    if (!upstream) return null;
+    return _wfmResolveBypassSource(nodeById, linkMap, upstream[0], upstream[1], visited);
+}
+
+function _wfmGetWidgetInputNames(objectInfo, classType) {
+    const info = objectInfo[classType];
+    if (!info) return [];
+    const names = [];
+    const required = info.input?.required || {};
+    const optional = info.input?.optional || {};
+    for (const [name, spec] of Object.entries(required)) {
+        const type = Array.isArray(spec) ? spec[0] : spec;
+        if (Array.isArray(type)) {
+            names.push(name);
+        } else if (typeof type === "string") {
+            const upper = type.toUpperCase();
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
+                names.push(name);
+            }
+        }
+    }
+    for (const [name, spec] of Object.entries(optional)) {
+        const type = Array.isArray(spec) ? spec[0] : spec;
+        if (Array.isArray(type)) {
+            names.push(name);
+        } else if (typeof type === "string") {
+            const upper = type.toUpperCase();
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMFY_DYNAMICCOMBO_V3") {
+                names.push(name);
+            }
+        }
+    }
+    return names;
+}
+
+function _wfmGetWidgetInputTypes(objectInfo, classType) {
+    const info = objectInfo[classType];
+    if (!info) return [];
+    const types = [];
+    const required = info.input?.required || {};
+    const optional = info.input?.optional || {};
+    for (const [name, spec] of Object.entries(required)) {
+        const type = Array.isArray(spec) ? spec[0] : spec;
+        if (Array.isArray(type)) {
+            types.push("COMBO");
+        } else if (typeof type === "string") {
+            const upper = type.toUpperCase();
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
+                types.push(upper);
+            }
+        }
+    }
+    for (const [name, spec] of Object.entries(optional)) {
+        const type = Array.isArray(spec) ? spec[0] : spec;
+        if (Array.isArray(type)) {
+            types.push("COMBO");
+        } else if (typeof type === "string") {
+            const upper = type.toUpperCase();
+            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
+                types.push(upper);
+            }
+        }
+    }
+    return types;
+}
+
+function _wfmGetDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey) {
+    const info = objectInfo[classType];
+    const spec = info?.input?.required?.[widgetName] || info?.input?.optional?.[widgetName];
+    const options = spec?.[1]?.options;
+    if (!Array.isArray(options)) return [];
+    const opt = options.find((o) => o.key === selectedKey) || options[0];
+    return Object.keys(opt?.inputs?.required || {});
+}
+
+const _WFM_CONTROL_AFTER_GENERATE = new Set(["fixed", "increment", "decrement", "randomize"]);
+function _wfmIsExtraWidgetValue(val, expectedType) {
+    if (expectedType === "INT" || expectedType === "FLOAT") {
+        if (typeof val === "string" && _WFM_CONTROL_AFTER_GENERATE.has(val)) return true;
+    }
+    return false;
+}
+
+function _wfmFlattenSubgraphs(workflow, objectInfo) {
+    const defs = workflow.definitions?.subgraphs;
+    if (!defs || defs.length === 0) return workflow;
+    const subgraphMap = {};
+    for (const sg of defs) subgraphMap[sg.id] = sg;
+    if (!workflow.nodes.some(n => subgraphMap[n.type])) return workflow;
+
+    const wf = JSON.parse(JSON.stringify(workflow));
+    const sgDefs = {};
+    for (const sg of wf.definitions?.subgraphs || []) sgDefs[sg.id] = sg;
+
+    let maxNodeId = 0;
+    let maxLinkId = 0;
+    for (const n of wf.nodes) if (n.id > maxNodeId) maxNodeId = n.id;
+    for (const l of wf.links) if (l[0] > maxLinkId) maxLinkId = l[0];
+
+    const addedNodes = [];
+    const addedLinks = [];
+    const nodesToRemove = new Set();
+
+    for (const node of wf.nodes) {
+        const sgDef = sgDefs[node.type];
+        if (!sgDef) continue;
+        nodesToRemove.add(node.id);
+
+        const nodeIdRemap = {};
+        for (const iNode of sgDef.nodes) {
+            nodeIdRemap[iNode.id] = `${node.id}:${iNode.id}`;
+        }
+
+        const inputPortTargets = {};
+        for (let portIdx = 0; portIdx < (sgDef.inputs || []).length; portIdx++) {
+            const port = sgDef.inputs[portIdx];
+            for (const linkId of (port.linkIds || [])) {
+                const iLink = (sgDef.links || []).find(l => l.id === linkId);
+                if (iLink && iLink.origin_id === -10) {
+                    inputPortTargets[portIdx] = {
+                        targetNodeId: nodeIdRemap[iLink.target_id],
+                        targetSlot: iLink.target_slot,
+                    };
+                }
+            }
+        }
+
+        const outputPortSources = {};
+        for (let portIdx = 0; portIdx < (sgDef.outputs || []).length; portIdx++) {
+            const port = sgDef.outputs[portIdx];
+            for (const linkId of (port.linkIds || [])) {
+                const iLink = (sgDef.links || []).find(l => l.id === linkId);
+                if (iLink && iLink.target_id === -20) {
+                    outputPortSources[portIdx] = {
+                        sourceNodeId: nodeIdRemap[iLink.origin_id],
+                        sourceSlot: iLink.origin_slot,
+                    };
+                }
+            }
+        }
+
+        const redirectedTargets = new Set();
+        for (const link of wf.links) {
+            if (link[3] === node.id) {
+                const dstSlot = link[4];
+                const inputName = node.inputs?.[dstSlot]?.name;
+                let portIdx = inputName
+                    ? (sgDef.inputs || []).findIndex(p => p.name === inputName)
+                    : -1;
+                if (portIdx === -1) portIdx = dstSlot;
+                const target = inputPortTargets[portIdx];
+                if (target) {
+                    link[3] = target.targetNodeId;
+                    link[4] = target.targetSlot;
+                    redirectedTargets.add(`${target.targetNodeId}:${target.targetSlot}`);
+                }
+            }
+            if (link[1] === node.id) {
+                const srcSlot = link[2];
+                const source = outputPortSources[srcSlot];
+                if (source) {
+                    link[1] = source.sourceNodeId;
+                    link[2] = source.sourceSlot;
+                }
+            }
+        }
+
+        const remappedByOrigId = {};
+        const normalizedNodeIds = new Set();
+        for (const iNode of sgDef.nodes) {
+            const remapped = JSON.parse(JSON.stringify(iNode));
+            remapped.id = nodeIdRemap[iNode.id];
+
+            const allWidgetInputs = (remapped.inputs || []).filter((i) => i.widget);
+            if (remapped.widgets_values && remapped.widgets_values.length === allWidgetInputs.length) {
+                const linkedIdx = new Set();
+                allWidgetInputs.forEach((inp, i) => {
+                    const slotIdx = remapped.inputs.indexOf(inp);
+                    if (redirectedTargets.has(`${remapped.id}:${slotIdx}`)) linkedIdx.add(i);
+                });
+                if (linkedIdx.size > 0) {
+                    remapped.widgets_values = remapped.widgets_values.filter((_, i) => !linkedIdx.has(i));
+                    normalizedNodeIds.add(remapped.id);
+                }
+            }
+
+            addedNodes.push(remapped);
+            remappedByOrigId[iNode.id] = remapped;
+        }
+
+        const outerWidgetInputs = (node.inputs || []).filter((inp) => inp.widget);
+        outerWidgetInputs.forEach((inp, widgetIdx) => {
+            if (inp.link != null) return;
+            if (widgetIdx >= (node.widgets_values || []).length) return;
+            const outerValue = node.widgets_values[widgetIdx];
+
+            const portIdx = (sgDef.inputs || []).findIndex((p) => p.name === inp.name);
+            if (portIdx === -1) return;
+            const target = inputPortTargets[portIdx];
+            if (!target) return;
+
+            const origInternalId = String(target.targetNodeId).split(":").pop();
+            const remappedNode = remappedByOrigId[origInternalId];
+            if (!remappedNode) return;
+
+            const targetInputDef = (remappedNode.inputs || [])[target.targetSlot];
+            if (!targetInputDef?.widget) return;
+
+            let iWidgetIdx;
+            if (normalizedNodeIds.has(remappedNode.id)) {
+                const remainingNames = (remappedNode.inputs || [])
+                    .filter((i) => i.widget)
+                    .filter((i) => {
+                        const slotIdx = remappedNode.inputs.indexOf(i);
+                        return !redirectedTargets.has(`${remappedNode.id}:${slotIdx}`);
+                    })
+                    .map((i) => i.name);
+                iWidgetIdx = remainingNames.indexOf(targetInputDef.name);
+            } else {
+                const widgetNames = _wfmGetWidgetInputNames(objectInfo, remappedNode.type);
+                iWidgetIdx = widgetNames.indexOf(targetInputDef.name);
+            }
+            if (iWidgetIdx === -1) return;
+
+            if (!remappedNode.widgets_values) remappedNode.widgets_values = [];
+            remappedNode.widgets_values[iWidgetIdx] = outerValue;
+        });
+
+        for (const iLink of (sgDef.links || [])) {
+            if (iLink.origin_id === -10 || iLink.target_id === -20) continue;
+            maxLinkId++;
+            addedLinks.push([
+                maxLinkId,
+                nodeIdRemap[iLink.origin_id],
+                iLink.origin_slot,
+                nodeIdRemap[iLink.target_id],
+                iLink.target_slot,
+                iLink.type,
+            ]);
+        }
+    }
+
+    wf.nodes = [...wf.nodes.filter(n => !nodesToRemove.has(n.id)), ...addedNodes];
+    wf.links = [
+        ...wf.links.filter(l => !nodesToRemove.has(l[1]) && !nodesToRemove.has(l[3])),
+        ...addedLinks,
+    ];
+
+    delete wf.definitions;
+    return wf;
+}
+
+function _wfmIsDisplayOnlyNode(node) {
+    const hasConnectedOutput = node.outputs?.some(o => o.links && o.links.length > 0);
+    const hasConnectedInput = node.inputs?.some(i => i.link != null);
+    return !hasConnectedOutput && !hasConnectedInput;
+}
+
+function _wfmGetWidgetMapping(nodeType) {
+    const mappings = {
+        CheckpointLoaderSimple: ["ckpt_name"],
+        KSampler: ["seed", "steps", "cfg", "sampler_name", "scheduler", "denoise"],
+        CLIPTextEncode: ["text"],
+        CLIPTextEncodeEditPlus: ["text_edit", "mode"],
+        ImageMetadataCheckpointLoader: ["ckpt_name", "vae_name", "_metadata_json"],
+        ImageMetadataPromptLoader: ["ckpt_name", "vae_name", "positive_text", "negative_text", "_metadata_json"],
+        ImageMetadataLoRALoader: ["lora_1", "strength_model_1", "strength_clip_1", "lora_2", "strength_model_2", "strength_clip_2", "lora_3", "strength_model_3", "strength_clip_3"],
+        EmptyLatentImage: ["width", "height", "batch_size"],
+        LoraLoader: ["lora_name", "strength_model", "strength_clip"],
+        VAELoader: ["vae_name"],
+        SaveImage: ["filename_prefix"],
+        LoadImage: ["image", "upload"],
+        UNETLoader: ["unet_name", "weight_dtype"],
+        LoaderGGUF: ["gguf_name"],
+        LoaderGGUFAdvanced: ["gguf_name", "dequant_dtype", "patch_dtype", "patch_on_device"],
+        ResolutionSelector: ["aspect_ratio", "megapixels"],
+        EmptySD3LatentImage: ["width", "height", "batch_size"],
+        CLIPLoader: ["clip_name", "type", "device"],
+        ClipLoaderGGUF: ["clip_name", "type"],
+        DualClipLoaderGGUF: ["clip_name1", "clip_name2", "type"],
+        FluxGuidance: ["guidance"],
+        CFGNorm: ["strength"],
+        ImpactWildcardProcessor: ["wildcard_text"],
+        ImpactWildcardEncode: ["wildcard_text"],
+        WFS_PromptText: ["positive", "negative"],
+    };
+    return mappings[nodeType] || null;
+}
+
+async function _wfmConvertUiToApi(workflow) {
+    if (!workflow.nodes || !workflow.links) return {};
+
+    const objectInfo = await _wfmLoadObjectInfo();
+    const flatWorkflow = _wfmFlattenSubgraphs(workflow, objectInfo);
+
+    const linkMap = {};
+    for (const link of flatWorkflow.links) {
+        const [id, srcNode, srcSlot, dstNode, dstSlot] = link;
+        if (!linkMap[dstNode]) linkMap[dstNode] = {};
+        linkMap[dstNode][dstSlot] = [String(srcNode), srcSlot];
+    }
+    const nodeById = {};
+    for (const n of flatWorkflow.nodes) nodeById[String(n.id)] = n;
+
+    const api = {};
+    for (const node of flatWorkflow.nodes) {
+        if (node.mode === 2 || node.mode === 4) continue;
+        if (!objectInfo[node.type] && _wfmIsDisplayOnlyNode(node)) continue;
+        const nodeId = String(node.id);
+        const inputs = {};
+
+        const nodeLinks = linkMap[node.id] || {};
+        const inputDefs = node.inputs || [];
+        const linkedInputNames = new Set();
+        const linkedSlotNames = new Set();
+        inputDefs.forEach((inp, idx) => {
+            if (nodeLinks[idx]) {
+                const resolved = _wfmResolveBypassSource(nodeById, linkMap, nodeLinks[idx][0], nodeLinks[idx][1], new Set());
+                if (!resolved) return;
+                inputs[inp.name] = resolved;
+                linkedInputNames.add(inp.name);
+                linkedSlotNames.add(inp.name);
+            }
+        });
+
+        const widgets = node.widgets_values || [];
+        if (widgets.length > 0) {
+            const lmWidgetIds = node.properties?.__lm_widget_ids;
+            if (lmWidgetIds && Array.isArray(lmWidgetIds)) {
+                lmWidgetIds.forEach((name, idx) => {
+                    if (idx >= widgets.length || linkedInputNames.has(name)) return;
+                    let val = widgets[idx];
+                    if (name === "loras" && Array.isArray(val)) {
+                        val = { "__value__": val };
+                    }
+                    inputs[name] = val;
+                });
+            } else {
+                const widgetNames = _wfmGetWidgetInputNames(objectInfo, node.type);
+                if (widgetNames.length > 0) {
+                    const widgetTypes = _wfmGetWidgetInputTypes(objectInfo, node.type);
+                    let wIdx = 0;
+                    for (let nIdx = 0; nIdx < widgetNames.length; nIdx++) {
+                        if (wIdx >= widgets.length) break;
+                        const name = widgetNames[nIdx];
+                        const expectedType = widgetTypes[nIdx];
+                        if (linkedInputNames.has(name)) {
+                            if (!linkedSlotNames.has(name)) {
+                                wIdx++;
+                                if (wIdx < widgets.length && _wfmIsExtraWidgetValue(widgets[wIdx], expectedType)) {
+                                    wIdx++;
+                                }
+                            }
+                            continue;
+                        }
+                        let val = widgets[wIdx];
+                        wIdx++;
+                        if (_wfmIsExtraWidgetValue(val, expectedType)) {
+                            if (wIdx < widgets.length) {
+                                val = widgets[wIdx];
+                                wIdx++;
+                            }
+                        }
+                        if (expectedType === "COMFY_DYNAMICCOMBO_V3") {
+                            inputs[name] = val;
+                            const subNames = _wfmGetDynamicComboSubNames(objectInfo, node.type, name, val);
+                            for (const subName of subNames) {
+                                if (wIdx >= widgets.length) break;
+                                inputs[`${name}.${subName}`] = widgets[wIdx];
+                                wIdx++;
+                            }
+                            continue;
+                        }
+                        if (expectedType === "COMBO") {
+                            const allInputDefs = {
+                                ...(objectInfo[node.type]?.input?.required || {}),
+                                ...(objectInfo[node.type]?.input?.optional || {}),
+                            };
+                            const spec = allInputDefs[name];
+                            if (spec) {
+                                const choices = Array.isArray(spec[0]) ? spec[0] : null;
+                                if (choices && choices.length > 0 && !choices.includes(val)) {
+                                    val = choices[0];
+                                }
+                            }
+                        }
+                        inputs[name] = val;
+                    }
+                } else {
+                    const mapping = _wfmGetWidgetMapping(node.type);
+                    if (mapping) {
+                        mapping.forEach((key, idx) => {
+                            if (idx < widgets.length && key && !(key in inputs)) {
+                                inputs[key] = widgets[idx];
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        if ((node.type === "ImpactWildcardEncode" || node.type === "ImpactWildcardProcessor")
+            && widgets.length > 0) {
+            inputs["wildcard_text"] = widgets[0];
+        }
+
+        api[nodeId] = {
+            class_type: node.type,
+            inputs,
+            _meta: { title: node.title || node.type },
+        };
+    }
+    return api;
+}
+
 function _collectUnique(arr) {
     const seen = new Set(), out = [];
     for (const v of arr) { if (v && typeof v === "string" && !seen.has(v)) { seen.add(v); out.push(v); } }
@@ -2522,11 +2977,22 @@ function _extractPromptsFromNodeSet(nodes, links) {
             if (!inp || inp.link == null) continue;
             const originId = linkOrigin.get(inp.link);
             if (originId == null) continue;
+            const name = inp.name ?? "";
+            const isPos = name === "positive" || name.startsWith("positive");
+            const isNeg = name === "negative" || name.startsWith("negative");
+            if (!isPos && !isNeg) continue;
+            // TextEncodeMageFlowEdit — 1ノードでprompt/negative_prompt両方を直接持つため、
+            // textMap(1ノード1テキスト)では両ロールを表現できない
+            const srcNode = nodeMap.get(originId);
+            if (srcNode?.type === "TextEncodeMageFlowEdit") {
+                const widgetIdx = isPos ? 0 : 1; // widgets_values: [prompt, negative_prompt, ...]
+                const txt = srcNode.widgets_values?.[widgetIdx];
+                if (txt && typeof txt === "string") { if (isPos) pos.add(txt); else neg.add(txt); }
+                continue;
+            }
             const txt = textMap.get(originId);
             if (!txt) continue;
-            const name = inp.name ?? "";
-            if (name === "positive" || name.startsWith("positive")) pos.add(txt);
-            else if (name === "negative" || name.startsWith("negative")) neg.add(txt);
+            if (isPos) pos.add(txt); else neg.add(txt);
         }
     }
     if (!foundSampler) return null;
@@ -2605,10 +3071,20 @@ function _extractPromptsAPI(wf) {
         foundSampler = true;
         for (const [key, val] of Object.entries(n.inputs ?? {})) {
             if (!Array.isArray(val)) continue;
+            const isPos = key === "positive" || key.startsWith("positive");
+            const isNeg = key === "negative" || key.startsWith("negative");
+            if (!isPos && !isNeg) continue;
+            // TextEncodeMageFlowEdit — 1ノードでprompt/negative_prompt両方を直接持つため、
+            // textMap(1ノード1テキスト)では両ロールを表現できない
+            const srcNode = wf[String(val[0])];
+            if (srcNode?.class_type === "TextEncodeMageFlowEdit") {
+                const txt = isPos ? srcNode.inputs?.prompt : srcNode.inputs?.negative_prompt;
+                if (txt && typeof txt === "string") { if (isPos) pos.add(txt); else neg.add(txt); }
+                continue;
+            }
             const txt = textMap.get(String(val[0]));
             if (!txt) continue;
-            if (key === "positive" || key.startsWith("positive")) pos.add(txt);
-            else if (key === "negative" || key.startsWith("negative")) neg.add(txt);
+            if (isPos) pos.add(txt); else neg.add(txt);
         }
     }
     if (!foundSampler || (pos.size === 0 && neg.size === 0)) { const all = [...textMap.values()].filter(t => t && t.trim()); return { positives: [], negatives: [], texts: all }; }
@@ -2695,9 +3171,20 @@ async function _extractAllMetadata(file) {
     const isJSON = file.type === "application/json" || name.endsWith(".json");
     const isWebP = file.type === "image/webp" || name.endsWith(".webp");
 
-    function fromWorkflow(wf, source) {
+    async function fromWorkflow(originalWf, source) {
+        let wf = originalWf;
+        // サブグラフを持つワークフローは、外側の折りたたみ表示ウィジェット値(実際に
+        // ユーザーが見ている値)がテンプレート内のノードのwidgets_valuesへ反映されて
+        // いないことがあるため、_wfmConvertUiToApi() で正規化してから抽出する。
+        if (Array.isArray(wf?.nodes) && wf.definitions?.subgraphs?.length > 0) {
+            try {
+                const apiWf = await _wfmConvertUiToApi(wf);
+                if (apiWf && Object.keys(apiWf).length > 0) wf = apiWf;
+            } catch { /* 変換失敗時は元のUI形式のまま抽出（既存ロジックにフォールバック） */ }
+        }
         const base = { source, checkpoints: _extractCheckpoints(wf), vaes: _extractVAEs(wf), diffusionModels: _extractDiffusionModels(wf), textEncoders: _extractTextEncoders(wf), loras: _extractLoRAs(wf), ..._extractPrompts(wf) };
-        const mdm = _extractMarkdownNoteModels(wf);
+        // MarkdownNote は常に元のUI形式ワークフローから抽出する（API変換後は nodes 情報が失われるため）
+        const mdm = _extractMarkdownNoteModels(originalWf);
         if (mdm) {
             if (!base.checkpoints.length) base.checkpoints = mdm.checkpoints;
             if (!base.vaes.length) base.vaes = mdm.vaes;
@@ -2710,19 +3197,19 @@ async function _extractAllMetadata(file) {
 
     if (isJSON) {
         let wf; try { wf = JSON.parse(_sanitizeJSON(await file.text())); } catch { return null; }
-        return wf ? fromWorkflow(wf, "comfyui") : null;
+        return wf ? await fromWorkflow(wf, "comfyui") : null;
     }
     if (isWebP) {
         const exif = await _readWebPEXIFChunk(file);
         if (!exif) return null;
         const wf = _extractWorkflowFromEXIF(exif);
-        return wf ? fromWorkflow(wf, "comfyui") : null;
+        return wf ? await fromWorkflow(wf, "comfyui") : null;
     }
     // PNG
     const chunks = await _readAllPNGTextChunks(file);
     if (!chunks) return null;
-    if (chunks.prompt) { let wf; try { wf = JSON.parse(_sanitizeJSON(chunks.prompt)); } catch { return null; } return wf ? fromWorkflow(wf, "comfyui") : null; }
-    if (chunks.workflow) { let wf; try { wf = JSON.parse(_sanitizeJSON(chunks.workflow)); } catch { return null; } return wf ? fromWorkflow(wf, "comfyui") : null; }
+    if (chunks.prompt) { let wf; try { wf = JSON.parse(_sanitizeJSON(chunks.prompt)); } catch { return null; } return wf ? await fromWorkflow(wf, "comfyui") : null; }
+    if (chunks.workflow) { let wf; try { wf = JSON.parse(_sanitizeJSON(chunks.workflow)); } catch { return null; } return wf ? await fromWorkflow(wf, "comfyui") : null; }
     if (chunks.fooocus_scheme === "fooocus" && chunks.parameters) {
         const f = _parseFooocusMetadata(chunks.parameters);
         if (!f) return null;

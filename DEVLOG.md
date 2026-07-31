@@ -2,6 +2,20 @@
 
 ---
 
+## v0.3.79 (未リリース)
+
+### 追加機能: サイドパネル（Workflow Studio Library）IタブのMage-Flow等サブグラフワークフロー対応
+
+v0.3.78でMetadataタブ(`metadata-tab.js`)に行ったMage-Flowサブグラフ対応と同様の対応を、「同様にサイドパネル(ComfyUIキャンバス上のIタブ)も更新したい」という依頼を受けて`node_sets_menu.js`にも適用。調査したところ、`node_sets_menu.js`のIタブは`metadata-tab.js`とほぼ同一の抽出関数群(`_extractCheckpoints`/`_extractPrompts`/`_collectAllNodes`等)を独立に重複実装しており、`web/comfyui/`は`static/js/`と配信URLが異なるためESモジュールをimportできない(既存のAI backend URL解決等と同じ制約)。そのためMetadataタブ側の対応がそのまま反映されない状態だった。
+
+- `comfyui-workflow.js`の`convertUiToApi()`相当ロジック一式(`_flattenSubgraphs`による外側ウィジェット値の内部ノードへの注入、`_getWidgetInputNames`/`_getWidgetInputTypes`/`_getDynamicComboSubNames`によるobject_infoベースのwidgetマッピング、DynamicCombo型対応を含む、約450行)を`_wfm`接頭辞を付けて`node_sets_menu.js`にローカル複製。GenerateUIタブと異なりIタブは読み取り専用表示のため、Checkpoint代替やBypass/Muteノードの記録機能(`_lastCheckpointSubstitutions`等)は複製せず省略。
+- `fromWorkflow`をasync化し、サブグラフ(`definitions.subgraphs`)を検出した場合は複製版`_wfmConvertUiToApi()`でAPI形式に正規化してから抽出するよう変更(変換失敗時は元のUI形式のまま抽出する既存ロジックへフォールバック)。
+- `_extractPromptsFromNodeSet`/`_extractPromptsAPI`に`TextEncodeMageFlowEdit`(1ノードでprompt/negative_prompt両方を直接持つ複合ノード)専用の分岐を追加。既存のtextMap(1ノード1テキストしか保持できない)構造では両ロールを区別できず、同じテキストが両方に登録されてしまうバグの修正を複製。
+
+**検証**: `node_sets_menu.js`は`../../scripts/app.js`をトップレベルでimportしモジュール自体をNode.jsで直接実行できないため、複製したロジックブロック(`_sanitizeJSON`〜`_extractAllMetadata`の自己完結範囲)を`sed`で抜き出しNode.jsでテスト。`mageflow_1.json`で`metadata-tab.js`側と完全に一致する結果(モデル名・プロンプトとも外側の実際の値)を確認。既存の他サブグラフワークフロー(Flux2/Qwen/Ernie/Krea2等)8件でもエラーなく動作しリグレッションがないことを確認。
+
+**How to apply**: [[project_v0375_lemonade_bypass]]で確立した「`web/comfyui/`はimport不可のためローカル複製」パターンを踏襲する場合、複製元のロジックが今後も更新される可能性があるものは、複製箇所に「変更する場合は元ファイル側も同期すること」という注意コメントを残す。複製したコードの検証は、importが困難なファイルでも`sed`等で自己完結したコードブロックを抜き出しNode.jsで実行すれば、ブラウザなしでも複製元と出力を突き合わせられる。
+
 ## v0.3.78
 
 ### 追加機能: Eagle自動保存のSVG対応
