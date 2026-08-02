@@ -5,7 +5,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { readJsonStorage, getAiBackendDefaultUrl } from "./util.js";
+import { readJsonStorage, getAiBackendDefaultUrl, escapeHtml } from "./util.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
@@ -583,6 +583,245 @@ function _appendSvgPreview(container, svgCode) {
     container.appendChild(wrapper);
 }
 
+// アシスタント応答から ```skill フェンスを抽出する（Skill Creator用スキルが出力する完成品ブロック）
+function _extractSkillBlock(text) {
+    if (!text) return null;
+    const m = text.match(/```skill\s*([\s\S]*?)```/i);
+    return m ? m[1].trim() : null;
+}
+
+// frontmatterの name から保存用ファイル名を推測する（未設定時は my-skill.md）
+function _slugifySkillName(content) {
+    const m = content.match(/^---\r?\n[\s\S]*?name:\s*(.+?)\r?\n/);
+    const name = (m ? m[1] : "").trim();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return `${slug || "my-skill"}.md`;
+}
+
+// 応答内にスキル定義ブロックがあれば「スキルとして保存」ボタンを追加する。
+// クリックすると管理パネルを開き、新規スキルとしてエディタに内容を流し込む（保存前にレビュー可能）。
+function _appendSkillSaveButton(container, skillContent) {
+    const btn = document.createElement("button");
+    btn.className = "wfm-btn wfm-btn-sm";
+    btn.textContent = t("aiChatSaveAsSkill");
+    btn.addEventListener("click", () => {
+        const panel = document.getElementById("wfm-ai-skill-panel");
+        if (panel) panel.style.display = "";
+        skillOpenEditor(null, skillContent);
+        const nameInput = document.getElementById("wfm-ai-skill-editor-filename");
+        if (nameInput) nameInput.value = _slugifySkillName(skillContent);
+    });
+    container.appendChild(btn);
+}
+
+// ============================================
+// AI skills (Chat system prompt library)
+// ============================================
+
+async function skillFetchFiles() {
+    try {
+        const res = await fetch("/api/wfm/skills");
+        return res.ok ? await res.json() : [];
+    } catch { return []; }
+}
+
+async function skillFetchContent(filename) {
+    try {
+        const res = await fetch(`/api/wfm/skills/content?filename=${encodeURIComponent(filename)}`);
+        const data = await res.json();
+        return data.content ?? null;
+    } catch { return null; }
+}
+
+async function skillSaveFile(filename, content) {
+    try {
+        const res = await fetch("/api/wfm/skills/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename, content }),
+        });
+        const data = await res.json();
+        return data.status === "ok" ? data.file : null;
+    } catch { return null; }
+}
+
+async function skillDeleteFile(filename) {
+    try {
+        await fetch("/api/wfm/skills/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename }),
+        });
+    } catch { /* ignore */ }
+}
+
+// system prompt として送る前に frontmatter (---...---) を取り除く
+function _stripSkillFrontmatter(content) {
+    const m = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    return (m ? content.slice(m[0].length) : content).trim();
+}
+
+let skillFiles = [];
+let skillEditingFilename = null; // null = new file
+let _activeSkillCache = null; // { filename, content } キャッシュ（送信毎の再フェッチを避ける）
+
+function skillRenderList() {
+    const list = document.getElementById("wfm-ai-skill-list");
+    if (!list) return;
+    list.innerHTML = "";
+
+    if (skillFiles.length === 0) {
+        list.innerHTML = `<div class="wfm-pm-empty" style="font-size:12px;">${t("aiSkillNoFiles")}</div>`;
+        return;
+    }
+
+    for (const f of skillFiles) {
+        const item = document.createElement("div");
+        item.className = "wfm-wc-file-item";
+        item.innerHTML = `
+            <div class="wfm-wc-file-item-info">
+                <span class="wfm-wc-file-name" title="${escapeHtml(f.description || "")}">${escapeHtml(f.name)}</span>
+                <span class="wfm-wc-file-ext">.md</span>
+            </div>
+            <div class="wfm-wc-file-item-actions">
+                <button class="wfm-pm-action-btn wfm-ai-skill-edit-btn" title="Edit">&#9998;</button>
+            </div>
+        `;
+        item.querySelector(".wfm-ai-skill-edit-btn").addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const content = await skillFetchContent(f.filename);
+            skillOpenEditor(f.filename, content ?? "");
+        });
+        list.appendChild(item);
+    }
+}
+
+function skillOpenEditor(filename, content) {
+    skillEditingFilename = filename || null;
+
+    const editor = document.getElementById("wfm-ai-skill-editor");
+    const nameInput = document.getElementById("wfm-ai-skill-editor-filename");
+    const contentTA = document.getElementById("wfm-ai-skill-editor-content");
+    const deleteBtn = document.getElementById("wfm-ai-skill-editor-delete-btn");
+
+    if (!editor) return;
+    nameInput.value = filename || "";
+    contentTA.value = content || "";
+    deleteBtn.style.display = filename ? "" : "none";
+    editor.style.display = "";
+    nameInput.focus();
+}
+
+function skillCloseEditor() {
+    skillEditingFilename = null;
+    const editor = document.getElementById("wfm-ai-skill-editor");
+    if (editor) editor.style.display = "none";
+}
+
+function skillPopulateSelect() {
+    const sel = document.getElementById("wfm-ai-chat-skill-select");
+    if (!sel) return;
+    const settings = loadAiSettings();
+    const wanted = sel.value || settings.activeSkillFilename || "";
+
+    sel.innerHTML = `<option value="">-- ${t("aiSkillNone")} --</option>` +
+        skillFiles.map((f) => `<option value="${escapeHtml(f.filename)}" title="${escapeHtml(f.description || "")}">${escapeHtml(f.name)}</option>`).join("");
+
+    sel.value = skillFiles.some((f) => f.filename === wanted) ? wanted : "";
+    _activeSkillCache = null;
+}
+
+async function skillRefreshFiles() {
+    skillFiles = await skillFetchFiles();
+    skillRenderList();
+    skillPopulateSelect();
+}
+
+// 選択中スキルの本文を取得（system prompt注入用、選択が変わるまでキャッシュ）
+async function _getActiveSkillSystemPrompt() {
+    const sel = document.getElementById("wfm-ai-chat-skill-select");
+    const filename = sel?.value || "";
+    if (!filename) return null;
+    if (_activeSkillCache?.filename === filename) return _activeSkillCache.content;
+    const raw = await skillFetchContent(filename);
+    const content = _stripSkillFrontmatter(raw || "");
+    _activeSkillCache = { filename, content };
+    return content;
+}
+
+function initSkillManager() {
+    const selectEl = document.getElementById("wfm-ai-chat-skill-select");
+    const manageBtn = document.getElementById("wfm-ai-chat-skill-manage-btn");
+    const panel = document.getElementById("wfm-ai-skill-panel");
+    const closeBtn = document.getElementById("wfm-ai-skill-close-btn");
+    const newBtn = document.getElementById("wfm-ai-skill-new-btn");
+    const saveBtn = document.getElementById("wfm-ai-skill-editor-save-btn");
+    const deleteBtn = document.getElementById("wfm-ai-skill-editor-delete-btn");
+    const cancelBtn = document.getElementById("wfm-ai-skill-editor-cancel-btn");
+
+    if (!selectEl) return;
+
+    skillRefreshFiles();
+
+    selectEl.addEventListener("change", () => {
+        saveAiSettings({ activeSkillFilename: selectEl.value });
+        _activeSkillCache = null;
+    });
+
+    manageBtn?.addEventListener("click", () => {
+        if (!panel) return;
+        const show = panel.style.display === "none";
+        panel.style.display = show ? "" : "none";
+        if (show) skillRefreshFiles();
+    });
+
+    closeBtn?.addEventListener("click", () => {
+        if (panel) panel.style.display = "none";
+    });
+
+    newBtn?.addEventListener("click", () => {
+        skillOpenEditor(null, "---\nname: \ndescription: \n---\n\n");
+    });
+
+    saveBtn?.addEventListener("click", async () => {
+        const nameInput = document.getElementById("wfm-ai-skill-editor-filename");
+        const contentTA = document.getElementById("wfm-ai-skill-editor-content");
+        let filename = (nameInput?.value || "").trim();
+        const content = contentTA?.value || "";
+
+        if (!filename) { showToast(t("pleaseEnterFilename"), "error"); return; }
+        if (!/\.md$/i.test(filename)) filename += ".md";
+        if (!/^[\w\-. ]+\.md$/i.test(filename)) { showToast(t("invalidPathFormat"), "error"); return; }
+
+        const saved = await skillSaveFile(filename, content);
+        if (saved) {
+            showToast(t("savedAs", filename), "success");
+            skillCloseEditor();
+            await skillRefreshFiles();
+            selectEl.value = filename;
+            saveAiSettings({ activeSkillFilename: filename });
+            _activeSkillCache = null;
+        } else {
+            showToast(t("saveFailed"), "error");
+        }
+    });
+
+    deleteBtn?.addEventListener("click", async () => {
+        if (!skillEditingFilename) return;
+        if (!confirm(`Delete "${skillEditingFilename}"?`)) return;
+        await skillDeleteFile(skillEditingFilename);
+        showToast(t("deletedName", skillEditingFilename), "success");
+        if (selectEl.value === skillEditingFilename) {
+            saveAiSettings({ activeSkillFilename: "" });
+            _activeSkillCache = null;
+        }
+        skillCloseEditor();
+        await skillRefreshFiles();
+    });
+
+    cancelBtn?.addEventListener("click", () => skillCloseEditor());
+}
+
 function appendChatBubble(messagesEl, role, content, opts = {}) {
     const div = document.createElement("div");
     div.className = `wfm-ai-chat-msg wfm-ai-chat-msg-${role}`;
@@ -602,6 +841,8 @@ function appendChatBubble(messagesEl, role, content, opts = {}) {
     if (role === "assistant" && content) {
         const svgCode = _extractSvgCode(content);
         if (svgCode) _appendSvgPreview(div, svgCode);
+        const skillBlock = _extractSkillBlock(content);
+        if (skillBlock) _appendSkillSaveButton(div, skillBlock);
     }
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -629,6 +870,8 @@ function initChatTab() {
     document.getElementById("wfm-ai-chat-attachment-clear")?.addEventListener("click", () => {
         _clearToolsImage();
     });
+
+    initSkillManager();
 
     let chatHistory = [];
 
@@ -662,7 +905,11 @@ function initChatTab() {
 
         try {
             const tools = imgGenToggle?.checked !== false ? IMAGE_GEN_TOOLS : undefined;
-            const reply = await callChat(url, backend, model, chatHistory, tools);
+            const skillPrompt = await _getActiveSkillSystemPrompt();
+            const messagesToSend = skillPrompt
+                ? [{ role: "system", content: skillPrompt }, ...chatHistory]
+                : chatHistory;
+            const reply = await callChat(url, backend, model, messagesToSend, tools);
             const toolCall = reply.toolCalls?.find(
                 (tc) => (tc.function?.name || tc.name) === "generate_image"
             );

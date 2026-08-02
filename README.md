@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.78-green)
+![Version](https://img.shields.io/badge/version-0.3.79-green)
 
 ## Screenshots
 
@@ -282,6 +282,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **TOOLS pane (Wildcards)** (v0.3.40) — select "Create wildcards" from the task dropdown; enter a category name and count; click Run to generate plain-text wildcard entries one per line (no markdown, no numbering); result can be copied directly into wildcard `.txt` files
 - **Chat pane — image-to-image (I2I)** (v0.3.74) — when an image is attached and `generate_image` is invoked, the attachment is uploaded and swapped into the target workflow's LoadImage node instead of running text-to-image; the target workflow is the one currently loaded in GenerateUI, or a dedicated I2I workflow configured in the Settings pane
 - **Chat pane — SVG generation, no ComfyUI workflow involved** (v0.3.77) — the LLM can also produce SVG graphics directly as text; if a reply contains SVG code (wrapped in a markdown code fence or written directly as a bare `<svg>...</svg>`), it's rendered inline as a preview and a "Save to Gallery" button writes it as a `.svg` file to the Gallery tab's output folder; unlike the Tool Calling image generation flow above, this is plain text pattern matching, so it works with any model regardless of tool-calling support
+- **Chat pane — Skills** (v0.3.79) — select a `.md` skill file from a dropdown above the message list to prepend its instructions to the conversation as a system prompt (not shown in the visible chat log); a pencil button opens an in-pane manager (list + inline editor, same pattern as the Prompt tab's wildcard file manager) to create, edit, or delete skill files stored in `user/default/Workflow-Studio/ai_skills/`; a file's `---`-delimited frontmatter (`name`/`description`) is shown in the dropdown; two starter skills are bundled — **SVG Icon Generator** (explicitly decomposes the subject into parts before drawing, which markedly improves recognizability from small local models) and **Skill Creator** (interviews you conversationally and drafts a new skill as a ```skill code block; a "Save as new skill" button appears under such replies and opens the manager pre-filled with the draft)
 - **Settings pane** — choose backend (Ollama / LM Studio / Lemonade), set the API URL, test connection, select a model (with refresh button), and configure Free language names for translation source and destination
 - **Settings pane — Chat Image Generation** (v0.3.73) — "Use dedicated workflow" checkbox lets Chat-triggered image generation use a saved workflow of your choice instead of the one currently loaded in GenerateUI, without disturbing what's shown there (same pattern as Image Edit's Inpaint dedicated workflow)
 - **Settings pane — Chat I2I Generation** (v0.3.74) — same "Use dedicated workflow" pattern as above, but for image-to-image generation when an image is attached; independent of the text-to-image dedicated workflow setting
@@ -408,6 +409,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.79
+
+- **AI TOOL Chat — Skills** — a selectable library of `.md` system-prompt files (frontmatter `name`/`description`) that get prepended to the conversation; managed in-pane (list + inline editor) with a new `/api/wfm/skills` backend (`skill_service.py`/`skill_routes.py`, same pattern as the existing wildcard file manager); two bundled skills: **SVG Icon Generator**, engineered around the "decompose the subject into parts before drawing" technique to fix unrecognizable SVG output from smaller local models, and **Skill Creator**, a meta-skill that interviews you and drafts a new skill as a ```skill code block with a one-click "Save as new skill" button
+- **Sidebar Info tab — Mage-Flow / subgraph workflow support** — the ComfyUI side panel's I tab now matches the Metadata tab's ability to inspect subgraph-based workflows (Flux.2 / Qwen-Image / Z-Image / Mage-Flow templates), including correct outer-widget-value injection and `TextEncodeMageFlowEdit` prompt handling
+- **Help tab — card-based redesign** — every help page now opens with a page title + "Open tab" jump button, and its content is split into topic-focused cards (heading + list) instead of one long flat bullet list per tab, matching the AI TOOL page's format introduced this release; no content was rewritten, only regrouped, and a few pre-existing gaps were fixed along the way (a duplicated Settings-pane bullet, and Tagger/Troubleshooting text that only lived in the i18n dictionary and never made it into the page markup)
 
 ### v0.3.78
 

@@ -3182,6 +3182,21 @@ body {
     display: block;
 }
 
+.wfm-help-article-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.wfm-help-article-header h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--wfm-text);
+    margin: 0;
+}
+
 .wfm-help-card {
     background: var(--wfm-surface);
     border: 1px solid var(--wfm-border);
@@ -5713,4 +5728,43 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.wfm-ai-chat-skill-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 0;
+    flex-shrink: 0;
+}
+
+.wfm-ai-chat-skill-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.wfm-ai-skill-panel {
+    margin: 6px 8px 0;
+    padding: 8px;
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius);
+    background: var(--wfm-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.wfm-ai-skill-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.wfm-ai-skill-panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wfm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }

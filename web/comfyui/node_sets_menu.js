@@ -3603,6 +3603,48 @@ async function aiFetchModels(url, backend) {
     }
 }
 
+// ---- AI skills (Chat system prompt library) ----
+
+async function aiSkillFetchFiles() {
+    try {
+        const r = await fetch("/api/wfm/skills");
+        return r.ok ? await r.json() : [];
+    } catch { return []; }
+}
+
+async function aiSkillFetchContent(filename) {
+    try {
+        const r = await fetch(`/api/wfm/skills/content?filename=${encodeURIComponent(filename)}`);
+        const d = await r.json();
+        return d.content ?? null;
+    } catch { return null; }
+}
+
+async function aiSkillSaveFile(filename, content) {
+    try {
+        const r = await fetch("/api/wfm/skills/save", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename, content }),
+        });
+        const d = await r.json();
+        return d.status === "ok" ? d.file : null;
+    } catch { return null; }
+}
+
+async function aiSkillDeleteFile(filename) {
+    try {
+        await fetch("/api/wfm/skills/delete", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename }),
+        });
+    } catch { /* ignore */ }
+}
+
+function aiSkillStripFrontmatter(content) {
+    const m = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    return (m ? content.slice(m[0].length) : content).trim();
+}
+
 const renderAiTab = (container) => {
     if (!container.querySelector(".wfm-nlp-ai-layout")) {
         container.innerHTML = `
@@ -3634,6 +3676,31 @@ const renderAiTab = (container) => {
                 </div>
                 <!-- Chat sub -->
                 <div id="wfm-nlp-ai-chat" class="wfm-nlp-ai-pane" style="display:none;">
+                    <div class="wfm-nlp-ai-row" style="flex-shrink:0;">
+                        <select id="wfm-nlp-ai-skill-select" class="wfm-nlp-ai-sel" style="flex:1;width:auto;">
+                            <option value="">-- No skill --</option>
+                        </select>
+                        <button id="wfm-nlp-ai-skill-manage-btn" class="wfm-nlp-ai-btn" title="Manage skills">&#9998;</button>
+                    </div>
+                    <div id="wfm-nlp-ai-skill-panel" class="wfm-nlp-ai-skill-panel" style="display:none;">
+                        <div class="wfm-nlp-ai-row" style="justify-content:space-between;">
+                            <span class="wfm-nlp-ai-sec-title">Skills</span>
+                            <div style="display:flex;gap:4px;">
+                                <button id="wfm-nlp-ai-skill-new-btn" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">+ New</button>
+                                <button id="wfm-nlp-ai-skill-close-btn" class="wfm-nlp-ai-btn">&#10005;</button>
+                            </div>
+                        </div>
+                        <div id="wfm-nlp-ai-skill-list" class="wfm-nlp-ai-skill-list"></div>
+                        <div id="wfm-nlp-ai-skill-editor" class="wfm-nlp-ai-skill-editor" style="display:none;">
+                            <input type="text" id="wfm-nlp-ai-skill-editor-filename" class="wfm-nlp-ai-input" placeholder="filename.md">
+                            <textarea id="wfm-nlp-ai-skill-editor-content" class="wfm-nlp-ai-input wfm-nlp-ai-skill-editor-ta" rows="6" placeholder="---&#10;name: My Skill&#10;description: ...&#10;---&#10;&#10;System prompt..."></textarea>
+                            <div class="wfm-nlp-ai-actions">
+                                <button id="wfm-nlp-ai-skill-editor-save-btn" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary">Save</button>
+                                <button id="wfm-nlp-ai-skill-editor-delete-btn" class="wfm-nlp-ai-btn wfm-nlp-ai-skill-danger-btn" style="display:none;">Delete</button>
+                                <button id="wfm-nlp-ai-skill-editor-cancel-btn" class="wfm-nlp-ai-btn">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="wfm-nlp-ai-chat-msgs" id="wfm-nlp-ai-chat-msgs"></div>
                     <textarea id="wfm-nlp-ai-chat-input" class="wfm-nlp-ai-textarea wfm-nlp-ai-chat-input" placeholder="Type a message..."></textarea>
                     <div class="wfm-nlp-ai-actions">
@@ -3920,7 +3987,11 @@ const setupAiHandlers = (container) => {
         chatStatusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
 
         try {
-            const reply = await aiCallChat(url, backend, model, chatHistory);
+            const skillPrompt = await getActiveSkillSystemPrompt();
+            const messagesToSend = skillPrompt
+                ? [{ role: "system", content: skillPrompt }, ...chatHistory]
+                : chatHistory;
+            const reply = await aiCallChat(url, backend, model, messagesToSend);
             chatHistory.push({ role: "assistant", content: reply });
             appendChatBubble("assistant", reply);
             chatStatusEl.textContent = "";
@@ -3945,6 +4016,141 @@ const setupAiHandlers = (container) => {
         if (chatMsgsEl) chatMsgsEl.innerHTML = "";
         if (chatStatusEl) { chatStatusEl.textContent = ""; chatStatusEl.className = "wfm-nlp-ai-status"; }
     });
+
+    // ---- Skill handlers (Chat system prompt library) ----
+    let skillFilesNlp = [];
+    let skillEditingFilenameNlp = null;
+    let activeSkillCacheNlp = null; // { filename, content }
+
+    const skillSelectEl = container.querySelector("#wfm-nlp-ai-skill-select");
+    const skillManageBtn = container.querySelector("#wfm-nlp-ai-skill-manage-btn");
+    const skillPanelEl = container.querySelector("#wfm-nlp-ai-skill-panel");
+    const skillCloseBtn = container.querySelector("#wfm-nlp-ai-skill-close-btn");
+    const skillNewBtn = container.querySelector("#wfm-nlp-ai-skill-new-btn");
+    const skillListEl = container.querySelector("#wfm-nlp-ai-skill-list");
+    const skillEditorEl = container.querySelector("#wfm-nlp-ai-skill-editor");
+    const skillEditorFilenameEl = container.querySelector("#wfm-nlp-ai-skill-editor-filename");
+    const skillEditorContentEl = container.querySelector("#wfm-nlp-ai-skill-editor-content");
+    const skillEditorSaveBtn = container.querySelector("#wfm-nlp-ai-skill-editor-save-btn");
+    const skillEditorDeleteBtn = container.querySelector("#wfm-nlp-ai-skill-editor-delete-btn");
+    const skillEditorCancelBtn = container.querySelector("#wfm-nlp-ai-skill-editor-cancel-btn");
+
+    async function getActiveSkillSystemPrompt() {
+        const filename = skillSelectEl?.value || "";
+        if (!filename) return null;
+        if (activeSkillCacheNlp?.filename === filename) return activeSkillCacheNlp.content;
+        const raw = await aiSkillFetchContent(filename);
+        const content = aiSkillStripFrontmatter(raw || "");
+        activeSkillCacheNlp = { filename, content };
+        return content;
+    }
+
+    function renderSkillList() {
+        if (!skillListEl) return;
+        skillListEl.innerHTML = "";
+        if (skillFilesNlp.length === 0) {
+            skillListEl.innerHTML = `<div style="padding:8px;font-size:11px;color:var(--descrip-text,#888);">No skills yet.</div>`;
+            return;
+        }
+        for (const f of skillFilesNlp) {
+            const item = document.createElement("div");
+            item.className = "wfm-nlp-ai-skill-item";
+            item.title = f.description || "";
+            item.innerHTML = `<span class="wfm-nlp-ai-skill-item-name">${f.name}</span><span>&#9998;</span>`;
+            item.addEventListener("click", async () => {
+                const content = await aiSkillFetchContent(f.filename);
+                openSkillEditor(f.filename, content ?? "");
+            });
+            skillListEl.appendChild(item);
+        }
+    }
+
+    function openSkillEditor(filename, content) {
+        skillEditingFilenameNlp = filename || null;
+        if (!skillEditorEl) return;
+        if (skillEditorFilenameEl) skillEditorFilenameEl.value = filename || "";
+        if (skillEditorContentEl) skillEditorContentEl.value = content || "";
+        if (skillEditorDeleteBtn) skillEditorDeleteBtn.style.display = filename ? "" : "none";
+        skillEditorEl.style.display = "";
+        skillEditorFilenameEl?.focus();
+    }
+
+    function closeSkillEditor() {
+        skillEditingFilenameNlp = null;
+        if (skillEditorEl) skillEditorEl.style.display = "none";
+    }
+
+    function populateSkillSelect() {
+        if (!skillSelectEl) return;
+        const c = loadAiCfg();
+        const wanted = skillSelectEl.value || c.activeSkillFilename || "";
+        skillSelectEl.innerHTML = `<option value="">-- No skill --</option>` +
+            skillFilesNlp.map(f => `<option value="${f.filename}" title="${f.description || ""}">${f.name}</option>`).join("");
+        skillSelectEl.value = skillFilesNlp.some(f => f.filename === wanted) ? wanted : "";
+        activeSkillCacheNlp = null;
+    }
+
+    async function refreshSkillFiles() {
+        skillFilesNlp = await aiSkillFetchFiles();
+        renderSkillList();
+        populateSkillSelect();
+    }
+
+    refreshSkillFiles();
+
+    skillSelectEl?.addEventListener("change", () => {
+        saveAiCfg({ activeSkillFilename: skillSelectEl.value });
+        activeSkillCacheNlp = null;
+    });
+
+    skillManageBtn?.addEventListener("click", () => {
+        if (!skillPanelEl) return;
+        const show = skillPanelEl.style.display === "none";
+        skillPanelEl.style.display = show ? "" : "none";
+        if (show) refreshSkillFiles();
+    });
+
+    skillCloseBtn?.addEventListener("click", () => {
+        if (skillPanelEl) skillPanelEl.style.display = "none";
+    });
+
+    skillNewBtn?.addEventListener("click", () => {
+        openSkillEditor(null, "---\nname: \ndescription: \n---\n\n");
+    });
+
+    skillEditorSaveBtn?.addEventListener("click", async () => {
+        let filename = (skillEditorFilenameEl?.value || "").trim();
+        const content = skillEditorContentEl?.value || "";
+        if (!filename) { showToast("ファイル名を入力してください", "error"); return; }
+        if (!/\.md$/i.test(filename)) filename += ".md";
+        if (!/^[\w\-. ]+\.md$/i.test(filename)) { showToast("無効なファイル名です", "error"); return; }
+        const saved = await aiSkillSaveFile(filename, content);
+        if (saved) {
+            showToast(`保存しました: ${filename}`, "success");
+            closeSkillEditor();
+            await refreshSkillFiles();
+            skillSelectEl.value = filename;
+            saveAiCfg({ activeSkillFilename: filename });
+            activeSkillCacheNlp = null;
+        } else {
+            showToast("保存に失敗しました", "error");
+        }
+    });
+
+    skillEditorDeleteBtn?.addEventListener("click", async () => {
+        if (!skillEditingFilenameNlp) return;
+        if (!confirm(`Delete "${skillEditingFilenameNlp}"?`)) return;
+        await aiSkillDeleteFile(skillEditingFilenameNlp);
+        showToast(`削除しました: ${skillEditingFilenameNlp}`, "success");
+        if (skillSelectEl.value === skillEditingFilenameNlp) {
+            saveAiCfg({ activeSkillFilename: "" });
+            activeSkillCacheNlp = null;
+        }
+        closeSkillEditor();
+        await refreshSkillFiles();
+    });
+
+    skillEditorCancelBtn?.addEventListener("click", () => closeSkillEditor());
 
     // ---- VLM handlers ----
     let vlmImage = null; // { base64, mimeType }
@@ -4941,6 +5147,55 @@ const injectStyles = () => {
         /* Wildcard count */
         .wfm-nlp-ai-wc-count {
             width: 60px;
+        }
+        /* AI skills */
+        .wfm-nlp-ai-skill-panel {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 6px;
+            border: 1px solid var(--border-color, #4e4e4e);
+            border-radius: 4px;
+            background: var(--comfy-menu-bg, #1e1e1e);
+        }
+        .wfm-nlp-ai-skill-list {
+            max-height: 120px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color, #4e4e4e);
+            border-radius: 3px;
+        }
+        .wfm-nlp-ai-skill-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            padding: 4px 6px;
+            font-size: 11px;
+            color: var(--input-text, #ddd);
+            border-bottom: 1px solid var(--border-color, #3a3a3a);
+            cursor: pointer;
+        }
+        .wfm-nlp-ai-skill-item:last-child { border-bottom: none; }
+        .wfm-nlp-ai-skill-item:hover { background: rgba(74,158,255,0.1); }
+        .wfm-nlp-ai-skill-item-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .wfm-nlp-ai-skill-editor {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .wfm-nlp-ai-skill-editor-ta {
+            font-family: monospace;
+            resize: vertical;
+            min-height: 90px;
+        }
+        .wfm-nlp-ai-skill-danger-btn {
+            color: #ff4757;
+            border-color: #ff4757;
         }
     `;
     document.head.appendChild(style);

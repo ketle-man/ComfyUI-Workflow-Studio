@@ -14,7 +14,20 @@ v0.3.78でMetadataタブ(`metadata-tab.js`)に行ったMage-Flowサブグラフ�
 
 **検証**: `node_sets_menu.js`は`../../scripts/app.js`をトップレベルでimportしモジュール自体をNode.jsで直接実行できないため、複製したロジックブロック(`_sanitizeJSON`〜`_extractAllMetadata`の自己完結範囲)を`sed`で抜き出しNode.jsでテスト。`mageflow_1.json`で`metadata-tab.js`側と完全に一致する結果(モデル名・プロンプトとも外側の実際の値)を確認。既存の他サブグラフワークフロー(Flux2/Qwen/Ernie/Krea2等)8件でもエラーなく動作しリグレッションがないことを確認。
 
-**How to apply**: [[project_v0375_lemonade_bypass]]で確立した「`web/comfyui/`はimport不可のためローカル複製」パターンを踏襲する場合、複製元のロジックが今後も更新される可能性があるものは、複製箇所に「変更する場合は元ファイル側も同期すること」という注意コメントを残す。複製したコードの検証は、importが困難なファイルでも`sed`等で自己完結したコードブロックを抜き出しNode.jsで実行すれば、ブラウザなしでも複製元と出力を突き合わせられる。
+**How to apply**: `web/comfyui/`はimport不可のためローカル複製パターンを踏襲する場合、複製元のロジックが今後も更新される可能性があるものは、複製箇所に「変更する場合は元ファイル側も同期すること」という注意コメントを残す。複製したコードの検証は、importが困難なファイルでも`sed`等で自己完結したコードブロックを抜き出しNode.jsで実行すれば、ブラウザなしでも複製元と出力を突き合わせられる。
+
+### 追加機能: AI TOOL Chatにスキル機能を追加・SVG生成品質改善・ヘルプのカード形式再設計
+
+「Chatで生成されるSVGの質を上げたい」という依頼から調査を開始したところ、Chat機能(`ai-tab.js`)にはsystem promptの仕組みが一切なく、SVG生成は「モデルが会話の流れで偶然SVGコードを書いた場合に正規表現で抽出するだけ」という後付け設計だったことが判明した(`_extractSvgCode`/`_appendSvgPreview`)。これを踏まえ、単発のSVG改善ではなく汎用的な「AIスキル」機構(選択式system promptライブラリ)を新設し、SVG生成品質改善をその第一弾スキルとして実装する方針に変更した。
+
+- **AIスキル機構**: `.md`ファイル(frontmatterで`name`/`description`を定義)を`user/default/Workflow-Studio/ai_skills/`に保存し、Chatペイン上部のドロップダウンで選択すると、その内容がsystem promptとして会話履歴の先頭に(表示上のチャット履歴には含めず)注入される。バックエンドは既存の`wildcard_service.py`/`wildcard_routes.py`パターンを踏襲した`skill_service.py`/`skill_routes.py`(`GET/POST /api/wfm/skills`系)を新設。管理UI(一覧・追加・編集・削除)はワイルドカードエディタのUIパターンを再利用してChatペインに内蔵。
+- **SVG Icon Generatorスキル**: アイコンライブラリ(Feather/Heroicons等)の設計慣習(`viewBox`+`currentColor`+`stroke-width`)とSVGのXSS対策(`<script>`/イベント属性/`<foreignObject>`禁止)を組み込んだ初期スキルとして同梱。実機検証(gemma3系モデル等)でカモメ/ペンギン等の生成結果が「落書き」状態だったため追加調査したところ、LLMのSVG生成研究(Chat2SVG等)で言われる「Shape Decomposition」(対象を部位に分解してから図形を組み立てる)を明示的に指示していないことが原因と判明。「Composition process」セクション(部位分解→形状割当→組み立ての手順を明示指示)を追加し、有機的な輪郭には短い`<path>`曲線を許可するよう緩和した結果、体感で大幅に改善(ユーザー確認済み)。
+- **Skill Creator(対話式スキル作成)**: 「作りたいスキルを対話形式で聞き出し、完成品を返す」ためのメタスキルを第二弾として同梱。1問ずつ質問し、十分な情報が集まったら\`\`\`skill\`\`\`フェンスでfrontmatter付きの完成スキルを出力する設計。フロント側に\`\`\`skill\`\`\`ブロック検出＋「スキルとして保存」ボタン(クリックでスキル管理パネルを開きfrontmatterの`name`から自動生成したファイル名とともにエディタへプリフィル)を追加し、実際にqwen3:4bで対話→保存までのフローを検証済み。SVGプレビュー機能と同じ理由でSPA(`ai-tab.js`)側のみの実装とし、サイドパネル(`node_sets_menu.js`)はスキル選択・system prompt注入のみ対応。
+- **ヘルプのカード形式再設計**: 別件で導入中の`comfyui-comic-creator`のヘルプUIが「セクションをカード形式で表示(workflow studio のヘルプ形式)」というコメント付きで実装されており、調査したところWFS自身のヘルプUI(サイドバーナビ＋検索)を参考に作られたものだったが、1トピック=1カードという構造だけはWFS側になかったことが判明。AI TOOLページを皮切りに全16ヘルプページを「ページ見出し+タブへのジャンプボタン」＋「トピックごとの複数カード(見出し+`<ul>`)」の構造に再構成した。個々の項目テキスト・id・i18n翻訳キーは変更せず、既存の`<li>`要素をどのカードの`<ul>`に含めるかという入れ物の再編成のみで実施(新規に追加したのはカード見出し用のキーのみ、約50個×3言語)。再構成の過程で、AI TOOLページの`helpAi5`(Settingsペインの説明)が`helpAi6`に完全に包含される重複項目だったこと、Taggerページと一部のTrouble項目がindex.html上は空の`<li>`(実テキストはi18n.js側にのみ存在)だったことも発見し、あわせて修正・記入した。
+
+**検証**: 新規追加した`/api/wfm/skills`系エンドポイントをcurlで確認。ブラウザでSVGスキル・Skill Creatorスキルの選択→送信→system prompt注入をfetchフックで実データ検証、手書きの「Bird」few-shot例は実際にレンダリングして認識可能な形状であることを確認。ヘルプの再設計は全16ページを実ブラウザでクリックし、カード表示・ジャンプボタンの遷移・翻訳適用を確認。
+
+**How to apply**: 新しい「選択式system promptライブラリ」的な機能を追加する際は、`skill_service.py`のfrontmatterパース(`_FRONTMATTER_RE`)とファイル一覧/読み書きAPIパターンがそのまま再利用できる。ヘルプページを新設・改修する際は、1ページ=1個の巨大な`<ul>`ではなく、トピックごとに`.wfm-help-card`で分割し、新規カード見出しはid+i18n 3言語キー+`app.js`の`helpIdMap`の3点セットで追加すること([[project_v0336_conventions]]のヘルプ更新規約を参照)。index.html上のテキストは`applyI18nToHtml()`がi18n.jsの内容で必ず上書きするため、実際に表示される文言はi18n.js側が正であり、index.html側は空にしたり古いままにしたりせず同期を保つこと。
 
 ## v0.3.78
 

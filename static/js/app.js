@@ -320,6 +320,19 @@ function applyI18nToHtml() {
     if (aiChatGenI2ITitle) aiChatGenI2ITitle.textContent = t("aiSettingsChatI2IGenTitle");
     const aiChatGenI2IDedicatedLabel = document.getElementById("wfm-ai-chatgen-i2i-dedicated-label");
     if (aiChatGenI2IDedicatedLabel) aiChatGenI2IDedicatedLabel.textContent = t("aiSettingsChatGenDedicated");
+    const aiSkillSel = document.getElementById("wfm-ai-chat-skill-select");
+    if (aiSkillSel) {
+        const firstOpt = aiSkillSel.querySelector("option[value='']");
+        if (firstOpt) firstOpt.textContent = `-- ${t("aiSkillNone")} --`;
+    }
+    const aiSkillManageBtn = document.getElementById("wfm-ai-chat-skill-manage-btn");
+    if (aiSkillManageBtn) aiSkillManageBtn.title = t("aiSkillManageBtnTitle");
+    const aiSkillPanelTitle = document.querySelector(".wfm-ai-skill-panel-title");
+    if (aiSkillPanelTitle) aiSkillPanelTitle.textContent = t("aiSkillPanelTitle");
+    const aiSkillNewBtn = document.getElementById("wfm-ai-skill-new-btn");
+    if (aiSkillNewBtn) aiSkillNewBtn.textContent = t("aiSkillNewBtn");
+    const aiSkillContentTA = document.getElementById("wfm-ai-skill-editor-content");
+    if (aiSkillContentTA) aiSkillContentTA.placeholder = t("aiSkillContentPlaceholder");
 
     // Group panel labels
     const propTitle = document.querySelector("#wfm-side-tab-group .wfm-group-section-title");
@@ -432,8 +445,18 @@ function applyI18nToHtml() {
         "wfm-help-sidepanel-17": "helpSidepanel17",
         "wfm-help-ai-title": "helpAiTitle",
         "wfm-help-ai-1": "helpAi1", "wfm-help-ai-2": "helpAi2", "wfm-help-ai-3": "helpAi3",
-        "wfm-help-ai-4": "helpAi4", "wfm-help-ai-5": "helpAi5", "wfm-help-ai-6": "helpAi6",
+        "wfm-help-ai-4": "helpAi4", "wfm-help-ai-6": "helpAi6",
         "wfm-help-ai-7": "helpAi7",
+        "wfm-help-ai-8": "helpAi8",
+        "wfm-help-ai-9": "helpAi9",
+        "wfm-help-ai-card-layout-title": "helpAiCardLayout",
+        "wfm-help-ai-card-translate-title": "helpAiCardTranslate",
+        "wfm-help-ai-card-chat-title": "helpAiCardChat",
+        "wfm-help-ai-card-svg-title": "helpAiCardSvg",
+        "wfm-help-ai-card-skills-title": "helpAiCardSkills",
+        "wfm-help-ai-card-skilltips-title": "helpAiCardSkillTips",
+        "wfm-help-ai-card-tools-title": "helpAiCardTools",
+        "wfm-help-ai-card-settings-title": "helpAiCardSettings",
         "wfm-help-imageedit-title": "helpImageEditTitle",
         "wfm-help-imageedit-tools-title": "helpImageEditToolsTitle",
         "wfm-help-imageedit-layer-title": "helpImageEditLayerTitle",
@@ -499,6 +522,60 @@ function applyI18nToHtml() {
         "wfm-help-github-desc": "helpGithubDesc",
         "wfm-help-kofi-desc": "helpKofiDesc",
         "wfm-help-thanks": "helpThanks",
+        // -- Help card headings (card-based redesign) --
+        "wfm-help-about-card-getting-started-title": "helpAboutCardGettingStarted",
+        "wfm-help-wf-title": "helpWfTitle",
+        "wfm-help-wf-card-browse-title": "helpWfCardBrowse",
+        "wfm-help-wf-card-groups-title": "helpWfCardGroups",
+        "wfm-help-wf-card-panel-title": "helpWfCardPanel",
+        "wfm-help-gen-title": "helpGenTitle",
+        "wfm-help-gen-card-connect-title": "helpGenCardConnect",
+        "wfm-help-gen-card-tabs-title": "helpGenCardTabs",
+        "wfm-help-gen-card-seed-title": "helpGenCardSeed",
+        "wfm-help-gen-card-batchsetup-title": "helpGenCardBatchSetup",
+        "wfm-help-gen-card-batchtypes-title": "helpGenCardBatchTypes",
+        "wfm-help-prompt-title": "helpPromptTitle",
+        "wfm-help-prompt-card-ai-title": "helpPromptCardAi",
+        "wfm-help-prompt-card-presets-title": "helpPromptCardPresets",
+        "wfm-help-prompt-card-wildcards-title": "helpPromptCardWildcards",
+        "wfm-help-metadata-card-overview-title": "helpMetadataCardOverview",
+        "wfm-help-metadata-card-extracted-title": "helpMetadataCardExtracted",
+        "wfm-help-metadata-card-formats-title": "helpMetadataCardFormats",
+        "wfm-help-settings-title": "helpSettingsTitle",
+        "wfm-help-settings-card-general-title": "helpSettingsCardGeneral",
+        "wfm-help-settings-card-connections-title": "helpSettingsCardConnections",
+        "wfm-help-settings-card-workflow-title": "helpSettingsCardWorkflow",
+        "wfm-help-settings-card-editor-title": "helpSettingsCardEditor",
+        "wfm-help-settings-card-misc-title": "helpSettingsCardMisc",
+        "wfm-help-nodes-title": "helpNodesTitle",
+        "wfm-help-nodes-card-browse-title": "helpNodesCardBrowse",
+        "wfm-help-nodes-card-groups-title": "helpNodesCardGroups",
+        "wfm-help-nodes-card-panel-title": "helpNodesCardPanel",
+        "wfm-help-gallery-card-browse-title": "helpGalleryCardBrowse",
+        "wfm-help-gallery-card-folder-title": "helpGalleryCardFolder",
+        "wfm-help-gallery-card-detail-title": "helpGalleryCardDetail",
+        "wfm-help-gallery-card-actions-title": "helpGalleryCardActions",
+        "wfm-help-gallery-card-formats-title": "helpGalleryCardFormats",
+        "wfm-help-models-title": "helpModelsTitle",
+        "wfm-help-models-card-browse-title": "helpModelsCardBrowse",
+        "wfm-help-models-card-civitai-title": "helpModelsCardCivitai",
+        "wfm-help-models-card-apply-title": "helpModelsCardApply",
+        "wfm-help-models-card-groups-title": "helpModelsCardGroups",
+        "wfm-help-models-card-bulk-title": "helpModelsCardBulk",
+        "wfm-help-sidepanel-card-tabs-title": "helpSidepanelCardTabs",
+        "wfm-help-sidepanel-card-dnd-title": "helpSidepanelCardDnd",
+        "wfm-help-sidepanel-card-info-title": "helpSidepanelCardInfo",
+        "wfm-help-sidepanel-card-ai-title": "helpSidepanelCardAi",
+        "wfm-help-sidepanel-card-nav-title": "helpSidepanelCardNav",
+        "wfm-help-tagger-card-overview-title": "helpTaggerCardOverview",
+        "wfm-help-tagger-card-single-title": "helpTaggerCardSingle",
+        "wfm-help-tagger-card-sending-title": "helpTaggerCardSending",
+        "wfm-help-tagger-card-batch-title": "helpTaggerCardBatch",
+        "wfm-help-imageedit-card-overview-title": "helpImageEditCardOverview",
+        "wfm-help-shortcuts-card-general-title": "helpShortcutsCardGeneral",
+        "wfm-help-trouble-card-connection-title": "helpTroubleCardConnection",
+        "wfm-help-trouble-card-workflow-title": "helpTroubleCardWorkflow",
+        "wfm-help-trouble-card-tagger-title": "helpTroubleCardTagger",
     };
     for (const [id, key] of Object.entries(helpIdMap)) {
         const el = document.getElementById(id);
@@ -511,6 +588,11 @@ function applyI18nToHtml() {
         helpSearch.placeholder = t("helpSearchPlaceholder");
         helpSearch.addEventListener("input", _onHelpSearch);
     }
+
+    // Jump-to-tab buttons
+    document.querySelectorAll(".wfm-help-jump-btn").forEach((btn) => {
+        btn.textContent = t("helpJumpToTab");
+    });
 }
 
 function _onHelpSearch(e) {
@@ -602,6 +684,13 @@ function initHelpTab() {
             btn.classList.add("active");
             document.querySelectorAll(".wfm-help-page").forEach((p) => p.classList.remove("active"));
             document.getElementById(`wfm-help-page-${page}`)?.classList.add("active");
+        });
+    });
+
+    // Jump-to-tab buttons: switch to the real feature tab this help page documents
+    document.querySelectorAll(".wfm-help-jump-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            document.querySelector(`.wfm-tab[data-tab="${btn.dataset.jumpTab}"]`)?.click();
         });
     });
 }

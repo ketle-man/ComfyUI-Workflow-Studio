@@ -1057,8 +1057,11 @@
                 <div class="wfm-help-content">
 
                     <div class="wfm-help-page active" id="wfm-help-page-about">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-about-title">About</h2>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-about-title">About</h3>
+                            <h3 id="wfm-help-about-card-getting-started-title">Getting Started</h3>
                             <p id="wfm-help-about-desc">A centralized control UI for managing ComfyUI workflow JSON files, generating images via API, assisting with prompt creation, and browsing/organizing nodes.</p>
                             <ul>
                                 <li id="wfm-help-about-1">Install via ComfyUI Manager or git clone to custom_nodes</li>
@@ -1068,53 +1071,94 @@
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-workflow">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-wf-title">Workflow Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="workflow">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3>Workflow Tab</h3>
+                            <h3 id="wfm-help-wf-card-browse-title">Browsing &amp; Filtering</h3>
                             <ul>
                                 <li id="wfm-help-wf-1">Switch between Thumbnail, Card, and Table view modes</li>
                                 <li id="wfm-help-wf-2">Search, category filter, favorites filter, and group filter</li>
-                                <li id="wfm-help-wf-3">Create, rename, delete groups and assign/remove workflows</li>
                                 <li id="wfm-help-wf-4">Import JSON/PNG files via button or drag &amp; drop</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-wf-card-groups-title">Groups &amp; Badges</h3>
+                            <ul>
+                                <li id="wfm-help-wf-3">Create, rename, delete groups and assign/remove workflows</li>
+                                <li id="wfm-help-wf-7">Badge management: add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-wf-card-panel-title">Side Panel &amp; Detail Modal</h3>
+                            <ul>
                                 <li id="wfm-help-wf-5">Side panel: thumbnail, JSON viewer (format badge: UI/API/App), clipboard copy, group management</li>
                                 <li id="wfm-help-wf-6">Detail modal: rename, favorite, thumbnail change, badge assignment, tags, memo, AI summary, send to canvas, load in GenerateUI, set as default, delete</li>
-                                <li id="wfm-help-wf-7">Badge management: add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-generate">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-gen-title">GenerateUI Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="generate">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3>GenerateUI Tab</h3>
+                            <h3 id="wfm-help-gen-card-connect-title">Connecting &amp; Loading Workflows</h3>
                             <ul>
                                 <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
                                 <li id="wfm-help-gen-2">Load workflows from Workflow tab (subgraph-containing workflows are supported, e.g. Flux.2 / Qwen-Image / Z-Image / Mage-Flow templates; only ComfyUI's simplified App format [.app.json / Linear Mode] is not); Reset Workflow button re-reads the current workflow file from disk and reloads the editor; <b>Save</b> button (right end of the tab bar) saves the current workflow — including any edits made in the editor — as a new .json file to the Workflow tab; a filename dialog appears with the current workflow name as the default; <b>Style</b> checkbox and dropdown (next to Reset Workflow): enable to apply a Fooocus-style JSON style to the positive and negative prompts at generation time — style files are loaded from <code>user/default/Workflow-Studio/style/*.json</code>; the style's <code>{prompt}</code> placeholder is replaced with the original prompt, or the style text is appended if no placeholder exists</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gen-card-tabs-title">Tab Layout</h3>
+                            <ul>
                                 <li id="wfm-help-gen-3">5-tab layout — Input (Prompt + Image), Model, Settings, Feeder, Batch — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
                                 <li id="wfm-help-gen-4">Input tab: inner tabs — <b>Prompt</b> and <b>Image</b> (drag-and-drop upload); Prompt tab has Positive Prompt, Negative Prompt, and an <b>Embeddings</b> selector at the bottom — select a model, set Weight (default 1.0), then click <b>Paste</b> to insert <code>(embedding:Name:weight)</code> at the cursor position of the last focused textarea (defaults to Positive if neither is focused); a <b>↺</b> button next to each Apply button reverts the textarea to the node's currently applied value; select text (or just place the cursor on a word/parenthesis block) and press <b>Ctrl+↑/↓</b> to adjust its emphasis weight in <code>(text:weight)</code> syntax by ±0.05 — the parentheses are removed automatically when the weight returns to 1.0</li>
                                 <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA (Single/Stack tabs), ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors), Hypernetwork (with Strength field) selectors with filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones</li>
                                 <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
                                 <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow; if the loaded workflow has Bypass or Mute nodes, a note listing them appears above the search bar (Bypass nodes are excluded with their wires reconnected around them; Mute nodes are excluded with no reconnection, matching ComfyUI itself)</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gen-card-seed-title">Seed &amp; Generation</h3>
+                            <ul>
                                 <li id="wfm-help-gen-8">Seed control: random, fixed, increment, decrement — seed input and mode selector stacked vertically for readability</li>
                                 <li id="wfm-help-gen-9">Generate, progress display, stop, and view results</li>
                                 <li id="wfm-help-gen-10">Eagle integration: auto-save generated images to Eagle (SVG output supported too — both the standard SaveSVGNode and comfyui-tosvg's Save SVG String node)</li>
+                                <li id="wfm-help-gen-18">Alt+Click any Apply button (Positive Prompt / Checkpoint / KSampler) to Apply &amp; Generate in one step — applies the parameter to the workflow then immediately queues a generation; only fires when the target node exists in the loaded workflow</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gen-card-batchsetup-title">Batch Tab — Setup</h3>
+                            <ul>
                                 <li id="wfm-help-gen-11">Batch tab — enable one batch type at a time by checking the checkbox in the Batch Queue column header; Generate then runs through all queued items sequentially with Pause/Resume and Stop controls</li>
                                 <li id="wfm-help-gen-12">Batch tab — Left pane has 4 tabs: <b>Checkpoints</b> (folder tree with Filter/All/None; (root) header checkbox selects all), <b>Sampler</b> (KSampler sampler_name list with (root) checkbox), <b>Scheduler</b> (KSampler scheduler list with (root) checkbox), <b>Style</b> (flat list of all styles loaded from <code>Workflow-Studio/style/</code> with All/None buttons); All/None toolbar buttons available for each tab</li>
                                 <li id="wfm-help-gen-13">Batch tab — Center pane: group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint tab shows groups defined in the Models tab — check a group header to select all its members, or expand ▶ to check individual models; group membership always reflects the current Models tab state</li>
                                 <li id="wfm-help-gen-14">Batch tab — Right pane (Batch Queue): 7 columns — Checkpoint, Lora, Prompt, Workflow, Sampler, Scheduler, <b>Style</b>; each column has an enable checkbox; only one type active at a time; count shown per column</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gen-card-batchtypes-title">Batch Tab — Batch Types</h3>
+                            <ul>
                                 <li id="wfm-help-gen-15">Sampler/Scheduler batch: select one or more samplers or schedulers from the left pane, enable the column in Batch Queue, then Generate to run each value through the KSampler node sequentially; sampler/scheduler lists are fetched from ComfyUI (requires connection)</li>
                                 <li id="wfm-help-gen-17">Style batch: select styles in the left pane Style tab, enable the Style column in Batch Queue, then Generate — each selected style is applied in sequence to the positive and negative prompts; styles are applied to workflow copies so the loaded workflow is not modified; style files are re-read each time the page loads from <code>user/default/Workflow-Studio/style/*.json</code></li>
-                                <li id="wfm-help-gen-16">SPA-side wildcard expansion (A1111-style): when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains __name__ syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation</li>
-                                <li id="wfm-help-gen-18">Alt+Click any Apply button (Positive Prompt / Checkpoint / KSampler) to Apply &amp; Generate in one step — applies the parameter to the workflow then immediately queues a generation; only fires when the target node exists in the loaded workflow</li>
                                 <li id="wfm-help-gen-19">Lora batch: for each LoRA, its syntax (&lt;lora:name:strength_model:strength_clip&gt;) and CivitAI trained words are automatically appended to the Positive prompt — rebuilt from the original prompt each time, not accumulated; the prompt is automatically restored to its pre-batch state when the batch completes or is stopped; if a selected LoRA is not yet recognized by ComfyUI's model list, a warning toast is shown (Refresh or restart ComfyUI)</li>
+                                <li id="wfm-help-gen-16">SPA-side wildcard expansion (A1111-style): when prompt text in non-ImpactWildcard nodes (e.g. CLIPTextEncode) contains __name__ syntax, the SPA expands it at generation time by randomly picking a line from the matching file in the WFS wildcard folder; nested wildcards are re-expanded up to 5 passes; unresolved wildcards are passed through unchanged; ImpactWildcardEncode/Processor nodes are skipped (handled server-side by Impact Pack); works in both single and batch generation</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-feeder">
-                        <div class="wfm-help-card">
-                            <h3 id="wfm-help-feeder-title">GenerateUI Tab — Feeder subtab</h3>
-                            <p id="wfm-help-feeder-desc">Two modes switchable via the [Image Loop] / [Gallery] toggle at the top of the left pane.</p>
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-feeder-title">GenerateUI Tab — Feeder subtab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="generate">Open tab &rarr;</button>
+                        </div>
+                        <p id="wfm-help-feeder-desc" style="margin-bottom:12px;">Two modes switchable via the [Image Loop] / [Gallery] toggle at the top of the left pane.</p>
 
-                            <h4 id="wfm-help-feeder-imgloop-title" style="margin:10px 0 4px;color:var(--wfm-accent)">Image Loop mode</h4>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-feeder-imgloop-title">Image Loop mode</h3>
                             <p id="wfm-help-feeder-imgloop-desc">Requires the comfyui-image-feeder custom node. Controls ImageFeeder nodes and runs continuous generation loops over an image library stored in user/default/image-loop-data/.</p>
                             <ul>
                                 <li id="wfm-help-feeder-1">Left pane — Node settings: select the target ImageFeeder node from the dropdown; edit all node parameters (Directory, Sort Mode, Index, Start/End Index, Batch Size, Seed, Use Selection); click Apply to write changes to the loaded workflow</li>
@@ -1127,8 +1171,10 @@
                                 <li id="wfm-help-feeder-8">Seed during Run: uses the right-pane seed setting (Random / Fixed / Increment / Decrement) — the ImageFeeder's own Seed field controls random sort order only</li>
                                 <li id="wfm-help-feeder-9">Index sync: after each generation the node returns the next index via WebSocket; the Index field updates automatically so the display stays in sync</li>
                             </ul>
+                        </div>
 
-                            <h4 id="wfm-help-feeder-gal-title" style="margin:14px 0 4px;color:var(--wfm-accent)">Gallery mode</h4>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-feeder-gal-title">Gallery mode</h3>
                             <p id="wfm-help-feeder-gal-desc">Uses the built-in WFS_GalleryFeeder node (no external plugin required). Feeds images from a Gallery group into a continuous generation loop.</p>
                             <ul>
                                 <li id="wfm-help-feeder-gal-1">Left pane — Node: select a WFS_GalleryFeeder node from the dropdown and click Apply to link it to the workflow; select the source group (defaults to <b>__Feeder__</b>), Sort Mode, Index (current image position), and Seed</li>
@@ -1142,16 +1188,30 @@
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-prompt">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-prompt-title">Prompt Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="prompt">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3>Prompt Tab</h3>
+                            <h3 id="wfm-help-prompt-card-ai-title">AI Assistant &amp; Translation</h3>
                             <ul>
                                 <li id="wfm-help-prompt-1">AI assistant (Ollama): model selection, chat for prompt consultation, image attachment (vision models)</li>
                                 <li id="wfm-help-prompt-2">Apply AI responses to GenerateUI prompts</li>
                                 <li id="wfm-help-prompt-3">Translation: JA&#8596;EN, ZH&#8596;EN</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-prompt-card-presets-title">Presets</h3>
+                            <ul>
                                 <li id="wfm-help-prompt-4">Preset management: create, edit, positive/negative prompt clipboard copy (PP/NP)</li>
                                 <li id="wfm-help-prompt-5">Preset Manager: browse all presets, favorites, and group-based filtering</li>
                                 <li id="wfm-help-prompt-6">Group management: create groups, assign/remove presets, delete groups</li>
                                 <li id="wfm-help-prompt-7">GenUI Set: apply preset prompts directly to GenerateUI</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-prompt-card-wildcards-title">Wildcards</h3>
+                            <ul>
                                 <li id="wfm-help-prompt-8">Wildcard toolbar: one-click buttons to insert wildcard syntax ({|}, {n$|}, __|__, &lt;lora:&gt;, etc.); wraps selected text</li>
                                 <li id="wfm-help-prompt-9">Wildcard file manager: create/edit/delete .txt/.yaml wildcard files; click filename to insert __filename__ at cursor</li>
                             </ul>
@@ -1159,71 +1219,140 @@
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-metadata">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-metadata-title">Metadata Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="metadata">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-metadata-title">Metadata Tab</h3>
+                            <h3 id="wfm-help-metadata-card-overview-title">Overview</h3>
                             <p id="wfm-help-metadata-desc">Drop a ComfyUI-generated PNG/WebP or workflow JSON to instantly extract and view the embedded model and prompt information.</p>
                             <ul>
                                 <li id="wfm-help-metadata-1">Left column: drop zone (image preview for PNG/WebP) and file info; click or drop to load</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-metadata-card-extracted-title">Extracted Information</h3>
+                            <ul>
                                 <li id="wfm-help-metadata-2">Center column: Checkpoint, VAE, Diffusion Model, and Text Encoder lists extracted from the workflow</li>
                                 <li id="wfm-help-metadata-3">Right column: LoRA list (with strength values) and Prompt list (click to view full text below)</li>
                                 <li id="wfm-help-metadata-4">Prompt actions — Copy: copy to clipboard; GenUI:P/N: set GenerateUI positive/negative prompt; Prompt:P/N: set Prompt tab preset positive/negative</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-metadata-card-formats-title">Supported Formats</h3>
+                            <ul>
                                 <li id="wfm-help-metadata-5">Supported: ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Mage-Flow subgraph workflows), SD WebUI, SD Forge, Fooocus. Model extraction covers UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, and QuadrupleCLIPLoader (e.g. HiDream 4-CLIP).</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-settings">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-settings-title">Settings Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="settings">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3>Settings Tab</h3>
+                            <h3 id="wfm-help-settings-card-general-title">General</h3>
                             <ul>
                                 <li id="wfm-help-settings-1">UI language and summary language</li>
                                 <li id="wfm-help-settings-2">Theme selection (13 presets) with customization: color overrides, background patterns (stripes, polka dot, checkerboard, SVG tiling), and font selection (16 Google Fonts including Japanese display fonts)</li>
-                                <li id="wfm-help-settings-3">Workflow data folder path</li>
+                                <li id="wfm-help-settings-9">All sections are collapsible accordion panels</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-settings-card-connections-title">Connections</h3>
+                            <ul>
                                 <li id="wfm-help-settings-4">ComfyUI connection URL and test</li>
                                 <li id="wfm-help-settings-5">Ollama URL, default model, and connection test</li>
-                                <li id="wfm-help-settings-6">Default workflow setting</li>
                                 <li id="wfm-help-settings-7">Eagle integration URL and auto-save toggle</li>
-                                <li id="wfm-help-settings-8">Data Management: export all plugin data to JSON / import to restore</li>
-                                <li id="wfm-help-settings-9">All sections are collapsible accordion panels</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-settings-card-workflow-title">Workflow Defaults</h3>
+                            <ul>
+                                <li id="wfm-help-settings-3">Workflow data folder path</li>
+                                <li id="wfm-help-settings-6">Default workflow setting</li>
                                 <li id="wfm-help-settings-10">Wildcard Integration: link WFS wildcard dir to ComfyUI-Impact-Pack wildcards (junction/symlink); existing files migrated automatically</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-settings-card-editor-title">Editor Customization</h3>
+                            <ul>
                                 <li id="wfm-help-settings-11">Text Size: one slider (10–28 px) adjusts font size for all prompt and chat textareas at once — Generate UI positive/negative prompts, AI Assistant chat input, Preset positive/negative, Wildcard prompt and file editor, and Metadata prompt full preview; takes effect immediately and saved with Save Settings</li>
                                 <li id="wfm-help-settings-12">RAW JSON Colors: customize the 6 syntax highlight colors for the Raw JSON editor in Generate UI — Default Text, Name/Scheduler, Title, Width/Height, Prompt/Text, Image/File; changes apply immediately on color pick; Reset Defaults restores the original color scheme</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-settings-card-misc-title">Data &amp; Misc</h3>
+                            <ul>
+                                <li id="wfm-help-settings-8">Data Management: export all plugin data to JSON / import to restore</li>
                                 <li id="wfm-help-settings-13">CivitAI Host: choose between civitai.com (SFW only) and civitai.red (unrestricted) — determines which site opens when clicking a model link in the Models tab CivitAI panel</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-nodes">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-nodes-title">Nodes Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="nodes">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3>Nodes Tab</h3>
+                            <h3 id="wfm-help-nodes-card-browse-title">Browse &amp; Organize</h3>
                             <ul>
                                 <li id="wfm-help-nodes-1">Node Browser: search by name/description/alias/tag, filter by category, package, tag, group, favorites</li>
                                 <li id="wfm-help-nodes-2">Card and Table view modes with pagination</li>
                                 <li id="wfm-help-nodes-3">Favorite nodes and add custom tags for organization</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-nodes-card-groups-title">Groups &amp; Sets</h3>
+                            <ul>
                                 <li id="wfm-help-nodes-4">Create, rename, delete node groups and assign/remove nodes</li>
-                                <li id="wfm-help-nodes-5">Side panel: Details (class name, package, category, description, flags), I/O Spec (inputs/outputs with types and defaults), Groups management</li>
                                 <li id="wfm-help-nodes-6">Node Sets: create reusable node collections with descriptions, tags, and link definitions between nodes</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-nodes-card-panel-title">Side Panel &amp; Multi-select</h3>
+                            <ul>
+                                <li id="wfm-help-nodes-5">Side panel: Details (class name, package, category, description, flags), I/O Spec (inputs/outputs with types and defaults), Groups management</li>
                                 <li id="wfm-help-nodes-7">Multi-select: Ctrl+click to toggle individual nodes, Shift+click for range selection; bulk action bar appears with add to group / remove from group / create &amp; add group / bulk favorite / unfavorite</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-gallery">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-gallery-title">Gallery Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="gallery">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-gallery-title">Gallery Tab</h3>
+                            <h3 id="wfm-help-gallery-card-browse-title">Browsing</h3>
                             <ul>
                                 <li id="wfm-help-gallery-1">Browse images in the ComfyUI output folder — set the folder path in Settings &gt; Gallery Output Folder</li>
                                 <li id="wfm-help-gallery-2">3-column layout: folder tree (left) | image grid (center) | detail panel (right)</li>
                                 <li id="wfm-help-gallery-3">Thumbnail and Table view modes; double-click any image to open fullscreen lightbox</li>
                                 <li id="wfm-help-gallery-4">Toolbar filters: favorites (★), text search (filename / tag / prompt), tag filter, group filter, sort by date/name</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gallery-card-folder-title">Folder &amp; Selection</h3>
+                            <ul>
                                 <li id="wfm-help-gallery-5">Folder tree: click to load images, expand with ▶; "+ New" creates a subfolder inside the selected folder, "Del" deletes it with all contents</li>
                                 <li id="wfm-help-gallery-6">Multi-select with Ctrl+click — bulk bar: select group → 'Add to Group' / 'Remove from Group'; 'Favorite All' / 'Unfavorite All'; 'Compare' (2–4 images); 'Move To...'; '<b>Export</b>' (downloads all selected images as a ZIP file); 'Delete File'</li>
+                                <li id="wfm-help-gallery-15"><b>F button</b> (cyan overlay, top-left of each thumbnail): toggle the image in/out of the <b>__Feeder__</b> group with a single click; active state stays visible (cyan) when the image is already in the group; use this to quickly queue images for the Feeder tab Gallery mode</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gallery-card-detail-title">Detail Panel</h3>
+                            <ul>
                                 <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, date, tags (add/remove), memo; <b>download icon</b> (on image hover) to download the single image; "Move To..." moves the image to another folder, "Delete File" removes it permanently</li>
                                 <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; 'Copy &amp; Send Canvas' button copies to clipboard and stores the workflow for title-drag to canvas</li>
                                 <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image; the <b>__Feeder__</b> group is reserved (shown with 🔒) and cannot be renamed or deleted — rename and delete buttons are disabled when it is selected</li>
-                                <li id="wfm-help-gallery-15"><b>F button</b> (cyan overlay, top-left of each thumbnail): toggle the image in/out of the <b>__Feeder__</b> group with a single click; active state stays visible (cyan) when the image is already in the group; use this to quickly queue images for the Feeder tab Gallery mode</li>
-                                <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the JSON tab</li>
-                                <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF; workflow extraction reads ComfyUI prompt and workflow keys embedded in PNG metadata</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gallery-card-actions-title">Actions Toolbar</h3>
+                            <ul>
                                 <li id="wfm-help-gallery-12"><b>Metadata</b> button (green, in the detail panel tab bar): opens the selected image in the Metadata tab for full embedded-data inspection; Alt+click on any image thumbnail has the same effect</li>
                                 <li id="wfm-help-gallery-13"><b>Load GenUI</b> button (blue, in the detail panel tab bar): loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab and switches to it; shows a warning toast if no workflow is embedded or the format is not supported</li>
                                 <li id="wfm-help-gallery-14"><b>Tagger</b> button (purple, in the detail panel action row): opens the selected image directly in the Tagger tab's Single mode for instant tagging</li>
@@ -1231,21 +1360,52 @@
                                 <li id="wfm-help-gallery-17"><b>Send GenUI Image</b> button (toolbar, next to Image Edit): uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded first</li>
                             </ul>
                         </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-gallery-card-formats-title">Formats &amp; Auto-save</h3>
+                            <ul>
+                                <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the JSON tab</li>
+                                <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF; workflow extraction reads ComfyUI prompt and workflow keys embedded in PNG metadata</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-models">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-models-title">Models Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="models">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3>Models Tab</h3>
+                            <h3 id="wfm-help-models-card-browse-title">Browsing</h3>
                             <ul>
                                 <li id="wfm-help-models-1">Browse installed models: Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding with sub-tab switching</li>
                                 <li id="wfm-help-models-2">Thumbnail and Table view modes with pagination; Table view shows Type and Base Model columns sourced from CivitAI data alongside filename, subdirectory, and extension; <b>column headers are clickable to sort</b> — click once for ascending (▲), again for descending (▼), a third time to clear the sort; the <b>E/D</b> column sorts by enable/disable status</li>
                                 <li id="wfm-help-models-3">Search, tag filter, group filter, favorites filter, and status filter (All / Enabled only / Disabled only)</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-models-card-civitai-title">Side Panel &amp; CivitAI</h3>
+                            <ul>
                                 <li id="wfm-help-models-4">Side panel: opens to CivitAI tab by default when a model is selected; Info (file path, tags, memo), Groups management, CivitAI integration</li>
                                 <li id="wfm-help-models-5">CivitAI integration: fetch model info by SHA256 hash, batch fetch per model type</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-models-card-apply-title">Apply &amp; Detail</h3>
+                            <ul>
                                 <li id="wfm-help-models-6">Detail modal: preview image, CivitAI info (base model, trained words, tags), thumbnail change — upload any image format to replace the preview; changes take effect immediately without restarting ComfyUI; broken/empty preview files are automatically skipped; Delete button permanently removes the model file and all associated sidecar files</li>
-                                <li id="wfm-help-models-7">Group management: create, rename, delete groups and assign/remove models; Checkpoint and LoRA tabs support B (Batch) and S (Stack) quick-assign buttons per model in both card and table views</li>
                                 <li id="wfm-help-models-8">GenUI Model button: apply the selected model to the corresponding node in GenerateUI's current workflow (Checkpoint / LoRA / VAE / ControlNet / UNET / TextEncoder / Hypernetwork); <b>Embedding</b> tab shows <b>GenUI PP</b> / <b>GenUI NP</b> buttons instead — appends <code>(embedding:Name:1.0)</code> to the Positive or Negative prompt of the loaded workflow</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-models-card-groups-title">Groups &amp; Badges</h3>
+                            <ul>
+                                <li id="wfm-help-models-7">Group management: create, rename, delete groups and assign/remove models; Checkpoint and LoRA tabs support B (Batch) and S (Stack) quick-assign buttons per model in both card and table views</li>
                                 <li id="wfm-help-models-9">User-defined badges: assign free-label badges with custom colors shared with the Workflow tab</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-models-card-bulk-title">Enable/Disable &amp; Bulk Operations</h3>
+                            <ul>
                                 <li id="wfm-help-models-10">Enable/Disable models: toggle visibility in ComfyUI by renaming file extension (.disabled suffix). Disable per model (⏸ button on each card) or per group (Enable All / Disable All in Group panel). Changes take effect after ComfyUI refresh.</li>
                                 <li id="wfm-help-models-11">Multi-select &amp; bulk operations: click Select (green) to enter selection mode, then check multiple models; the bulk action bar is organized into three rows — <b>Group row:</b> select an existing group and Add/Remove, or type a new name and Create &amp; Add; <b>Badge row:</b> select a badge and +Badge / −Badge to apply or remove; <b>File row:</b> select a destination subfolder (or type a new folder name) and Move to relocate model files with all sidecar files (.preview.png, .json, .civitai.info, etc.), Delete Files to permanently remove selected models; header row provides Deselect All and ★/☆ Favorite toggles</li>
                                 <li id="wfm-help-models-12">After moving or deleting models, ComfyUI may fail to load them because it caches the old file paths. Perform a Hard Reset from the ComfyUI menu (Queue → Hard Reset) or restart ComfyUI to refresh the model cache.</li>
@@ -1254,65 +1414,135 @@
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-sidepanel">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-sidepanel-title">Workflow Studio Library (ComfyUI Side Panel)</h2>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-sidepanel-title">Workflow Studio Library (ComfyUI Side Panel)</h3>
+                            <h3 id="wfm-help-sidepanel-card-tabs-title">Tabs Overview</h3>
                             <ul>
                                 <li id="wfm-help-sidepanel-1">Open from the Workflow Studio Library button in the ComfyUI toolbar</li>
                                 <li id="wfm-help-sidepanel-2">Workflows tab: All / ★ Favorites / Groups sub-tabs; ★ shown for favorites in All view</li>
                                 <li id="wfm-help-sidepanel-3">Nodes tab: All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs; Category and Package show a dropdown to filter nodes</li>
                                 <li id="wfm-help-sidepanel-11">Models tab: All / ★ Favorites / Groups / By Type sub-tabs</li>
                                 <li id="wfm-help-sidepanel-4">Prompts tab: browse prompt presets with All/Favorites/Categories sub-tabs</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-sidepanel-card-dnd-title">Drag &amp; Drop / Interaction</h3>
+                            <ul>
                                 <li id="wfm-help-sidepanel-5">Drag &amp; drop workflows onto the canvas to load them</li>
                                 <li id="wfm-help-sidepanel-6">Drag &amp; drop nodes/node sets onto the canvas to place them</li>
                                 <li id="wfm-help-sidepanel-7">Drag &amp; drop prompt presets to create WFS_PromptText nodes with positive/negative prompts</li>
                                 <li id="wfm-help-sidepanel-8">Copy individual positive (P) or negative (N) prompts from sidebar items</li>
                                 <li id="wfm-help-sidepanel-9">Double-click items to load/place without dragging</li>
                                 <li id="wfm-help-sidepanel-10">Search within each sub-tab to quickly find items</li>
-                                <li id="wfm-help-sidepanel-12">⚙ Theme button (header): customize panel background, text, border colors — saved to localStorage</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-sidepanel-card-info-title">Information (I) tab</h3>
+                            <ul>
                                 <li id="wfm-help-sidepanel-13">I tab (Information): drop a ComfyUI PNG/WebP/JSON to inspect model, LoRA, and prompt metadata in the side panel — sub-tabs: model / lora / Prompts; supports UnetLoaderGGUF and QuadrupleCLIPLoader node types</li>
                                 <li id="wfm-help-sidepanel-14">Information tab — drag items to canvas: model sub-tab places the loader node (Checkpoint → CheckpointLoaderSimple, VAE → VAELoader, Diffusion Model → UNETLoader, Text Encoder → CLIPLoader); double-click also places at canvas center</li>
                                 <li id="wfm-help-sidepanel-15">Information tab — LoRA sub-tab: drag individual LoRA to place LoraLoader; "Multiple LORA" section at bottom places all LoRAs in a single Lora Loader (LoraManager) node; Prompts sub-tab: drag a prompt to place CLIPTextEncode node with text pre-filled; click prompt to view full text and copy</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-sidepanel-card-ai-title">AI TOOL tab</h3>
+                            <ul>
                                 <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, or Lemonade; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-sidepanel-card-nav-title">Customization &amp; Navigation</h3>
+                            <ul>
+                                <li id="wfm-help-sidepanel-12">⚙ Theme button (header): customize panel background, text, border colors — saved to localStorage</li>
                                 <li id="wfm-help-sidepanel-17">Title drag (Send to Canvas): after clicking 'Send to Canvas' (Workflow tab) or 'Copy &amp; Send Canvas' (Gallery tab), the 'Workflow Studio Library' title turns blue with a green ● — drag it onto the canvas to load the workflow; title resets automatically after loading</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-aitool">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-ai-title">AI TOOL Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="ai">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-ai-title">AI TOOL Tab</h3>
-                            <ul>
-                                <li id="wfm-help-ai-1">4-pane layout — Translation | Chat | TOOLS | Settings — all panes are always visible simultaneously</li>
-                                <li id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama, LM Studio, or Lemonade; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</li>
-                                <li id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history; if the model supports tool calling and asks for an image ("generate a cat picture", etc.) it will run generation on the workflow currently loaded in GenerateUI and show the result inline; the "Allow image generation" checkbox in the pane header toggles this on/off; if an image is attached (dropped in the TOOLS pane) it is sent to the LLM as vision input and, when generate_image is called, used as the base for image-to-image generation instead of text-to-image; models verified to work well for tool calling and vision: Gemma 4:e4b, Qwen 3.5:9b, Ministral 3:3b (Ollama)</li>
-                                <li id="wfm-help-ai-4">TOOLS pane — VLM: drop an image (PNG/JPG/WebP) and select a task (Describe Image, Create Prompt, Create Tags), then click Run to analyze with a vision model; result shown with Copy button; the dropped image is also shared with the Chat pane as its attachment (shown there and used for image-to-image generation) until cleared with the ✕ button</li>
-                                <li id="wfm-help-ai-5">TOOLS pane — Wildcards: select "Create wildcards" from the dropdown, enter a category name and count, click Run to generate plain-text wildcard entries one per line</li>
-                                <li id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</li>
-                                <li id="wfm-help-ai-7">Chat pane — SVG: the LLM can also produce SVG graphics directly as text, with no ComfyUI workflow involved; ask it to draw something in SVG and, if the reply contains SVG code, it is rendered inline as a preview with a "Save to Gallery" button that writes it as a .svg file to the Gallery tab's output folder; this does not use tool calling, so it works with any model regardless of tool-calling support</li>
-                            </ul>
+                            <h3 id="wfm-help-ai-card-layout-title">Layout</h3>
+                            <p id="wfm-help-ai-1">4-pane layout — Translation | Chat | TOOLS | Settings — all panes are always visible simultaneously</p>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-ai-card-translate-title">Translation pane</h3>
+                            <p id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama, LM Studio, or Lemonade; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</p>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-ai-card-chat-title">Chat pane</h3>
+                            <p id="wfm-help-ai-3">Chat pane: multi-turn conversation with the LLM; Enter to send a message, Shift+Enter for a newline; Clear button resets the conversation history; if the model supports tool calling and asks for an image ("generate a cat picture", etc.) it will run generation on the workflow currently loaded in GenerateUI and show the result inline; the "Allow image generation" checkbox in the pane header toggles this on/off; if an image is attached (dropped in the TOOLS pane) it is sent to the LLM as vision input and, when generate_image is called, used as the base for image-to-image generation instead of text-to-image; models verified to work well for tool calling and vision: Gemma 4:e4b, Qwen 3.5:9b, Ministral 3:3b (Ollama)</p>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-ai-card-svg-title">Chat pane — SVG generation</h3>
+                            <p id="wfm-help-ai-7">Chat pane — SVG: the LLM can also produce SVG graphics directly as text, with no ComfyUI workflow involved; ask it to draw something in SVG and, if the reply contains SVG code, it is rendered inline as a preview with a "Save to Gallery" button that writes it as a .svg file to the Gallery tab's output folder; this does not use tool calling, so it works with any model regardless of tool-calling support</p>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-ai-card-skills-title">Chat pane — Skills</h3>
+                            <p id="wfm-help-ai-8">Chat pane — Skills: pick a skill from the dropdown above the message list to prepend its instructions to the conversation as a system prompt (not shown in the visible chat log); use the pencil button to open the skill manager and create, edit, or delete .md skill files, stored in user/default/Workflow-Studio/ai_skills/; a file's first line block between --- markers can define name/description shown in the dropdown; two starter skills are included by default: "SVG Icon Generator" (decomposes the subject into parts before drawing, for more recognizable SVG output) and "Skill Creator" (interviews you conversationally and drafts a new skill file, ready to save); when a reply contains a ```skill code block, a "Save as new skill" button appears below it that opens the manager with the draft pre-filled</p>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-ai-card-skilltips-title">Writing your own skills</h3>
+                            <p id="wfm-help-ai-9">Tips for writing your own skills: give a clear frontmatter name/description so it reads well in the dropdown and tooltip; state the exact output format you want and, if there is a deliverable to extract later (like SVG or another skill file), wrap it in a distinctive fenced code block; write concrete, imperative instructions rather than vague ones - smaller local models follow explicit rules and a short worked example far better than general guidance; state hard constraints (forbidden content, security, length limits) explicitly rather than assuming they are implied; when in doubt, select the "Skill Creator" skill in the dropdown and describe what you want - it will interview you and draft the file for you</p>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-ai-card-tools-title">TOOLS pane</h3>
+                            <p id="wfm-help-ai-4">TOOLS pane — VLM: drop an image (PNG/JPG/WebP) and select a task (Describe Image, Create Prompt, Create Tags), click Run; or select "Create wildcards", enter a category name and count to generate plain-text entries one per line; the dropped image is also shared with the Chat pane as its attachment (shown there and used for image-to-image generation) until cleared with the ✕ button</p>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-ai-card-settings-title">Settings pane</h3>
+                            <p id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</p>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-tagger">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-tagger-title">Tagger Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="tagger">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-tagger-title">Tagger Tab</h3>
+                            <h3 id="wfm-help-tagger-card-overview-title">Overview &amp; Setup</h3>
                             <ul>
-                                <li id="wfm-help-tagger-1"></li>
-                                <li id="wfm-help-tagger-2"></li>
-                                <li id="wfm-help-tagger-3"></li>
-                                <li id="wfm-help-tagger-4"></li>
-                                <li id="wfm-help-tagger-5"></li>
-                                <li id="wfm-help-tagger-6"></li>
-                                <li id="wfm-help-tagger-7"></li>
-                                <li id="wfm-help-tagger-8"></li>
-                                <li id="wfm-help-tagger-9"></li>
+                                <li id="wfm-help-tagger-1">Automatic image tagging using WD Tagger (ONNX), SwinV2, DeepDanbooru (.h5), and Ollama VLM — 3 sub-tabs: Single / Batch / DB</li>
+                                <li id="wfm-help-tagger-2">Model placement: put each model in its own subfolder under ComfyUI/models/tagger/&lt;model-name&gt;/; the folder must contain a .onnx file + selected_tags.csv (or .h5 + label file for DeepDanbooru)</li>
+                                <li id="wfm-help-tagger-9">Install dependencies into ComfyUI's embedded Python: python_embeded\python.exe -m pip install -r requirements.txt; for GPU ONNX inference install onnxruntime-gpu instead of onnxruntime; TensorFlow (for DeepDanbooru) is commented out by default due to size</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagger-card-single-title">Single Tab</h3>
+                            <ul>
+                                <li id="wfm-help-tagger-3">Single tab: drag &amp; drop an image onto the preview area, or click Upload to pick a file; the Tagger button in the Gallery detail panel opens the selected image directly here</li>
+                                <li id="wfm-help-tagger-4">Threshold slider: minimum confidence score for general tags (default 0.35); Character Threshold: separate threshold for character: prefix tags (default 0.85)</li>
+                                <li id="wfm-help-tagger-5">Ollama VLM: enable the checkbox to run a vision model alongside WD Tagger; set API URL, select model (click ↻ to refresh), and customize the prompt; results from both models are merged</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagger-card-sending-title">Sending Results</h3>
+                            <ul>
+                                <li id="wfm-help-tagger-6">Result tags can be sent to: (1) GenUI:P — appended to the GenerateUI tab's positive prompt textarea and applied to the loaded workflow immediately; (2) Send to Prompt — appended to the Prompt tab's positive textarea; (3) Save to Gallery — saved to Gallery image metadata (requires image opened from Gallery); (4) Write to File — embedded into JPEG EXIF (ImageDescription) or PNG tEXt (Tags key); (5) Save to DB — stored in the internal SQLite database</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagger-card-batch-title">Batch &amp; DB Tabs</h3>
+                            <ul>
+                                <li id="wfm-help-tagger-7">Batch tab: enter a folder path, configure WD Tagger and Ollama settings; output options: Save to DB (default on), Write to File (EXIF/PNG metadata), Write .txt (creates &lt;filename&gt;.txt alongside each image); click Start Batch to process all images in the folder; progress bar and log are updated in real time; Stop cancels after the current image</li>
+                                <li id="wfm-help-tagger-8">DB tab: searchable database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records as a CSV file</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-imageedit">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-imageedit-title">Image Edit Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="image-edit">Open tab &rarr;</button>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-imageedit-title">Image Edit Tab</h3>
+                            <h3 id="wfm-help-imageedit-card-overview-title">Overview</h3>
                             <ul>
                                 <li id="wfm-help-imageedit-1">Layer-based image editor — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite</li>
                                 <li id="wfm-help-imageedit-2">Loading images: drag &amp; drop onto the canvas, Upload button, or send from the Gallery tab via the Image Edit button in the Gallery toolbar; the first image becomes Layer 1 (auto-locked); subsequent images are added as new layers scaled to fit the canvas</li>
@@ -1435,8 +1665,11 @@
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-shortcuts">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-shortcuts-title">Keyboard Shortcuts</h2>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-shortcuts-title">Keyboard Shortcuts</h3>
+                            <h3 id="wfm-help-shortcuts-card-general-title">General</h3>
                             <ul>
                                 <li id="wfm-help-shortcuts-1">Escape: Close modal/panel</li>
                                 <li id="wfm-help-shortcuts-2">Enter: Confirm rename, send chat</li>
@@ -1460,17 +1693,30 @@
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-trouble">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-trouble-title">Troubleshooting</h2>
+                        </div>
                         <div class="wfm-help-card">
-                            <h3 id="wfm-help-trouble-title">Troubleshooting</h3>
+                            <h3 id="wfm-help-trouble-card-connection-title">Connection Issues</h3>
                             <ul>
                                 <li id="wfm-help-trouble-1">Cannot connect to ComfyUI: Check if ComfyUI can generate images, verify URL in Settings, try refreshing or restarting</li>
                                 <li id="wfm-help-trouble-2">Cannot connect to Ollama: Use connection test button, check if Ollama is running and models are downloaded</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-trouble-card-workflow-title">Workflow &amp; Generation Issues</h3>
+                            <ul>
                                 <li id="wfm-help-trouble-3">Workflows not showing: Click refresh button, check if loadable in ComfyUI, try restarting browser/ComfyUI</li>
                                 <li id="wfm-help-trouble-4">Image generation fails: Check if specified models exist in ComfyUI, verify connection, try restarting</li>
                                 <li id="wfm-help-trouble-5">LoRA Stack fails with "No such file or directory" error: The LoRA may not be recognized by comfyui-lora-manager (known issue). Try a different LoRA or check if the file appears in Lora Manager's own UI</li>
                                 <li id="wfm-help-trouble-6">Model loading error after moving or deleting models: ComfyUI caches file paths and may still reference old locations. Perform a Hard Reset from the ComfyUI menu (Queue → Hard Reset) or restart ComfyUI to clear the cache.</li>
-                                <li id="wfm-help-trouble-7"></li>
-                                <li id="wfm-help-trouble-8"></li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-trouble-card-tagger-title">Tagger &amp; Model Issues</h3>
+                            <ul>
+                                <li id="wfm-help-trouble-7">Tagger tab shows no models: verify the model folder exists at ComfyUI/models/tagger/&lt;model-name&gt;/ and contains a .onnx or .h5 file; if onnxruntime is not installed, run: python_embeded\python.exe -m pip install onnxruntime</li>
+                                <li id="wfm-help-trouble-8">Model tab shows a checkpoint you didn't expect (e.g. always the same model regardless of the loaded workflow): the checkpoint saved in the workflow file is not installed, so it was silently replaced with another available model during loading — an error toast reports the original (missing) model name when this happens. Select the correct checkpoint manually in the Model tab, or enable "Default Checkpoint" in Settings to force a known-good model on every load.</li>
                             </ul>
                         </div>
                     </div>
@@ -2002,6 +2248,31 @@
             <!-- Chat pane -->
             <div class="wfm-ai-pane wfm-ai-pane-chat">
                 <div class="wfm-ai-pane-header">Chat</div>
+                <div class="wfm-ai-chat-skill-row">
+                    <select id="wfm-ai-chat-skill-select" class="wfm-select wfm-ai-chat-skill-select">
+                        <option value="">-- No skill --</option>
+                    </select>
+                    <button id="wfm-ai-chat-skill-manage-btn" class="wfm-btn wfm-btn-sm" title="Manage skills">&#9998;</button>
+                </div>
+                <div id="wfm-ai-skill-panel" class="wfm-ai-skill-panel" style="display:none;">
+                    <div class="wfm-ai-skill-panel-header">
+                        <span class="wfm-ai-skill-panel-title">Skills</span>
+                        <div style="display:flex;gap:4px;">
+                            <button id="wfm-ai-skill-new-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New</button>
+                            <button id="wfm-ai-skill-close-btn" class="wfm-btn wfm-btn-sm" title="Close">&#10005;</button>
+                        </div>
+                    </div>
+                    <div id="wfm-ai-skill-list" class="wfm-wc-file-list"></div>
+                    <div id="wfm-ai-skill-editor" class="wfm-wc-editor" style="display:none;">
+                        <input type="text" id="wfm-ai-skill-editor-filename" class="wfm-input" placeholder="filename.md">
+                        <textarea id="wfm-ai-skill-editor-content" class="wfm-textarea wfm-wc-editor-ta" rows="10" placeholder="---&#10;name: My Skill&#10;description: What this skill does&#10;---&#10;&#10;System prompt instructions for the LLM..."></textarea>
+                        <div class="wfm-wc-editor-actions">
+                            <button id="wfm-ai-skill-editor-save-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Save</button>
+                            <button id="wfm-ai-skill-editor-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" style="display:none;">Delete</button>
+                            <button id="wfm-ai-skill-editor-cancel-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Cancel</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="wfm-ai-chat-container">
                     <div class="wfm-ai-chat-messages" id="wfm-ai-chat-messages"></div>
                     <div class="wfm-ai-chat-input-area">
