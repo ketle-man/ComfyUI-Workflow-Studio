@@ -1125,3 +1125,7 @@ export function initAiTab() {
     initVlmTab();
     initSettingsTab();
 }
+
+// gallery-tab.js の外部（Comic Creator）向けブリッジ（半自動マンガ作成の画像プロンプト
+// 下書き機能）が、設定タブと同じAI接続設定・LLM呼び出しロジックを再利用するためのexport。
+export { callLLM, loadAiSettings, isValidBackendUrl };

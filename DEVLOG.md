@@ -2,6 +2,19 @@
 
 ---
 
+## v0.3.80 (未リリース)
+
+### 追加機能: Comic Creator「半自動マンガ作成」向けブリッジ（LLMプロンプト下書き・バッチ画像生成）
+
+別カスタムノード`comfyui-comic-creator`が実装中の「半自動マンガ作成」機能（スクリプトのコマ割り・セリフからコマ単位でフキダシ・画像を自動生成するPhase 3）から、iframe越しに呼び出される新規ブリッジ2つを`gallery-tab.js`に追加。既存の`_wfmReceiveImageForI2I`/`_wfmReceiveInpaintRequest`/`_wfmReceiveI2IRunRequest`と同じ「`window._wfmReceiveXxx`をwindowへ直接代入し、Comic Creator側からiframe越しに呼ぶ」配置パターンを踏襲。
+
+- **`_wfmReceiveLLMPromptRequest(context)`**: シーン・登場人物・セリフ・現在のプロンプト下書きをコンテキストとして受け取り、AIタブの翻訳機能が既に持つLLM接続ロジック（`ai-tab.js`の`callLLM`/`loadAiSettings`/`isValidBackendUrl`、Ollama/LM Studio対応、設定タブの接続設定をそのまま再利用）で画像生成プロンプト案を1本生成して返す。これらの関数は元々`ai-tab.js`内に閉じていたため、`export`に追加してモジュール間で再利用できるようにした。
+- **`_wfmReceiveGenerateRequest(prompt, width, height)`**: 現在Generate UIタブにロード中のワークフローでtxt2img生成を実行し、結果画像のURLを返す。専用ワークフロー選択（I2I/Inpaint連携にある`workflowData`引数）は今回は非対応。幅・高さの指定は、設定タブの「Latent Image」パネルが`analysis.latent_nodes[0]`（`EmptyLatentImage`/`EmptySD3LatentImage`ノードを検出）を使って`workflow[id].inputs.width/height`を直接書き換えているのと同じ手法をそのまま踏襲。結果URLの取得は`_runInpaintWithImages`等と同じ「`window._wfmGenerateTab.generate()`実行後に`#wfm-gen-result-img`の`src`を読む」パターンを採用。
+
+**検証**: Comic Creator側からKaptureで実機E2E確認済み（Ollama接続でのLLM呼び出し、t2iワークフローでの画像生成・結果URL取得とも成功）。詳細はComic Creator側DEVLOG「半自動マンガ作成 Phase 3」の項を参照。
+
+---
+
 ## v0.3.79 (未リリース)
 
 ### 追加機能: サイドパネル（Workflow Studio Library）IタブのMage-Flow等サブグラフワークフロー対応

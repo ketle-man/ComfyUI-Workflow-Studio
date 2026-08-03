@@ -7,10 +7,11 @@ import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { loadFileIntoMetadataTab } from "./metadata-tab.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
-import { escapeHtml, setupSearchClearBtn } from "./util.js";
+import { escapeHtml, setupSearchClearBtn, getAiBackendDefaultUrl } from "./util.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
+import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -121,6 +122,70 @@ window._wfmReceiveI2IRunRequest = async (imageBlob, params, workflowData, workfl
             await loadWorkflowIntoEditor(workflowData, workflowFilename || "workflow.json");
         }
         return await window._wfmImageEditTab.runI2IExternal(imageBlob, params);
+    } catch (e) {
+        return { ok: false, message: e.message };
+    }
+};
+
+// ComfyUI Comic Creater からiframe越しにコマの設定（シーン・要素・セリフ等）を受け取り、
+// AIタブの設定タブと同じLLM接続設定（Ollama/LM Studio）で画像生成プロンプトの下書きを
+// 生成して返す（半自動マンガ作成の「L」ボタン連携用）。
+// Comic Creater側のスクリプトタブ「L」ボタンから
+// iframe.contentWindow._wfmReceiveLLMPromptRequest(context) として呼ばれる。
+// context: { scene, elements, dialogues, existingPrompt }（いずれも文字列、空文字可）
+window._wfmReceiveLLMPromptRequest = async (context) => {
+    try {
+        const settings = loadAiSettings();
+        const { backend = "ollama", backendUrl, model } = settings;
+        const url = backendUrl || getAiBackendDefaultUrl(backend);
+        if (!isValidBackendUrl(url)) return { ok: false, message: "AI settings: invalid backend URL (configure it in the Settings tab)" };
+        if (!model) return { ok: false, message: "AI settings: no model selected (configure it in the Settings tab)" };
+
+        const { scene = "", elements = "", dialogues = "", existingPrompt = "" } = context || {};
+        const prompt = [
+            "Create a concise Stable Diffusion image generation prompt (English, comma-separated tags/phrases describing scene, composition, character appearance and action) for one manga panel, based on the following context.",
+            "Output only the prompt text, nothing else.",
+            scene ? `Scene: ${scene}` : null,
+            elements ? `Characters/elements: ${elements}` : null,
+            dialogues ? `Dialogue: ${dialogues}` : null,
+            existingPrompt ? `Current draft prompt (revise/improve it): ${existingPrompt}` : null,
+        ].filter(Boolean).join("\n");
+
+        const result = await callLLM(url, backend, model, prompt);
+        const text = (result || "").trim();
+        if (!text) return { ok: false, message: "LLM returned an empty response" };
+        return { ok: true, text };
+    } catch (e) {
+        return { ok: false, message: e.message };
+    }
+};
+
+// ComfyUI Comic Creater からiframe越しに画像プロンプト・サイズを受け取り、Generate UIで
+// テキストから画像を生成して結果URLを返す（半自動マンガ作成のコマ単位バッチ画像生成用）。
+// Comic Creater側のスクリプトタブ「画像を一括生成」から
+// iframe.contentWindow._wfmReceiveGenerateRequest(prompt, width, height) として呼ばれる。
+// I2I/Inpaintと異なり画像アップロードは行わず（txt2img）、専用ワークフロー選択には未対応で
+// 常にGenerate UIに現在ロード中のワークフローをそのまま使う。
+window._wfmReceiveGenerateRequest = async (prompt, width, height) => {
+    try {
+        if (!window._wfmGenerateTab?.generate) return { ok: false, message: "Generate UI is not ready yet" };
+        const analysis = comfyUI.currentAnalysis;
+        if (!comfyUI.currentWorkflow || !analysis) return { ok: false, message: "No workflow loaded in Generate UI" };
+
+        const workflow = JSON.parse(JSON.stringify(comfyUI.currentWorkflow));
+        const latent = analysis.latent_nodes?.[0];
+        if (latent && width && height && workflow[latent.id]) {
+            workflow[latent.id].inputs.width = width;
+            workflow[latent.id].inputs.height = height;
+        }
+
+        comfyEditor.setPromptText("positive", prompt || "", { workflow, analysis });
+
+        await window._wfmGenerateTab.generate(workflow);
+
+        const resultUrl = document.getElementById("wfm-gen-result-img")?.src;
+        if (!resultUrl) return { ok: false, message: "No result image produced" };
+        return { ok: true, url: resultUrl };
     } catch (e) {
         return { ok: false, message: e.message };
     }
