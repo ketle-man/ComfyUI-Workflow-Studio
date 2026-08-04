@@ -410,6 +410,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ## Changelog
 
+### v0.3.80
+
+- **Comic Creator — Semi-Automatic Manga bridges** — added `window._wfmReceiveLLMPromptRequest(context)` and `window._wfmReceiveGenerateRequest(prompt, width, height)` (`gallery-tab.js`), following the same "assign to `window`, called across the iframe boundary" pattern as the existing I2I/Inpaint bridges. The LLM bridge drafts an image-generation prompt from scene/character/dialogue context using the AI tab's existing Ollama/LM Studio connection logic (`callLLM`/`loadAiSettings`/`isValidBackendUrl`, now exported from `ai-tab.js`); the generate bridge runs a txt2img generation with the workflow currently loaded in the GenerateUI tab, writing the requested width/height into the detected `EmptyLatentImage`/`EmptySD3LatentImage` node the same way the Settings tab's Latent Image panel does, and returns the result image URL.
+
 ### v0.3.79
 
 - **AI TOOL Chat — Skills** — a selectable library of `.md` system-prompt files (frontmatter `name`/`description`) that get prepended to the conversation; managed in-pane (list + inline editor) with a new `/api/wfm/skills` backend (`skill_service.py`/`skill_routes.py`, same pattern as the existing wildcard file manager); two bundled skills: **SVG Icon Generator**, engineered around the "decompose the subject into parts before drawing" technique to fix unrecognizable SVG output from smaller local models, and **Skill Creator**, a meta-skill that interviews you and drafts a new skill as a ```skill code block with a one-click "Save as new skill" button
