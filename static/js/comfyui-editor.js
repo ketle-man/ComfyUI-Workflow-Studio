@@ -367,7 +367,7 @@ export const comfyEditor = {
                 <label>Positive Prompt</label>
                 <div style="display:flex;gap:8px;margin-bottom:6px;">
                     <select id="wfm-prompt-pos-target" class="wfm-select" style="width:auto;flex:1;min-width:0;">
-                        ${positiveNodes.map((n) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" selected>ID:${n.id} (${n.title})</option>`).join("")}
+                        ${positiveNodes.map((n, i) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" ${i === 0 ? "selected" : ""}>ID:${n.id} (${n.title})</option>`).join("")}
                         ${nodeOpts}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-revert" title="${t("revertPromptTitle")}">↺</button>
@@ -379,7 +379,7 @@ export const comfyEditor = {
                 <label>Negative Prompt</label>
                 <div style="display:flex;gap:8px;margin-bottom:6px;">
                     <select id="wfm-prompt-neg-target" class="wfm-select" style="width:auto;flex:1;min-width:0;">
-                        ${negativeNodes.map((n) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" selected>ID:${n.id} (${n.title})</option>`).join("")}
+                        ${negativeNodes.map((n, i) => `<option value="${n.id}" data-text-key="${n.textKey || "text"}" ${i === 0 ? "selected" : ""}>ID:${n.id} (${n.title})</option>`).join("")}
                         ${nodeOpts}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-neg-revert" title="${t("revertPromptTitle")}">↺</button>
@@ -1030,23 +1030,38 @@ export const comfyEditor = {
         const sampler = analysis.sampler_nodes?.[0];
         const latent = analysis.latent_nodes?.[0];
 
+        // "Advanced Sampling" workflows (Flux.1/Flux.2, SD3.5, Chroma...) spread seed/steps/cfg/
+        // sampler/scheduler/denoise across RandomNoise + CFGGuider + KSamplerSelect + a *Scheduler
+        // node instead of one KSampler. sampler.*NodeId (set in analyzeWorkflow) says which real
+        // node each field writes back to; null/"" means that workflow has no such control at all
+        // (e.g. Flux2Scheduler has no named "scheduler" combo) so the field is disabled here.
+        const schedulerAvailable = !!sampler && sampler.schedulerNodeId != null;
+        const denoiseAvailable = !!sampler && sampler.denoiseNodeId != null;
+
         el.innerHTML = `
             <div style="display:flex;flex-direction:row;gap:0;align-items:flex-start;">
                 <div style="flex:1;min-width:0;padding-right:14px;border-right:1px solid var(--wfm-border);">
-                    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">KSampler</h3>
+                    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">${sampler?.advanced ? "Sampler (Advanced)" : "KSampler"}</h3>
                     ${sampler ? `
-                    <input type="hidden" id="wfm-settings-sampler-id" value="${sampler.id}" data-seed-key="${sampler.seedKey || "seed"}">
+                    <input type="hidden" id="wfm-settings-sampler-id"
+                        data-seed-key="${sampler.seedKey || "seed"}"
+                        data-seed-node-id="${sampler.seedNodeId ?? sampler.id}"
+                        data-steps-node-id="${sampler.stepsNodeId ?? sampler.id}"
+                        data-cfg-node-id="${sampler.cfgNodeId ?? sampler.id}"
+                        data-sampler-node-id="${sampler.samplerNodeId ?? sampler.id}"
+                        data-scheduler-node-id="${sampler.schedulerNodeId ?? ""}"
+                        data-denoise-node-id="${sampler.denoiseNodeId ?? ""}">
                     <div class="wfm-form-group">
                         <label>Seed</label>
                         <input type="number" class="wfm-input" id="wfm-settings-seed" value="${sampler.seed ?? -1}">
                     </div>
                     <div class="wfm-form-group">
                         <label>Steps</label>
-                        <input type="number" class="wfm-input" id="wfm-settings-steps" value="${sampler.steps ?? 20}" min="1" max="200">
+                        <input type="number" class="wfm-input" id="wfm-settings-steps" value="${sampler.steps ?? ""}" placeholder="${sampler.steps === undefined ? "linked" : ""}" min="1" max="200">
                     </div>
                     <div class="wfm-form-group">
                         <label>CFG</label>
-                        <input type="number" class="wfm-input" id="wfm-settings-cfg" value="${sampler.cfg ?? 7}" step="0.5" min="0">
+                        <input type="number" class="wfm-input" id="wfm-settings-cfg" value="${sampler.cfg ?? ""}" placeholder="${sampler.cfg === undefined ? "linked" : ""}" step="0.5" min="0">
                     </div>
                     <div class="wfm-form-group">
                         <label>Sampler</label>
@@ -1056,13 +1071,15 @@ export const comfyEditor = {
                     </div>
                     <div class="wfm-form-group">
                         <label>Scheduler</label>
-                        <select class="wfm-select" id="wfm-settings-scheduler">
-                            ${this.models.schedulers.map((s) => `<option value="${s}" ${s === sampler.scheduler ? "selected" : ""}>${s}</option>`).join("")}
+                        <select class="wfm-select" id="wfm-settings-scheduler" ${schedulerAvailable ? "" : "disabled"}>
+                            ${schedulerAvailable
+                                ? this.models.schedulers.map((s) => `<option value="${s}" ${s === sampler.scheduler ? "selected" : ""}>${s}</option>`).join("")
+                                : `<option value="">N/A</option>`}
                         </select>
                     </div>
                     <div class="wfm-form-group">
                         <label>Denoise</label>
-                        <input type="number" class="wfm-input" id="wfm-settings-denoise" value="${sampler.denoise ?? 1.0}" step="0.05" min="0" max="1">
+                        <input type="number" class="wfm-input" id="wfm-settings-denoise" value="${sampler.denoise ?? 1.0}" step="0.05" min="0" max="1" ${denoiseAvailable ? "" : "disabled"}>
                     </div>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-settings-sampler-apply" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                     ` : "<p class='wfm-placeholder'>No KSampler node found</p>"}
@@ -1073,17 +1090,18 @@ export const comfyEditor = {
                     <input type="hidden" id="wfm-settings-latent-id" value="${latent.id}">
                     <div class="wfm-form-group">
                         <label>Width</label>
-                        <input type="number" class="wfm-input" id="wfm-settings-width" value="${latent.width ?? 512}" step="8" min="64">
+                        <input type="number" class="wfm-input" id="wfm-settings-width" value="${latent.width ?? ""}" placeholder="${latent.width === undefined ? "linked" : ""}" step="8" min="64">
                     </div>
                     <div class="wfm-form-group">
                         <label>Height</label>
-                        <input type="number" class="wfm-input" id="wfm-settings-height" value="${latent.height ?? 512}" step="8" min="64">
+                        <input type="number" class="wfm-input" id="wfm-settings-height" value="${latent.height ?? ""}" placeholder="${latent.height === undefined ? "linked" : ""}" step="8" min="64">
                     </div>
                     <div class="wfm-form-group">
                         <label>Batch Size</label>
                         <input type="number" class="wfm-input" id="wfm-settings-batch" value="${latent.batch_size ?? 1}" min="1" max="64">
                     </div>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-settings-latent-apply">Apply</button>
+                    ${latent.width === undefined || latent.height === undefined ? `<p class="wfm-placeholder" style="margin-top:6px;">Width/Height is linked to another node (e.g. auto-follows the input image) — leave blank to keep it linked.</p>` : ""}
                     <div style="margin-top:10px;border-top:1px solid var(--wfm-border);padding-top:10px;">
                         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
                             ${[512, 768, 1024, 2048].map((s) => `<button class="wfm-btn wfm-btn-sm wfm-latent-sq-btn" data-size="${s}">${s}</button>`).join("")}
@@ -1109,17 +1127,19 @@ export const comfyEditor = {
         `;
 
         document.getElementById("wfm-settings-sampler-apply")?.addEventListener("click", (e) => {
-            const nodeId = document.getElementById("wfm-settings-sampler-id")?.value;
-            if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
-            const inputs = comfyUI.currentWorkflow[nodeId].inputs;
-            // KSamplerAdvanced uses noise_seed; fall back to seed
-            const seedKey = document.getElementById("wfm-settings-sampler-id")?.dataset?.seedKey || "seed";
-            inputs[seedKey] = parseInt(document.getElementById("wfm-settings-seed")?.value) || -1;
-            inputs.steps = parseInt(document.getElementById("wfm-settings-steps")?.value) || 20;
-            inputs.cfg = parseFloat(document.getElementById("wfm-settings-cfg")?.value) || 7;
-            inputs.sampler_name = document.getElementById("wfm-settings-sampler-name")?.value;
-            inputs.scheduler = document.getElementById("wfm-settings-scheduler")?.value;
-            inputs.denoise = parseFloat(document.getElementById("wfm-settings-denoise")?.value) || 1.0;
+            const ds = document.getElementById("wfm-settings-sampler-id")?.dataset || {};
+            const write = (nodeId, key, value) => {
+                if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
+                comfyUI.currentWorkflow[nodeId].inputs[key] = value;
+            };
+            write(ds.seedNodeId, ds.seedKey || "seed", parseInt(document.getElementById("wfm-settings-seed")?.value) || -1);
+            const stepsEl = document.getElementById("wfm-settings-steps");
+            if (stepsEl?.value !== "") write(ds.stepsNodeId, "steps", parseInt(stepsEl.value) || 20);
+            const cfgEl = document.getElementById("wfm-settings-cfg");
+            if (cfgEl?.value !== "") write(ds.cfgNodeId, "cfg", parseFloat(cfgEl.value) || 7);
+            write(ds.samplerNodeId, "sampler_name", document.getElementById("wfm-settings-sampler-name")?.value);
+            if (ds.schedulerNodeId) write(ds.schedulerNodeId, "scheduler", document.getElementById("wfm-settings-scheduler")?.value);
+            if (ds.denoiseNodeId) write(ds.denoiseNodeId, "denoise", parseFloat(document.getElementById("wfm-settings-denoise")?.value) || 1.0);
             _syncRawJson();
             if (e.altKey) document.dispatchEvent(new CustomEvent("wfm:apply-and-generate"));
         });
@@ -1128,8 +1148,11 @@ export const comfyEditor = {
             const nodeId = document.getElementById("wfm-settings-latent-id")?.value;
             if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
             const inputs = comfyUI.currentWorkflow[nodeId].inputs;
-            inputs.width = parseInt(document.getElementById("wfm-settings-width")?.value) || 512;
-            inputs.height = parseInt(document.getElementById("wfm-settings-height")?.value) || 512;
+            const wEl = document.getElementById("wfm-settings-width");
+            const hEl = document.getElementById("wfm-settings-height");
+            // Blank = leave the (linked) width/height alone instead of clobbering it with a default
+            if (wEl?.value !== "") inputs.width = parseInt(wEl.value) || 512;
+            if (hEl?.value !== "") inputs.height = parseInt(hEl.value) || 512;
             inputs.batch_size = parseInt(document.getElementById("wfm-settings-batch")?.value) || 1;
             _syncRawJson();
         });

@@ -294,6 +294,17 @@ function _flattenSubgraphs(workflow, objectInfo) {
             const remapped = JSON.parse(JSON.stringify(iNode));
             remapped.id = nodeIdRemap[iNode.id];
 
+            // Propagate the outer subgraph-node's Mute/Bypass mode onto every internal node.
+            // Without this, muting or bypassing a whole subgraph instance (e.g. disabling one of
+            // several parallel Flux.2 sampling pipelines via Ctrl-B) leaves its internal nodes at
+            // their template-authored mode (normally 0/enabled), so convertUiToApi's mode check
+            // below never excludes them — they end up in the API payload and can be picked up by
+            // node-existence-based UI logic (e.g. "first matching node found") ahead of the nodes
+            // actually driving the enabled pipeline.
+            if (node.mode === 2 || node.mode === 4) {
+                remapped.mode = node.mode;
+            }
+
             // Some subgraph-template nodes store widgets_values in the "legacy full" format
             // (one entry per widget input, including linked ones), while convertUiToApi's
             // widget-mapping loop assumes the "modern" format (linked widget inputs have no
@@ -303,12 +314,23 @@ function _flattenSubgraphs(workflow, objectInfo) {
             // links that terminate in a plain widget value (e.g. prompt text) are NOT
             // stripped — their value lives in the outer node's widgets_values instead and
             // is injected below.
+            // A widget input can also be linked entirely *within* the subgraph template itself
+            // (e.g. EmptyFlux2LatentImage.width <- GetImageSize, both internal nodes in the same
+            // Flux.2 template) — redirectedTargets only tracks links redirected from the *outer*
+            // parent graph, so it misses these. Detect them via sgDef.links directly, but only
+            // when the link's origin is another internal node (origin_id !== -10) — boundary
+            // links (origin_id === -10, e.g. prompt text) must NOT be treated as linked here,
+            // since those resolve to a plain widget value injected below instead.
             const allWidgetInputs = (remapped.inputs || []).filter((i) => i.widget);
             if (remapped.widgets_values && remapped.widgets_values.length === allWidgetInputs.length) {
                 const linkedIdx = new Set();
                 allWidgetInputs.forEach((inp, i) => {
                     const slotIdx = remapped.inputs.indexOf(inp);
-                    if (redirectedTargets.has(`${remapped.id}:${slotIdx}`)) linkedIdx.add(i);
+                    const isRedirected = redirectedTargets.has(`${remapped.id}:${slotIdx}`);
+                    const isInternalLink = inp.link != null && (sgDef.links || []).some(
+                        (l) => l.id === inp.link && l.target_id === iNode.id && l.target_slot === slotIdx && l.origin_id !== -10
+                    );
+                    if (isRedirected || isInternalLink) linkedIdx.add(i);
                 });
                 if (linkedIdx.size > 0) {
                     remapped.widgets_values = remapped.widgets_values.filter((_, i) => !linkedIdx.has(i));
@@ -346,11 +368,16 @@ function _flattenSubgraphs(workflow, objectInfo) {
             // e.g. width/height) would be off by however many entries were stripped.
             let iWidgetIdx;
             if (normalizedNodeIds.has(remappedNode.id)) {
+                const origInternalNodeId = String(remappedNode.id).split(":").pop();
                 const remainingNames = (remappedNode.inputs || [])
                     .filter((i) => i.widget)
                     .filter((i) => {
                         const slotIdx = remappedNode.inputs.indexOf(i);
-                        return !redirectedTargets.has(`${remappedNode.id}:${slotIdx}`);
+                        const isRedirected = redirectedTargets.has(`${remappedNode.id}:${slotIdx}`);
+                        const isInternalLink = i.link != null && (sgDef.links || []).some(
+                            (l) => l.id === i.link && String(l.target_id) === origInternalNodeId && l.target_slot === slotIdx && l.origin_id !== -10
+                        );
+                        return !isRedirected && !isInternalLink;
                     })
                     .map((i) => i.name);
                 iWidgetIdx = remainingNames.indexOf(targetInputDef.name);
@@ -718,11 +745,25 @@ export const comfyWorkflow = {
                 result.sampler_nodes.push({
                     id, type: ct, title,
                     seed: inputs.seed ?? inputs.noise_seed,
-                    seedKey,
-                    steps: inputs.steps, cfg: inputs.cfg,
-                    sampler_name: inputs.sampler_name, scheduler: inputs.scheduler,
-                    denoise: inputs.denoise,
+                    seedKey, seedNodeId: id,
+                    steps: inputs.steps, stepsNodeId: id,
+                    cfg: inputs.cfg, cfgNodeId: id,
+                    sampler_name: inputs.sampler_name, samplerNodeId: id,
+                    scheduler: inputs.scheduler, schedulerNodeId: id,
+                    denoise: inputs.denoise, denoiseNodeId: id,
                 });
+            }
+
+            // CFGGuider / BasicGuider — used by "Advanced Sampling" workflows (Flux.1/Flux.2,
+            // SD3.5, Chroma, etc.) in place of KSampler's positive/negative inputs. These feed
+            // SamplerCustomAdvanced rather than driving a sampler themselves, so role propagation
+            // must start here too, or CLIPTextEncode nodes downstream stay "unknown" role.
+            if (ct === "CFGGuider") {
+                if (Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
+                if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
+            }
+            if (ct === "BasicGuider") {
+                if (Array.isArray(inputs.conditioning)) samplerPositiveRef[inputs.conditioning[0]] = true;
             }
         }
 
@@ -811,6 +852,40 @@ export const comfyWorkflow = {
                 if (/neg|負/i.test(title)) return "negative";
                 return "unknown";
             };
+
+            // --- Advanced Sampler (SamplerCustom / SamplerCustomAdvanced) ---
+            // "Advanced Sampling" pattern used by Flux.1/Flux.2, SD3.5, Chroma, etc.: instead of
+            // one KSampler node holding seed/steps/cfg/sampler/scheduler, those values are spread
+            // across RandomNoise (noise_seed) → CFGGuider/BasicGuider (cfg) → KSamplerSelect
+            // (sampler_name) → a *Scheduler node (steps/denoise), all feeding SamplerCustomAdvanced.
+            // Collect them into one composite entry so Settings-tab editing still works; each
+            // value's *NodeId tracks which real node to write back to (null = no such control
+            // exists on this workflow, e.g. Flux2Scheduler has no named "scheduler" combo).
+            if (ct === "SamplerCustomAdvanced" || ct === "SamplerCustom") {
+                const noiseId = Array.isArray(inputs.noise) ? String(inputs.noise[0]) : null;
+                const guiderId = Array.isArray(inputs.guider) ? String(inputs.guider[0]) : null;
+                const samplerSelId = Array.isArray(inputs.sampler) ? String(inputs.sampler[0]) : null;
+                const schedulerId = Array.isArray(inputs.sigmas) ? String(inputs.sigmas[0]) : null;
+
+                const noiseInputs = (noiseId && workflow[noiseId]?.inputs) || {};
+                const guiderInputs = (guiderId && workflow[guiderId]?.inputs) || {};
+                const samplerSelInputs = (samplerSelId && workflow[samplerSelId]?.inputs) || {};
+                const schedulerInputs = (schedulerId && workflow[schedulerId]?.inputs) || {};
+
+                result.sampler_nodes.push({
+                    id, type: ct, title, advanced: true,
+                    seed: typeof noiseInputs.noise_seed === "number" ? noiseInputs.noise_seed : undefined,
+                    seedKey: "noise_seed", seedNodeId: noiseId,
+                    steps: typeof schedulerInputs.steps === "number" ? schedulerInputs.steps : undefined,
+                    stepsNodeId: schedulerId,
+                    cfg: typeof guiderInputs.cfg === "number" ? guiderInputs.cfg : undefined,
+                    cfgNodeId: "cfg" in guiderInputs ? guiderId : null,
+                    sampler_name: samplerSelInputs.sampler_name, samplerNodeId: samplerSelId,
+                    scheduler: undefined, schedulerNodeId: "scheduler" in schedulerInputs ? schedulerId : null,
+                    denoise: typeof schedulerInputs.denoise === "number" ? schedulerInputs.denoise : undefined,
+                    denoiseNodeId: "denoise" in schedulerInputs ? schedulerId : null,
+                });
+            }
 
             // --- Checkpoint nodes ---
             // Matches: CheckpointLoaderSimple, CheckpointLoader, "Checkpoint Loader" (WAS), etc.
@@ -957,10 +1032,15 @@ export const comfyWorkflow = {
             }
 
             // --- Latent nodes ---
-            if (ct === "EmptyLatentImage" || ct === "EmptySD3LatentImage") {
+            // EmptyFlux2LatentImage (Flux.2 templates) often has width/height wired to a
+            // GetImageSize node (auto-follows the reference image) rather than a direct number —
+            // leave those as undefined, same treatment as TextEncodeMageFlowEdit below, so the
+            // settings-tab UI shows "linked" instead of a stale default and Apply doesn't clobber it.
+            if (ct === "EmptyLatentImage" || ct === "EmptySD3LatentImage" || ct === "EmptyFlux2LatentImage") {
                 result.latent_nodes.push({
                     id, type: ct, title,
-                    width: inputs.width, height: inputs.height,
+                    width: typeof inputs.width === "number" ? inputs.width : undefined,
+                    height: typeof inputs.height === "number" ? inputs.height : undefined,
                     batch_size: inputs.batch_size,
                 });
             }
