@@ -2,6 +2,30 @@
 
 ---
 
+## v0.3.81
+
+### 追加機能: GenerateUIタブでFlux.2 Klein / LongCat / Boogu / HiDream E1 / FireRedのImage Editワークフローに対応
+
+「Flux2.Klein4b_comic.json / Flux2.Klein9b_comic.jsonをGenerateUIタブで動作させたい」という依頼を皮切りに、続けて`longcat_comic` / `boogu_image_comic` / `hidream_comic` / `Firered_comic`の4ワークフローにも対応してほしいという依頼が続いた。いずれも公式・サードパーティのImage Edit系ワークフローで、`KSampler`を使わない「Advanced Sampling」構成（`RandomNoise`＋何らかのGuiderノード＋`KSamplerSelect`＋`*Scheduler`＋`SamplerCustom`系ノードに分散した seed/steps/cfg/sampler/scheduler）や、独自のプロンプト/サンプラーノードを使っており、既存の`analyzeWorkflow()`（`comfyui-workflow.js`）が前提とするKSampler中心の設計では検出できず、GenerateUIタブのSettings/Latentパネルが「ノードが見つかりません」表示のまま操作不能だった。
+
+- **Flux.2 Klein（4b/9b）**: `CFGGuider`＋`RandomNoise`＋`SamplerCustomAdvanced`＋`KSamplerSelect`＋`Flux2Scheduler`という構成。`SamplerCustomAdvanced`を起点にguider/noise/sampler/schedulerの4ノードをたどり、Settingsパネルに複合サンプラーとして集約表示・編集できるようにした。`EmptyFlux2LatentImage`もLatentパネルに対応させ、`GetImageSize`へリンクされたwidth/heightは編集不可の代わりに空欄＋説明表示にして誤上書きを防止。`CFGGuider`/`BasicGuider`をpositive/negative判定の起点にも追加。
+- **LongCat**: 標準`KSampler`だが独自プロンプトノード`TextEncodeQwenImageEdit`（Plus無し版）を使用。`FluxGuidance`/`FluxKontextMultiReferenceLatentMethod`をrole伝播のパススルーノード集合(`COND_PASSTHROUGH`)に追加。
+- **Boogu**: `SamplerCustom`（`SamplerCustomAdvanced`とは入力構成が別物で、`CFGGuider`/`RandomNoise`を介さず自身が`positive`/`negative`/`cfg`/`noise_seed`を直接持つ）を誤って同一視していた既存実装を分離し、それぞれ専用ロジックで検出。独自プロンプトノード`TextEncodeBooguEdit`（1ノードに`prompt`/`negative_prompt`を両方保持）にも対応。
+- **HiDream E1**: `cond1`/`cond2`/`negative`という3つのconditioning入力を持つ特殊ガイダンスノード`DualCFGGuider`（`cfg`の代わりに`cfg_conds`/`cfg_cond2_negative`を持つ）と、画像編集用の中継ノード`InstructPixToPixConditioning`（positive/negative別々の入力・出力を持つため、通常の`COND_PASSTHROUGH`一括処理では役割を取り違える）のrole伝播に個別対応。
+- **FireRed**: `KSampler`のseed/steps/cfgがPrimitiveノード経由でリンクされる構成（値が数値ではなくリンク参照配列になる）で、既存の直接値前提のコードがリンク配列をそのままSettingsパネルに表示しようとしていた不具合を修正（数値でない場合は`undefined`扱いにし、リンク接続時は空欄＋「linked」表示、Apply時は未入力なら書き込みをスキップ）。
+
+**実機検証で発見・修正した既存バグ（今回の対応範囲拡大で初めて表面化）**
+
+- サブグラフ内部で完結するリンク（`GetImageSize`→`EmptyFlux2LatentImage`など）の扱いが誤っており、`widgets_values`変換で`batch_size`が`1024`になったり`CLIPTextEncode`の`text`が消えたりする不具合。
+- 同じロール（positive/negative）のプロンプトノードが複数存在する場合、ドロップダウンの選択とテキストエリアの表示内容が食い違う不具合（全`<option>`に無条件で`selected`を付けていたため）。
+- ミュート/バイパスしたサブグラフの内部ノードにmode情報が伝播せず、無効なパイプラインのノードがModelタブ等のデフォルト表示に紛れ込む不具合。
+- サブグラフ展開処理（`_flattenSubgraphs`）の`widgets_values`ノーマライズが「配列長とwidget数が完全一致する場合のみ」動作する設計だったため、seed直後に`control_after_generate`拡張値（`'fixed'`等）が挟まるノード（`KSampler`等）では条件が不成立となり、リンクされたwidget（steps/cfg等）のエントリが除去されないまま後続処理に渡り、cfg/denoiseなど後続フィールドの値が1つずつズレて上書きされる不具合（Firered_comicの実機検証で発覚）。`_simulateWidgetValues`/`_stripLegacyLinkedWidgetValues`/`_findInjectedWidgetIndex`という共通ロジックに全面書き直し、legacy-full/modern形式の自動判定と`control_after_generate`込みの正確な位置計算・注入に統一した。
+- `Reroute`ノード（配線整理用のUI専用パススルーノードで、ComfyUIバックエンドにノードクラスが存在しない）がそのままAPIペイロードに含まれ、`missing_node_type`の400エラーで生成が失敗する不具合（hidream_comicを実際にGenerateして初めて発覚）。既存のBypass(mode:4)ノード解決ロジック(`_resolveBypassSource`)をReroute対応に拡張し、常に配線を透過解決するようにした。Rerouteの入力型は`"*"`（汎用型）のまま保存されることが多く、Bypass用の型一致検索では見つからないため、Reroute（常に1入力1出力）は型チェックを省略する専用分岐を追加。
+
+**検証**: 実際にComfyUI上で6ワークフロー（Flux2.Klein4b_comic/Flux2.Klein9b_comic/longcat_comic/boogu_image_comic/hidream_comic/Firered_comic）をGenerateUIタブへ読み込み、Prompt/Settings/Model/Imageタブの表示とRaw JSON変換結果を1つずつ突き合わせて確認。hidream_comicは実際にGenerateを実行し、画像生成成功（Eagle保存ログ）まで確認。
+
+**How to apply**: KSamplerを使わない「Advanced Sampling」構成（`CFGGuider`/`DualCFGGuider`/`BasicGuider` + `RandomNoise` + `SamplerCustom`(`Advanced`) + `KSamplerSelect` + `*Scheduler`）に新しく遭遇したら、`SamplerCustomAdvanced`/`SamplerCustom`自体を起点にguider/scheduler/samplerノードをたどるのが基本形だが、guiderノードのconditioning入力名（`positive`/`negative` vs `cond1`/`cond2`/`negative`等）やSamplerCustom系のwidget有無はノードごとに異なるため、実際のノード定義を確認してから個別対応を追加すること。サブグラフの`widgets_values`関連の不具合は、`_simulateWidgetValues`系の共通ロジックが「legacy-full/modern形式の自動判定」「`control_after_generate`込みの正確な位置計算」まで一括して担うようになったため、今後同種の問題が出たら個別対応ではなくこの共通関数を確認・拡張するのが筋。`Reroute`のようなComfyコア標準の「UI専用でバックエンドに実体がないノード」は他にも存在しうるため、同様のエラー（`missing_node_type`）に遭遇したら`_resolveBypassSource`の仕組みを拡張する方針で対応する。
+
 ## v0.3.80
 
 ### 追加機能: Comic Creator「半自動マンガ作成」向けブリッジ（LLMプロンプト下書き・バッチ画像生成）
