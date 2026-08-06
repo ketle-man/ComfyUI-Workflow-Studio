@@ -171,6 +171,124 @@ function _isExtraWidgetValue(val, expectedType) {
 }
 
 /**
+ * True when a subgraph-template node's widget input (by name) is actually wired end-to-end —
+ * either redirected from an outer parent-graph link, or wired to another internal node within the
+ * same subgraph template (boundary links from the subgraph's own input ports, origin_id === -10,
+ * don't count: those resolve to a plain injected widget value instead, handled separately).
+ */
+function _isLinkedWidgetName(remappedNode, sgDef, origInternalId, redirectedTargets, name) {
+    const inputDef = (remappedNode.inputs || []).find((i) => i.widget && i.name === name);
+    if (!inputDef) return false;
+    const slotIdx = remappedNode.inputs.indexOf(inputDef);
+    if (redirectedTargets.has(`${remappedNode.id}:${slotIdx}`)) return true;
+    return inputDef.link != null && (sgDef.links || []).some(
+        (l) => l.id === inputDef.link && String(l.target_id) === origInternalId && l.target_slot === slotIdx && l.origin_id !== -10
+    );
+}
+
+/**
+ * Simulate consuming widgets_values against object_info's widget name/type order, accounting for
+ * frontend-only "control_after_generate" extras (e.g. "fixed" after a seed) that occupy one extra
+ * slot and shift every later index by one. When skipLinked is true, widgets the caller's
+ * isLinkedName() flags as linked are treated as consuming zero widgets_values entries (the
+ * "modern" ComfyUI format); with it false, every widget is assumed present (the "legacy full"
+ * format some subgraph templates store). Returns each widget's actual widgets_values index
+ * (or -1 if the array ran out), plus consumedIndices — every index a widget's own turn advanced
+ * past (normally just its value, but two when a control_after_generate extra was skipped) — and
+ * how many entries were consumed in total (the latter is how callers detect which of the two
+ * formats a given widgets_values array actually follows).
+ *
+ * consumedIndices matters because convertUiToApi's own widget-mapping loop only skips a
+ * control_after_generate extra while advancing past the *next* widget's turn (see its
+ * `!linkedSlotNames.has(name)` branch) — if that next widget turns out to be linked, the loop
+ * `continue`s before ever looking at the extra, leaving it unconsumed and silently misread as the
+ * value of whatever non-linked widget comes after. Stripping a linked widget's position alone
+ * (without its swallowed extra) reproduces exactly that bug one level up, in the injection step.
+ */
+function _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, skipLinked) {
+    let idx = 0;
+    const positions = {};
+    const consumedIndices = {};
+    for (let nIdx = 0; nIdx < widgetNames.length; nIdx++) {
+        const name = widgetNames[nIdx];
+        if (skipLinked && isLinkedName(name)) {
+            positions[name] = -1;
+            consumedIndices[name] = [];
+            continue;
+        }
+        if (idx >= widgetsValues.length) {
+            positions[name] = -1;
+            consumedIndices[name] = [];
+            continue;
+        }
+        const consumed = [idx];
+        let p = idx;
+        idx++;
+        if (_isExtraWidgetValue(widgetsValues[p], widgetTypes[nIdx]) && idx < widgetsValues.length) {
+            consumed.push(idx);
+            p = idx;
+            idx++;
+        }
+        positions[name] = p;
+        consumedIndices[name] = consumed;
+    }
+    return { positions, consumedIndices, consumed: idx };
+}
+
+/**
+ * Strip a subgraph-template node's widgets_values entries belonging to widget slots that are
+ * actually linked (see _isLinkedWidgetName), so convertUiToApi's own widget-mapping loop — which
+ * assumes the "modern" format where linked widgets contribute zero widgets_values entries — maps
+ * every remaining widget to the right value instead of drifting by however many linked entries
+ * were left in place. No-op when widgets_values already follows the modern format (nothing to
+ * strip) or the node has no widget inputs at all.
+ */
+function _stripLegacyLinkedWidgetValues(objectInfo, remappedNode, sgDef, origInternalId, redirectedTargets) {
+    const widgetsValues = remappedNode.widgets_values;
+    const allWidgetInputs = (remappedNode.inputs || []).filter((i) => i.widget);
+    if (!widgetsValues || allWidgetInputs.length === 0) return;
+
+    const widgetNames = _getWidgetInputNames(objectInfo, remappedNode.type);
+    const widgetTypes = _getWidgetInputTypes(objectInfo, remappedNode.type);
+    const isLinkedName = (name) => _isLinkedWidgetName(remappedNode, sgDef, origInternalId, redirectedTargets, name);
+
+    // If skipping linked widgets already accounts for every entry, widgets_values is already in
+    // the modern (no dangling linked entries) format — nothing to strip.
+    const skipSim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, true);
+    if (skipSim.consumed === widgetsValues.length) return;
+
+    // Otherwise it's "legacy full": recompute with every widget present to find exactly which
+    // indices the linked ones occupy — including any control_after_generate extra a linked
+    // widget's own turn would have consumed, which must be dropped too (see _simulateWidgetValues).
+    const fullSim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, false);
+    const linkedIdx = new Set();
+    for (const name of widgetNames) {
+        if (isLinkedName(name)) {
+            for (const i of fullSim.consumedIndices[name] || []) linkedIdx.add(i);
+        }
+    }
+    if (linkedIdx.size > 0) {
+        remappedNode.widgets_values = widgetsValues.filter((_, i) => !linkedIdx.has(i));
+    }
+}
+
+/**
+ * Find the widgets_values array index that corresponds to a given widget input name on a
+ * subgraph-template node, for injecting an outer subgraph-node's un-linked widget value into it.
+ * Assumes _stripLegacyLinkedWidgetValues has already normalized widgets_values to the modern
+ * format (linked widgets contribute zero entries), matching what convertUiToApi's own
+ * widget-mapping loop expects.
+ */
+function _findInjectedWidgetIndex(objectInfo, remappedNode, sgDef, origInternalId, redirectedTargets, targetName) {
+    const widgetNames = _getWidgetInputNames(objectInfo, remappedNode.type);
+    const widgetTypes = _getWidgetInputTypes(objectInfo, remappedNode.type);
+    const widgetsValues = remappedNode.widgets_values || [];
+    const isLinkedName = (name) => _isLinkedWidgetName(remappedNode, sgDef, origInternalId, redirectedTargets, name);
+    const sim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, true);
+    return sim.positions[targetName] ?? -1;
+}
+
+/**
  * Flatten a subgraph-containing UI workflow into a plain UI workflow.
  *
  * Subgraph nodes have a UUID type matching definitions.subgraphs[].id.
@@ -289,7 +407,6 @@ function _flattenSubgraphs(workflow, objectInfo) {
 
         // === Add internal nodes (remapped IDs) ===
         const remappedByOrigId = {};
-        const normalizedNodeIds = new Set();
         for (const iNode of sgDef.nodes) {
             const remapped = JSON.parse(JSON.stringify(iNode));
             remapped.id = nodeIdRemap[iNode.id];
@@ -305,38 +422,16 @@ function _flattenSubgraphs(workflow, objectInfo) {
                 remapped.mode = node.mode;
             }
 
-            // Some subgraph-template nodes store widgets_values in the "legacy full" format
-            // (one entry per widget input, including linked ones), while convertUiToApi's
-            // widget-mapping loop assumes the "modern" format (linked widget inputs have no
-            // entry at all). Detect the full format by comparing lengths and strip the
-            // entries belonging to inputs that are *actually* linked end-to-end (per
-            // redirectedTargets above) so downstream mapping stays index-aligned. Boundary
-            // links that terminate in a plain widget value (e.g. prompt text) are NOT
-            // stripped — their value lives in the outer node's widgets_values instead and
-            // is injected below.
-            // A widget input can also be linked entirely *within* the subgraph template itself
-            // (e.g. EmptyFlux2LatentImage.width <- GetImageSize, both internal nodes in the same
-            // Flux.2 template) — redirectedTargets only tracks links redirected from the *outer*
-            // parent graph, so it misses these. Detect them via sgDef.links directly, but only
-            // when the link's origin is another internal node (origin_id !== -10) — boundary
-            // links (origin_id === -10, e.g. prompt text) must NOT be treated as linked here,
-            // since those resolve to a plain widget value injected below instead.
-            const allWidgetInputs = (remapped.inputs || []).filter((i) => i.widget);
-            if (remapped.widgets_values && remapped.widgets_values.length === allWidgetInputs.length) {
-                const linkedIdx = new Set();
-                allWidgetInputs.forEach((inp, i) => {
-                    const slotIdx = remapped.inputs.indexOf(inp);
-                    const isRedirected = redirectedTargets.has(`${remapped.id}:${slotIdx}`);
-                    const isInternalLink = inp.link != null && (sgDef.links || []).some(
-                        (l) => l.id === inp.link && l.target_id === iNode.id && l.target_slot === slotIdx && l.origin_id !== -10
-                    );
-                    if (isRedirected || isInternalLink) linkedIdx.add(i);
-                });
-                if (linkedIdx.size > 0) {
-                    remapped.widgets_values = remapped.widgets_values.filter((_, i) => !linkedIdx.has(i));
-                    normalizedNodeIds.add(remapped.id);
-                }
-            }
+            // Some subgraph-template nodes store widgets_values in the "legacy full" format (one
+            // entry per widget input, including ones that are actually linked — either redirected
+            // from an outer parent-graph link, or wired to another internal node within the same
+            // subgraph template, e.g. EmptyFlux2LatentImage.width <- GetImageSize). Strip those
+            // entries so convertUiToApi's widget-mapping loop (which assumes the "modern" format:
+            // linked widgets contribute zero entries) doesn't drift every subsequent widget by
+            // however many linked entries were left in place — see _stripLegacyLinkedWidgetValues.
+            // Boundary links that terminate in a plain widget value (e.g. prompt text) are NOT
+            // treated as linked here — those resolve via the outer-value injection step below.
+            _stripLegacyLinkedWidgetValues(objectInfo, remapped, sgDef, String(iNode.id), redirectedTargets);
 
             addedNodes.push(remapped);
             remappedByOrigId[iNode.id] = remapped;
@@ -362,29 +457,13 @@ function _flattenSubgraphs(workflow, objectInfo) {
             const targetInputDef = (remappedNode.inputs || [])[target.targetSlot];
             if (!targetInputDef?.widget) return;
 
-            // When the internal node's widgets_values was normalized above (stripped of
-            // linked-slot entries), the index must be computed against that same reduced
-            // set of widget names — object_info's full name order (which still includes
-            // e.g. width/height) would be off by however many entries were stripped.
-            let iWidgetIdx;
-            if (normalizedNodeIds.has(remappedNode.id)) {
-                const origInternalNodeId = String(remappedNode.id).split(":").pop();
-                const remainingNames = (remappedNode.inputs || [])
-                    .filter((i) => i.widget)
-                    .filter((i) => {
-                        const slotIdx = remappedNode.inputs.indexOf(i);
-                        const isRedirected = redirectedTargets.has(`${remappedNode.id}:${slotIdx}`);
-                        const isInternalLink = i.link != null && (sgDef.links || []).some(
-                            (l) => l.id === i.link && String(l.target_id) === origInternalNodeId && l.target_slot === slotIdx && l.origin_id !== -10
-                        );
-                        return !isRedirected && !isInternalLink;
-                    })
-                    .map((i) => i.name);
-                iWidgetIdx = remainingNames.indexOf(targetInputDef.name);
-            } else {
-                const widgetNames = _getWidgetInputNames(objectInfo, remappedNode.type);
-                iWidgetIdx = widgetNames.indexOf(targetInputDef.name);
-            }
+            // Compute where in widgets_values this widget's value actually lives — accounting for
+            // linked slots (which consume no entry) and control_after_generate-style extras
+            // (which shift later indices by one). See _findInjectedWidgetIndex for why a plain
+            // name-index lookup silently corrupts sibling widgets here.
+            const iWidgetIdx = _findInjectedWidgetIndex(
+                objectInfo, remappedNode, sgDef, origInternalId, redirectedTargets, targetInputDef.name
+            );
             if (iWidgetIdx === -1) return;
 
             if (!remappedNode.widgets_values) remappedNode.widgets_values = [];
@@ -742,28 +821,47 @@ export const comfyWorkflow = {
 
                 // KSamplerAdvanced uses noise_seed instead of seed
                 const seedKey = "seed" in inputs ? "seed" : "noise_seed";
+                const seedVal = inputs.seed ?? inputs.noise_seed;
+                // seed/steps/cfg/denoise are sometimes wired to Primitive nodes (e.g. a shared
+                // "steps" value switched between two LoRA presets) instead of holding a direct
+                // number — leave those undefined so the settings-tab UI shows "linked" instead of
+                // a link-reference array, and Apply doesn't clobber the link with a literal value.
                 result.sampler_nodes.push({
                     id, type: ct, title,
-                    seed: inputs.seed ?? inputs.noise_seed,
+                    seed: typeof seedVal === "number" ? seedVal : undefined,
                     seedKey, seedNodeId: id,
-                    steps: inputs.steps, stepsNodeId: id,
-                    cfg: inputs.cfg, cfgNodeId: id,
+                    steps: typeof inputs.steps === "number" ? inputs.steps : undefined, stepsNodeId: id,
+                    cfg: typeof inputs.cfg === "number" ? inputs.cfg : undefined, cfgNodeId: id,
                     sampler_name: inputs.sampler_name, samplerNodeId: id,
                     scheduler: inputs.scheduler, schedulerNodeId: id,
-                    denoise: inputs.denoise, denoiseNodeId: id,
+                    denoise: typeof inputs.denoise === "number" ? inputs.denoise : undefined, denoiseNodeId: id,
                 });
             }
 
-            // CFGGuider / BasicGuider — used by "Advanced Sampling" workflows (Flux.1/Flux.2,
-            // SD3.5, Chroma, etc.) in place of KSampler's positive/negative inputs. These feed
-            // SamplerCustomAdvanced rather than driving a sampler themselves, so role propagation
-            // must start here too, or CLIPTextEncode nodes downstream stay "unknown" role.
+            // CFGGuider / BasicGuider / DualCFGGuider — used by "Advanced Sampling" workflows
+            // (Flux.1/Flux.2, SD3.5, Chroma, HiDream E1, etc.) in place of KSampler's
+            // positive/negative inputs. These feed SamplerCustomAdvanced rather than driving a
+            // sampler themselves, so role propagation must start here too, or CLIPTextEncode
+            // nodes downstream stay "unknown" role.
             if (ct === "CFGGuider") {
                 if (Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
                 if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
             }
             if (ct === "BasicGuider") {
                 if (Array.isArray(inputs.conditioning)) samplerPositiveRef[inputs.conditioning[0]] = true;
+            }
+            // DualCFGGuider (HiDream E1 instruct-pix2pix style edit): cond1/cond2 both derive from
+            // the positive text (often via InstructPixToPixConditioning), negative is separate —
+            // cond2 is left unmarked since it doesn't cleanly map to either role.
+            if (ct === "DualCFGGuider") {
+                if (Array.isArray(inputs.cond1)) samplerPositiveRef[inputs.cond1[0]] = true;
+                if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
+            }
+            // SamplerCustom (older/simpler counterpart to SamplerCustomAdvanced): holds
+            // positive/negative directly instead of going through a separate Guider node.
+            if (ct === "SamplerCustom") {
+                if (Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
+                if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
             }
         }
 
@@ -778,6 +876,7 @@ export const comfyWorkflow = {
             "ControlNetApply", "ControlNetApplyAdvanced",
             "IPAdapterApply", "IPAdapterApplyFaceID",
             "StyleModelApply",
+            "FluxGuidance", "FluxKontextMultiReferenceLatentMethod",
         ]);
 
         for (let iter = 0; iter < 5; iter++) {
@@ -832,6 +931,14 @@ export const comfyWorkflow = {
                         }
                     }
                 }
+                // InstructPixToPixConditioning (HiDream E1 edit) — unlike COND_PASSTHROUGH nodes,
+                // this has *separate* positive/negative inputs feeding separate outputs, so each
+                // role must route only to its own input (not both) or the negative CLIPTextEncode
+                // would incorrectly get marked positive too via the positive-output branch.
+                if (ct === "InstructPixToPixConditioning") {
+                    if (isPos && Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
+                    if (isNeg && Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
+                }
             }
         }
 
@@ -853,22 +960,27 @@ export const comfyWorkflow = {
                 return "unknown";
             };
 
-            // --- Advanced Sampler (SamplerCustom / SamplerCustomAdvanced) ---
-            // "Advanced Sampling" pattern used by Flux.1/Flux.2, SD3.5, Chroma, etc.: instead of
-            // one KSampler node holding seed/steps/cfg/sampler/scheduler, those values are spread
-            // across RandomNoise (noise_seed) → CFGGuider/BasicGuider (cfg) → KSamplerSelect
+            // --- Advanced Sampler: SamplerCustomAdvanced ---
+            // "Advanced Sampling" pattern used by Flux.1/Flux.2, SD3.5, Chroma, HiDream E1, etc.:
+            // instead of one KSampler node holding seed/steps/cfg/sampler/scheduler, those values
+            // are spread across RandomNoise (noise_seed) → a Guider node (cfg) → KSamplerSelect
             // (sampler_name) → a *Scheduler node (steps/denoise), all feeding SamplerCustomAdvanced.
             // Collect them into one composite entry so Settings-tab editing still works; each
             // value's *NodeId tracks which real node to write back to (null = no such control
             // exists on this workflow, e.g. Flux2Scheduler has no named "scheduler" combo).
-            if (ct === "SamplerCustomAdvanced" || ct === "SamplerCustom") {
+            if (ct === "SamplerCustomAdvanced") {
                 const noiseId = Array.isArray(inputs.noise) ? String(inputs.noise[0]) : null;
                 const guiderId = Array.isArray(inputs.guider) ? String(inputs.guider[0]) : null;
                 const samplerSelId = Array.isArray(inputs.sampler) ? String(inputs.sampler[0]) : null;
                 const schedulerId = Array.isArray(inputs.sigmas) ? String(inputs.sigmas[0]) : null;
 
                 const noiseInputs = (noiseId && workflow[noiseId]?.inputs) || {};
-                const guiderInputs = (guiderId && workflow[guiderId]?.inputs) || {};
+                const guiderNode = guiderId ? workflow[guiderId] : null;
+                const guiderInputs = guiderNode?.inputs || {};
+                // DualCFGGuider (HiDream E1 instruct-pix2pix edit) has no plain "cfg" input — its
+                // two CFG knobs are cfg_conds/cfg_cond2_negative. Use cfg_conds as the
+                // representative value so Settings still shows/edits *something* meaningful.
+                const guiderCfgKey = guiderNode?.class_type === "DualCFGGuider" ? "cfg_conds" : "cfg";
                 const samplerSelInputs = (samplerSelId && workflow[samplerSelId]?.inputs) || {};
                 const schedulerInputs = (schedulerId && workflow[schedulerId]?.inputs) || {};
 
@@ -878,10 +990,37 @@ export const comfyWorkflow = {
                     seedKey: "noise_seed", seedNodeId: noiseId,
                     steps: typeof schedulerInputs.steps === "number" ? schedulerInputs.steps : undefined,
                     stepsNodeId: schedulerId,
-                    cfg: typeof guiderInputs.cfg === "number" ? guiderInputs.cfg : undefined,
-                    cfgNodeId: "cfg" in guiderInputs ? guiderId : null,
+                    cfg: typeof guiderInputs[guiderCfgKey] === "number" ? guiderInputs[guiderCfgKey] : undefined,
+                    cfgNodeId: guiderCfgKey in guiderInputs ? guiderId : null,
+                    cfgKey: guiderCfgKey,
                     sampler_name: samplerSelInputs.sampler_name, samplerNodeId: samplerSelId,
                     scheduler: undefined, schedulerNodeId: "scheduler" in schedulerInputs ? schedulerId : null,
+                    denoise: typeof schedulerInputs.denoise === "number" ? schedulerInputs.denoise : undefined,
+                    denoiseNodeId: "denoise" in schedulerInputs ? schedulerId : null,
+                });
+            }
+
+            // --- Advanced Sampler: SamplerCustom ---
+            // Older/simpler counterpart to SamplerCustomAdvanced: no RandomNoise/Guider
+            // indirection — noise_seed and cfg are its own widgets, and positive/negative feed it
+            // directly. sampler_name/steps/scheduler/denoise still come from separate
+            // KSamplerSelect/*Scheduler nodes via its sampler/sigmas inputs.
+            if (ct === "SamplerCustom") {
+                const samplerSelId = Array.isArray(inputs.sampler) ? String(inputs.sampler[0]) : null;
+                const schedulerId = Array.isArray(inputs.sigmas) ? String(inputs.sigmas[0]) : null;
+                const samplerSelInputs = (samplerSelId && workflow[samplerSelId]?.inputs) || {};
+                const schedulerInputs = (schedulerId && workflow[schedulerId]?.inputs) || {};
+
+                result.sampler_nodes.push({
+                    id, type: ct, title, advanced: true,
+                    seed: typeof inputs.noise_seed === "number" ? inputs.noise_seed : undefined,
+                    seedKey: "noise_seed", seedNodeId: id,
+                    steps: typeof schedulerInputs.steps === "number" ? schedulerInputs.steps : undefined,
+                    stepsNodeId: schedulerId,
+                    cfg: typeof inputs.cfg === "number" ? inputs.cfg : undefined,
+                    cfgNodeId: id,
+                    sampler_name: samplerSelInputs.sampler_name, samplerNodeId: samplerSelId,
+                    scheduler: schedulerInputs.scheduler, schedulerNodeId: "scheduler" in schedulerInputs ? schedulerId : null,
                     denoise: typeof schedulerInputs.denoise === "number" ? schedulerInputs.denoise : undefined,
                     denoiseNodeId: "denoise" in schedulerInputs ? schedulerId : null,
                 });
@@ -953,13 +1092,30 @@ export const comfyWorkflow = {
                 }
             }
 
-            // Qwen-based image+text encoder
-            if (ct === "TextEncodeQwenImageEditPlus") {
+            // Qwen-based image+text encoder (Plus variant takes up to 3 reference images;
+            // the base variant takes one — both share the same "prompt" widget)
+            if (ct === "TextEncodeQwenImageEditPlus" || ct === "TextEncodeQwenImageEdit") {
                 result.prompt_nodes.push({
                     id, type: ct, title, role: getRole(),
                     text: inputs.prompt || "",
                     textKey: "prompt",
                 });
+            }
+
+            // TextEncodeBooguEdit (Boogu image-edit model) — prompt + negative_prompt in one node
+            if (ct === "TextEncodeBooguEdit") {
+                if (typeof inputs.prompt === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [positive]`, role: "positive",
+                        text: inputs.prompt, textKey: "prompt",
+                    });
+                }
+                if (typeof inputs.negative_prompt === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title: `${title} [negative]`, role: "negative",
+                        text: inputs.negative_prompt, textKey: "negative_prompt",
+                    });
+                }
             }
 
             // Mage-Flow text encoder — prompt + negative_prompt in one node (fixed roles,

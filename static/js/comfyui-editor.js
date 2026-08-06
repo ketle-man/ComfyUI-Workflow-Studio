@@ -1047,13 +1047,14 @@ export const comfyEditor = {
                         data-seed-key="${sampler.seedKey || "seed"}"
                         data-seed-node-id="${sampler.seedNodeId ?? sampler.id}"
                         data-steps-node-id="${sampler.stepsNodeId ?? sampler.id}"
+                        data-cfg-key="${sampler.cfgKey || "cfg"}"
                         data-cfg-node-id="${sampler.cfgNodeId ?? sampler.id}"
                         data-sampler-node-id="${sampler.samplerNodeId ?? sampler.id}"
                         data-scheduler-node-id="${sampler.schedulerNodeId ?? ""}"
                         data-denoise-node-id="${sampler.denoiseNodeId ?? ""}">
                     <div class="wfm-form-group">
                         <label>Seed</label>
-                        <input type="number" class="wfm-input" id="wfm-settings-seed" value="${sampler.seed ?? -1}">
+                        <input type="number" class="wfm-input" id="wfm-settings-seed" value="${sampler.seed ?? ""}" placeholder="${sampler.seed === undefined ? "linked" : ""}">
                     </div>
                     <div class="wfm-form-group">
                         <label>Steps</label>
@@ -1079,7 +1080,7 @@ export const comfyEditor = {
                     </div>
                     <div class="wfm-form-group">
                         <label>Denoise</label>
-                        <input type="number" class="wfm-input" id="wfm-settings-denoise" value="${sampler.denoise ?? 1.0}" step="0.05" min="0" max="1" ${denoiseAvailable ? "" : "disabled"}>
+                        <input type="number" class="wfm-input" id="wfm-settings-denoise" value="${sampler.denoise ?? ""}" placeholder="${denoiseAvailable && sampler.denoise === undefined ? "linked" : ""}" step="0.05" min="0" max="1" ${denoiseAvailable ? "" : "disabled"}>
                     </div>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-settings-sampler-apply" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                     ` : "<p class='wfm-placeholder'>No KSampler node found</p>"}
@@ -1132,14 +1133,16 @@ export const comfyEditor = {
                 if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
                 comfyUI.currentWorkflow[nodeId].inputs[key] = value;
             };
-            write(ds.seedNodeId, ds.seedKey || "seed", parseInt(document.getElementById("wfm-settings-seed")?.value) || -1);
+            const seedEl = document.getElementById("wfm-settings-seed");
+            if (seedEl?.value !== "") write(ds.seedNodeId, ds.seedKey || "seed", parseInt(seedEl.value) || -1);
             const stepsEl = document.getElementById("wfm-settings-steps");
             if (stepsEl?.value !== "") write(ds.stepsNodeId, "steps", parseInt(stepsEl.value) || 20);
             const cfgEl = document.getElementById("wfm-settings-cfg");
-            if (cfgEl?.value !== "") write(ds.cfgNodeId, "cfg", parseFloat(cfgEl.value) || 7);
+            if (cfgEl?.value !== "") write(ds.cfgNodeId, ds.cfgKey || "cfg", parseFloat(cfgEl.value) || 7);
             write(ds.samplerNodeId, "sampler_name", document.getElementById("wfm-settings-sampler-name")?.value);
             if (ds.schedulerNodeId) write(ds.schedulerNodeId, "scheduler", document.getElementById("wfm-settings-scheduler")?.value);
-            if (ds.denoiseNodeId) write(ds.denoiseNodeId, "denoise", parseFloat(document.getElementById("wfm-settings-denoise")?.value) || 1.0);
+            const denoiseEl = document.getElementById("wfm-settings-denoise");
+            if (ds.denoiseNodeId && denoiseEl?.value !== "") write(ds.denoiseNodeId, "denoise", parseFloat(denoiseEl.value) || 1.0);
             _syncRawJson();
             if (e.altKey) document.dispatchEvent(new CustomEvent("wfm:apply-and-generate"));
         });
