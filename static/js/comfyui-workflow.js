@@ -18,31 +18,42 @@ let _lastBypassedNodes = [];
 let _lastMutedNodes = [];
 
 /**
- * Trace a link's source through any Bypass-mode (mode 4) nodes, matching each bypassed
- * node's output slot to an input slot of the same type and following the connection
- * upstream (recursively, for chained bypasses). Mirrors ComfyUI's own Bypass behavior,
- * where a bypassed node is removed but its wires are reconnected end-to-end.
+ * Trace a link's source through any Bypass-mode (mode 4) nodes AND Reroute nodes, matching each
+ * one's output slot to an input slot of the same type and following the connection upstream
+ * (recursively, for chains of either/both). Mirrors ComfyUI's own Bypass behavior, where a
+ * bypassed node is removed but its wires are reconnected end-to-end — Reroute needs the identical
+ * treatment because it's a UI-only passthrough node with no backend node class at all: leaving it
+ * in the API payload makes ComfyUI reject the whole prompt with "missing_node_type" (Reroute
+ * always has to be resolved through, regardless of its mode).
  * Returns null when no pass-through source exists (the matching input is unconnected),
  * in which case the caller should treat the input as unlinked.
  */
 function _resolveBypassSource(nodeById, linkMap, nodeId, slot, visited) {
     const idStr = String(nodeId);
     const node = nodeById[idStr];
-    if (!node || node.mode !== 4) return [idStr, slot];
-    if (visited.has(idStr)) return null; // circular bypass chain guard
+    if (!node || (node.mode !== 4 && node.type !== "Reroute")) return [idStr, slot];
+    if (visited.has(idStr)) return null; // circular bypass/reroute chain guard
 
     visited.add(idStr);
     const outputs = node.outputs || [];
     const inputs = node.inputs || [];
-    const outType = outputs[slot]?.type;
 
-    let inIdx = -1;
-    if (inputs[slot]?.type === outType && linkMap[idStr]?.[slot]) {
-        inIdx = slot;
+    let inIdx;
+    if (node.type === "Reroute") {
+        // Reroute is always exactly one input -> one output. Its stored input type is commonly
+        // the generic "*" even when the output shows the propagated concrete type (e.g. MODEL),
+        // so the type-match search used for Bypass below would fail to find it — just take the
+        // sole input.
+        inIdx = 0;
     } else {
-        inIdx = inputs.findIndex((inp, i) => inp.type === outType && linkMap[idStr]?.[i]);
+        const outType = outputs[slot]?.type;
+        if (inputs[slot]?.type === outType && linkMap[idStr]?.[slot]) {
+            inIdx = slot;
+        } else {
+            inIdx = inputs.findIndex((inp, i) => inp.type === outType && linkMap[idStr]?.[i]);
+        }
     }
-    if (inIdx === -1) return null;
+    if (inIdx === -1 || inIdx === undefined) return null;
 
     const upstream = linkMap[idStr][inIdx];
     if (!upstream) return null;
@@ -565,6 +576,10 @@ export const comfyWorkflow = {
                 _lastBypassedNodes.push({ nodeId: String(node.id), title: node.title || node.type });
                 continue;
             }
+            // Reroute: UI-only passthrough node, no backend node class — including it in the API
+            // payload triggers a "missing_node_type" 400 from ComfyUI. Its wires are already
+            // resolved through via _resolveBypassSource() below, same as a Bypassed node's.
+            if (node.type === "Reroute") continue;
             // Skip note/display-only nodes that are unknown to ComfyUI backend
             if (!objectInfo[node.type] && _isDisplayOnlyNode(node)) continue;
             const nodeId = String(node.id);
