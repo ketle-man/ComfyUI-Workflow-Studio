@@ -2,6 +2,25 @@
 
 ---
 
+## v0.3.82
+
+### バグ修正: MetadataタブとサイドパネルIタブでLongCat/Boogu/HiDream E1/FireRed等のプロンプトが表示されない不具合
+
+v0.3.81でFlux.2 Klein/LongCat/Boogu/HiDream E1/FireRedをGenerateUIタブに対応させた後、ユーザーがAI TOOL Chatで実際に5系統すべてを生成しMetadataタブで確認したところ、`qwen_image_edit2509`/`2511`・LongCat・Boogu・FireRedの画像でプロンプトが一切表示されない不具合が見つかった。同じ画像をGenerateUIタブへ読み込むと正しく表示されたことから、GenerateUIタブの解析（`comfyui-workflow.js`の`analyzeWorkflow()`）とは別に実装されているMetadataタブ独自のプロンプト抽出ロジック（`extractPromptsAPI()`/`extractPromptsFromNodeSet()`）が、v0.3.81で対応した新しいノードパターンに追従していなかったことが原因と判明した。
+
+- **`prompt`キーの欠落**: PNG画像は`workflow`チャンク（UI形式）より`prompt`チャンク（ComfyUIが実行時に生成した、既にAPI形式のペイロードそのもの）が優先的に読まれるため、常に`extractPromptsAPI()`のtextMap構築ロジックが使われる。ここが`text`/`text_g`キーのみを見ており、`TextEncodeQwenImageEdit`(Plus含む)や`TextEncodeBooguEdit`が使う`prompt`キーを見ていなかった（LongCat/Boogu/FireRed、および同種のQwen-Image-Edit系公式テンプレートすべてに影響）。
+- **Guider経由のrole判定漏れ**: `SamplerCustomAdvanced`はpositive/negativeを直接持たず、`guider`入力の先にある`CFGGuider`/`DualCFGGuider`/`BasicGuider`ノードが持つため、サンプラーノードのinputsを直接見るだけの既存ロジックでは見つけられなかった（Flux.2 Klein/HiDream E1）。GenerateUIタブ側で先に実装した「guiderノードを辿る」対応と同じロジックをMetadataタブ側にも追加。
+- **`TextEncodeBooguEdit`の1ノード2ロール対応**: `prompt`/`negative_prompt`を1ノードに両方持つ構造は`TextEncodeMageFlowEdit`と同じパターンのため、既存の専用分岐にBooguも合流させた。
+- **`InstructPixToPixConditioning`の追加ホップ解決**: HiDream E1のこのノードはpositive/negativeを中継するだけで自身はテキストを持たないため、guiderの`cond1`/`negative`から一段先まで辿るようにした。
+
+`extractPromptsAPI()`（API形式JSON・PNGの`prompt`チャンク用）と`extractPromptsFromNodeSet()`（UI形式・サブグラフ内共用）の両方を修正。さらに`node_sets_menu.js`（ComfyUIサイドパネルのIタブ、`web/comfyui/`はESモジュールをimportできない制約から`comfyui-workflow.js`/`metadata-tab.js`相当のロジックを`_wfm`接頭辞でローカル複製している）にも同じ修正を適用した。
+
+**あわせてヘルプを更新**: GenerateUIタブ（`helpGen2`）・Metadataタブ（`helpMetadata5`）のヘルプ本文、およびMetadataタブ内の対応フォーマット補足（`metaFormatTodo`）に記載している対応サブグラフワークフローの例に、LongCat/Boogu/HiDream E1/FireRedを追加（EN/JA/ZH）。あわせて`metaFormatTodo`にMage-Flowが記載漏れだった既存の抜けも修正した。
+
+**検証**: ユーザーがAI TOOL Chatで実際に5系統のワークフローを生成し、Metadataタブでプロンプトが正しく表示されることを確認。サイドパネルIタブでも同様に確認。
+
+**How to apply**: GenerateUIタブとMetadataタブ（および複製先のIタブ）は、ワークフロー解析ロジックを別々に実装しており自動的には同期しない。新しいノードパターン（プロンプトの格納キー名、guider経由のconditioning構造など）へ対応する際は、`comfyui-workflow.js`の`analyzeWorkflow()`だけでなく`metadata-tab.js`の`extractPromptsAPI()`/`extractPromptsFromNodeSet()`、および`node_sets_menu.js`のローカル複製版も合わせて確認・修正すること。特にPNG画像のメタデータは`prompt`（API形式）チャンクが`workflow`（UI形式）チャンクより優先されるため、実機検証はワークフローJSONの直接ドロップだけでなく、実際に生成したPNG画像でも行うこと（今回はまさにこの違いで問題が後から発覚した）。
+
 ## v0.3.81
 
 ### 追加機能: GenerateUIタブでFlux.2 Klein / LongCat / Boogu / HiDream E1 / FireRedのImage Editワークフローに対応

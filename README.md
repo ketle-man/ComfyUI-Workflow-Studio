@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.79-green)
+![Version](https://img.shields.io/badge/version-0.3.82-green)
 
 ## Screenshots
 
@@ -99,7 +99,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
   - **Center pane** — group-based selection with inner tabs (Checkpoint | Lora | Prompt | Workflow); Checkpoint/Lora groups come from the Models tab, Prompt groups from the Prompt tab, Workflow groups from the Workflow tab — check a group to add all its members, expand ▶ to select individually
   - **Right pane (Batch Queue)** — 7 columns: Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler / **Style**; each column header has an enable checkbox (radio behavior: only one at a time); count shown per column; Style batch applies each selected style sequentially to a workflow copy
   - **Lora batch prompt sync** (v0.3.69) — for each selected LoRA, its syntax (`<lora:name:strength_model:strength_clip>`) and CivitAI trained words are automatically appended to the Positive prompt (rebuilt from the original prompt each time, not accumulated), then restored to the pre-batch state when the batch completes or is stopped; if a selected LoRA is not yet recognized by ComfyUI's model list, a warning toast suggests a Refresh or restart
-- **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and more
+- **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and Guider-based "Advanced Sampling" workflows (`SamplerCustomAdvanced`/`SamplerCustom` + `CFGGuider`/`DualCFGGuider`/`BasicGuider` + `RandomNoise` + `KSamplerSelect` + `*Scheduler` — Flux.2 Klein, LongCat, Boogu, HiDream E1, etc.)
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
 ### Feeder subtab (v0.3.5 / v0.3.42)
@@ -145,11 +145,11 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 
 - **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
 - **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
-- **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/2511/Layered, Z-Image Base/Turbo, Ernie Image, WAN2.2); node types covered: UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, QuadrupleCLIPLoader (e.g. HiDream 4-CLIP)
+- **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/2511/Layered, Z-Image Base/Turbo, Ernie Image, WAN2.2, Mage-Flow, LongCat, Boogu, HiDream E1, FireRed); node types covered: UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, QuadrupleCLIPLoader (e.g. HiDream 4-CLIP)
 - **LoRA extraction** — lists all LoRA models with `strength_model / strength_clip` values
 - **Prompt extraction** — lists prompts with POS / NEG badges when positive/negative can be determined; when distinction is not possible (e.g. `SamplerCustomAdvanced`, intermediate nodes, cross-level connections), prompts are shown without a badge as plain **Text**; click any entry to view the full text below
 - **Prompt actions** — Copy to clipboard, **GenUI:P/N** (set GenerateUI positive/negative prompt), **Prompt:P/N** (set Prompt tab preset positive/negative)
-- **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 subgraph workflows), SD WebUI, SD Forge, Fooocus
+- **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 / Mage-Flow / LongCat / Boogu / HiDream E1 / FireRed subgraph workflows), SD WebUI, SD Forge, Fooocus
 - **Format note** — supported formats and covered model types are always shown in the left column
 
 ### Settings Tab
@@ -409,6 +409,14 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.82
+
+- **GenerateUI tab — Flux.2 Klein / LongCat / Boogu / HiDream E1 / FireRed Image Edit workflow support** — these use ComfyUI's Guider-based "Advanced Sampling" pattern (`SamplerCustomAdvanced`/`SamplerCustom` + `CFGGuider`/`DualCFGGuider`/`BasicGuider` + `RandomNoise` + `KSamplerSelect` + `*Scheduler`, spreading seed/steps/cfg/sampler/scheduler across several nodes instead of one `KSampler`) plus model-specific text-encoder nodes (`TextEncodeQwenImageEdit`, `TextEncodeBooguEdit`), none of which the previous KSampler-centric analysis could detect — the Settings/Latent panels showed "no node found" and were unusable. `SamplerCustomAdvanced`/`SamplerCustom` are now resolved back to their driving Guider/Scheduler/KSamplerSelect nodes for editing; `EmptyFlux2LatentImage` is supported in the Latent panel (linked width/height shown blank instead of a stale default).
+- **Bug fix: subgraph `widgets_values` normalization** — rewrote the subgraph-flattening logic that strips linked-widget entries from a template node's `widgets_values`; the previous length-based detection didn't account for the `control_after_generate` extra value that follows `seed`, so on nodes where a linked widget (e.g. `steps`) sits right after `seed` (e.g. `KSampler`), every subsequent widget value ended up shifted by one slot — `cfg`/`denoise` silently got the wrong value. Also fixed a related bug where `EmptyFlux2LatentImage.batch_size` came out as `1024` instead of `1` on Flux.2 Klein workflows.
+- **Bug fix: `Reroute` node caused a 400 error** — `Reroute` is a UI-only passthrough node with no backend node class; including it in the API payload (as happened with HiDream E1's UNETLoader→BasicScheduler/DualCFGGuider fan-out) made ComfyUI reject the prompt with `missing_node_type`. Now resolved through transparently, the same way Bypass-mode nodes already were.
+- **Bug fix: Metadata tab / sidebar Info tab prompt extraction** — these have their own prompt-extraction logic separate from GenerateUI's analysis, and it hadn't kept up: PNG metadata is read from the `prompt` chunk (already API-format) before `workflow`, so the text-encoder scan needed to recognize the `prompt` input key (used by `TextEncodeQwenImageEdit`/`TextEncodeBooguEdit`, not just `text`/`text_g`), resolve `SamplerCustomAdvanced` through its Guider node to find positive/negative, handle `TextEncodeBooguEdit`'s single-node prompt+negative_prompt layout, and follow one extra hop through `InstructPixToPixConditioning`. Without these, prompts from LongCat/Boogu/FireRed/Qwen-Image-Edit-2509/2511 images showed up empty even though the same image loaded correctly into GenerateUI.
+- **Help & format notes updated** — GenerateUI/Metadata tab help text and the Metadata tab's "supported formats" note now list LongCat/Boogu/HiDream E1/FireRed alongside the existing Flux.2/Qwen-Image/Z-Image/Mage-Flow entries (EN/JA/ZH).
 
 ### v0.3.80
 
