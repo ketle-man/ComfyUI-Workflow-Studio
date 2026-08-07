@@ -2,6 +2,19 @@
 
 ---
 
+## v0.3.85
+
+### 機能拡張: Generate UI連携ブリッジ（T2I）にデフォルトワークフロー・Negativeプロンプト対応を追加
+
+Comic Creator側のスクリプトタブ「画像を一括生成」(T2I)が、既存のI2I/Inpaint連携（`_wfmReceiveI2IRunRequest`/`_wfmReceiveInpaintRequest`）と同じ「デフォルトワークフローを実行前に自動読み込み」機能を持てるよう、`_wfmReceiveGenerateRequest`（gallery-tab.js）を拡張した。
+
+- 引数に`negative`・`workflowData`・`workflowFilename`を追加。`workflowData`が渡された場合は既存2関数と同じパターン（`comfyUI.connected`確認→未接続なら`checkConnection()`→モデルリスト未取得なら`loadModelLists()`→`loadWorkflowIntoEditor()`）で実行前にワークフローを読み込む。渡されない場合は従来通りGenerate UIに現在ロード中のワークフローをそのまま使う。
+- `negative`が渡された場合は`comfyEditor.setPromptText("negative", negative, { workflow, analysis })`で反映（`ai-tab.js`のInpaint連携と同じ呼び出しパターン）。
+
+**経緯**: ユーザーから「Workflow Studioの生成UIタブに`ernie_t2i.json`を読み込んで実行したが、別のワークフローが実行されたようだ」との報告を受け調査。原因はコードのバグではなく、ユーザーが手動でワークフローをロードしたのがComic Creator画面内に埋め込まれたWorkflow Studio（`wfmgallery-iframe`）ではなく、ブラウザの別タブとして独立に開いた`/wfm`だったこと（同じURLでも別ウィンドウ＝別JS実行コンテキストのため`comfyUI.currentWorkflow`等の状態が共有されない）と判明。この調査を踏まえ、T2I版にもI2I版同様のデフォルトワークフロー指定機能を持たせることで、Comic Creator画面から明示的にワークフローを固定できるようにした（対応する連携コードはComic Creator側`14-integrations.js`/`26-auto-comic-bridge.js`、詳細はcomfyui-comic-creator側のDEVLOG参照）。
+
+Kaptureで実機E2E確認済み: Comic Creator画面内のWorkflow Studioタブ経由でT2I設定に`ernie_t2i.json`を指定し、スクリプトタブ「画像を一括生成」からRunを実行。ComfyUIサーバーの`/queue`監視・コンソールログで、`ernie_t2i.json`のモデル（`Ernie-Image-Turbo`）による生成が実際に行われ画像がEagleへ保存されたことを確認（2コマとも成功、レイアウトタブへ自動挿入）。新規コード起因のコンソールエラーなし。
+
 ## v0.3.84
 
 ### バグ修正: ernie_t2i.jsonをGenerateUIタブで実行すると "Prompt outputs failed validation" エラー

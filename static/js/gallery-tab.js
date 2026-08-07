@@ -163,12 +163,28 @@ window._wfmReceiveLLMPromptRequest = async (context) => {
 // ComfyUI Comic Creater からiframe越しに画像プロンプト・サイズを受け取り、Generate UIで
 // テキストから画像を生成して結果URLを返す（半自動マンガ作成のコマ単位バッチ画像生成用）。
 // Comic Creater側のスクリプトタブ「画像を一括生成」から
-// iframe.contentWindow._wfmReceiveGenerateRequest(prompt, width, height) として呼ばれる。
-// I2I/Inpaintと異なり画像アップロードは行わず（txt2img）、専用ワークフロー選択には未対応で
-// 常にGenerate UIに現在ロード中のワークフローをそのまま使う。
-window._wfmReceiveGenerateRequest = async (prompt, width, height) => {
+// iframe.contentWindow._wfmReceiveGenerateRequest(prompt, width, height, negative, workflowData?, workflowFilename?)
+// として呼ばれる。I2I/Inpaintと異なり画像アップロードは行わない（txt2img）。
+// workflowData が渡された場合（Comic Creater側のT2I設定でデフォルトワークフローが有効な時）は、
+// 実行前にそのワークフローを読み込む。渡されない場合はGenerate UIに現在ロード中のワークフローをそのまま使う。
+window._wfmReceiveGenerateRequest = async (prompt, width, height, negative, workflowData, workflowFilename) => {
     try {
         if (!window._wfmGenerateTab?.generate) return { ok: false, message: "Generate UI is not ready yet" };
+
+        if (workflowData) {
+            try {
+                if (!comfyUI.connected) {
+                    await comfyUI.checkConnection();
+                }
+                if (comfyUI.connected && (!comfyEditor.models.checkpoints || comfyEditor.models.checkpoints.length === 0)) {
+                    await comfyEditor.loadModelLists();
+                }
+                await loadWorkflowIntoEditor(workflowData, workflowFilename || "workflow.json");
+            } catch (e) {
+                console.warn("[T2I] failed to load default workflow:", e);
+            }
+        }
+
         const analysis = comfyUI.currentAnalysis;
         if (!comfyUI.currentWorkflow || !analysis) return { ok: false, message: "No workflow loaded in Generate UI" };
 
@@ -180,6 +196,7 @@ window._wfmReceiveGenerateRequest = async (prompt, width, height) => {
         }
 
         comfyEditor.setPromptText("positive", prompt || "", { workflow, analysis });
+        if (negative) comfyEditor.setPromptText("negative", negative, { workflow, analysis });
 
         await window._wfmGenerateTab.generate(workflow);
 
