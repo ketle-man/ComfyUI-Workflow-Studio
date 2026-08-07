@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.83-green)
+![Version](https://img.shields.io/badge/version-0.3.84-green)
 
 ## Screenshots
 
@@ -409,6 +409,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.84
+
+- **Bug fix: `ernie_t2i.json` failed to Generate with "Prompt outputs failed validation"** — the actual failure was `Required input is missing: source` on a `PreviewAny` ("Preview as Text") node. Ernie Image's subgraph fans a single boundary widget value (e.g. `width`) out to *two* internal targets — `EmptyFlux2LatentImage.width` (a real widget) and a `PreviewAny.source` (a required wildcard `*` input with no widget representation, used to render the value into a prompt-template string). The subgraph-flattening logic only ever tracked the last of several fan-out targets per boundary port, so one of the two was always left completely unconnected. Now every fan-out target is tracked and resolved: widget-type targets get the value written into `widgets_values` as before, and non-widget targets get it injected as a plain literal input value. Also handles unfilled templates (outer `widgets_values` empty) by falling back to the sibling widget target's own template-authored default.
+- Verified against a live ComfyUI server: `/prompt` validation passes with `node_errors: {}`, and an actual Generate run from the GenerateUI tab completes successfully.
 
 ### v0.3.83
 

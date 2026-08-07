@@ -2,6 +2,22 @@
 
 ---
 
+## v0.3.84
+
+### バグ修正: ernie_t2i.jsonをGenerateUIタブで実行すると "Prompt outputs failed validation" エラー
+
+v0.3.83でプロンプト表示は修正できたが、ユーザーが実際にGenerateを実行すると`Required input is missing: source`で失敗する不具合が新たに見つかった。ComfyUIサーバーへ直接`/prompt`をPOSTして検証エラーの詳細を取得したところ、原因は`PreviewAny`（"Preview as Text"、テキストデバッグ表示用）ノードの必須入力`source`（型`*`のワイルドカード、ウィジェット表現を持たない）が空になっていたこと。
+
+Ernie Imageのサブグラフでは、外側の折りたたみノードが持つ`width`/`height`ウィジェット値が、内部で**2方向に分岐**していた: 一方は`EmptyFlux2LatentImage.width`（ウィジェット値として注入・解決済み）、もう一方は`PreviewAny.source`（幅の値をプロンプトテンプレート文字列 `{width}` に埋め込むために使われる中継ノード）。既存の`_flattenSubgraphs`の境界値注入ロジックは「1つの境界ポート→1つの内部ターゲット」を前提にしており、`inputPortTargets`が複数ターゲットのうち最後の1つで上書きされていたため、fan-out先の一方（多くの場合ウィジェットではない方）が完全に未接続のまま残っていた。
+
+- `inputPortTargets`をポートごとに配列で保持するよう変更し、全fan-outターゲットを追跡できるようにした
+- ウィジェット注入ループをポート単位で回すよう再構成: ウィジェット型ターゲットには従来通り`widgets_values`へ注入しつつ、非ウィジェット型（`PreviewAny.source`のようなワイルドカード必須入力）には`_wfmLiteralInputs`という新しい経路でリテラル値をそのまま`inputs`に注入するようにした（`convertUiToApi`側で`_wfmLiteralInputs`をマージ）
+- 外側ノードの`widgets_values`が空（＝ユーザーが未設定のテンプレートそのまま）の場合でも、fan-out先の別ターゲット（例: `EmptyFlux2LatentImage`）が保持する内部デフォルト値を読み取ってフォールバックとして使うようにし、`image_ernie_image.json`（未設定テンプレート）でも同様に動作するようにした
+
+**検証**: `/object_info`を提供する実際のComfyUIサーバーに対しNode.jsから直接`/prompt`をPOSTして修正前後の検証結果を比較（修正前: `node_errors`に`Required input is missing: source`、修正後: `node_errors: {}`）。さらに実ブラウザのGenerateUIタブから`ernie_t2i.json`を読み込みGenerateボタンを実行し、実際に画像が生成され「Done (1 image)」になることを確認。
+
+**How to apply**: サブグラフの境界ウィジェット値は1つのポートから複数の内部ノードへ分岐しうる（今回のような「実際に使う値」と「表示・テンプレート埋め込み用の値」の二重利用パターン）。`_flattenSubgraphs`の境界値解決ロジックを触る際は、常に「1ポート=1ターゲット」ではなく「1ポート=Nターゲット」であることを前提にすること。またウィジェット表現を持たない必須入力（型`*`など）はwidgets_valuesに書けないため、`_wfmLiteralInputs`のような別経路でリテラル値を注入する。
+
 ## v0.3.83
 
 ### 追加機能: Ernie Image（ernie-image / ernie-image-turbo）ワークフロー対応 + プロンプトがリンク経由のノードから供給されるパターンの修正

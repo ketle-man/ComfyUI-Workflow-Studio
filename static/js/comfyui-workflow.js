@@ -355,16 +355,20 @@ function _flattenSubgraphs(workflow, objectInfo) {
         }
 
         // === Map subgraph input ports → internal target {nodeId, slot} ===
+        // A single boundary port can fan out to MULTIPLE internal targets (e.g. a "width" pin
+        // feeding both EmptyFlux2LatentImage.width as a widget AND a PreviewAny.source wildcard
+        // link purely for canvas display) — collect all of them, not just the last one seen.
         const inputPortTargets = {};
         for (let portIdx = 0; portIdx < (sgDef.inputs || []).length; portIdx++) {
             const port = sgDef.inputs[portIdx];
             for (const linkId of (port.linkIds || [])) {
                 const iLink = (sgDef.links || []).find(l => l.id === linkId);
                 if (iLink && iLink.origin_id === -10) {
-                    inputPortTargets[portIdx] = {
+                    if (!inputPortTargets[portIdx]) inputPortTargets[portIdx] = [];
+                    inputPortTargets[portIdx].push({
                         targetNodeId: nodeIdRemap[iLink.target_id],
                         targetSlot: iLink.target_slot,
-                    };
+                    });
                 }
             }
         }
@@ -399,7 +403,11 @@ function _flattenSubgraphs(workflow, objectInfo) {
                     ? (sgDef.inputs || []).findIndex(p => p.name === inputName)
                     : -1;
                 if (portIdx === -1) portIdx = dstSlot;
-                const target = inputPortTargets[portIdx];
+                // Only the port's first fanned-out target is redirected here (a real outer link
+                // feeding a fanned-out port is rare — not seen in any known template so far).
+                // The far more common case (an outer *widget value*, no real link, fanning out to
+                // multiple internal targets) is handled fully below, for every target.
+                const target = inputPortTargets[portIdx]?.[0];
                 if (target) {
                     link[3] = target.targetNodeId;
                     link[4] = target.targetSlot;
@@ -449,37 +457,71 @@ function _flattenSubgraphs(workflow, objectInfo) {
         }
 
         // === Inject outer subgraph-node widget values into internal nodes ===
-        // Only un-linked widget inputs — linked ones are already redirected above.
+        // Only un-linked widget inputs — linked ones are already redirected above. A port can fan
+        // out to several internal targets (see inputPortTargets collection above) — apply the same
+        // value to every one of them, not just the first. Iterating per PORT (rather than per
+        // outer widget) matters for unfilled templates whose outer widgets_values is empty ([]) —
+        // there is then no outer override to apply, but the fan-out's widget-type target (e.g.
+        // EmptyFlux2LatentImage.width) still holds its own template-authored default, and that
+        // same value is what a sibling non-widget target (e.g. a PreviewAny used to render the
+        // value into a text template) needs too.
         const outerWidgetInputs = (node.inputs || []).filter((inp) => inp.widget);
-        outerWidgetInputs.forEach((inp, widgetIdx) => {
-            if (inp.link != null) return;
-            if (widgetIdx >= (node.widgets_values || []).length) return;
-            const outerValue = node.widgets_values[widgetIdx];
+        for (let portIdx = 0; portIdx < (sgDef.inputs || []).length; portIdx++) {
+            const targets = inputPortTargets[portIdx];
+            if (!targets || targets.length === 0) continue;
 
-            const portIdx = (sgDef.inputs || []).findIndex((p) => p.name === inp.name);
-            if (portIdx === -1) return;
-            const target = inputPortTargets[portIdx];
-            if (!target) return;
+            const port = sgDef.inputs[portIdx];
+            const outerInp = outerWidgetInputs.find((inp) => inp.name === port.name);
+            const outerWidgetIdx = outerInp ? outerWidgetInputs.indexOf(outerInp) : -1;
+            const hasOuterOverride = !!outerInp && outerInp.link == null && outerWidgetIdx !== -1
+                && outerWidgetIdx < (node.widgets_values || []).length;
+            const outerValue = hasOuterOverride ? node.widgets_values[outerWidgetIdx] : undefined;
 
-            const origInternalId = String(target.targetNodeId).split(":").pop();
-            const remappedNode = remappedByOrigId[origInternalId];
-            if (!remappedNode) return;
+            // Value to apply to non-widget (wildcard) fan-out targets: the outer override if
+            // present, otherwise whatever a sibling widget-type target ends up holding (its own
+            // unmodified template default, when there is no outer override).
+            let fallbackLiteral = outerValue;
 
-            const targetInputDef = (remappedNode.inputs || [])[target.targetSlot];
-            if (!targetInputDef?.widget) return;
+            for (const target of targets) {
+                const origInternalId = String(target.targetNodeId).split(":").pop();
+                const remappedNode = remappedByOrigId[origInternalId];
+                if (!remappedNode) continue;
+                const targetInputDef = (remappedNode.inputs || [])[target.targetSlot];
+                if (!targetInputDef?.widget) continue;
 
-            // Compute where in widgets_values this widget's value actually lives — accounting for
-            // linked slots (which consume no entry) and control_after_generate-style extras
-            // (which shift later indices by one). See _findInjectedWidgetIndex for why a plain
-            // name-index lookup silently corrupts sibling widgets here.
-            const iWidgetIdx = _findInjectedWidgetIndex(
-                objectInfo, remappedNode, sgDef, origInternalId, redirectedTargets, targetInputDef.name
-            );
-            if (iWidgetIdx === -1) return;
+                // Compute where in widgets_values this widget's value actually lives — accounting
+                // for linked slots (which consume no entry) and control_after_generate-style
+                // extras (which shift later indices by one). See _findInjectedWidgetIndex for why
+                // a plain name-index lookup silently corrupts sibling widgets here.
+                const iWidgetIdx = _findInjectedWidgetIndex(
+                    objectInfo, remappedNode, sgDef, origInternalId, redirectedTargets, targetInputDef.name
+                );
+                if (iWidgetIdx === -1) continue;
 
-            if (!remappedNode.widgets_values) remappedNode.widgets_values = [];
-            remappedNode.widgets_values[iWidgetIdx] = outerValue;
-        });
+                if (!remappedNode.widgets_values) remappedNode.widgets_values = [];
+                if (hasOuterOverride) remappedNode.widgets_values[iWidgetIdx] = outerValue;
+                if (fallbackLiteral === undefined) fallbackLiteral = remappedNode.widgets_values[iWidgetIdx];
+            }
+
+            if (fallbackLiteral === undefined) continue;
+
+            for (const target of targets) {
+                const origInternalId = String(target.targetNodeId).split(":").pop();
+                const remappedNode = remappedByOrigId[origInternalId];
+                if (!remappedNode) continue;
+                const targetInputDef = (remappedNode.inputs || [])[target.targetSlot];
+                if (!targetInputDef || targetInputDef.widget) continue;
+
+                // Not a widget-representable input — typically a required wildcard ("*") link slot
+                // with no widget UI (e.g. a "Preview as Text" node used to render a width/height
+                // value into a prompt template string). There is no upstream node to link it to
+                // once flattened (the value only ever existed as this outer widget or a sibling
+                // target's own default), so stash it for convertUiToApi() to inject as a plain
+                // literal value instead of a link.
+                if (!remappedNode._wfmLiteralInputs) remappedNode._wfmLiteralInputs = {};
+                remappedNode._wfmLiteralInputs[targetInputDef.name] = fallbackLiteral;
+            }
+        }
 
         // === Add internal links (object format → array format) ===
         for (const iLink of (sgDef.links || [])) {
@@ -725,6 +767,15 @@ export const comfyWorkflow = {
             if ((node.type === "ImpactWildcardEncode" || node.type === "ImpactWildcardProcessor")
                 && widgets.length > 0) {
                 inputs["wildcard_text"] = widgets[0];
+            }
+
+            // Literal values for non-widget (e.g. wildcard "*") inputs that a subgraph boundary
+            // widget fanned out to — see the injection step in _flattenSubgraphs for why these
+            // can't be represented as widgets_values entries or resolved as a link.
+            if (node._wfmLiteralInputs) {
+                for (const [k, v] of Object.entries(node._wfmLiteralInputs)) {
+                    if (!(k in inputs)) inputs[k] = v;
+                }
             }
 
             api[nodeId] = {
