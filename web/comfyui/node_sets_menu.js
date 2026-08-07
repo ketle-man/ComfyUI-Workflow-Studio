@@ -2973,24 +2973,44 @@ function _extractPromptsFromNodeSet(nodes, links) {
     for (const n of nodes) {
         if (!_isSamplerNode(n.type ?? "") || !Array.isArray(n.inputs)) continue;
         foundSampler = true;
-        for (const inp of n.inputs) {
+        // SamplerCustomAdvanced doesn't hold positive/negative directly — resolve through its
+        // "guider" input (CFGGuider/DualCFGGuider/BasicGuider) instead.
+        let inputsToScan = n.inputs;
+        const guiderInput = n.inputs.find(inp => inp.name === "guider");
+        if (guiderInput?.link != null) {
+            const guiderId = linkOrigin.get(guiderInput.link);
+            const guiderNode = guiderId != null ? nodeMap.get(guiderId) : null;
+            if (Array.isArray(guiderNode?.inputs)) inputsToScan = guiderNode.inputs;
+        }
+        for (const inp of inputsToScan) {
             if (!inp || inp.link == null) continue;
             const originId = linkOrigin.get(inp.link);
             if (originId == null) continue;
             const name = inp.name ?? "";
-            const isPos = name === "positive" || name.startsWith("positive");
+            // DualCFGGuider (HiDream E1): cond1 carries the positive-derived conditioning.
+            const isPos = name === "positive" || name === "cond1" || name.startsWith("positive");
             const isNeg = name === "negative" || name.startsWith("negative");
             if (!isPos && !isNeg) continue;
-            // TextEncodeMageFlowEdit — 1ノードでprompt/negative_prompt両方を直接持つため、
-            // textMap(1ノード1テキスト)では両ロールを表現できない
+            // TextEncodeMageFlowEdit / TextEncodeBooguEdit — 1ノードでprompt/negative_prompt両方を
+            // 直接持つため、textMap(1ノード1テキスト)では両ロールを表現できない
             const srcNode = nodeMap.get(originId);
-            if (srcNode?.type === "TextEncodeMageFlowEdit") {
+            if (srcNode?.type === "TextEncodeMageFlowEdit" || srcNode?.type === "TextEncodeBooguEdit") {
                 const widgetIdx = isPos ? 0 : 1; // widgets_values: [prompt, negative_prompt, ...]
                 const txt = srcNode.widgets_values?.[widgetIdx];
                 if (txt && typeof txt === "string") { if (isPos) pos.add(txt); else neg.add(txt); }
                 continue;
             }
-            const txt = textMap.get(originId);
+            // InstructPixToPixConditioning (HiDream E1): forwards the actual text-encoder
+            // conditioning through its own positive/negative inputs — follow one more hop.
+            let resolvedOriginId = originId;
+            if (srcNode?.type === "InstructPixToPixConditioning" && Array.isArray(srcNode.inputs)) {
+                const innerInput = srcNode.inputs.find(i => i.name === (isPos ? "positive" : "negative"));
+                if (innerInput?.link != null) {
+                    const innerId = linkOrigin.get(innerInput.link);
+                    if (innerId != null) resolvedOriginId = innerId;
+                }
+            }
+            const txt = textMap.get(resolvedOriginId);
             if (!txt) continue;
             if (isPos) pos.add(txt); else neg.add(txt);
         }
@@ -3060,7 +3080,9 @@ function _extractPromptsAPI(wf) {
     const textMap = new Map();
     for (const [id, n] of Object.entries(wf)) {
         if (!n || !_isTextEncoderNode(n.class_type ?? "")) continue;
-        const raw = n.inputs?.text ?? n.inputs?.text_g ?? null;
+        // "prompt" — TextEncodeQwenImageEdit(Plus)/TextEncodeBooguEdit and similar Image Edit
+        // model text encoders use this key instead of "text"/"text_g".
+        const raw = n.inputs?.text ?? n.inputs?.text_g ?? n.inputs?.prompt ?? null;
         if (raw && typeof raw === "string") { textMap.set(id, raw); }
         else if (Array.isArray(raw)) { const txt = _resolveLinkedText(wf, raw[0], raw[1] ?? 0); if (txt) textMap.set(id, txt); }
     }
@@ -3069,20 +3091,34 @@ function _extractPromptsAPI(wf) {
     for (const n of Object.values(wf)) {
         if (!n || !_isSamplerNode(n.class_type ?? "")) continue;
         foundSampler = true;
-        for (const [key, val] of Object.entries(n.inputs ?? {})) {
+        // SamplerCustomAdvanced doesn't hold positive/negative directly — it drives a separate
+        // Guider node (CFGGuider/DualCFGGuider/BasicGuider) via its "guider" input. Scan that
+        // node's inputs instead so the loop below can find the positive/negative-role keys.
+        let inputsToScan = n.inputs ?? {};
+        if (Array.isArray(n.inputs?.guider)) {
+            const guiderNode = wf[String(n.inputs.guider[0])];
+            if (guiderNode?.inputs) inputsToScan = guiderNode.inputs;
+        }
+        for (const [key, val] of Object.entries(inputsToScan)) {
             if (!Array.isArray(val)) continue;
-            const isPos = key === "positive" || key.startsWith("positive");
+            // DualCFGGuider (HiDream E1): cond1 carries the positive-derived conditioning.
+            const isPos = key === "positive" || key === "cond1" || key.startsWith("positive");
             const isNeg = key === "negative" || key.startsWith("negative");
             if (!isPos && !isNeg) continue;
-            // TextEncodeMageFlowEdit — 1ノードでprompt/negative_prompt両方を直接持つため、
-            // textMap(1ノード1テキスト)では両ロールを表現できない
+            // TextEncodeMageFlowEdit / TextEncodeBooguEdit — 1ノードでprompt/negative_prompt両方を
+            // 直接持つため、textMap(1ノード1テキスト)では両ロールを表現できない
             const srcNode = wf[String(val[0])];
-            if (srcNode?.class_type === "TextEncodeMageFlowEdit") {
+            if (srcNode?.class_type === "TextEncodeMageFlowEdit" || srcNode?.class_type === "TextEncodeBooguEdit") {
                 const txt = isPos ? srcNode.inputs?.prompt : srcNode.inputs?.negative_prompt;
                 if (txt && typeof txt === "string") { if (isPos) pos.add(txt); else neg.add(txt); }
                 continue;
             }
-            const txt = textMap.get(String(val[0]));
+            // InstructPixToPixConditioning (HiDream E1): forwards the actual text-encoder
+            // conditioning through its own positive/negative inputs — follow one more hop.
+            const resolvedId = srcNode?.class_type === "InstructPixToPixConditioning" && Array.isArray(srcNode.inputs?.[isPos ? "positive" : "negative"])
+                ? String(srcNode.inputs[isPos ? "positive" : "negative"][0])
+                : String(val[0]);
+            const txt = textMap.get(resolvedId);
             if (!txt) continue;
             if (isPos) pos.add(txt); else neg.add(txt);
         }
