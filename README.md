@@ -21,7 +21,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.82-green)
+![Version](https://img.shields.io/badge/version-0.3.83-green)
 
 ## Screenshots
 
@@ -409,6 +409,11 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.83
+
+- **Bug fix: prompts not shown for Flux.2 Klein / Ernie Image workflows** — fixed in the GenerateUI tab, Metadata tab, and sidebar Info tab. Two related patterns weren't detected: (1) `CLIPTextEncode.text` linked to a `PrimitiveStringMultiline` node instead of holding the text directly — the Metadata/Info tab's link resolver only recognized `text`/`text_g`/`prompt` input keys, not `PrimitiveStringMultiline`'s `value` key (GenerateUI's own analysis already handled this). (2) Ernie Image's prompt-enhancement toggle routes the prompt through a `ComfySwitchNode` ("If/Else Switch") that picks between the raw `PrimitiveStringMultiline` text and an LLM-rewritten version from a `TextGenerate` node — since the LLM output can't be known statically, all three tabs now follow both switch branches and use whichever resolves to a literal string (i.e. the user's original prompt).
+- **Help & format notes updated** — GenerateUI/Metadata tab help text and the Metadata tab's "supported formats" note now include Ernie Image alongside the existing subgraph-workflow entries (EN/JA/ZH).
 
 ### v0.3.82
 

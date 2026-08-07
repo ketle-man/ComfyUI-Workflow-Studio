@@ -2,6 +2,25 @@
 
 ---
 
+## v0.3.83
+
+### 追加機能: Ernie Image（ernie-image / ernie-image-turbo）ワークフロー対応 + プロンプトがリンク経由のノードから供給されるパターンの修正
+
+Flux2 Klein（`Flux2-Klein_00025.json`）とErnie Image系2ワークフロー（`image_ernie_image.json` / `ernie_t2i.json`）で、GenerateUIタブ・Metadataタブ・サイドパネルIタブのいずれもプロンプトが表示されない不具合を修正した。
+
+いずれも「プロンプトの実体が`CLIPTextEncode`自身のウィジェット値ではなく、リンク経由で外部の別ノードから供給される」という、v0.3.81/v0.3.82で対応した構成とは異なる新しいパターンが原因だった。
+
+- **Flux2 Klein**: `CLIPTextEncode.text`が`PrimitiveStringMultiline`ノードへのリンク参照になっている。GenerateUIタブ側（`comfyui-workflow.js`）は既存のrole伝播ロジックで対応済みだったが、Metadataタブ側（`metadata-tab.js`の`resolveLinkedText()`、API形式のリンク解決用）が`text`/`text_g`/`prompt`等のキーしか見ておらず、`PrimitiveStringMultiline`が使う`value`キーを見ていなかったため未検出だった。
+- **Ernie Image**: プロンプト強化トグル（`prompt_enhancement`）用に`ComfySwitchNode`（if/else switch）を使い、生プロンプトを保持する`PrimitiveStringMultiline`と、LLMで書き換える`TextGenerate`ノードのどちらかへ実行時に切り替える構成。`TextGenerate`の出力は実行時まで内容が決まらず静的解析では取得不能なため、3タブとも`ComfySwitchNode`の両分岐（`on_false`/`on_true`）を辿った上で、リテラルな文字列へ解決できる方（＝ユーザーが入力した元のプロンプト）を採用するようにした。
+
+`comfyui-workflow.js`（GenerateUIタブの`analyzeWorkflow()`のPass 1bロール伝播に`ComfySwitchNode`対応を追加）、`metadata-tab.js`（`resolveLinkedText()`と`extractPromptsFromNodeSet()`を再帰的な解決ロジックに書き直し、`ComfySwitchNode`と`value`キーに対応）、`node_sets_menu.js`（サイドパネルIタブのローカル複製、同様の修正）の3ファイルを修正。
+
+**検証**: 実際に稼働中のComfyUIサーバー（`/object_info`）を使い、`convertUiToApi()`によるサブグラフ展開を経た上でGenerateUIタブ・Metadataタブ・サイドパネルIタブの3箇所すべてで実ブラウザ上からプロンプトが正しく表示されることを確認。
+
+**あわせてヘルプを更新**: GenerateUIタブ（`helpGen2`）・Metadataタブ（`helpMetadata5`）のヘルプ本文、およびMetadataタブ内の対応フォーマット補足（`metaFormatTodo`）に記載している対応サブグラフワークフローの例にErnie Imageを追加（EN/JA/ZH）。
+
+**How to apply**: [[v0.3.82]]で整理した「GenerateUIタブとMetadataタブ（およびIタブの複製）は別実装で自動同期しない」という注意点に加え、プロンプトが`CLIPTextEncode`自身の値ではなくリンク経由で別ノードから来るパターン（`PrimitiveStringMultiline`直結、`ComfySwitchNode`等の中継ノード経由）は今後も現れうる。中継ノードがLLM呼び出しなど実行時にしか値が決まらないノードへ分岐している場合は、無理に実際の出力値を再現しようとせず、静的に解決できる（＝ユーザーが直接入力した）分岐を優先して表示する方針でよい。
+
 ## v0.3.82
 
 ### バグ修正: MetadataタブとサイドパネルIタブでLongCat/Boogu/HiDream E1/FireRed等のプロンプトが表示されない不具合

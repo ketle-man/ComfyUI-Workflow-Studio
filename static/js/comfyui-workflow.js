@@ -954,6 +954,21 @@ export const comfyWorkflow = {
                     if (isPos && Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
                     if (isNeg && Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
                 }
+                // ComfySwitchNode ("If/Else Switch", on_false/on_true/switch) — used by Ernie
+                // Image's prompt-enhancement toggle to pick between the raw PrimitiveStringMultiline
+                // text and an LLM-generated (TextGenerate) rewrite. The rewrite can't be known
+                // statically, so propagate the role through both branches — only the branch that
+                // resolves to a literal string source (e.g. PrimitiveStringMultiline) will end up
+                // producing a prompt_nodes entry in Pass 2.
+                if (ct === "ComfySwitchNode") {
+                    for (const key of ["on_false", "on_true"]) {
+                        const tv = inputs[key];
+                        if (Array.isArray(tv)) {
+                            if (isPos) samplerPositiveRef[tv[0]] = true;
+                            if (isNeg) samplerNegativeRef[tv[0]] = true;
+                        }
+                    }
+                }
             }
         }
 

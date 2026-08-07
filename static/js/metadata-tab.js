@@ -193,6 +193,45 @@ function extractPrompts(wf) {
     return Array.isArray(wf.nodes) ? extractPromptsLiteGraph(wf) : extractPromptsAPI(wf);
 }
 
+// LiteGraph形式: リンクを辿ってテキストを解決（ComfySwitchNode等の中継ノードにも対応）
+function resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, srcId, slot, depth = 0) {
+    if (depth > 6) return null;
+    const srcNode = nodeMap.get(srcId);
+    if (!srcNode) return null;
+    const srcType = srcNode.type ?? "";
+    if (isPromptStylerNode(srcType)) {
+        const v = srcNode.widgets_values?.[slot];
+        return (v && typeof v === "string") ? v : null;
+    }
+    // ComfySwitchNode ("If/Else Switch") — 片方(TextGenerateなどLLMノード)は静的解決不能なため
+    // on_false/on_true の両方を試し、リテラルへ解決できた方を採用する。
+    if (srcType === "ComfySwitchNode" && Array.isArray(srcNode.inputs)) {
+        for (const name of ["on_false", "on_true"]) {
+            const inp = srcNode.inputs.find(i => i.name === name);
+            if (inp?.link == null) continue;
+            const originId = linkOrigin.get(inp.link);
+            const originSlot = linkSlot.get(inp.link) ?? 0;
+            if (originId == null) continue;
+            const text = resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, originId, originSlot, depth + 1);
+            if (text) return text;
+        }
+        return null;
+    }
+    // WFS_PromptText, PrimitiveStringMultiline 等、任意の STRING 出力ノード
+    const v = srcNode.widgets_values?.[slot] ?? srcNode.widgets_values?.[0];
+    if (v && typeof v === "string") return v;
+    // さらにリンクされている場合（StringReplace等の中継ノード）は追跡する
+    if (Array.isArray(srcNode.inputs)) {
+        const nextInput = srcNode.inputs.find(i => ["text", "value", "prompt", "string"].includes(i.name));
+        if (nextInput?.link != null) {
+            const originId = linkOrigin.get(nextInput.link);
+            const originSlot = linkSlot.get(nextInput.link) ?? 0;
+            if (originId != null) return resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, originId, originSlot, depth + 1);
+        }
+    }
+    return null;
+}
+
 // CLIPTextEncode + KSampler でプロンプト抽出（トップレベル・サブグラフ共用）
 // サンプラーが見つかりテキストが取れた場合のみ非null を返す
 function extractPromptsFromNodeSet(nodes, links) {
@@ -221,18 +260,8 @@ function extractPromptsFromNodeSet(nodes, links) {
             if (textInput?.link != null) {
                 const originId = linkOrigin.get(textInput.link);
                 const originSlot = linkSlot.get(textInput.link) ?? 0;
-                const srcNode = originId != null ? nodeMap.get(originId) : null;
-                if (srcNode) {
-                    const srcType = srcNode.type ?? "";
-                    if (isPromptStylerNode(srcType)) {
-                        const v = srcNode.widgets_values?.[originSlot];
-                        if (v && typeof v === "string") textMap.set(n.id, v);
-                    } else {
-                        // WFS_PromptText, PrimitiveStringMultiline, ComfySwitchNode 等、任意の STRING 出力ノード
-                        const v = srcNode.widgets_values?.[originSlot] ?? srcNode.widgets_values?.[0];
-                        if (v && typeof v === "string") textMap.set(n.id, v);
-                    }
-                }
+                const text2 = resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, originId, originSlot);
+                if (text2) textMap.set(n.id, text2);
             }
         }
     }
@@ -334,7 +363,8 @@ function extractMarkdownNoteModels(wf) {
 }
 
 // API形式: リンク参照 [srcNodeId, slot] からテキストを解決
-function resolveLinkedText(wf, srcId, slot) {
+function resolveLinkedText(wf, srcId, slot, depth = 0) {
+    if (depth > 6) return null;
     const src = wf[String(srcId)];
     if (!src || typeof src !== "object") return null;
     const ct = src.class_type ?? "";
@@ -343,13 +373,32 @@ function resolveLinkedText(wf, srcId, slot) {
         const v = slot === 0 ? src.inputs?.text_positive : src.inputs?.text_negative;
         return (v && typeof v === "string") ? v : null;
     }
-    // 汎用テキストキー
+    // ComfySwitchNode ("If/Else Switch", on_false/on_true/switch) — Ernie Imageのプロンプト強化
+    // トグルなどで使われる。片方(TextGenerateなどLLMノード)は静的解決不能なため両方試し、
+    // リテラルへ解決できた方を採用する。
+    if (ct === "ComfySwitchNode") {
+        for (const key of ["on_false", "on_true"]) {
+            const v = src.inputs?.[key];
+            if (Array.isArray(v)) {
+                const text = resolveLinkedText(wf, v[0], v[1] ?? 0, depth + 1);
+                if (text) return text;
+            } else if (typeof v === "string" && v) {
+                return v;
+            }
+        }
+        return null;
+    }
+    // 汎用テキストキー（"value" は PrimitiveString/PrimitiveStringMultiline）
     const keys = slot === 0
-        ? ["text_positive", "text", "text_g", "prompt"]
+        ? ["text_positive", "text", "text_g", "prompt", "value"]
         : ["text_negative", "text_l"];
     for (const k of keys) {
         const v = src.inputs?.[k];
-        if (v && typeof v === "string") return v;
+        if (typeof v === "string" && v) return v;
+        if (Array.isArray(v)) {
+            const text = resolveLinkedText(wf, v[0], v[1] ?? 0, depth + 1);
+            if (text) return text;
+        }
     }
     return null;
 }

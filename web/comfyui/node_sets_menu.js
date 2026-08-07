@@ -2939,6 +2939,41 @@ function _isTextEncoderNode(ct) { return ct === "CLIPTextEncode" || ct.includes(
 function _isSamplerNode(ct) { return ct === "KSampler" || ct === "KSamplerAdvanced" || ct.includes("KSampler") || ct.includes("Sampler"); }
 function _isPromptStylerNode(ct) { return ct.includes("PromptStyler"); }
 
+// LiteGraph形式: リンクを辿ってテキストを解決（ComfySwitchNode等の中継ノードにも対応）
+function _resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, srcId, slot, depth = 0) {
+    if (depth > 6) return null;
+    const srcNode = nodeMap.get(srcId);
+    if (!srcNode) return null;
+    const srcType = srcNode.type ?? "";
+    if (_isPromptStylerNode(srcType)) {
+        const v = srcNode.widgets_values?.[slot];
+        return (v && typeof v === "string") ? v : null;
+    }
+    if (srcType === "ComfySwitchNode" && Array.isArray(srcNode.inputs)) {
+        for (const name of ["on_false", "on_true"]) {
+            const inp = srcNode.inputs.find(i => i.name === name);
+            if (inp?.link == null) continue;
+            const originId = linkOrigin.get(inp.link);
+            const originSlot = linkSlot.get(inp.link) ?? 0;
+            if (originId == null) continue;
+            const text = _resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, originId, originSlot, depth + 1);
+            if (text) return text;
+        }
+        return null;
+    }
+    const v = srcNode.widgets_values?.[slot] ?? srcNode.widgets_values?.[0];
+    if (v && typeof v === "string") return v;
+    if (Array.isArray(srcNode.inputs)) {
+        const nextInput = srcNode.inputs.find(i => ["text", "value", "prompt", "string"].includes(i.name));
+        if (nextInput?.link != null) {
+            const originId = linkOrigin.get(nextInput.link);
+            const originSlot = linkSlot.get(nextInput.link) ?? 0;
+            if (originId != null) return _resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, originId, originSlot, depth + 1);
+        }
+    }
+    return null;
+}
+
 function _extractPromptsFromNodeSet(nodes, links) {
     const nodeMap = new Map();
     for (const n of nodes) nodeMap.set(n.id, n);
@@ -2959,12 +2994,8 @@ function _extractPromptsFromNodeSet(nodes, links) {
             if (textInput?.link != null) {
                 const originId = linkOrigin.get(textInput.link);
                 const originSlot = linkSlot.get(textInput.link) ?? 0;
-                const srcNode = originId != null ? nodeMap.get(originId) : null;
-                if (srcNode) {
-                    const srcType = srcNode.type ?? "";
-                    if (_isPromptStylerNode(srcType)) { const v = srcNode.widgets_values?.[originSlot]; if (v && typeof v === "string") textMap.set(n.id, v); }
-                    else { const v = srcNode.widgets_values?.[originSlot] ?? srcNode.widgets_values?.[0]; if (v && typeof v === "string") textMap.set(n.id, v); }
-                }
+                const text2 = _resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, originId, originSlot);
+                if (text2) textMap.set(n.id, text2);
             }
         }
     }
@@ -3060,13 +3091,28 @@ function _extractMarkdownNoteModels(wf) {
     return hasAny ? result : null;
 }
 
-function _resolveLinkedText(wf, srcId, slot) {
+function _resolveLinkedText(wf, srcId, slot, depth = 0) {
+    if (depth > 6) return null;
     const src = wf[String(srcId)];
     if (!src || typeof src !== "object") return null;
     const ct = src.class_type ?? "";
     if (_isPromptStylerNode(ct)) { const v = slot === 0 ? src.inputs?.text_positive : src.inputs?.text_negative; return (v && typeof v === "string") ? v : null; }
-    const keys = slot === 0 ? ["text_positive", "text", "text_g", "prompt"] : ["text_negative", "text_l"];
-    for (const k of keys) { const v = src.inputs?.[k]; if (v && typeof v === "string") return v; }
+    // ComfySwitchNode ("If/Else Switch") — 片方(TextGenerateなどLLMノード)は静的解決不能なため
+    // on_false/on_true の両方を試し、リテラルへ解決できた方を採用する。
+    if (ct === "ComfySwitchNode") {
+        for (const key of ["on_false", "on_true"]) {
+            const v = src.inputs?.[key];
+            if (Array.isArray(v)) { const text = _resolveLinkedText(wf, v[0], v[1] ?? 0, depth + 1); if (text) return text; }
+            else if (typeof v === "string" && v) return v;
+        }
+        return null;
+    }
+    const keys = slot === 0 ? ["text_positive", "text", "text_g", "prompt", "value"] : ["text_negative", "text_l"];
+    for (const k of keys) {
+        const v = src.inputs?.[k];
+        if (typeof v === "string" && v) return v;
+        if (Array.isArray(v)) { const text = _resolveLinkedText(wf, v[0], v[1] ?? 0, depth + 1); if (text) return text; }
+    }
     return null;
 }
 
