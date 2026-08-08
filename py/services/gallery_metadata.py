@@ -3,6 +3,7 @@ Gallery Metadata Store - ギャラリー画像のメタデータ永続化
 """
 import json
 import logging
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -24,14 +25,24 @@ class GalleryMetadataStore:
             {"name": str}
         ]
     }
+
+    self._data（特に "images" 辞書）は、バックグラウンドのフォルダインデックススレッド
+    （gallery_service.pyの_bg_index_folder）と、リクエストハンドラを処理するメインスレッドの
+    双方から並行に読み書きされる。ロックなしで辞書を反復（.items()/.values()/for key in ...や
+    json.dumpによるシリアライズ）している最中に別スレッドがキーを追加/削除すると
+    "dictionary changed size during iteration" が発生するため、_data へアクセスする
+    全メソッドを self._lock で保護する（re-entrant: ensure_group()がcreate_group()を
+    内部呼び出しするため、通常のLockではなくRLockを使う）。
     """
 
     def __init__(self, file_path: Path):
         self.file_path = file_path
+        self._lock = threading.RLock()
         self._data: dict = {"images": {}, "groups": []}
         self._load()
 
     def _load(self):
+        # コンストラクタからのみ呼ばれ、この時点ではまだ他スレッドと共有されていないためロック不要
         if self.file_path.exists():
             try:
                 with open(self.file_path, "r", encoding="utf-8") as f:
@@ -44,6 +55,7 @@ class GalleryMetadataStore:
                 logger.warning("GalleryMetadataStore: load error: %s", e)
 
     def _save_to_disk(self):
+        # 呼び出し元（save/create_group等）が既にself._lockを保持している前提の内部メソッド
         try:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.file_path, "w", encoding="utf-8") as f:
@@ -58,113 +70,126 @@ class GalleryMetadataStore:
 
     def get(self, image_path: str) -> dict:
         key = self._normalize_path(image_path)
-        return dict(self._data["images"].get(key, {}))
+        with self._lock:
+            return dict(self._data["images"].get(key, {}))
 
     def save(self, image_path: str, data: dict) -> bool:
         key = self._normalize_path(image_path)
-        existing = self._data["images"].get(key, {})
-        existing.update(data)
-        allowed = {"favorite", "tags", "memo", "groups", "workflow"}
-        existing = {k: v for k, v in existing.items() if k in allowed}
-        self._data["images"][key] = existing
-        return self._save_to_disk()
+        with self._lock:
+            existing = self._data["images"].get(key, {})
+            existing.update(data)
+            allowed = {"favorite", "tags", "memo", "groups", "workflow"}
+            existing = {k: v for k, v in existing.items() if k in allowed}
+            self._data["images"][key] = existing
+            return self._save_to_disk()
 
     # ── グループ管理 ──────────────────────────────────────────────
 
     def list_groups(self) -> list[dict]:
-        return list(self._data.get("groups", []))
+        with self._lock:
+            return list(self._data.get("groups", []))
 
     def create_group(self, name: str) -> bool:
-        groups = self._data.get("groups", [])
-        if any(g["name"] == name for g in groups):
-            return False
-        groups.append({"name": name})
-        self._data["groups"] = groups
-        return self._save_to_disk()
+        with self._lock:
+            groups = self._data.get("groups", [])
+            if any(g["name"] == name for g in groups):
+                return False
+            groups.append({"name": name})
+            self._data["groups"] = groups
+            return self._save_to_disk()
 
     def rename_group(self, old_name: str, new_name: str) -> bool:
         """グループ名を変更し、全画像のgroupsフィールドも更新する"""
-        groups = self._data.get("groups", [])
-        if not any(g["name"] == old_name for g in groups):
-            return False
-        if any(g["name"] == new_name for g in groups):
-            return False  # 新名前が既に存在
-        # グループリスト更新
-        for g in groups:
-            if g["name"] == old_name:
-                g["name"] = new_name
-                break
-        # 全画像のgroupsフィールドを更新
-        for meta in self._data["images"].values():
-            img_groups = meta.get("groups", [])
-            if old_name in img_groups:
-                meta["groups"] = [new_name if g == old_name else g for g in img_groups]
-        return self._save_to_disk()
+        with self._lock:
+            groups = self._data.get("groups", [])
+            if not any(g["name"] == old_name for g in groups):
+                return False
+            if any(g["name"] == new_name for g in groups):
+                return False  # 新名前が既に存在
+            # グループリスト更新
+            for g in groups:
+                if g["name"] == old_name:
+                    g["name"] = new_name
+                    break
+            # 全画像のgroupsフィールドを更新
+            for meta in self._data["images"].values():
+                img_groups = meta.get("groups", [])
+                if old_name in img_groups:
+                    meta["groups"] = [new_name if g == old_name else g for g in img_groups]
+            return self._save_to_disk()
 
     def delete_group(self, name: str) -> bool:
-        groups = [g for g in self._data.get("groups", []) if g["name"] != name]
-        self._data["groups"] = groups
-        # 画像のgroupsからも削除
-        for meta in self._data["images"].values():
-            if name in meta.get("groups", []):
-                meta["groups"] = [g for g in meta["groups"] if g != name]
-        return self._save_to_disk()
+        with self._lock:
+            groups = [g for g in self._data.get("groups", []) if g["name"] != name]
+            self._data["groups"] = groups
+            # 画像のgroupsからも削除
+            for meta in self._data["images"].values():
+                if name in meta.get("groups", []):
+                    meta["groups"] = [g for g in meta["groups"] if g != name]
+            return self._save_to_disk()
 
     def list_images_in_group(self, group_name: str) -> list[str]:
-        result = []
-        for key, meta in self._data["images"].items():
-            if group_name in meta.get("groups", []):
-                result.append(key)
-        return result
+        with self._lock:
+            result = []
+            for key, meta in self._data["images"].items():
+                if group_name in meta.get("groups", []):
+                    result.append(key)
+            return result
 
     def remove_stale_paths_from_group(self, group_name: str, stale_paths: list) -> int:
         """存在しないパスをグループから一括削除する（1回の保存で完結）"""
-        stale_set = {self._normalize_path(p) for p in stale_paths}
-        count = 0
-        for key, meta in self._data["images"].items():
-            if key in stale_set and group_name in meta.get("groups", []):
-                meta["groups"] = [g for g in meta["groups"] if g != group_name]
-                count += 1
-        if count:
-            self._save_to_disk()
-        return count
+        with self._lock:
+            stale_set = {self._normalize_path(p) for p in stale_paths}
+            count = 0
+            for key, meta in self._data["images"].items():
+                if key in stale_set and group_name in meta.get("groups", []):
+                    meta["groups"] = [g for g in meta["groups"] if g != group_name]
+                    count += 1
+            if count:
+                self._save_to_disk()
+            return count
 
     def get_group_member_set(self, group_name: str) -> set:
         """グループメンバーのパスをsetで返す（高速フィルタ用）"""
-        return {
-            key for key, meta in self._data["images"].items()
-            if group_name in meta.get("groups", [])
-        }
+        with self._lock:
+            return {
+                key for key, meta in self._data["images"].items()
+                if group_name in meta.get("groups", [])
+            }
 
     def clear_group(self, group_name: str) -> bool:
         """グループ内の全画像を除外する（グループ自体は残す）"""
-        for meta in self._data["images"].values():
-            if group_name in meta.get("groups", []):
-                meta["groups"] = [g for g in meta["groups"] if g != group_name]
-        return self._save_to_disk()
+        with self._lock:
+            for meta in self._data["images"].values():
+                if group_name in meta.get("groups", []):
+                    meta["groups"] = [g for g in meta["groups"] if g != group_name]
+            return self._save_to_disk()
 
     def ensure_group(self, name: str) -> bool:
         """グループが存在しない場合のみ作成する"""
-        if any(g["name"] == name for g in self._data.get("groups", [])):
-            return True
-        return self.create_group(name)
+        with self._lock:
+            if any(g["name"] == name for g in self._data.get("groups", [])):
+                return True
+            return self.create_group(name)
 
     def delete(self, image_path: str) -> bool:
         """画像のメタデータエントリを削除する"""
         key = self._normalize_path(image_path)
-        if key in self._data["images"]:
-            del self._data["images"][key]
-            return self._save_to_disk()
-        return True
+        with self._lock:
+            if key in self._data["images"]:
+                del self._data["images"][key]
+                return self._save_to_disk()
+            return True
 
     def rename_path(self, old_path: str, new_path: str) -> bool:
         """画像のパスキーを変更する（ファイル移動後のメタデータ引継ぎ）"""
         old_key = self._normalize_path(old_path)
         new_key = self._normalize_path(new_path)
-        if old_key in self._data["images"]:
-            self._data["images"][new_key] = self._data["images"].pop(old_key)
-            return self._save_to_disk()
-        return True
+        with self._lock:
+            if old_key in self._data["images"]:
+                self._data["images"][new_key] = self._data["images"].pop(old_key)
+                return self._save_to_disk()
+            return True
 
     def cleanup_stale_images(self, folder_path: str, existing_paths: set) -> int:
         """folder_path 配下の存在しないファイルのメタデータを削除する。
@@ -173,14 +198,15 @@ class GalleryMetadataStore:
         folder_key = self._normalize_path(folder_path)
         if not folder_key.endswith("/"):
             folder_key += "/"
-        stale = [
-            key for key in self._data["images"]
-            if key.startswith(folder_key) and key not in existing_paths
-        ]
-        if not stale:
-            return 0
-        for key in stale:
-            del self._data["images"][key]
-        self._save_to_disk()
-        logger.info("Cleaned up %d stale metadata entries from %s", len(stale), folder_path)
-        return len(stale)
+        with self._lock:
+            stale = [
+                key for key in self._data["images"]
+                if key.startswith(folder_key) and key not in existing_paths
+            ]
+            if not stale:
+                return 0
+            for key in stale:
+                del self._data["images"][key]
+            self._save_to_disk()
+            logger.info("Cleaned up %d stale metadata entries from %s", len(stale), folder_path)
+            return len(stale)

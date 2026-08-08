@@ -2,6 +2,20 @@
 
 ---
 
+## v0.3.86
+
+### バグ修正: 画像を一括生成（I2I）等の連続実行で "GalleryMetadataStore: save error: dictionary changed size during iteration" が発生
+
+comfyui-comic-creator側で「画像を一括生成（I2I）」を実行すると、ログに`[ERROR] GalleryMetadataStore: save error: dictionary changed size during iteration`が出る不具合をユーザー報告により調査。
+
+**原因**: ギャラリー機能のメタデータ永続化クラス`GalleryMetadataStore`（`py/services/gallery_metadata.py`）は、`self._data["images"]`という単一の辞書を、フォルダを定期的に再スキャンするバックグラウンドスレッド（`gallery_service.py`の`_bg_index_folder`）と、リクエストを処理するメインスレッドの双方から、ロックなしで並行に読み書きしていた。`_save_to_disk()`の`json.dump(self._data, ...)`は内部で`self._data["images"]`を反復してシリアライズするが、その最中に別スレッドがキーを追加/削除すると、Pythonの`RuntimeError: dictionary changed size during iteration`が発生する。画像を一括生成（I2I）はコマごとに生成結果のメタデータ保存リクエストを短時間に連発するため、バックグラウンドインデックススレッドとの競合が起きやすいタイミングだった。同様の反復（`.items()`/`.values()`/`for key in ...`）は`rename_group`/`delete_group`/`list_images_in_group`/`cleanup_stale_images`等、他の複数メソッドにも存在し、いずれも無防備だった。
+
+**修正**: `GalleryMetadataStore`に`threading.RLock`を追加し、`_data`を読み書きする全メソッド（`save`/`get`/`delete`/`rename_path`/`cleanup_stale_images`/グループ管理系すべて）を`with self._lock:`で保護した。`ensure_group()`が内部で`create_group()`を呼ぶ再入呼び出しがあるため、通常の`Lock`ではなく`RLock`を採用。
+
+**How to apply**: バックグラウンドスレッド（`_bg_index_folder`等）とリクエストハンドラの双方から触られる共有可変状態（辞書・リスト）を持つクラスを新設・変更する際は、読み取り専用に見えるメソッドも含めて必ずロックで保護すること。「dictionary changed size during iteration」はこの種の無防備な共有辞書の典型的な症状であり、例外を握りつぶすログ出力（`except Exception as e: logger.error(...)`）の裏に隠れて原因特定が遅れやすい。
+
+---
+
 ## v0.3.85
 
 ### 機能拡張: Generate UI連携ブリッジ（T2I）にデフォルトワークフロー・Negativeプロンプト対応を追加
