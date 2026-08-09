@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.87-green)
+![Version](https://img.shields.io/badge/version-0.3.88-green)
 
 ## Screenshots
 
@@ -128,15 +128,18 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **After Gen modes** — Loop (wrap at end and continue indefinitely), Increment (stop automatically when last image is reached), Fixed (always use the same index)
 - **Run / Stop controls** — left pane Run / Stop buttons manage the generation loop; After Gen combo (loop / increment / fixed), ▶ Run, and ■ Stop widgets are also available directly on the WFS_GalleryFeeder node in the ComfyUI canvas (`gallery_feeder_extension.js`)
 
-### Lab subtab (v0.3.87)
+### Lab subtab (v0.3.87 / v0.3.88)
 
 An experimental I2I batch generator: runs the workflow currently loaded in GenerateUI N times, letting Checkpoint / VAE / Prompt / KSampler each change independently starting at a chosen iteration — unlike the Batch tab's single-axis queue, every column keeps its own list of change points. Never mutates the loaded workflow; every iteration runs on a fresh clone.
 
-- **Setting / Results sub-panels** — Setting: image drop zone + 4 keyframe columns + run controls; Results: source image and up to 9 generated thumbnails (click to enlarge)
+- **Setting / Results / Plan JSON sub-panels** — Setting: image drop zone + 4 keyframe columns + run controls; Results: source image and up to 9 generated thumbnails (click to enlarge); Plan JSON: the current plan as raw editable JSON (v0.3.88)
 - **Per-column keyframes** — Checkpoint, VAE, Prompt, KSampler each hold an independent list of `{iteration, value}` keyframes; +/− per column adds/removes a keyframe (iteration #1 is fixed and can't be removed); click a cell to edit its value, the iteration it starts applying from, and a "revert to #1's setting" checkbox; the effective value at iteration N is the latest keyframe with iteration ≤ N, carried forward until the next one changes it
+- **Checkpoint / VAE cell filtering** (v0.3.88) — a Filter... box above the value dropdown narrows the list live, same as GenerateUI's Model tab; overlay ✕ clear button matches the Models/Nodes/Workflow/Gallery tab search boxes
+- **Prompt cell extras** (v0.3.88) — **Get from GenerateUI** fills Positive/Negative from the workflow currently loaded in GenerateUI; **Get from Image** extracts a prompt from a dropped/selected image or workflow JSON (same detection as the Metadata tab); **Style** applies whichever style is currently selected in GenerateUI's own Style checkbox/dropdown to the Positive/Negative text below (Lab has no separate style picker of its own)
 - **Use generated image for next** — optional checkbox that chains iterations: from iteration 2 onward the previous iteration's first output image is fed back in as the I2I source instead of the original dropped image, using ComfyUI's `"name [type]"` annotated-filename reference (no re-upload needed)
 - **Plan files** — Plan Save (silently overwrites the loaded plan) / Save As (always asks for a new name) / Plan Clear; plans are stored as `<name>.json` in `user/default/Workflow-Studio/lab_plan/`, alongside an auto-generated `<name>.png` index image (a 3-per-row contact sheet of up to 9 result thumbnails)
 - **Plan Load** — same drag-and-drop / click-to-browse drop zone as the Image slot; drop a plan's `.json` (read directly in the browser) or its `.png` index-image thumbnail (fetches the matching `.json` by filename)
+- **Plan JSON tab** (v0.3.88) — view/edit the current plan as raw JSON (same shape saved to disk); Refresh re-reads it from the Setting tab, Apply to Setting parses your edits and writes them back into the Setting tab's columns/note/batch/chain-image/source-image/results — the same effect as loading that JSON as a plan file, without saving it first
 - **Eagle integration** — every image Lab generates is auto-saved to Eagle the same way as GenerateUI's own Generate button, if enabled in the Settings tab
 
 ### Prompt Tab
@@ -421,6 +424,12 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.88
+
+- **Lab tab — Prompt cell extras** — Get from GenerateUI (fills Positive/Negative from the currently loaded workflow), Get from Image (extracts a prompt from a dropped/selected image or workflow JSON, reusing the Metadata tab's `extractAllMetadata()`), and Style (applies whichever style is currently selected in GenerateUI's own top-bar Style checkbox/dropdown — no separate style picker inside Lab)
+- **Lab tab — Checkpoint/VAE cell filtering** — a Filter... box narrows the dropdown live, same as GenerateUI's Model tab, with the same overlay ✕ clear button used by the Models/Nodes/Workflow/Gallery search boxes (`setupSearchClearBtn()`)
+- **Lab tab — new Plan JSON subtab** — view/edit the current plan as raw JSON (syntax highlighted, same shape as the saved file); Refresh re-syncs it from the Setting tab, Apply to Setting parses your edits and writes them back into the Setting tab's columns/note/batch/chain-image/source-image/results, the same as loading that JSON as a plan file without saving it first
 
 ### v0.3.87
 

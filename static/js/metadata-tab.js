@@ -556,7 +556,7 @@ function parseFooocusMetadata(raw) {
 }
 
 // ── Master extractAllMetadata ─────────────────────────────────
-async function extractAllMetadata(file) {
+export async function extractAllMetadata(file) {
     const name = file.name.toLowerCase();
     const isJSON = file.type === "application/json" || name.endsWith(".json");
     const isWebP = file.type === "image/webp" || name.endsWith(".webp");

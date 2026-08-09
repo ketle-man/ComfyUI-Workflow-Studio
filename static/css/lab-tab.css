@@ -37,6 +37,14 @@
 
 .wfm-lab-panel.active { display: flex; }
 
+.wfm-lab-planjson-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
 .wfm-lab-pane-header {
     font-size: 11px;
     font-weight: 600;
@@ -216,6 +224,13 @@
 .wfm-lab-modal-inline {
     display: flex;
     gap: 8px;
+}
+
+.wfm-lab-modal-btnrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
 }
 
 .wfm-lab-modal-inline > div {

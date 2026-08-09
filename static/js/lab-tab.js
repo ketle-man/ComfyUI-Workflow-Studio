@@ -12,7 +12,9 @@ import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { showToast, openModal, closeModal } from "./app.js";
 import { t } from "./i18n.js";
-import { escapeHtml, getEagleSettings, saveToEagle } from "./util.js";
+import { escapeHtml, getEagleSettings, saveToEagle, setupSearchClearBtn } from "./util.js";
+import { extractAllMetadata } from "./metadata-tab.js";
+import { syncJsonHighlight } from "./json-highlight.js";
 
 const COLUMN_KEYS = ["checkpoint", "vae", "prompt", "ksampler"];
 const MAX_RESULTS = 9;
@@ -62,6 +64,7 @@ export function initLabTab() {
     _initColumnButtons();
     _initRunControls();
     _initPlanButtons();
+    _initPlanJsonTab();
     _renderAllColumns();
     _renderResultsGrid();
 }
@@ -144,9 +147,56 @@ function _initSubtabToggle() {
             btn.classList.add("active");
             document.getElementById("wfm-lab-panel-setting")?.classList.toggle("active", target === "setting");
             document.getElementById("wfm-lab-panel-results")?.classList.toggle("active", target === "results");
+            document.getElementById("wfm-lab-panel-planjson")?.classList.toggle("active", target === "planjson");
             if (target === "results") _updateResultsSourceImage();
+            if (target === "planjson") _syncLabJsonView();
         });
     });
+}
+
+function _initPlanJsonTab() {
+    document.getElementById("wfm-lab-planjson-refresh")?.addEventListener("click", () => {
+        _syncLabJsonView();
+        showToast(t("labPlanJsonRefreshed"), "success");
+    });
+
+    document.getElementById("wfm-lab-planjson-apply")?.addEventListener("click", () => {
+        const editor = document.getElementById("wfm-lab-planjson-editor");
+        let data;
+        try {
+            data = JSON.parse(editor?.value || "{}");
+        } catch (err) {
+            showToast(`${t("labPlanJsonInvalid")}: ${err.message}`, "error");
+            return;
+        }
+        _applyPlanData(_lab.planFilename, data);
+        _syncLabJsonView();
+        showToast(t("labPlanJsonApplied"), "success");
+    });
+}
+
+// Serializes the live Setting-tab state into the same shape saved to disk by
+// _savePlan(), for display/editing in the Plan JSON panel.
+function _buildPlanData(name) {
+    return {
+        name,
+        note: _lab.note,
+        batch_count: _lab.batchCount,
+        chain_image: _lab.chainImage,
+        source_image: _lab.sourceImageFilename,
+        columns: _lab.columns,
+        results: { images: _lab.results.images },
+    };
+}
+
+function _syncLabJsonView() {
+    const editor = document.getElementById("wfm-lab-planjson-editor");
+    const highlight = document.getElementById("wfm-lab-planjson-highlight");
+    if (!editor) return;
+    const name = _lab.planFilename ? _lab.planFilename.replace(/\.json$/i, "") : "";
+    const json = JSON.stringify(_buildPlanData(name), null, 2);
+    editor.value = json;
+    syncJsonHighlight(highlight, json);
 }
 
 function _initRunControls() {
@@ -282,6 +332,10 @@ function _openCellModal(col, idx) {
         valueFieldsHtml = `
             <div class="wfm-lab-modal-row">
                 <label>${col === "checkpoint" ? "Checkpoint" : "VAE"}</label>
+                <div class="wfm-search-wrap" style="margin-bottom:4px;width:100%;">
+                    <input type="text" id="wfm-lab-modal-value-filter" class="wfm-input wfm-search-input" placeholder="Filter...">
+                    <button type="button" class="wfm-search-clear-btn" id="wfm-lab-modal-value-filter-clear" title="Clear search">✕</button>
+                </div>
                 <select id="wfm-lab-modal-value" class="wfm-select">
                     <option value="">${t("labUseWorkflowDefault")}</option>
                     ${options.map((m) => `<option value="${escapeHtml(m)}" ${m === kf.value ? "selected" : ""}>${escapeHtml(m)}</option>`).join("")}
@@ -290,6 +344,11 @@ function _openCellModal(col, idx) {
     } else if (col === "prompt") {
         const v = kf.value || {};
         valueFieldsHtml = `
+            <div class="wfm-lab-modal-btnrow">
+                <button type="button" id="wfm-lab-modal-get-genui" class="wfm-btn wfm-btn-sm">${t("labGetFromGenUI")}</button>
+                <button type="button" id="wfm-lab-modal-get-image" class="wfm-btn wfm-btn-sm">${t("labGetFromImage")}</button>
+                <input type="file" id="wfm-lab-modal-image-file" accept="image/*,.json" style="display:none;">
+            </div>
             <div class="wfm-lab-modal-row">
                 <label>Positive</label>
                 <textarea id="wfm-lab-modal-positive" class="wfm-input" rows="3">${escapeHtml(v.positive || "")}</textarea>
@@ -297,6 +356,10 @@ function _openCellModal(col, idx) {
             <div class="wfm-lab-modal-row">
                 <label>Negative</label>
                 <textarea id="wfm-lab-modal-negative" class="wfm-input" rows="3">${escapeHtml(v.negative || "")}</textarea>
+            </div>
+            <div class="wfm-lab-modal-row">
+                <label>${t("labStyle")}</label>
+                <button type="button" id="wfm-lab-modal-style-apply" class="wfm-btn wfm-btn-sm">${t("labApply")}</button>
             </div>`;
     } else if (col === "ksampler") {
         const v = kf.value || {};
@@ -352,6 +415,8 @@ function _openCellModal(col, idx) {
             <button id="wfm-lab-modal-save" class="wfm-btn wfm-btn-primary">${t("save")}</button>
         </div>`;
     openModal(`${col} #${idx + 1}`, html);
+    if (col === "prompt") _wireLabPromptModalExtras();
+    if (col === "checkpoint" || col === "vae") _wireLabValueFilter(col);
 
     const revertCb = document.getElementById("wfm-lab-modal-revert");
     const fieldsWrap = document.getElementById("wfm-lab-modal-fields");
@@ -406,6 +471,116 @@ function _openCellModal(col, idx) {
         _lab.columns[col].sort((a, b) => a.atIteration - b.atIteration);
         _renderColumn(col);
         closeModal();
+    });
+}
+
+// Merges a style ({prompt, negative_prompt}, from Workflow-Studio/style/*.json) into
+// plain positive/negative text — same substitution rule as generate-tab.js's
+// _applyNamedStyle(), just operating on strings instead of a live workflow's nodes.
+function _applyStyleToText(positive, negative, style) {
+    let newPositive = positive;
+    if (style.prompt) {
+        newPositive = style.prompt.includes("{prompt}")
+            ? style.prompt.replace("{prompt}", positive)
+            : (positive ? `${positive}, ${style.prompt}` : style.prompt);
+    }
+    let newNegative = negative;
+    if (style.negative_prompt) {
+        newNegative = negative ? `${negative}, ${style.negative_prompt}` : style.negative_prompt;
+    }
+    return { positive: newPositive, negative: newNegative };
+}
+
+// Filter box above the Checkpoint/VAE modal's <select>, same behavior as the
+// Model tab's filter inputs (comfyui-editor.js renderModelTab): rebuild the
+// option list on every keystroke, always keeping the "workflow default" option.
+// The overlay ✕ clear button reuses the same setupSearchClearBtn() helper as the
+// Models/Nodes/Workflow/Gallery tab search boxes and the Raw JSON search bar.
+function _wireLabValueFilter(col) {
+    const filterInput = document.getElementById("wfm-lab-modal-value-filter");
+    const select = document.getElementById("wfm-lab-modal-value");
+    if (!filterInput || !select) return;
+    const options = comfyEditor.models[col === "checkpoint" ? "checkpoints" : "vaes"] || [];
+
+    const applyFilter = () => {
+        const filter = filterInput.value.toLowerCase();
+        select.innerHTML = `<option value="">${t("labUseWorkflowDefault")}</option>` +
+            options.filter((m) => m.toLowerCase().includes(filter))
+                .map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+    };
+
+    filterInput.addEventListener("input", applyFilter);
+    setupSearchClearBtn("wfm-lab-modal-value-filter", "wfm-lab-modal-value-filter-clear", applyFilter);
+}
+
+// Wires the Prompt-column modal's extra actions: fetch the live GenerateUI prompt,
+// extract a prompt from a dropped image/workflow file, and apply a saved Style.
+function _wireLabPromptModalExtras() {
+    // Reuses the Style checkbox/dropdown already at the top of the GenerateUI toolbar
+    // (populated by generate-tab.js's _loadStyles()) instead of duplicating a second
+    // style picker inside this modal.
+    const styleApplyBtn = document.getElementById("wfm-lab-modal-style-apply");
+    const topStyleName = document.getElementById("wfm-style-select")?.value;
+    const topStyleEnabled = !!document.getElementById("wfm-style-enabled")?.checked;
+    if (styleApplyBtn) {
+        styleApplyBtn.textContent = (topStyleEnabled && topStyleName) ? `${t("labApply")}: ${topStyleName}` : t("labApply");
+    }
+
+    styleApplyBtn?.addEventListener("click", async () => {
+        const enabled = !!document.getElementById("wfm-style-enabled")?.checked;
+        const styleName = document.getElementById("wfm-style-select")?.value;
+        if (!enabled || !styleName) {
+            showToast(t("labEnableStyleFirst"), "error");
+            return;
+        }
+        let styles = [];
+        try {
+            const res = await fetch("/api/wfm/styles");
+            styles = res.ok ? await res.json() : [];
+        } catch { styles = []; }
+        const style = styles.find((s) => s.name === styleName);
+        if (!style) { showToast(t("labNoStyles"), "error"); return; }
+
+        const posEl = document.getElementById("wfm-lab-modal-positive");
+        const negEl = document.getElementById("wfm-lab-modal-negative");
+        const merged = _applyStyleToText(posEl?.value || "", negEl?.value || "", style);
+        if (posEl) posEl.value = merged.positive;
+        if (negEl) negEl.value = merged.negative;
+        showToast(t("labStyleApplied"), "success");
+    });
+
+    document.getElementById("wfm-lab-modal-get-genui")?.addEventListener("click", () => {
+        const analysis = comfyUI.currentAnalysis;
+        if (!analysis) { showToast(t("labNoWorkflowLoaded"), "error"); return; }
+        const posNode = analysis.prompt_nodes?.find((n) => n.role === "positive");
+        const negNode = analysis.prompt_nodes?.find((n) => n.role === "negative");
+        const posEl = document.getElementById("wfm-lab-modal-positive");
+        const negEl = document.getElementById("wfm-lab-modal-negative");
+        if (posEl) posEl.value = posNode?.text ?? "";
+        if (negEl) negEl.value = negNode?.text ?? "";
+        showToast(t("labPromptFetched"), "success");
+    });
+
+    const imageFileInput = document.getElementById("wfm-lab-modal-image-file");
+    document.getElementById("wfm-lab-modal-get-image")?.addEventListener("click", () => imageFileInput?.click());
+    imageFileInput?.addEventListener("change", async () => {
+        const file = imageFileInput.files[0];
+        imageFileInput.value = "";
+        if (!file) return;
+        try {
+            const meta = await extractAllMetadata(file);
+            if (!meta || (!meta.positives?.length && !meta.negatives?.length)) {
+                showToast(t("labNoPromptInImage"), "error");
+                return;
+            }
+            const posEl = document.getElementById("wfm-lab-modal-positive");
+            const negEl = document.getElementById("wfm-lab-modal-negative");
+            if (posEl && meta.positives?.[0]) posEl.value = meta.positives[0];
+            if (negEl && meta.negatives?.[0]) negEl.value = meta.negatives[0];
+            showToast(t("labPromptFetched"), "success");
+        } catch (err) {
+            showToast(`${t("labMetadataExtractFailed")}: ${err.message}`, "error");
+        }
     });
 }
 
@@ -670,15 +845,7 @@ async function _savePlan(filenameOverride, forceNewName = false) {
         }
     }
 
-    const data = {
-        name: filename.replace(/\.json$/i, ""),
-        note: _lab.note,
-        batch_count: _lab.batchCount,
-        chain_image: _lab.chainImage,
-        source_image: _lab.sourceImageFilename,
-        columns: _lab.columns,
-        results: { images: _lab.results.images },
-    };
+    const data = _buildPlanData(filename.replace(/\.json$/i, ""));
 
     let indexImageBase64 = null;
     try {

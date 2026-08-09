@@ -2,6 +2,35 @@
 
 ---
 
+## v0.3.88
+
+### 機能拡張: Labタブ Promptセルにスタイル適用・画像/GenerateUIからのプロンプト取得、Checkpoint/VAEフィルター、Plan JSONサブタブを追加
+
+v0.3.87で追加したLabタブ（GenerateUI）に対するユーザーからの一連の改善要望をまとめて対応。
+
+**Promptセル編集モーダルの拡張**:
+- **Get from GenerateUI**: 現在GenerateUIに読み込まれているワークフローの`comfyUI.currentAnalysis.prompt_nodes`からPositive/Negativeを直接取得
+- **Get from Image**: 画像/ワークフローJSONをドロップ/選択すると、Metadataタブの抽出ロジック（`metadata-tab.js`の`extractAllMetadata()`。新たに`export`して再利用）でプロンプトを抽出
+- **Style適用**: 当初はモーダル内に独自のスタイルドロップダウンを設けたが、ユーザーから「GenerateUIツールバー上部の`#wfm-style-enabled`チェックボックス／`#wfm-style-select`ドロップダウンをそのまま使えないか」と指摘を受け設計変更。モーダル内の選択UIを廃し、Applyボタンが常にツールバー側の現在値を読んで適用する方式にした（チェックボックスOFFまたは未選択ならエラートースト）。ボタンラベルにも選択中のスタイル名を動的表示（例:「Apply: cinematic-diva」）。プロンプトへのマージ処理自体は`generate-tab.js`の`_applyNamedStyle()`と同じ置換ルール（`{prompt}`プレースホルダ置換／ネガティブ追記）を、ワークフローではなく文字列に対して行う`_applyStyleToText()`として実装
+
+**Checkpoint/VAEセルにフィルター機能追加**:
+- GenerateUIのModelサブタブ（`comfyui-editor.js`の`renderModelTab`）と同じ「Filter...」テキスト入力で`<select>`の候補を絞り込み
+- 続けて「オーバーレイ✕でクリア可能にしたい、Modelタブの各フィルタリング機能・Raw JSON検索と同様に」という要望を受け、Models/Nodes/Workflow/Gallery各タブの検索ボックスやRaw JSON検索と同じ`setupSearchClearBtn()`（`util.js`）＋`.wfm-search-wrap`/`.wfm-search-clear-btn`（`main.css`）パターンを流用し、入力欄内に✕クリアボタンをオーバーレイ表示するよう変更
+
+**Plan JSONサブタブ追加**:
+- Setting/Resultsに続く3つ目のサブタブとして新設。現在のLab状態（列のキーフレーム・Note・Batch数・画像連鎖設定・元画像・結果一覧）を、プランファイル保存時と同じ構造のJSONとして`json-highlight.js`の`syncJsonHighlight()`で構文ハイライト表示する
+- **Refresh**: Settingタブの現在値で再同期（未適用の編集は破棄）
+- **Apply to Setting**: テキストエリアの内容を`JSON.parse`し、Plan Load（`_loadPlanFromFile`/`_loadPlanFromServer`）と共通の`_applyPlanData(filename, data)`を呼んでSettingタブへ反映。不正なJSONの場合は`JSON.parse`の例外メッセージをそのままエラートーストに出し、状態は変更しない
+- 保存用のプランオブジェクト構築ロジックが`_savePlan()`内にインライン実装されていたのを`_buildPlanData(name)`として切り出し、Save・Plan JSON表示の双方から共用するようリファクタリング
+
+**あわせてヘルプを更新**: Labサブタブのヘルプページ（`index.html`＋`i18n.js`日英中＋`app.js`の`helpIdMap`）に、Promptモーダルの追加ボタン群とPlan JSONサブタブの説明を追記。
+
+**検証**: 各機能をKaptureで実ブラウザ確認 — Get from GenerateUI/Get from Imageでの実際のプロンプト取得、Style Apply（トップバーOFF時のエラートースト・ON時の`{prompt}`置換とネガティブ追記）、Checkpoint/VAEフィルターの絞り込みと✕クリア、Plan JSONの表示→編集→Apply→Setting反映、および不正JSON入力時のエラーハンドリング。いずれもコンソールエラーなし（既存の無関係なOllama接続エラーを除く）。
+
+**How to apply**: 複数モジュールで使う汎用UI部品（`setupSearchClearBtn`、`extractAllMetadata`等）は積極的にexportして使い回すこと。「モーダル内に専用UIを新設する」より「既存のツールバー等の状態をそのまま参照する」方がユーザーにとって一貫性があり実装も軽い場合があるため、要望の意図が既存UIの流用にあるかどうかを都度確認する。プラン保存構造とJSONビュー表示は同じビルダー関数（`_buildPlanData`）を共有させ、二重管理を避ける。
+
+---
+
 ## v0.3.87
 
 ### 追加機能: GenerateUIタブに実験的な「Lab」サブタブを追加（I2Iバッチ生成・キーフレーム方式）
