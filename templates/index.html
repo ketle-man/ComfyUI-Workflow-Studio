@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/wfm_static/css/gallery-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/tagger-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/image-edit-tab.css">
+    <link rel="stylesheet" href="/wfm_static/css/lab-tab.css">
 </head>
 <body>
     <!-- Header -->
@@ -310,6 +311,7 @@
                         <button class="wfm-gen-subtab-btn" data-subtab="settings">Settings</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="feeder">Feeder</button>
                         <button class="wfm-gen-subtab-btn" data-subtab="batch">Batch</button>
+                        <button class="wfm-gen-subtab-btn" data-subtab="lab">Lab</button>
                         <button id="wfm-gen-save-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" style="margin-left:auto;" title="Save current workflow to Workflow tab">Save</button>
                     </div>
 
@@ -495,6 +497,137 @@
                                         </div>
                                         <div id="wfm-batch-style-count" class="wfm-batch-count"></div>
                                         <div id="wfm-batch-style-preview-list" class="wfm-batch-preview-list"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Lab — experimental I2I batch generation with per-column keyframes -->
+                    <div id="wfm-gen-subtab-lab" class="wfm-gen-subtab-content">
+                        <div class="wfm-lab-subtab-nav">
+                            <button class="wfm-lab-subtab-btn active" data-lab-subtab="setting">Setting</button>
+                            <button class="wfm-lab-subtab-btn" data-lab-subtab="results">Results</button>
+                        </div>
+
+                        <!-- Setting panel -->
+                        <div id="wfm-lab-panel-setting" class="wfm-lab-panel active">
+                            <div class="wfm-lab-setting-layout">
+                                <!-- Left: source image + plan load/clear -->
+                                <div class="wfm-lab-pane wfm-lab-left">
+                                    <div class="wfm-lab-pane-header">Image</div>
+                                    <div class="wfm-i2i-preview-wrap" id="wfm-lab-preview-wrap" style="display:none;">
+                                        <img class="wfm-i2i-preview-img" id="wfm-lab-preview-img" alt="">
+                                    </div>
+                                    <div class="wfm-i2i-drop-zone" id="wfm-lab-drop-zone">
+                                        <label class="wfm-i2i-drop-label">
+                                            <input type="file" id="wfm-lab-file-input" accept="image/*" style="display:none;">
+                                            Drop image here or click to select
+                                        </label>
+                                    </div>
+                                    <label class="wfm-lab-checkbox-label">
+                                        <input type="checkbox" id="wfm-lab-chain-image">
+                                        Use generated image for next
+                                    </label>
+
+                                    <div class="wfm-lab-pane-header" style="margin-top:10px;">Plan</div>
+                                    <div class="wfm-i2i-drop-zone" id="wfm-lab-plan-drop-zone">
+                                        <label class="wfm-i2i-drop-label">
+                                            <input type="file" id="wfm-lab-plan-file-input" accept="application/json,.json,image/png,.png" style="display:none;">
+                                            Drop plan (.json/.png) here or click to select
+                                        </label>
+                                    </div>
+                                    <div class="wfm-lab-side-btns">
+                                        <button id="wfm-lab-plan-clear-btn" class="wfm-btn">Plan Clear</button>
+                                    </div>
+                                </div>
+
+                                <!-- Center: 4 keyframe columns -->
+                                <div class="wfm-lab-pane wfm-lab-center">
+                                    <div class="wfm-lab-columns">
+                                        <div class="wfm-lab-column" data-col="checkpoint">
+                                            <div class="wfm-lab-col-header">
+                                                <span>checkpoint</span>
+                                                <div class="wfm-lab-col-btns">
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-add" data-col="checkpoint" title="Add keyframe">＋</button>
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-remove" data-col="checkpoint" title="Remove last keyframe">－</button>
+                                                </div>
+                                            </div>
+                                            <div class="wfm-lab-col-cells" id="wfm-lab-col-cells-checkpoint"></div>
+                                        </div>
+                                        <div class="wfm-lab-column" data-col="vae">
+                                            <div class="wfm-lab-col-header">
+                                                <span>vae</span>
+                                                <div class="wfm-lab-col-btns">
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-add" data-col="vae" title="Add keyframe">＋</button>
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-remove" data-col="vae" title="Remove last keyframe">－</button>
+                                                </div>
+                                            </div>
+                                            <div class="wfm-lab-col-cells" id="wfm-lab-col-cells-vae"></div>
+                                        </div>
+                                        <div class="wfm-lab-column" data-col="prompt">
+                                            <div class="wfm-lab-col-header">
+                                                <span>プロンプト</span>
+                                                <div class="wfm-lab-col-btns">
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-add" data-col="prompt" title="Add keyframe">＋</button>
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-remove" data-col="prompt" title="Remove last keyframe">－</button>
+                                                </div>
+                                            </div>
+                                            <div class="wfm-lab-col-cells" id="wfm-lab-col-cells-prompt"></div>
+                                        </div>
+                                        <div class="wfm-lab-column" data-col="ksampler">
+                                            <div class="wfm-lab-col-header">
+                                                <span>Ksampler</span>
+                                                <div class="wfm-lab-col-btns">
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-add" data-col="ksampler" title="Add keyframe">＋</button>
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-remove" data-col="ksampler" title="Remove last keyframe">－</button>
+                                                </div>
+                                            </div>
+                                            <div class="wfm-lab-col-cells" id="wfm-lab-col-cells-ksampler"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right: run controls -->
+                                <div class="wfm-lab-pane wfm-lab-right">
+                                    <div style="display:flex;gap:6px;">
+                                        <button id="wfm-lab-run-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Run</button>
+                                        <button id="wfm-lab-cancel-btn" class="wfm-btn wfm-btn-danger" style="display:none;">Cancel</button>
+                                    </div>
+                                    <button id="wfm-lab-pause-btn" class="wfm-btn" style="width:100%;margin-top:6px;" disabled>Pause</button>
+
+                                    <div class="wfm-gen-progress-container" style="margin-top:8px;">
+                                        <div class="wfm-gen-progress-track">
+                                            <div id="wfm-lab-progress-bar" class="wfm-gen-progress-bar"></div>
+                                        </div>
+                                        <span id="wfm-lab-progress-text" class="wfm-gen-progress-text">Ready</span>
+                                    </div>
+
+                                    <div class="wfm-lab-field-row">
+                                        <label>Batch:</label>
+                                        <input type="number" id="wfm-lab-batch-count" class="wfm-input" value="4" min="1" max="50">
+                                    </div>
+
+                                    <div class="wfm-lab-pane-header" style="margin-top:12px;">Note</div>
+                                    <textarea id="wfm-lab-note" class="wfm-input wfm-lab-note" rows="6"></textarea>
+
+                                    <button id="wfm-lab-plan-save-btn" class="wfm-btn wfm-btn-primary" style="width:100%;margin-top:8px;">Plan Save</button>
+                                    <button id="wfm-lab-plan-saveas-btn" class="wfm-btn" style="width:100%;margin-top:6px;">Save As</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Results panel -->
+                        <div id="wfm-lab-panel-results" class="wfm-lab-panel">
+                            <div class="wfm-lab-results-layout">
+                                <div class="wfm-lab-pane wfm-lab-results-left">
+                                    <div class="wfm-lab-pane-header">Image</div>
+                                    <img id="wfm-lab-results-source-img" class="wfm-i2i-preview-img" style="display:none;" alt="">
+                                </div>
+                                <div class="wfm-lab-pane wfm-lab-results-center">
+                                    <div class="wfm-lab-pane-header">Results</div>
+                                    <div id="wfm-lab-results-grid" class="wfm-lab-results-grid">
+                                        <p class="wfm-placeholder">No results yet</p>
                                     </div>
                                 </div>
                             </div>
@@ -1036,6 +1169,7 @@
                         <button class="wfm-help-nav-item" data-help-page="workflow">Workflow Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="generate">GenerateUI Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="feeder">Feeder subtab</button>
+                        <button class="wfm-help-nav-item" data-help-page="lab">Lab subtab</button>
                         <button class="wfm-help-nav-item" data-help-page="prompt">Prompt Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="metadata">Metadata Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="settings">Settings Tab</button>
@@ -1183,6 +1317,49 @@
                                 <li id="wfm-help-feeder-gal-4">Right pane — Preview: displays the currently selected input image; updates when a thumbnail is clicked</li>
                                 <li id="wfm-help-feeder-gal-5"><b>__Feeder__ group</b>: reserved group pre-created automatically; cannot be renamed or deleted; add images to it from the Gallery tab using the <b>F</b> overlay button on each thumbnail</li>
                                 <li id="wfm-help-feeder-gal-6"><b>WFS_GalleryFeeder canvas controls</b>: the node also has Run / Stop / After Gen widgets added directly on the ComfyUI canvas — these work the same as the WFM UI controls and allow running the gallery feeder loop without opening WFM</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="wfm-help-page" id="wfm-help-page-lab">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-lab-title">GenerateUI Tab — Lab subtab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="generate">Open tab &rarr;</button>
+                        </div>
+                        <p id="wfm-help-lab-desc" style="margin-bottom:12px;">Experimental I2I batch generation. Runs the workflow currently loaded in GenerateUI N times, letting Checkpoint / VAE / Prompt / KSampler each change independently starting at a chosen iteration. Two subtabs: Setting and Results.</p>
+
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-lab-card-columns-title">Setting subtab — Image &amp; Columns</h3>
+                            <ul>
+                                <li id="wfm-help-lab-1">Left pane — Image: drop or click to select an I2I source image; it is uploaded to ComfyUI's input folder and used for every iteration unless "Use generated image for next" is checked</li>
+                                <li id="wfm-help-lab-2">Left pane — Use generated image for next: from iteration 2 onward, feeds the previous iteration's first output image back in as the I2I source instead of the original dropped image (iteration 1 always uses the original)</li>
+                                <li id="wfm-help-lab-3">Center pane — 4 independent columns: Checkpoint, VAE, Prompt, KSampler; each column keeps its own list of keyframes rather than sharing a row grid</li>
+                                <li id="wfm-help-lab-4">+ / − per column: + appends a new keyframe at the next free iteration number (up to the Batch count) and opens its edit modal immediately; − removes the last keyframe (iteration #1 can never be removed)</li>
+                                <li id="wfm-help-lab-5">Click a cell to edit it: iteration #1 sets the baseline value (leave it blank to keep the loaded workflow's own setting); iteration #2+ also lets you choose which iteration it starts applying from, plus a "revert to #1's setting" checkbox</li>
+                                <li id="wfm-help-lab-6">Effective value at iteration N: the latest keyframe with iteration ≤ N is used and carries forward until the next keyframe changes it; "revert to #1" reuses iteration #1's value (or the workflow default if #1 is blank) instead of specifying a new one</li>
+                                <li id="wfm-help-lab-7">Lab never edits the workflow shown in Input/Model/Settings — every iteration runs on a fresh clone of the loaded workflow, so keyframes here never affect the other subtabs</li>
+                            </ul>
+                        </div>
+
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-lab-card-plan-title">Setting subtab — Run &amp; Plan files</h3>
+                            <ul>
+                                <li id="wfm-help-lab-plan-1">Right pane — Batch: number of iterations to run; Note: free-text memo saved together with the plan</li>
+                                <li id="wfm-help-lab-plan-2">Run / Pause / Cancel: Run starts the batch loop; Pause/Resume freezes it between iterations; Cancel interrupts the current generation and stops the loop</li>
+                                <li id="wfm-help-lab-plan-3">Plan Save vs Save As: Plan Save silently overwrites the currently loaded plan (or asks for a name the first time); Save As always asks for a new name, even while a plan is already loaded</li>
+                                <li id="wfm-help-lab-plan-4">Plan Load: drop a plan's .json file, or its .png index-image thumbnail, onto the PLAN box (or click it to browse) — a dropped .json is read directly; a dropped .png fetches the matching .json (same filename) from the server</li>
+                                <li id="wfm-help-lab-plan-5">Plan Clear resets the Setting tab to an empty plan (asks for confirmation first)</li>
+                                <li id="wfm-help-lab-plan-6">Plan files are stored in <code>user/default/Workflow-Studio/lab_plan/</code> as <code>&lt;name&gt;.json</code> plus a <code>&lt;name&gt;.png</code> index image — a contact sheet of up to 9 result thumbnails (3 per row) generated automatically whenever a plan with results is saved</li>
+                                <li id="wfm-help-lab-plan-7">Eagle auto-save (configured in the Settings tab) applies to every image Lab generates, the same as GenerateUI's own Generate button</li>
+                            </ul>
+                        </div>
+
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-lab-card-results-title">Results subtab</h3>
+                            <ul>
+                                <li id="wfm-help-lab-results-1">Left pane shows the source image used for the run</li>
+                                <li id="wfm-help-lab-results-2">Center pane shows up to 9 generated images in generation order; click a thumbnail to view it enlarged</li>
+                                <li id="wfm-help-lab-results-3">Loading a saved plan restores its Results grid from the image list recorded in the plan file</li>
                             </ul>
                         </div>
                     </div>
@@ -1710,6 +1887,7 @@
                                 <li id="wfm-help-trouble-4">Image generation fails: Check if specified models exist in ComfyUI, verify connection, try restarting</li>
                                 <li id="wfm-help-trouble-5">LoRA Stack fails with "No such file or directory" error: The LoRA may not be recognized by comfyui-lora-manager (known issue). Try a different LoRA or check if the file appears in Lora Manager's own UI</li>
                                 <li id="wfm-help-trouble-6">Model loading error after moving or deleting models: ComfyUI caches file paths and may still reference old locations. Perform a Hard Reset from the ComfyUI menu (Queue → Hard Reset) or restart ComfyUI to clear the cache.</li>
+                                <li id="wfm-help-trouble-9">Generate runs a different workflow than the one just loaded: a Batch type checkbox (Checkpoint/LoRA/Prompt/Workflow/Sampler/Scheduler) is left ON in the Batch subtab. While any Batch type is active, the Generate button runs the batch selection instead of the currently loaded workflow. Open the Batch subtab and turn off the active batch type checkbox.</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">

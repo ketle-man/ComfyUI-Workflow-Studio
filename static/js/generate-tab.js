@@ -9,50 +9,8 @@ import { comfyEditor } from "./comfyui-editor.js";
 import { t } from "./i18n.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js";
-import { getSettings, readJsonStorage, escapeHtml } from "./util.js";
-
-// ============================================
-// Eagle Auto-Save
-// ============================================
-
-function getEagleSettings() {
-    const s = getSettings();
-    return {
-        url: s.eagleUrl || "http://localhost:41595",
-        autoSave: !!s.eagleAutoSave,
-    };
-}
-
-async function saveToEagle(imageUrl, name, tags = [], fileInfo = null) {
-    const eagle = getEagleSettings();
-    if (!eagle.autoSave) return;
-    try {
-        const res = await fetch("/api/wfm/eagle/add", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                eagleUrl: eagle.url,
-                url: imageUrl,
-                name,
-                tags: ["wfm-comfyui", ...tags],
-                // SVG はサーバー側でローカルパス解決(addFromPath)するために必要
-                filename: fileInfo?.filename || "",
-                subfolder: fileInfo?.subfolder || "",
-                type: fileInfo?.type || "output",
-                // comfyui-tosvg の Save SVG String など、絶対パスが既知の場合に渡す
-                localPath: fileInfo?.localPath || "",
-            }),
-        });
-        const data = await res.json();
-        if (data.status === "success") {
-            console.log("[Eagle] Saved:", name);
-        } else {
-            console.warn("[Eagle] Save failed:", data.message);
-        }
-    } catch (err) {
-        console.warn("[Eagle] Save error:", err.message);
-    }
-}
+import { initLabTab } from "./lab-tab.js";
+import { getSettings, readJsonStorage, escapeHtml, getEagleSettings, saveToEagle } from "./util.js";
 
 // ============================================
 // Gallery Metadata - ワークフロー保存
@@ -1961,7 +1919,7 @@ export async function initGenerateTab() {
     function moveRawJsonToTab(tabKey) {
         const widget = document.getElementById("wfm-gen-rawjson-widget");
         if (!widget) return;
-        if (tabKey === "feeder" || tabKey === "batch") {
+        if (tabKey === "feeder" || tabKey === "batch" || tabKey === "lab") {
             widget.style.display = "none";
             return;
         }
@@ -1985,6 +1943,9 @@ export async function initGenerateTab() {
             if (target === "model" && comfyUI.currentAnalysis) {
                 comfyEditor.renderLoraPane(comfyUI.currentAnalysis, "wfm-gen-lora-fields");
             }
+            // Lab has its own Run/Results panel — hide the shared Generate/Seed/Batch column
+            const rightCol = document.querySelector(".wfm-gen-right");
+            if (rightCol) rightCol.style.display = (target === "lab") ? "none" : "";
         });
     });
 
@@ -2160,6 +2121,9 @@ export async function initGenerateTab() {
 
     // Feeder tab
     await initFeederTab();
+
+    // Lab tab (experimental I2I batch generation)
+    initLabTab();
 
     // Style dropdown
     await _loadStyles();

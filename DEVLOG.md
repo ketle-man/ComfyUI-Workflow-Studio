@@ -2,6 +2,36 @@
 
 ---
 
+## v0.3.87
+
+### 追加機能: GenerateUIタブに実験的な「Lab」サブタブを追加（I2Iバッチ生成・キーフレーム方式）
+
+「I2Iのバッチ生成を、回数ごとにCheckpoint/VAE/Prompt/KSamplerを個別に変更しながら実行したい」という依頼を受け、GenerateUIの新しいサブタブとして実装（ブランチ`feature/lab-tab-i2i-batch`）。既存のBatchサブタブが「1軸を単純に流すバッチ」なのに対し、Labは「列（Checkpoint/VAE/Prompt/KSampler）ごとに独立したキーフレームで、何回目からどう変わるか」を指定できる点が異なる。
+
+**データモデルと解決ロジック**: 各列は行グリッドを共有せず、`{atIteration, value, revertToBase}`のキーフレーム配列を個別に持つ。反復回数Nでの実効値は「N以下で最大のatIterationのキーフレーム」を採用し、次のキーフレームまで引き継ぐ。`revertToBase`は1回目の値（空なら読み込み中ワークフローの既定値）を再利用する。1回目のキーフレームは削除不可で、空欄なら常にワークフロー本来の設定を使う。**Labはどの列も`comfyUI.currentWorkflow`を直接書き換えず、実行時にディープクローンした上でのみ値を適用する**ため、Input/Model/Settings/Batchサブタブの編集状態と干渉しない。
+
+**バックエンド**: `py/services/lab_plan_service.py`（`wildcard_service.py`のディレクトリCRUDパターンを踏襲）＋`py/routes/lab_routes.py`を新設し、`GET/POST /api/wfm/lab/plans*`を`py/wfm.py`に登録。プランは`user/default/Workflow-Studio/lab_plan/<name>.json`として保存し、結果画像がある場合は同stemの`<name>.png`（最大9枚・3列のコンタクトシート、Canvasで生成しbase64で送信）を`workflow_service.py`の`change_thumbnail`と同様のサムネイル対のパターンで自動保存する。
+
+**フロントエンド**: `static/js/lab-tab.js`（新規、`feeder-tab.js`と同じ「GenerateUIサブタブモジュール」パターン）を`generate-tab.js`から`initLabTab()`として呼び出し、サブタブ切替時に共通右ペイン（Generate/Seed/Batch状況パネル）を`display:none`にする分岐を追加。Setting/Resultsの2画面構成で、Setting画面は「画像ドロップ＋プラン読込ドロップゾーン（左）／4列キーフレーム（中央）／Run・Batch数・Note・Plan Save（右）」、Results画面は「元画像（左）／生成結果グリッド最大9枚（中央）」。
+
+**実装後にユーザーからの追加要望で反映した変更点**:
+
+- キーフレームセルの表示を、2回目以降は「値／`Applied: N`」の2行表示に変更（1回目のみ従来の1行表示のまま）
+- 生成した各画像をEagle自動保存に対応（設定タブの`eagleAutoSave`を尊重）。`getEagleSettings`/`saveToEagle`は元々`generate-tab.js`にのみ定義されていたが、`lab-tab.js`からの循環import(`generate-tab.js`→`lab-tab.js`→`generate-tab.js`)を避けるため`static/js/util.js`へ移設し、両ファイルからimportする形に整理
+- Plan Saveの下に「Save As」ボタンを追加。Plan Saveは読込済みプランがあれば無言で上書き、Save Asはプラン読込中でも常に新しい名前をプロンプトで確認する
+- 「Auto」チェックボックス（実行完了時の自動保存）を削除 — インデックス画像の自動生成があるため不要と判断
+- 「Use generated image for next」チェックボックスを追加。ONの場合、2回目以降は直前の反復で生成された1枚目の画像をI2I入力として使う連鎖生成に対応。再アップロードは行わず、ComfyUIのLoadImageが解釈できる`"name [type]"`（`folder_paths.get_annotated_filepath`が対応する記法。サブフォルダがあれば`"subfolder/name [type]"`）形式の参照をそのまま`image`ウィジェットに設定する方式を採用
+- インデックス画像の最大枚数を10→9、グリッド列数を5→3（3×3相当）に変更
+- Plan Loadを、独自のサムネイル一覧モーダルから、IMAGEドロップゾーンと同じ見た目のドラッグ&ドロップ＋クリック選択に変更。`.json`をドロップした場合はブラウザ内で直接読み込み（サーバー不要）、`.png`（インデックス画像）をドロップした場合は同じstemの`.json`をサーバーから取得する。ブラウザの仕様上Web page側からファイル選択ダイアログの初期フォルダを指定することはできないため、初回のみユーザーが`lab_plan`フォルダまで手動で移動する必要がある旨をヘルプに明記
+
+**ヘルプ更新**: 既存の3点セット規約（`index.html`のヘルプページ＋`i18n.js`の日英中3言語＋`app.js`の`applyI18nToHtml`内`helpIdMap`）に沿って、サイドバーに「Lab subtab」ページを新設（Feederページと同じ構成: 概要＋カード3枚 - 画像と列／実行とプランファイル／Results）。
+
+**検証**: 各段階でKaptureによる実ブラウザE2E確認を実施 — サブタブ切替時の右ペイン非表示化、4列の＋/－とセル編集モーダル（1回目/2回目以降の項目差）、Plan Save（無言上書き）とSave As（常にプロンプト表示）の挙動差、Plan Loadドロップゾーンのクリック/ドラッグ配線、ヘルプページの表示とスクロール、各段階でコンソールエラーが出ていないことを確認。実際のRun実行によるバッチ生成そのものはユーザー自身の環境で確認済み。
+
+**How to apply**: GenerateUIサブタブを新設する際は`feeder-tab.js`のモジュールパターン（`export function initXxxTab()`を`generate-tab.js`から呼び出し、`moveRawJsonToTab()`の特殊タブ判定に追加）を踏襲する。サブタブがGenerateUI共通の右ペインを使わない場合は、`generate-tab.js`のサブタブ切替ハンドラで`.wfm-gen-right`の`display`を明示的に切り替えること（`.wfm-gen-subtab-content.active`は`display:flex; flex-direction:row`がデフォルトなので、縦積みレイアウトが必要なサブタブは`#wfm-gen-subtab-<name>.active { flex-direction: column; }`のようなCSS上書きが別途必要になる点に注意）。複数モジュールから使う汎用関数（Eagle保存など）は、モジュール間の循環importを避けるため`util.js`のような共有モジュールに置く。ComfyUIの生成済み画像を再度I2I入力として使いたい場合は、再アップロードせずとも`"filename [type]"`のannotated-filepath記法で直接参照できる。
+
+---
+
 ## v0.3.86
 
 ### バグ修正: 画像を一括生成（I2I）等の連続実行で "GalleryMetadataStore: save error: dictionary changed size during iteration" が発生

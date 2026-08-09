@@ -38,6 +38,49 @@ export function getAiBackendDefaultUrl(backend) {
     return AI_BACKEND_DEFAULT_URLS[backend] || AI_BACKEND_DEFAULT_URLS.ollama;
 }
 
+// ============================================
+// Eagle Auto-Save
+// ============================================
+
+export function getEagleSettings() {
+    const s = getSettings();
+    return {
+        url: s.eagleUrl || "http://localhost:41595",
+        autoSave: !!s.eagleAutoSave,
+    };
+}
+
+export async function saveToEagle(imageUrl, name, tags = [], fileInfo = null) {
+    const eagle = getEagleSettings();
+    if (!eagle.autoSave) return;
+    try {
+        const res = await fetch("/api/wfm/eagle/add", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                eagleUrl: eagle.url,
+                url: imageUrl,
+                name,
+                tags: ["wfm-comfyui", ...tags],
+                // SVG はサーバー側でローカルパス解決(addFromPath)するために必要
+                filename: fileInfo?.filename || "",
+                subfolder: fileInfo?.subfolder || "",
+                type: fileInfo?.type || "output",
+                // comfyui-tosvg の Save SVG String など、絶対パスが既知の場合に渡す
+                localPath: fileInfo?.localPath || "",
+            }),
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+            console.log("[Eagle] Saved:", name);
+        } else {
+            console.warn("[Eagle] Save failed:", data.message);
+        }
+    } catch (err) {
+        console.warn("[Eagle] Save error:", err.message);
+    }
+}
+
 /**
  * 検索inputにオーバーレイXボタンを設定する。
  * @param {string} inputId - 検索inputのID

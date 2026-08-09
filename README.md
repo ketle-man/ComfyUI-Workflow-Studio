@@ -12,6 +12,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 
 - Batch generation across models, samplers, prompts, and workflows
 - Image Feeder for continuous folder-based generation
+- Lab: experimental I2I batch generation with independent per-iteration keyframes for Checkpoint/VAE/Prompt/KSampler
 
 **📚 Workflow Studio Library** — a multi-function side panel for smooth ComfyUI integration
 
@@ -21,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.84-green)
+![Version](https://img.shields.io/badge/version-0.3.87-green)
 
 ## Screenshots
 
@@ -80,7 +81,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 
 ### GenerateUI Tab (v0.3.5)
 
-- **5-tab layout** — Input / Model / Settings / Feeder / Batch tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
+- **6-tab layout** — Input / Model / Settings / Feeder / Batch / **Lab** tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API
 - **Input tab** — Prompt and Image inner tabs (drag-and-drop upload); Prompt tab shows Positive Prompt and Negative Prompt textareas, plus an **Embeddings selector** at the bottom (Filter + Select + Weight input + Paste button); Paste inserts `(embedding:Name:weight)` at the cursor position of the last focused textarea (defaults to Positive when neither is focused); Raw JSON (540px) in the right column
   - **Revert button** (v0.3.70) — a ↺ button next to each Apply button reverts the textarea to the node's currently applied value (the reverse of Apply)
@@ -126,6 +127,17 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **Image grid** — center pane shows all images in the selected group; click any image to update the Index to that position
 - **After Gen modes** — Loop (wrap at end and continue indefinitely), Increment (stop automatically when last image is reached), Fixed (always use the same index)
 - **Run / Stop controls** — left pane Run / Stop buttons manage the generation loop; After Gen combo (loop / increment / fixed), ▶ Run, and ■ Stop widgets are also available directly on the WFS_GalleryFeeder node in the ComfyUI canvas (`gallery_feeder_extension.js`)
+
+### Lab subtab (v0.3.87)
+
+An experimental I2I batch generator: runs the workflow currently loaded in GenerateUI N times, letting Checkpoint / VAE / Prompt / KSampler each change independently starting at a chosen iteration — unlike the Batch tab's single-axis queue, every column keeps its own list of change points. Never mutates the loaded workflow; every iteration runs on a fresh clone.
+
+- **Setting / Results sub-panels** — Setting: image drop zone + 4 keyframe columns + run controls; Results: source image and up to 9 generated thumbnails (click to enlarge)
+- **Per-column keyframes** — Checkpoint, VAE, Prompt, KSampler each hold an independent list of `{iteration, value}` keyframes; +/− per column adds/removes a keyframe (iteration #1 is fixed and can't be removed); click a cell to edit its value, the iteration it starts applying from, and a "revert to #1's setting" checkbox; the effective value at iteration N is the latest keyframe with iteration ≤ N, carried forward until the next one changes it
+- **Use generated image for next** — optional checkbox that chains iterations: from iteration 2 onward the previous iteration's first output image is fed back in as the I2I source instead of the original dropped image, using ComfyUI's `"name [type]"` annotated-filename reference (no re-upload needed)
+- **Plan files** — Plan Save (silently overwrites the loaded plan) / Save As (always asks for a new name) / Plan Clear; plans are stored as `<name>.json` in `user/default/Workflow-Studio/lab_plan/`, alongside an auto-generated `<name>.png` index image (a 3-per-row contact sheet of up to 9 result thumbnails)
+- **Plan Load** — same drag-and-drop / click-to-browse drop zone as the Image slot; drop a plan's `.json` (read directly in the browser) or its `.png` index-image thumbnail (fetches the matching `.json` by filename)
+- **Eagle integration** — every image Lab generates is auto-saved to Eagle the same way as GenerateUI's own Generate button, if enabled in the Settings tab
 
 ### Prompt Tab
 
@@ -409,6 +421,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.87
+
+- **New: GenerateUI — Lab subtab** — experimental I2I batch generation. Runs the workflow currently loaded in GenerateUI N times, with Checkpoint/VAE/Prompt/KSampler each independently overridable via a per-column list of keyframes (`{iteration, value}`) instead of the Batch tab's single shared axis; the effective value at iteration N carries forward from the latest keyframe ≤ N, and a "revert to #1" option reuses the baseline value. Every iteration runs on a cloned workflow, so the loaded workflow (and the Input/Model/Settings/Batch tabs) is never modified. Includes an optional "use generated image for next" chain mode (iteration 2+ feeds the previous output back in as the I2I source via ComfyUI's `"name [type]"` reference, no re-upload needed), Eagle auto-save integration, and Plan Save/Save As/Load (drag-and-drop `.json` or its `.png` index-image thumbnail) with plans stored under `user/default/Workflow-Studio/lab_plan/` alongside an auto-generated contact-sheet thumbnail (up to 9 result images, 3 per row).
 
 ### v0.3.84
 

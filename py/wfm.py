@@ -4,7 +4,7 @@ import jinja2
 from aiohttp import web
 from pathlib import Path
 
-from .config import TEMPLATES_DIR, STATIC_DIR, DATA_DIR, WORKFLOWS_DIR
+from .config import TEMPLATES_DIR, STATIC_DIR, DATA_DIR, WORKFLOWS_DIR, LAB_PLAN_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,22 @@ async def serve_workflow_file(request: web.Request) -> web.Response:
     })
 
 
+async def serve_lab_plan_file(request: web.Request) -> web.Response:
+    """Serve files (index thumbnails) from the Lab plan directory."""
+    filename = request.match_info.get("filename", "")
+    if not filename or ".." in filename or "/" in filename or "\\" in filename:
+        return web.Response(status=404)
+
+    file_path = LAB_PLAN_DIR / filename
+    if not file_path.is_file():
+        return web.Response(status=404)
+
+    content_type, _ = mimetypes.guess_type(str(file_path))
+    return web.FileResponse(file_path, headers={
+        "Content-Type": content_type or "application/octet-stream",
+    })
+
+
 class WorkflowStudio:
     """Main entry point for Workflow Studio plugin."""
 
@@ -57,11 +73,14 @@ class WorkflowStudio:
         # Dynamic workflow file serving (thumbnails etc.)
         app.router.add_get("/wfm_data/workflows/{filename}", serve_workflow_file)
 
+        # Dynamic Lab plan file serving (index thumbnails)
+        app.router.add_get("/wfm_data/lab_plan/{filename}", serve_lab_plan_file)
+
         # Main page
         app.router.add_get("/wfm", serve_index_page)
 
         # API routes
-        from .routes import workflow_routes, settings_routes, ollama_routes, eagle_routes, nodes_routes, prompts_routes, models_routes, gallery_routes, wildcard_routes, tagger_routes, gmic_routes, skill_routes
+        from .routes import workflow_routes, settings_routes, ollama_routes, eagle_routes, nodes_routes, prompts_routes, models_routes, gallery_routes, wildcard_routes, tagger_routes, gmic_routes, skill_routes, lab_routes
 
         workflow_routes.setup_routes(app)
         settings_routes.setup_routes(app)
@@ -75,5 +94,6 @@ class WorkflowStudio:
         tagger_routes.setup_routes(app)
         gmic_routes.setup_routes(app)
         skill_routes.setup_routes(app)
+        lab_routes.setup_routes(app)
 
         logger.info("Workflow Studio: Routes registered successfully")
