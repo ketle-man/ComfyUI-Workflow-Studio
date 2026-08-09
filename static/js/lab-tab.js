@@ -347,7 +347,6 @@ function _openCellModal(col, idx) {
             <div class="wfm-lab-modal-btnrow">
                 <button type="button" id="wfm-lab-modal-get-genui" class="wfm-btn wfm-btn-sm">${t("labGetFromGenUI")}</button>
                 <button type="button" id="wfm-lab-modal-get-image" class="wfm-btn wfm-btn-sm">${t("labGetFromImage")}</button>
-                <input type="file" id="wfm-lab-modal-image-file" accept="image/*,.json" style="display:none;">
             </div>
             <div class="wfm-lab-modal-row">
                 <label>Positive</label>
@@ -475,20 +474,19 @@ function _openCellModal(col, idx) {
 }
 
 // Merges a style ({prompt, negative_prompt}, from Workflow-Studio/style/*.json) into
-// plain positive/negative text — same substitution rule as generate-tab.js's
-// _applyNamedStyle(), just operating on strings instead of a live workflow's nodes.
+// plain positive/negative text. Unlike generate-tab.js's _applyNamedStyle() (which
+// substitutes a {prompt} placeholder into the style template for the main Generate
+// flow), Lab always appends: existing text is never cleared or reordered, the style's
+// text is just added after a comma (or used as-is if the field was empty).
 function _applyStyleToText(positive, negative, style) {
-    let newPositive = positive;
-    if (style.prompt) {
-        newPositive = style.prompt.includes("{prompt}")
-            ? style.prompt.replace("{prompt}", positive)
-            : (positive ? `${positive}, ${style.prompt}` : style.prompt);
-    }
-    let newNegative = negative;
-    if (style.negative_prompt) {
-        newNegative = negative ? `${negative}, ${style.negative_prompt}` : style.negative_prompt;
-    }
-    return { positive: newPositive, negative: newNegative };
+    const append = (existing, addition) => {
+        if (!addition) return existing;
+        return existing ? `${existing}, ${addition}` : addition;
+    };
+    return {
+        positive: append(positive, style.prompt),
+        negative: append(negative, style.negative_prompt),
+    };
 }
 
 // Filter box above the Checkpoint/VAE modal's <select>, same behavior as the
@@ -561,13 +559,20 @@ function _wireLabPromptModalExtras() {
         showToast(t("labPromptFetched"), "success");
     });
 
-    const imageFileInput = document.getElementById("wfm-lab-modal-image-file");
-    document.getElementById("wfm-lab-modal-get-image")?.addEventListener("click", () => imageFileInput?.click());
-    imageFileInput?.addEventListener("change", async () => {
-        const file = imageFileInput.files[0];
-        imageFileInput.value = "";
-        if (!file) return;
+    // Reads metadata from the image already loaded in Lab's own Image drop zone
+    // (_lab.sourceImageFilename, already uploaded to ComfyUI's input folder) rather
+    // than asking the user to pick a separate file.
+    document.getElementById("wfm-lab-modal-get-image")?.addEventListener("click", async () => {
+        if (!_lab.sourceImageFilename) {
+            showToast(t("labNoSourceImage"), "error");
+            return;
+        }
         try {
+            const res = await fetch(`/view?filename=${encodeURIComponent(_lab.sourceImageFilename)}&type=input`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            const file = new File([blob], _lab.sourceImageFilename, { type: blob.type || "image/png" });
+
             const meta = await extractAllMetadata(file);
             if (!meta || (!meta.positives?.length && !meta.negatives?.length)) {
                 showToast(t("labNoPromptInImage"), "error");

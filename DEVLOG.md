@@ -2,6 +2,26 @@
 
 ---
 
+## v0.3.89
+
+### バグ修正: v0.3.88で追加したLab機能への実動作確認フィードバック3件を反映
+
+v0.3.88で追加したLabタブのPromptセル拡張機能について、実際に触ったユーザーから3件の修正依頼を受けた。
+
+**1. Get from Imageが任意のファイルを選ばせる仕様だった**: 当初はファイル選択ダイアログで別途画像を選ぶ実装だったが、「Labタブで現在読み込んでいる画像から取得したい」という指摘を受け、`_lab.sourceImageFilename`（IMAGE欄に既にドロップ・アップロード済みの画像）を`/view?filename=...&type=input`経由で取得し`File`オブジェクトへ変換した上で`extractAllMetadata()`にかける方式に変更。ファイル選択ダイアログ（隠し`<input type="file">`）は不要になったため削除。画像未読込の場合は既存の`labNoSourceImage`トーストで案内する。
+
+**2. スタイル適用が`{prompt}`プレースホルダを置換していた**: `generate-tab.js`の`_applyNamedStyle()`と同じ「スタイルテンプレートの`{prompt}`を既存テキストで置換する」ロジックを流用していたが、「既存のプロンプトはクリアしないで追加したい。既存があればカンマ区切り、なければそのまま」という明確な要望を受け、`_applyStyleToText()`をプレースホルダ置換なしの単純追記（`既存 + ", " + style.prompt`、既存が空ならstyle.promptをそのまま）に書き換えた。GenerateUI本来のStyle機能（`_applyNamedStyle`）とは意図的に異なる仕様になったため、コード上にその旨のコメントを残した。
+
+**3. GenerateUIタブ Modelサブタブの各フィルターにクリアボタンがなかった**: Checkpoint/VAE/Diffusion Model/ControlNet/Hypernetwork（`comfyui-editor.js`の`renderModelTab`、ループでフィルター入力を動的生成）とLora Single（`renderLoraPane`）のフィルター入力に、Models/Nodes/Workflow/Galleryタブの検索ボックスやLabタブのCheckpoint/VAEフィルターと同じ`setupSearchClearBtn()`（`util.js`）＋`.wfm-search-wrap`/`.wfm-search-clear-btn`パターンでオーバーレイ✕クリアボタンを追加。`renderModelTab`は複数フィルターをループ生成するため、各入力に`id="wfm-model-${s.key}-filter"`／クリアボタンに`id="wfm-model-${s.key}-filter-clear"`を採番し、フィルター再構築処理を`input`イベントと`setupSearchClearBtn`のコールバックで共有する形にした。
+
+**あわせてヘルプを更新**: Labサブタブのヘルプ（`helpLab8`、index.html＋i18n.js日英中）を新しい挙動（Get from Imageの取得元、スタイルの追記方式）に合わせて修正。
+
+**検証**: Kaptureで実ブラウザ確認 — GenerateUI Modelタブの各フィルター（Checkpoint/Lora）で入力→✕クリア→リスト復元、Labタブで画像未読込時のGet from Imageのエラートースト、既存Positiveテキストへのスタイル追記結果（`{prompt}`が置換されずそのまま末尾に追加され、既存テキストが先頭に保持されることを確認）。いずれもコンソールエラーなし（既存の無関係なOllama接続エラーを除く）。
+
+**How to apply**: 新機能を実装した直後の「実際に触ってみた」フィードバックは、当初の設計判断（本実装ではEagle本来のUI流用や`{prompt}`置換の踏襲）を覆す具体的な仕様変更を伴うことが多い。既存の類似機能（ここでは`generate-tab.js`の`_applyNamedStyle`）のロジックをそのまま流用するのではなく、要望に応じて意図的に別実装へ分岐させてよい場面があることを踏まえ、分岐させた箇所には理由をコメントで残すこと。フィルター入力を動的ループで生成するコード（`renderModelTab`等）にクリアボタンを追加する際は、ループ内で一意なIDを採番し`setupSearchClearBtn`をループ内で呼び出す。
+
+---
+
 ## v0.3.88
 
 ### 機能拡張: Labタブ Promptセルにスタイル適用・画像/GenerateUIからのプロンプト取得、Checkpoint/VAEフィルター、Plan JSONサブタブを追加

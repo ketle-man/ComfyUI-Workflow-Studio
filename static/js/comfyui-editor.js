@@ -5,7 +5,7 @@
 import { comfyUI } from "./comfyui-client.js";
 import { syncJsonHighlight } from "./json-highlight.js";
 import { t } from "./i18n.js";
-import { escapeHtml } from "./util.js";
+import { escapeHtml, setupSearchClearBtn } from "./util.js";
 
 // ── Latent Image preset state ─────────────────────────────
 const _LATENT_PRESET_KEY = "wfm_latent_presets";
@@ -541,7 +541,10 @@ export const comfyEditor = {
                 return `
                 <div class="wfm-form-group" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;">
                     <label>${s.label}</label>
-                    <input type="text" class="wfm-input wfm-model-filter" placeholder="Filter..." data-target="wfm-model-${s.key}" style="margin-bottom:4px;">
+                    <div class="wfm-search-wrap" style="margin-bottom:4px;width:100%;">
+                        <input type="text" class="wfm-input wfm-search-input wfm-model-filter" id="wfm-model-${s.key}-filter" placeholder="Filter..." data-target="wfm-model-${s.key}">
+                        <button type="button" class="wfm-search-clear-btn" id="wfm-model-${s.key}-filter-clear" title="Clear search">✕</button>
+                    </div>
                     <select class="wfm-select ${isMissing ? "wfm-select-missing" : ""}" id="wfm-model-${s.key}" style="margin-bottom:4px;">
                         ${isMissing ? `<option value="${escapeHtml(currentVal)}" selected>⚠ ${escapeHtml(currentVal)} (${t("modelNotFound")})</option>` : ""}
                         ${models.map((m) => `<option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>`).join("")}
@@ -559,8 +562,8 @@ export const comfyEditor = {
 
         // Filter inputs
         el.querySelectorAll(".wfm-model-filter").forEach((input) => {
-            input.addEventListener("input", () => {
-                const targetId = input.dataset.target;
+            const targetId = input.dataset.target;
+            const rebuild = () => {
                 const select = document.getElementById(targetId);
                 if (!select) return;
                 const filter = input.value.toLowerCase();
@@ -570,7 +573,9 @@ export const comfyEditor = {
                     .filter((m) => m.toLowerCase().includes(filter))
                     .map((m) => `<option value="${m}">${m}</option>`)
                     .join("");
-            });
+            };
+            input.addEventListener("input", rebuild);
+            setupSearchClearBtn(input.id, `${input.id}-clear`, rebuild);
         });
 
         // Apply buttons
@@ -704,7 +709,10 @@ export const comfyEditor = {
 
             <!-- Single tab -->
             <div class="wfm-lora-tab-content" id="wfm-lora-panel-single">
-                <input type="text" class="wfm-input" id="wfm-lora-filter" placeholder="Filter...">
+                <div class="wfm-search-wrap" style="width:100%;">
+                    <input type="text" class="wfm-input wfm-search-input" id="wfm-lora-filter" placeholder="Filter...">
+                    <button type="button" class="wfm-search-clear-btn" id="wfm-lora-filter-clear" title="Clear search">✕</button>
+                </div>
                 <select class="wfm-select" id="wfm-lora-select">
                     ${loras.map((m) => `<option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>`).join("")}
                 </select>
@@ -804,8 +812,9 @@ export const comfyEditor = {
         }
 
         // ── Single: filter ───────────────────────────────────
-        document.getElementById("wfm-lora-filter")?.addEventListener("input", (e) => {
-            const filter = e.target.value.toLowerCase();
+        const loraFilterInput = document.getElementById("wfm-lora-filter");
+        const rebuildLoraSingleList = () => {
+            const filter = loraFilterInput?.value.toLowerCase() || "";
             const select = document.getElementById("wfm-lora-select");
             if (!select) return;
             select.innerHTML = loras
@@ -813,7 +822,9 @@ export const comfyEditor = {
                 .map((m) => `<option value="${m}">${m}</option>`)
                 .join("");
             _refreshLoraSingleDynamic(metadata, civitaiCache);
-        });
+        };
+        loraFilterInput?.addEventListener("input", rebuildLoraSingleList);
+        setupSearchClearBtn("wfm-lora-filter", "wfm-lora-filter-clear", rebuildLoraSingleList);
 
         // ── Single: update SYNTAX/TRIGGERS on model or strength change ──
         document.getElementById("wfm-lora-select")?.addEventListener("change", () => _refreshLoraSingleDynamic(metadata, civitaiCache));
