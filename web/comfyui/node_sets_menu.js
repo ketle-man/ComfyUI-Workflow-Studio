@@ -2939,6 +2939,21 @@ function _isTextEncoderNode(ct) { return ct === "CLIPTextEncode" || ct.includes(
 function _isSamplerNode(ct) { return ct === "KSampler" || ct === "KSamplerAdvanced" || ct.includes("KSampler") || ct.includes("Sampler"); }
 function _isPromptStylerNode(ct) { return ct.includes("PromptStyler"); }
 
+// CLIPTextEncodeEditPlus (model-and-prompt-from-metadata) の encode() と同じ結合ルール。
+// RAW: text1のみ。EDIT: text_editのみ。front/back: text2(未接続ならtext_edit)をtext1の前/後に結合。
+function _resolveEditPlusText(mode, textEdit, text1, text2) {
+    const t1 = typeof text1 === "string" ? text1 : "";
+    const edit = typeof textEdit === "string" ? textEdit : "";
+    const insert = typeof text2 === "string" && text2 !== "" ? text2 : edit;
+    switch (mode) {
+        case "RAW": return t1;
+        case "EDIT": return edit;
+        case "front": return t1 ? `${insert}, ${t1}` : insert;
+        case "back": return t1 ? `${t1}, ${insert}` : insert;
+        default: return t1 || edit;
+    }
+}
+
 // LiteGraph形式: リンクを辿ってテキストを解決（ComfySwitchNode等の中継ノードにも対応）
 function _resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, srcId, slot, depth = 0) {
     if (depth > 6) return null;
@@ -2986,7 +3001,22 @@ function _extractPromptsFromNodeSet(nodes, links) {
     }
     const textMap = new Map();
     for (const n of nodes) {
-        if (!_isTextEncoderNode(n.type ?? "")) continue;
+        const type = n.type ?? "";
+        if (type === "CLIPTextEncodeEditPlus") {
+            const resolveNamedInput = (name) => {
+                if (!Array.isArray(n.inputs)) return null;
+                const inp = n.inputs.find(i => i.name === name);
+                if (inp?.link == null) return null;
+                const originId = linkOrigin.get(inp.link);
+                const originSlot = linkSlot.get(inp.link) ?? 0;
+                if (originId == null) return null;
+                return _resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, originId, originSlot);
+            };
+            const combined = _resolveEditPlusText(n.widgets_values?.[1], n.widgets_values?.[0], resolveNamedInput("text1"), resolveNamedInput("text2"));
+            if (combined) textMap.set(n.id, combined);
+            continue;
+        }
+        if (!_isTextEncoderNode(type)) continue;
         const text = n.widgets_values?.[0];
         if (text && typeof text === "string") { textMap.set(n.id, text); }
         else if (Array.isArray(n.inputs)) {
@@ -3125,7 +3155,20 @@ function _extractPromptsAPI(wf) {
     }
     const textMap = new Map();
     for (const [id, n] of Object.entries(wf)) {
-        if (!n || !_isTextEncoderNode(n.class_type ?? "")) continue;
+        if (!n) continue;
+        const ct = n.class_type ?? "";
+        if (ct === "CLIPTextEncodeEditPlus") {
+            const resolveField = (key) => {
+                const v = n.inputs?.[key];
+                if (typeof v === "string") return v;
+                if (Array.isArray(v)) return _resolveLinkedText(wf, v[0], v[1] ?? 0);
+                return null;
+            };
+            const combined = _resolveEditPlusText(n.inputs?.mode, n.inputs?.text_edit, resolveField("text1"), resolveField("text2"));
+            if (combined) textMap.set(id, combined);
+            continue;
+        }
+        if (!_isTextEncoderNode(ct)) continue;
         // "prompt" — TextEncodeQwenImageEdit(Plus)/TextEncodeBooguEdit and similar Image Edit
         // model text encoders use this key instead of "text"/"text_g".
         const raw = n.inputs?.text ?? n.inputs?.text_g ?? n.inputs?.prompt ?? null;

@@ -85,6 +85,9 @@ function _getWidgetInputNames(objectInfo, classType) {
     // Required inputs: skip types that are linked (have uppercase first letter = node output types)
     for (const [name, spec] of Object.entries(required)) {
         const type = Array.isArray(spec) ? spec[0] : spec;
+        // forceInput: true — link-only socket even though its type is a widget type
+        // (e.g. CLIPTextEncodeEditPlus's text1/text2). Never has a widgets_values entry.
+        if (Array.isArray(spec) && spec[1]?.forceInput) continue;
         // Link types are strings like "MODEL", "CLIP", "CONDITIONING", "LATENT", "IMAGE", etc.
         // Widget types are: "INT", "FLOAT", "STRING", "BOOLEAN", or an array of choices
         if (Array.isArray(type)) {
@@ -102,6 +105,7 @@ function _getWidgetInputNames(objectInfo, classType) {
     // Optional inputs that are widgets
     for (const [name, spec] of Object.entries(optional)) {
         const type = Array.isArray(spec) ? spec[0] : spec;
+        if (Array.isArray(spec) && spec[1]?.forceInput) continue;
         if (Array.isArray(type)) {
             names.push(name);
         } else if (typeof type === "string") {
@@ -128,6 +132,7 @@ function _getWidgetInputTypes(objectInfo, classType) {
 
     for (const [name, spec] of Object.entries(required)) {
         const type = Array.isArray(spec) ? spec[0] : spec;
+        if (Array.isArray(spec) && spec[1]?.forceInput) continue;
         if (Array.isArray(type)) {
             types.push("COMBO");
         } else if (typeof type === "string") {
@@ -139,6 +144,7 @@ function _getWidgetInputTypes(objectInfo, classType) {
     }
     for (const [name, spec] of Object.entries(optional)) {
         const type = Array.isArray(spec) ? spec[0] : spec;
+        if (Array.isArray(spec) && spec[1]?.forceInput) continue;
         if (Array.isArray(type)) {
             types.push("COMBO");
         } else if (typeof type === "string") {

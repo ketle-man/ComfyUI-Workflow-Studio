@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.91-green)
+![Version](https://img.shields.io/badge/version-0.3.92-green)
 
 ## Screenshots
 
@@ -95,6 +95,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
   - **Emphasis weight editing** (v0.3.70) — select text (or just place the cursor on a word/parenthesis block) and press Ctrl+↑/↓ to adjust `(text:weight)` by ±0.05, A1111/native-ComfyUI style; parentheses are removed automatically when the weight returns to 1.0
   - **Mask slot for inpainting** (v0.3.71) — LoadImage slots whose MASK output feeds an inpaint node (e.g. `VAEEncodeForInpaint`) show an additional Mask drop zone; when a mask is set, image + mask are composited into a single RGBA upload (mask baked into the alpha channel) matching ComfyUI's native alpha→MASK extraction — no extra nodes required
 - **Model tab** — Checkpoint, VAE, LoRA, ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — single clip: type + device; dual clip: two clip selectors + type + device), **Hypernetwork** (with Strength field) selectors with filter; Raw JSON on the right
+  - **LoRA Stack Group toggle** (v0.3.92) — for `Lora Loader (LoraManager)` nodes, a **Use Stack Group** checkbox next to the Single/Stack tabs switches what the Stack tab shows and edits: OFF (the default whenever a workflow is loaded) displays and edits the LoRAs actually configured in the workflow's own Lora Manager node — correctly showing every LoRA it holds, not just the first one; ON switches to the LoRA group registered in the Models tab instead; toggling either direction clears the node's LoRA list first, then loads it from the newly selected source, and switching back to OFF restores exactly the list that was present when the workflow was loaded
 - **Settings tab** — KSampler and Latent Image side by side at 50% width each; Raw JSON on the right
 - **Always-visible Raw JSON** — edit the API-format JSON directly from any tab with syntax highlighting; Apply button reloads the workflow; built-in **search bar** (always shown) finds all matches as you type with count display (`3/12`); navigate with ↑/↓ buttons or Enter / Shift+Enter; Escape or ✕ clears; current match highlighted in orange, other matches in yellow
 - **Bypass/Mute node handling** (v0.3.75) — loading a UI-format workflow with Bypass-mode nodes now reroutes their wires to the upstream source (matching same-type input/output slots, recursively through chained bypasses) instead of leaving a dangling reference that failed validation; Mute-mode nodes are excluded without rerouting, same as ComfyUI itself; when either is present, a note listing the affected nodes appears above the Raw JSON search bar in the Input/Model/Settings tabs
@@ -186,6 +187,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/2511/Layered, Z-Image Base/Turbo, Ernie Image, WAN2.2, Mage-Flow, LongCat, Boogu, HiDream E1, FireRed); node types covered: UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, QuadrupleCLIPLoader (e.g. HiDream 4-CLIP)
 - **LoRA extraction** — lists all LoRA models with `strength_model / strength_clip` values
 - **Prompt extraction** — lists prompts with POS / NEG badges when positive/negative can be determined; when distinction is not possible (e.g. `SamplerCustomAdvanced`, intermediate nodes, cross-level connections), prompts are shown without a badge as plain **Text**; click any entry to view the full text below
+  - **CLIP Text Encode edit+ support** (v0.3.92) — `CLIPTextEncodeEditPlus` nodes are resolved using the same RAW / EDIT / front / back combination rule as the node itself, correctly merging the linked `text1` (e.g. a Lora Manager's trigger words) with the editable `text_edit` field instead of showing only one side
 - **Prompt actions** — Copy to clipboard, **GenUI:P/N** (set GenerateUI positive/negative prompt), **Prompt:P/N** (set Prompt tab preset positive/negative)
 - **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 / Mage-Flow / LongCat / Boogu / HiDream E1 / FireRed subgraph workflows), SD WebUI, SD Forge, Fooocus
 - **Format note** — supported formats and covered model types are always shown in the left column

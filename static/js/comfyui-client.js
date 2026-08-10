@@ -20,6 +20,9 @@ export const comfyUI = {
     currentPromptId: null,
     currentWorkflow: null,
     currentAnalysis: null,
+    // ワークフロー読み込み時点のLora Loader (LoraManager)ノードの loras/text 状態。
+    // Stackグループチェックボックスのトグル時に、OFF側の「読み込み時の状態へ戻す」用に使う。
+    loraManagerSnapshots: {},
 
     updateUrl(url) {
         if (!url) {

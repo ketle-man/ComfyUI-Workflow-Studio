@@ -2,6 +2,27 @@
 
 ---
 
+## v0.3.92
+
+### バグ修正: CLIPTextEncodeEditPlus使用ワークフローがGenerateUI経由だと直接実行と異なる画像になる問題（根本原因はconvertUiToApiのForceInput 未考慮バグ）＋LoRA Stack機能の改善一式
+
+ユーザーから「`CLIPTextEncodeEditPlus`（CLIP Text Encode edit+、`model-and-prompt-from-metadata`由来）と`Lora Loader (LoraManager)`を組み合わせたワークフローを、ComfyUIで直接実行した場合とWorkflow StudioのGenerateUI経由で実行した場合とで生成画像が異なる。シードも固定しているのに一致しない」という報告を受け、一連の調査・修正を行った。
+
+**1. Metadata/Infoタブでのプロンプト抽出漏れ**: `CLIPTextEncodeEditPlus`はPositiveプロンプトの実体を`text1`（リンク入力、例えばLoraManagerの`trigger_words`出力）と`text_edit`ウィジェットを`mode`（RAW/EDIT/front/back）に応じて結合する専用ノードだが、`metadata-tab.js`（およびその移植版`node_sets_menu.js`のIタブ側）の`extractPromptsAPI`/`extractPromptsFromNodeSet`は`widgets_values[0]`（=`text_edit`のみ）を素朴に読むか、API形式では`inputs.text`/`text_g`/`prompt`キーしか見ておらずこのノード自体を全く認識できていなかった（結果、生成画像のPNG内蔵メタデータを見るとPositiveが空、Negativeしか表示されない）。ノード本体のPython実装（`metadata_checkpoint_node.py`の`CLIPTextEncodeEditPlus.encode()`）と完全に同じ結合ルールを`resolveEditPlusText(mode, textEdit, text1, text2)`として両ファイルに実装し、LiteGraph形式・API形式それぞれのtextMap構築ロジックに組み込んだ。なお`text1`がLoraManagerの`trigger_words`のように実行時に動的計算される値の場合、ワークフローJSON自体にはそのテキストが保存されていないため静的解析では復元できない（この制約はユーザーに明示済み）。
+
+**2. 根本原因: `convertUiToApi`の`_getWidgetInputNames`/`_getWidgetInputTypes`が`forceInput: true`を考慮していなかった**: 上記の表示バグを追っている過程で、実際にComfyUIサーバー（`http://127.0.0.1:8189/object_info/CLIPTextEncodeEditPlus`）から取得したobject_infoと突き合わせたところ、真の実行結果不一致の原因を発見した。`text1`/`text2`はComfyUI側で`["STRING", {"forceInput": true}]`（リンク専用・ウィジェット化されない入力）として定義されているが、`comfyui-workflow.js`の`_getWidgetInputNames`/`_getWidgetInputTypes`はこの`forceInput`フラグを一切チェックしておらず、型がSTRING/INT/FLOAT/BOOLEAN等であれば`optional`入力も無条件にウィジェット名列へ含めていた。そのため`text2`（未接続）が誤って「ウィジェット」として扱われ、`widgets_values`の3番目に入っていた本来どのウィジェットにも対応しない余りの空文字列`""`が`text2`の値として吸い込まれ、送信されるAPIワークフローに`text2: ""`が**明示的に**含まれてしまっていた。Python側の`encode()`は`insert = text2 if text2 is not None else text_edit`という判定をしており、`text2=""`は`None`ではないため`insert = ""`が採用され、`mode: "back"`の場合`selected = text1 + ", " + ""`——**`text_edit`の内容が完全に欠落**していた。ComfyUI本体から直接実行した場合は未接続のforceInput入力が送信データに一切含まれず`text2=None`となるため、この欠落は発生しない。これが「同じワークフローなのに画像が異なる」「LoRA強度を変えても結果が変わらない（そもそも肝心のプロンプト本文が消えていたため無関係だった）」の直接の原因。`_getWidgetInputNames`/`_getWidgetInputTypes`双方の必須・オプション入力ループに`if (Array.isArray(spec) && spec[1]?.forceInput) continue;`を追加して除外するよう修正。この修正は`forceInput`付きオプション入力を持つ他のノード全般にも同様に効く汎用修正。
+
+**3. GenerateUI Model タブ — LoRA Stack機能の改善**: 上記の検証と並行して、LoRA周りのUI/UXも3点改善した。
+- **Use Stack Groupチェックボックス**: `Lora Loader (LoraManager)`ノードが存在するワークフローを読み込んだ際、従来はStackタブが常にModelsタブの登録済み「Stack」グループを参照しており、ワークフロー自体が保持している実際のLoRA構成とは無関係だった。新設したチェックボックスで、OFF（ワークフロー読み込み時の既定）はLoraManagerノードに実際に設定されているLoRAをそのまま表示・編集し、ON はModelsタブの「Stack」グループを表示・編集するよう切替可能にした。切替時は必ず対象ノードのLoRA一覧をクリアしてから新しいソースを読み込み、OFFへ戻すとワークフロー読み込み時点のLoRA一覧（読み込み時にスナップショットとして保存）へ正確に復元される。
+- **LORA SYNTAX表示が1件しか出ない不具合の修正**: SingleタブのLORA SYNTAXはLoraManagerノードの`loras[0]`（1件目）のみを見る設計（Single＝1件専用のため仕様通り）だが、Stackタブ側もModelsタブ登録グループしか見ておらず、結果的に「ワークフローに実際設定されている複数LoRA」を表示する手段がどこにもなかった。上記のチェックボックスと合わせて、新規読み込み時にLoRAが2件以上あれば自動でStackタブを初期表示するようにし、正しく全件表示されるようにした。
+- **タブ切替でStackのON/OFF状態が意図せず戻る不具合の修正**: 「ワークフロー状態」表示モードでは、Modelタブへ戻るたびの単純な再描画のたびに各LoRAの有効/無効状態（`_stackActive`）をワークフロー本来のデータで毎回強制上書きしていたため、ユーザーがStackパネルのトグルオールチェックボックスをOFFにしても次の再描画で無条件にONへ戻ってしまっていた。ワークフロー実データからの同期を「新規読み込み時」と「Use Stack GroupチェックボックスをOFFに戻した直後」の2タイミングのみに限定し、それ以外の再描画では既にメモリ上にある値を維持するよう修正。ついでに`stackModels.every()`が空配列に対し空虚な真を返すことで、LoRAが0件のときトグルオールチェックボックスが誤ってON表示になる副次的な表示バグも修正した。
+
+**検証**: ユーザー自身が実機で確認。(1) `lora_manager_normal_clip.json`（ネイティブCLIPTextEncode使用）でComfyUI直接実行とGenerateUI実行の生成画像が同一であることを確認。(2) `lora_m_editplus_comfyUI.json`（CLIPTextEncodeEditPlus使用、mode: back）でも同様に画像が同一であることを確認。(3) 残る3モード（RAW / EDIT / front）についても結果が同一であることを確認済み。実サーバーの`/object_info`を取得しての突き合わせ、および修正前後のconvertUiToApiロジックの単体シミュレーションで根本原因を再現・修正確認済み。
+
+**How to apply**: (1) ComfyUIのカスタムノードで`optional`の`forceInput: true`入力を追加する場合、Workflow Studio側のUI→API変換ロジックはこのフラグを尊重する前提で書くこと（`_getWidgetInputNames`/`_getWidgetInputTypes`が該当）——見落とすと、未接続時に本来送信されるべきでない値が紛れ込み、Pythonの`if x is not None`判定を静かに壊す。(2) ワークフローJSON上に存在しない・実行時にしか計算されない値（今回のLoraManagerの`trigger_words`のように）は、静的なメタデータ抽出では原理的に復元できないことをドキュメント・ユーザー説明の両方で明示すること。(3) 複数箇所に同種のロジックが移植されている場合（`metadata-tab.js`と`node_sets_menu.js`など）、片方だけ直して終わりにせず両方に同じ修正を適用し、`node --check`＋差分比較で開発元/ランタイム両フォルダの同一性を確認してから同期する。
+
+---
+
 ## v0.3.91
 
 ### 機能拡張: Labインデックス画像にPlanメタデータをPNG埋め込み＋README構成整理（Changelogセクション廃止）

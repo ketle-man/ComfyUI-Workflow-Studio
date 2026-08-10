@@ -231,7 +231,9 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
     comfyUI.currentAnalysis = comfyWorkflow.analyzeWorkflow(apiWorkflow);
 
     // Render editor tabs
-    comfyEditor.renderAll(comfyUI.currentAnalysis, apiWorkflow);
+    // resetStackMode: 新規ワークフロー読み込み時のみ、LoraManagerノードのloras/text状態を
+    // スナップショットし、Stackグループ使用チェックボックスをOFFへリセットする
+    comfyEditor.renderAll(comfyUI.currentAnalysis, apiWorkflow, { resetStackMode: true });
 
     // Update raw JSON with highlight
     const rawTextarea = document.getElementById("wfm-gen-raw-json");

@@ -344,11 +344,11 @@ export const comfyEditor = {
         return found || name;
     },
 
-    renderAll(analysis, workflow) {
+    renderAll(analysis, workflow, opts = {}) {
         this.renderPromptTab(analysis, "wfm-gen-prompt-fields");
         this.renderImageTab(analysis, "wfm-gen-image-fields");
         this.renderModelTab(analysis, "wfm-gen-model-fields");
-        this.renderLoraPane(analysis, "wfm-gen-lora-fields"); // async, fires independently
+        this.renderLoraPane(analysis, "wfm-gen-lora-fields", opts); // async, fires independently
         this.renderSettingsTab(analysis, "wfm-gen-settings-fields");
         _syncRawJson();
     },
@@ -611,13 +611,33 @@ export const comfyEditor = {
         _initTextEncoderSection(analysis, this.models.textEncoders || [], el).catch(() => {});
     },
 
-    async renderLoraPane(analysis, containerId) {
+    async renderLoraPane(analysis, containerId, opts = {}) {
         const el = document.getElementById(containerId);
         if (!el) return;
 
         const loraNodes = analysis.lora_nodes || [];
         const loras = this.models.loras || [];
         const defaultStackTarget = (loraNodes.find((n) => n.is_lora_manager) || loraNodes[0])?.id;
+        const hasLoraManager = loraNodes.some((n) => n.is_lora_manager);
+        // Use Stack Group チェックボックスの現在状態を先読み(Stack表示の取得元判定に使う)。
+        // resetStackMode(新規読み込み)時は常にOFF扱い。
+        const stackModeChecked = hasLoraManager && !opts.resetStackMode && (el.querySelector("#wfm-lora-stack-mode-toggle")?.checked ?? false);
+
+        // ワークフロー新規読み込み時のみ: LoraManagerノードのloras/text状態をスナップショットし、
+        // Stackグループ使用チェックボックスをOFFへリセットする(既存のGenUI状態への影響を避けるため
+        // タブ切替やStack再読込などの単なる再描画では行わない)。
+        if (opts.resetStackMode) {
+            comfyUI.loraManagerSnapshots = {};
+            for (const n of loraNodes) {
+                if (!n.is_lora_manager) continue;
+                const wfNode = comfyUI.currentWorkflow?.[n.id];
+                if (!wfNode?.inputs) continue;
+                comfyUI.loraManagerSnapshots[n.id] = {
+                    loras: Array.isArray(wfNode.inputs.loras?.__value__) ? JSON.parse(JSON.stringify(wfNode.inputs.loras.__value__)) : [],
+                    text: wfNode.inputs.text ?? "",
+                };
+            }
+        }
         const nodeOpts = loraNodes
             .map((n) => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`)
             .join("");
@@ -642,26 +662,53 @@ export const comfyEditor = {
             }
         }
 
-        // Fetch Stack group, metadata, CivitAI cache in parallel
+        // Stack表示の取得元: ON(Use Stack Group)ならModelsタブの登録済みStackグループ、
+        // OFF(既定)ならLoraManagerノードに実際に設定されているLoRAをそのまま表示する。
         let stackModels = [];
         let metadata = {};
         let civitaiCache = {};
+        const useWorkflowLoraState = hasLoraManager && !stackModeChecked;
         try {
-            const [grpRes, metaRes, civRes] = await Promise.all([
-                fetch("/api/wfm/models/groups?type=lora"),
+            const [metaRes, civRes] = await Promise.all([
                 fetch("/api/wfm/models/metadata"),
                 fetch("/api/wfm/models/civitai/cache"),
             ]);
-            const groups = grpRes.ok ? await grpRes.json() : {};
-            stackModels = groups["Stack"] || [];
             metadata = metaRes.ok ? await metaRes.json() : {};
             civitaiCache = civRes.ok ? await civRes.json() : {};
         } catch { /* ignore */ }
 
-        stackModels.forEach((m) => {
-            if (!_stackStrengths[m]) _stackStrengths[m] = { m: 1.0, c: 1.0 };
-            if (_stackActive[m] === undefined) _stackActive[m] = true;
-        });
+        if (stackModeChecked) {
+            try {
+                const grpRes = await fetch("/api/wfm/models/groups?type=lora");
+                const groups = grpRes.ok ? await grpRes.json() : {};
+                stackModels = groups["Stack"] || [];
+            } catch { /* ignore */ }
+            stackModels.forEach((m) => {
+                if (!_stackStrengths[m]) _stackStrengths[m] = { m: 1.0, c: 1.0 };
+                if (_stackActive[m] === undefined) _stackActive[m] = true;
+            });
+        } else if (useWorkflowLoraState) {
+            const wfNode = comfyUI.currentWorkflow?.[defaultStackTarget];
+            const wfLoras = wfNode?.inputs?.loras?.__value__;
+            // resetStackMode(新規読み込み)/syncFromWorkflow(チェックボックスOFF切替直後)の時だけ
+            // ワークフローの実データで強制上書きする。タブ切替等の単なる再描画では、
+            // 既にメモリ上に値があればそれを維持し、Stackパネルでの一時的なON/OFF・強度編集を
+            // 再描画のたびに消してしまわないようにする。
+            const shouldSync = opts.resetStackMode || opts.syncFromWorkflow;
+            if (Array.isArray(wfLoras)) {
+                stackModels = wfLoras.map((l) => {
+                    const found = (this.models.loras || []).find((m) => _loraBasename(m) === l.name);
+                    const full = found || l.name;
+                    if (shouldSync || _stackStrengths[full] === undefined) {
+                        _stackStrengths[full] = { m: parseFloat(l.strength) || 1.0, c: parseFloat(l.clipStrength ?? l.strength) || 1.0 };
+                    }
+                    if (shouldSync || _stackActive[full] === undefined) {
+                        _stackActive[full] = l.active !== false;
+                    }
+                    return full;
+                });
+            }
+        }
 
         // Build Stack trigger words
         const activeTriggerWords = [];
@@ -678,7 +725,9 @@ export const comfyEditor = {
             ? activeTriggerWords.map((w) => `<span class="wfm-lora-trigger-word">${w}</span>`).join(" ")
             : `<span style="color:var(--wfm-text-secondary);font-size:12px;">—</span>`;
         const stackLoraSyntax = _buildLoraSyntax(stackModels);
-        const allActive = stackModels.every((m) => _stackActive[m] !== false);
+        // stackModelsが空だと every() が空配列に対し true を返す(空虚な真)ため、
+        // 何も無いのに「トグルオール」チェックボックスがON表示になるのを防ぐ
+        const allActive = stackModels.length > 0 && stackModels.every((m) => _stackActive[m] !== false);
         const anyActive = stackModels.some((m) => _stackActive[m] !== false);
 
         const stackModelRows = stackModels.map((m) => {
@@ -696,7 +745,10 @@ export const comfyEditor = {
             </div>`;
         }).join("");
 
-        const _prevActiveTab = el.querySelector(".wfm-lora-tab-btn.active")?.dataset?.tab || "single";
+        let _prevActiveTab = el.querySelector(".wfm-lora-tab-btn.active")?.dataset?.tab || "single";
+        // 新規読み込み時、LoraManagerノードに実際に複数LoRAが設定されている場合は
+        // Single(1件しか表示できない)ではなくStackタブを初期表示にする
+        if (opts.resetStackMode && useWorkflowLoraState && stackModels.length > 1) _prevActiveTab = "stack";
         // applyToGenUIで設定したSingle表示の状態を保存（再描画後に復元）
         const _prevSingleSyntax = document.getElementById("wfm-lora-single-syntax")?.textContent || "";
         const _prevSingleTriggers = document.getElementById("wfm-lora-single-triggers")?.innerHTML || "";
@@ -705,6 +757,11 @@ export const comfyEditor = {
             <div class="wfm-lora-tab-header">
                 <button class="wfm-lora-tab-btn active" data-tab="single">Single</button>
                 <button class="wfm-lora-tab-btn" data-tab="stack">Stack</button>
+                ${hasLoraManager ? `
+                <label class="wfm-lora-stack-mode-label" style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;" title="ON: 登録済みStackグループを読み込む / OFF: ワークフローに実際に設定されているLoRAを表示・編集する">
+                    <input type="checkbox" id="wfm-lora-stack-mode-toggle" ${stackModeChecked ? "checked" : ""}>
+                    Use Stack Group
+                </label>` : ""}
             </div>
 
             <!-- Single tab -->
@@ -739,6 +796,7 @@ export const comfyEditor = {
 
             <!-- Stack tab -->
             <div class="wfm-lora-tab-content" id="wfm-lora-panel-stack" style="display:none;">
+                ${hasLoraManager ? `<div style="font-size:11px;color:var(--wfm-text-secondary);margin-bottom:6px;">${useWorkflowLoraState ? "Showing: LoRAs currently in workflow" : "Showing: registered Stack group"}</div>` : ""}
                 <div class="wfm-lora-stack-header">
                     <select class="wfm-select" id="wfm-lora-stack-target" style="flex:1;min-width:0;">${stackTargetOpts}</select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-lora-stack-apply" title="Apply Stack to node and sync to Positive prompt">Apply</button>
@@ -773,7 +831,7 @@ export const comfyEditor = {
                     <div id="wfm-lora-stack-triggers" class="wfm-lora-stack-triggers">${stackTriggerHtml}</div>
                 </div>
                 <div class="wfm-lora-stack-models">
-                    ${stackModelRows || `<p class="wfm-placeholder">No models in Stack group</p>`}
+                    ${stackModelRows || `<p class="wfm-placeholder">${useWorkflowLoraState ? "No LoRAs set on this node" : "No models in Stack group"}</p>`}
                 </div>
             </div>
         `;
@@ -810,6 +868,59 @@ export const comfyEditor = {
             document.getElementById("wfm-lora-panel-single").style.display = "none";
             document.getElementById("wfm-lora-panel-stack").style.display = "";
         }
+
+        // ── Stackグループ使用チェックボックス ─────────────────
+        // ON: LoraManagerノードへStackグループを（クリアしてから）読み込む(既存のStack Applyを流用)
+        // OFF: ワークフロー読み込み時点のloras/text状態へ（クリアしてから）戻す
+        document.getElementById("wfm-lora-stack-mode-toggle")?.addEventListener("change", async (e) => {
+            const nodeId = document.getElementById("wfm-lora-stack-target")?.value || defaultStackTarget;
+            if (!nodeId || !comfyUI.currentWorkflow?.[nodeId]) return;
+
+            if (e.target.checked) {
+                // stackModelsはこの時点では「ワークフロー state」を指したままのため、
+                // 先に再描画してStackグループを取得させてからApplyする
+                await this.renderLoraPane(analysis, containerId);
+                document.getElementById("wfm-lora-stack-apply")?.click();
+                return;
+            }
+
+            const snap = comfyUI.loraManagerSnapshots?.[nodeId] || { loras: [], text: "" };
+            comfyUI.currentWorkflow[nodeId].inputs.loras = { __value__: JSON.parse(JSON.stringify(snap.loras)) };
+            comfyUI.currentWorkflow[nodeId].inputs.text = snap.text;
+            _syncRawJson();
+
+            // ON時にPositiveプロンプトへ挿入されたStack由来の<lora:...>構文とトリガーワードを除去する
+            // (新規に追加はしない。ワークフロー本来のプロンプトへ戻すだけ)
+            const posTextarea = document.getElementById("wfm-prompt-pos-text");
+            if (posTextarea && stackModels.length > 0) {
+                let cleaned = posTextarea.value;
+                for (const m of stackModels) {
+                    const stem = _loraBasename(m).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    cleaned = cleaned.replace(new RegExp(`,?\\s*<lora:${stem}:[^>]*>`, "gi"), "");
+                }
+                const stackWords = new Set();
+                stackModels.forEach((m) => {
+                    const sha = (metadata[m] || {}).sha256;
+                    const civInfo = sha && civitaiCache[sha];
+                    civInfo?.trainedWords?.forEach((w) => stackWords.add(w.trim().toLowerCase()));
+                });
+                if (stackWords.size > 0) {
+                    cleaned = cleaned.split(",").map((p) => p.trim()).filter((p) => p && !stackWords.has(p.toLowerCase())).join(", ");
+                }
+                posTextarea.value = cleaned.replace(/,\s*$/, "").trim();
+
+                const posNodeId = document.getElementById("wfm-prompt-pos-target")?.value;
+                if (posNodeId && comfyUI.currentWorkflow?.[posNodeId]) {
+                    const promptNode = comfyUI.currentAnalysis?.prompt_nodes?.find((n) => String(n.id) === String(posNodeId));
+                    comfyUI.currentWorkflow[posNodeId].inputs[promptNode?.textKey || "text"] = posTextarea.value;
+                    _syncRawJson();
+                }
+            }
+
+            // syncFromWorkflow: OFFへ戻した直後は、たった今書き戻したloras/text状態と
+            // Stackパネルの強度/有効状態表示を一致させるため強制同期する
+            this.renderLoraPane(analysis, containerId, { syncFromWorkflow: true });
+        });
 
         // ── Single: filter ───────────────────────────────────
         const loraFilterInput = document.getElementById("wfm-lora-filter");
