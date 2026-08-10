@@ -194,9 +194,8 @@ os.environ["HF_HOME"] = "D:\\hf_cache"
 
 1. `pyproject.toml` の `version` を新バージョン番号に更新してステージングに含める
 2. `README.md` のバージョンバッジを更新（`![Version](https://img.shields.io/badge/version-X.Y.Z-green)`）
-3. `README.md` の Changelog に新バージョンのエントリを追加
-4. `DEVLOG.md` の先頭に変更詳細エントリを追加
-5. 上記すべてを同一コミットにまとめてプッシュ
-6. `gh release create vX.Y.Z` でリリースを作成
+3. `DEVLOG.md` の先頭に変更詳細エントリを追加
+4. 上記すべてを同一コミットにまとめてプッシュ
+5. `gh release create vX.Y.Z` でリリースを作成（リリースノート本文に変更点を記載する — v0.3.90でREADME.mdのChangelogセクションは廃止したため、以後のバージョン履歴はGitHub Releaseのリリースノートのみで管理する）
 
 `pyproject.toml` のバージョン変更が GitHub Actions のトリガー（`paths: pyproject.toml`）になっており、ComfyUI Registry への自動公開もここで行われる。バージョン更新を忘れると Registry に反映されない。

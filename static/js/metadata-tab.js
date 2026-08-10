@@ -75,7 +75,7 @@ function parseITXtChunk(data, latin1, utf8) {
     pos = findNull(data, pos); if (pos === -1) return null; pos++;
     return { keyword, text: utf8.decode(data.slice(pos)) };
 }
-async function readAllPNGTextChunks(file) {
+export async function readAllPNGTextChunks(file) {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

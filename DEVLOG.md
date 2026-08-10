@@ -2,6 +2,24 @@
 
 ---
 
+## v0.3.91
+
+### 機能拡張: Labインデックス画像にPlanメタデータをPNG埋め込み＋README構成整理（Changelogセクション廃止）
+
+v0.3.90でLabタブに追加した「Run時インデックス画像Output保存」機能について、ユーザーから「インデックス画像にPlanのメタデータは埋め込まれていないのでは」と確認を受け調査したところ、実際に埋め込まれていないことが判明。`_buildIndexImageDataUrl()`は`canvas.toDataURL("image/png")`でピクセルデータのみのプレーンなPNGを生成しており、バックエンド側（`lab_plan_service.py`の`save_index_image()`/`save_index_image_to_output()`）も受け取ったbase64をそのままバイト列として書き込むだけだった。特にOutputフォルダ側のコピーは対になる`.json`が存在しないため、画像単体では「どのPlanで生成したか」を後から追跡する手段が一切なかった。「Planドロップエリアにドロップして読み込める形にしたい」という要望を受け対応。
+
+**PNG埋め込みの実装**: `static/js/util.js`に`embedPngTextChunk(dataUrl, keyword, text)`を新規追加。PNGのIHDR直後に**iTXt**チャンクを挿入する（挿入位置・CRC計算ロジックは、ComfyUI本体が既に持つワークフロー埋め込み機能=`web/comfyui/top_menu_extension.js`の`embedWorkflowInPng`と同じ方式を踏襲）。**tEXtではなくiTXtを選んだ理由**: このコードベースの既存PNGチャンク読み取り（`metadata-tab.js`の`readAllPNGTextChunks`）は、tEXtのtextフィールドをLatin-1でデコードする実装になっている。一方書き込み側（`embedWorkflowInPng`含む）は`TextEncoder().encode()`でUTF-8エンコードしているため、非ASCII文字（日本語のNoteやプロンプトなど）を含むテキストをtEXt経由で埋め込むと、読み取り時にLatin-1誤変換で文字化けする。iTXtチャンクは仕様上UTF-8前提であり、`readAllPNGTextChunks`の`parseITXtChunk`は既に正しくUTF-8デコードを行っているため、新規キー`wfm_lab_plan`はiTXtで統一した（既存のtEXt/workflow埋め込みが同じ問題を抱えている可能性があるが、それは既存機能でありスコープ外として手を付けていない）。
+
+**読み書きの配線**: `metadata-tab.js`の`readAllPNGTextChunks`を新たに`export`（元は非export、Lab側から再利用するため）。`lab-tab.js`に`LAB_PLAN_PNG_KEY = "wfm_lab_plan"`を追加し、`_buildIndexImageDataUrl(planData)`が省略可能引数`planData`を受け取ってJSON文字列化・埋め込むよう変更。呼び出し元の`_savePlan()`と`_maybeSaveIndexImageOnRun()`双方で、既に構築済みの`_buildPlanData()`の結果を渡すようにした——Plan Save側（lab_plan/内、対になる.jsonが既にある）にも同じ埋め込みを行い、画像単体を持ち出しても再現可能にする一貫性を優先。`_loadPlanFromIndexImage(file)`は、まず`readAllPNGTextChunks(file)`でチャンクを直接読み`wfm_lab_plan`があれば`JSON.parse`して`_applyPlanData()`へ渡す（サーバー通信不要）よう変更し、埋め込みが無い古いインデックス画像に対してのみ従来の「同名.jsonをサーバーから取得」にフォールバックする。
+
+**検証**: (1) Node単体テストでembed→PNGバイト解析→JSON.parseの往復を検証（日本語＋絵文字を含む文字列が完全一致することを確認）。(2) Kaptureで実際にComfyUIを操作し、T2Iモード＋Save index on Run＋日本語/絵文字入りNoteでRunを実行、実際に生成された`Lab_index_00003_.png`の実バイトを別のNodeスクリプトで直接読み取り、埋め込まれた`wfm_lab_plan`チャンクの内容が実際のPlan状態と完全一致することを確認。(3) ブラウザの`evaluate`経由で`fetch`+`File`+`DataTransfer`+合成`drop`イベントを構築し、サーバー側に対応する`.json`が一切存在しないこのOutputフォルダPNGを実際にPlanドロップゾーンへドロップ、T2Iモード・Save index on Runチェックボックス・Note（日本語+絵文字）・Batch数・ワークフロー記録（Open Workflowボタン）が全てサーバー通信なしで正しく復元されることをスクリーンショットで確認済み。
+
+**README構成整理**: README.mdの`## Changelog`セクション（v0.1.1〜v0.3.90まで692行）を全削除。バージョンを重ねるごとに肥大化しており、GitHub Releaseのリリースノートと内容が重複していたため、ユーザーの意向で「今後はGitHub Releaseのリリースノートのみでバージョン履歴を管理する」方針に変更。あわせて`CLAUDE.md`のリリース手順から「READMEのChangelogにエントリを追加」の手順を削除し、代わりに`gh release create`のリリースノート本文に変更点を記載する旨を明記した。README.mdは692行分の削減（1248行→556行）。
+
+**How to apply**: (1) 今後PNGに新しいカスタムメタデータを埋め込みたい場合は、必ずtEXtではなく**iTXt**を使うこと（このコードベースのtEXt読み取りはLatin-1decodeのため非ASCII文字が壊れる）。`util.js`の`embedPngTextChunk(dataUrl, keyword, text)`と`metadata-tab.js`の`readAllPNGTextChunks(file)`（export済み）がその書き込み/読み取りのペア。(2) リリース時のバージョン履歴はREADME.mdではなく`gh release create`のリリースノートに記載する（README.mdにChangelogセクションを復活させない）。
+
+---
+
 ## v0.3.90
 
 ### 機能拡張: Labタブの進化（ワークフロー呼び出し・T2I対応・Run時インデックス画像Output保存＋Eagle連携・プラン接頭辞）＋Galleryタブのルート表示簡略化

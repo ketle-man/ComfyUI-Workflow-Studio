@@ -12,14 +12,15 @@ import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { showToast, openModal, closeModal } from "./app.js";
 import { t } from "./i18n.js";
-import { escapeHtml, getEagleSettings, saveToEagle, setupSearchClearBtn } from "./util.js";
-import { extractAllMetadata } from "./metadata-tab.js";
+import { escapeHtml, embedPngTextChunk, getEagleSettings, saveToEagle, setupSearchClearBtn } from "./util.js";
+import { extractAllMetadata, readAllPNGTextChunks } from "./metadata-tab.js";
 import { syncJsonHighlight } from "./json-highlight.js";
 
 const COLUMN_KEYS = ["checkpoint", "vae", "prompt", "ksampler"];
 const MAX_RESULTS = 9;
 const RESULTS_GRID_COLS = 3;
 const LAB_PLAN_PREFIX = "ws_labplan_";
+const LAB_PLAN_PNG_KEY = "wfm_lab_plan";
 
 function _defaultValueFor(col) {
     if (col === "prompt") return { positive: "", negative: "" };
@@ -853,7 +854,11 @@ function _loadImageEl(src) {
     });
 }
 
-async function _buildIndexImageDataUrl() {
+// planData, when given, is embedded into the resulting PNG as an iTXt chunk
+// (LAB_PLAN_PNG_KEY) so the image alone — dropped onto the Plan drop zone, from
+// anywhere, not just lab_plan/ — can be loaded back without needing a same-named
+// .json alongside it on the server.
+async function _buildIndexImageDataUrl(planData) {
     const imgs = _lab.results.images.slice(0, MAX_RESULTS);
     if (imgs.length === 0) return null;
 
@@ -875,7 +880,14 @@ async function _buildIndexImageDataUrl() {
         const w = im.width * scale, h = im.height * scale;
         ctx.drawImage(im, col * cellSize - (w - cellSize) / 2, row * cellSize - (h - cellSize) / 2, w, h);
     }
-    return canvas.toDataURL("image/png");
+    const dataUrl = canvas.toDataURL("image/png");
+    if (!planData) return dataUrl;
+    try {
+        return embedPngTextChunk(dataUrl, LAB_PLAN_PNG_KEY, JSON.stringify(planData));
+    } catch (err) {
+        console.warn("Failed to embed Lab plan metadata into index image:", err);
+        return dataUrl;
+    }
 }
 
 // When "Save index image to Output on Run" is checked, builds the same
@@ -888,7 +900,8 @@ async function _buildIndexImageDataUrl() {
 async function _maybeSaveIndexImageOnRun() {
     if (!_lab.saveIndexOnRun) return;
     try {
-        const dataUrl = await _buildIndexImageDataUrl();
+        const name = _lab.planFilename ? _stripLabPlanPrefix(_lab.planFilename.replace(/\.json$/i, "")) : "";
+        const dataUrl = await _buildIndexImageDataUrl(_buildPlanData(name));
         if (!dataUrl) return;
         const res = await fetch("/api/wfm/lab/index-image/save-to-output", {
             method: "POST",
@@ -936,7 +949,7 @@ async function _savePlan(filenameOverride, forceNewName = false) {
 
     let indexImageBase64 = null;
     try {
-        indexImageBase64 = await _buildIndexImageDataUrl();
+        indexImageBase64 = await _buildIndexImageDataUrl(data);
     } catch { /* thumbnail generation is best-effort */ }
 
     try {
@@ -1009,11 +1022,25 @@ async function _loadPlanFromFile(file) {
     }
 }
 
-// Dropping the index-image thumbnail (same basename as its .json, saved
-// alongside it on the server) fetches the actual plan JSON by that filename.
+// Dropping the index-image thumbnail. Since v0.3.90 every index image (both the
+// lab_plan/ companion PNG from Plan Save, and the Output-folder copy from "Save
+// index image to Output on Run") carries the full plan data embedded as a
+// LAB_PLAN_PNG_KEY iTXt chunk, so it can be read directly from the dropped file
+// with no server round-trip — this is the only way to load a plan back from an
+// Output-folder PNG, which has no same-named .json anywhere. Falls back to the
+// old same-basename server lookup for older index images saved before this.
 async function _loadPlanFromIndexImage(file) {
     const stem = file.name.replace(/\.[^.]+$/, "");
-    await _loadPlanFromServer(`${stem}.json`);
+    const filename = `${stem}.json`;
+    try {
+        const chunks = await readAllPNGTextChunks(file);
+        if (chunks?.[LAB_PLAN_PNG_KEY]) {
+            _applyPlanData(filename, JSON.parse(chunks[LAB_PLAN_PNG_KEY]));
+            showToast(t("labPlanLoaded"), "success");
+            return;
+        }
+    } catch { /* fall through to the server lookup below */ }
+    await _loadPlanFromServer(filename);
 }
 
 async function _loadPlanFromServer(filename) {
