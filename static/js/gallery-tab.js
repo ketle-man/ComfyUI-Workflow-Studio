@@ -401,7 +401,7 @@ function renderTreeNode(node, container, depth, isRoot) {
     // フォルダ名
     const label = document.createElement("span");
     label.className = "wfm-gallery-tree-label";
-    label.textContent = isRoot ? `[root] ${node.name}` : node.name;
+    label.textContent = isRoot ? "[root]" : node.name;
     if (node.image_count > 0) {
         const badge = document.createElement("span");
         badge.className = "wfm-gallery-tree-count";

@@ -2948,6 +2948,12 @@ body {
     background: rgba(74, 158, 255, 0.08);
 }
 
+.wfm-i2i-drop-zone.wfm-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: default;
+}
+
 .wfm-i2i-drop-label {
     font-size: 12px;
     color: var(--wfm-text-secondary);

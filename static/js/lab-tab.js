@@ -19,6 +19,7 @@ import { syncJsonHighlight } from "./json-highlight.js";
 const COLUMN_KEYS = ["checkpoint", "vae", "prompt", "ksampler"];
 const MAX_RESULTS = 9;
 const RESULTS_GRID_COLS = 3;
+const LAB_PLAN_PREFIX = "ws_labplan_";
 
 function _defaultValueFor(col) {
     if (col === "prompt") return { positive: "", negative: "" };
@@ -41,7 +42,10 @@ function _emptyLabState() {
         note: "",
         batchCount: 4,
         chainImage: false,
+        t2iMode: false,
+        saveIndexOnRun: false,
         sourceImageFilename: null,
+        workflowFilename: null,
         columns: _emptyColumns(),
         results: { images: [] },
     };
@@ -67,6 +71,7 @@ export function initLabTab() {
     _initPlanJsonTab();
     _renderAllColumns();
     _renderResultsGrid();
+    _updateT2IModeUI();
 }
 
 function _initDropZone() {
@@ -75,7 +80,16 @@ function _initDropZone() {
     const previewWrap = document.getElementById("wfm-lab-preview-wrap");
     const previewImg = document.getElementById("wfm-lab-preview-img");
 
+    document.getElementById("wfm-lab-t2i-mode")?.addEventListener("change", (e) => {
+        _lab.t2iMode = e.target.checked;
+        _updateT2IModeUI();
+    });
+
     const applyFile = async (file) => {
+        if (_lab.t2iMode) {
+            showToast(t("labT2IImageIgnored"), "info");
+            return;
+        }
         if (!file || !file.type.startsWith("image/")) return;
         const url = URL.createObjectURL(file);
         if (previewImg) previewImg.src = url;
@@ -178,12 +192,19 @@ function _initPlanJsonTab() {
 // Serializes the live Setting-tab state into the same shape saved to disk by
 // _savePlan(), for display/editing in the Plan JSON panel.
 function _buildPlanData(name) {
+    // The workflow currently loaded in GenerateUI is what this plan actually ran
+    // against — read it live so Save/Save As always records the up-to-date file.
+    const wfNameEl = document.getElementById("wfm-gen-wf-name");
+    const workflowFilename = wfNameEl?.dataset.filename || _lab.workflowFilename || "";
     return {
         name,
         note: _lab.note,
         batch_count: _lab.batchCount,
         chain_image: _lab.chainImage,
+        t2i_mode: _lab.t2iMode,
+        save_index_on_run: _lab.saveIndexOnRun,
         source_image: _lab.sourceImageFilename,
+        workflow_filename: workflowFilename,
         columns: _lab.columns,
         results: { images: _lab.results.images },
     };
@@ -193,7 +214,7 @@ function _syncLabJsonView() {
     const editor = document.getElementById("wfm-lab-planjson-editor");
     const highlight = document.getElementById("wfm-lab-planjson-highlight");
     if (!editor) return;
-    const name = _lab.planFilename ? _lab.planFilename.replace(/\.json$/i, "") : "";
+    const name = _lab.planFilename ? _stripLabPlanPrefix(_lab.planFilename.replace(/\.json$/i, "")) : "";
     const json = JSON.stringify(_buildPlanData(name), null, 2);
     editor.value = json;
     syncJsonHighlight(highlight, json);
@@ -207,6 +228,7 @@ function _initRunControls() {
     });
     document.getElementById("wfm-lab-note")?.addEventListener("input", (e) => { _lab.note = e.target.value; });
     document.getElementById("wfm-lab-chain-image")?.addEventListener("change", (e) => { _lab.chainImage = e.target.checked; });
+    document.getElementById("wfm-lab-save-index-on-run")?.addEventListener("change", (e) => { _lab.saveIndexOnRun = e.target.checked; });
 
     document.getElementById("wfm-lab-run-btn")?.addEventListener("click", () => _runLabBatch());
     document.getElementById("wfm-lab-cancel-btn")?.addEventListener("click", async () => {
@@ -227,6 +249,7 @@ function _initPlanButtons() {
     document.getElementById("wfm-lab-plan-save-btn")?.addEventListener("click", () => _savePlan());
     document.getElementById("wfm-lab-plan-saveas-btn")?.addEventListener("click", () => _savePlan(null, true));
     document.getElementById("wfm-lab-plan-clear-btn")?.addEventListener("click", () => _clearPlan());
+    document.getElementById("wfm-lab-plan-workflow-load-btn")?.addEventListener("click", () => _loadPlanWorkflow());
 }
 
 // ============================================
@@ -647,7 +670,7 @@ function _buildWorkflowForIteration(iteration, chainImageRef) {
         if (ks.seed != null) seed = ks.seed;
     }
 
-    const imageRef = chainImageRef || _lab.sourceImageFilename;
+    const imageRef = _lab.t2iMode ? null : (chainImageRef || _lab.sourceImageFilename);
     if (imageRef && analysis.load_image_nodes?.[0]) {
         write(analysis.load_image_nodes[0].id, "image", imageRef);
     }
@@ -688,7 +711,7 @@ async function _runLabBatch() {
         showToast(t("labNoWorkflowLoaded"), "error");
         return;
     }
-    if (!_lab.sourceImageFilename) {
+    if (!_lab.t2iMode && !_lab.sourceImageFilename) {
         showToast(t("labNoSourceImage"), "error");
         return;
     }
@@ -712,7 +735,7 @@ async function _runLabBatch() {
             if (_aborted) break;
 
             if (progressText) progressText.textContent = `[${i}/${_lab.batchCount}] ...`;
-            const chainRef = (_lab.chainImage && i > 1) ? _lastGeneratedImageRef : null;
+            const chainRef = (!_lab.t2iMode && _lab.chainImage && i > 1) ? _lastGeneratedImageRef : null;
             const { workflow, seed } = _buildWorkflowForIteration(i, chainRef);
 
             try {
@@ -751,6 +774,8 @@ async function _runLabBatch() {
         _setRunUiState(false);
     }
 
+    await _maybeSaveIndexImageOnRun();
+
     if (progressBar) progressBar.style.width = "100%";
     if (_aborted) {
         showToast(t("batchStopped", completed, failed), "info");
@@ -788,13 +813,31 @@ function _renderResultsGrid() {
 
 function _updateResultsSourceImage() {
     const img = document.getElementById("wfm-lab-results-source-img");
+    const t2iNote = document.getElementById("wfm-lab-results-t2i-note");
     if (!img) return;
-    if (_lab.sourceImageFilename) {
+    if (!_lab.t2iMode && _lab.sourceImageFilename) {
         img.src = `/view?filename=${encodeURIComponent(_lab.sourceImageFilename)}&type=input`;
         img.style.display = "";
     } else {
         img.style.display = "none";
     }
+    if (t2iNote) t2iNote.style.display = _lab.t2iMode ? "" : "none";
+}
+
+// Greys out image-related controls that don't apply to a T2I workflow (no
+// LoadImage node to feed): the drop zone and the "use generated image for
+// next" chain checkbox. Doesn't clear any already-uploaded source image, so
+// toggling back to I2I restores prior state.
+function _updateT2IModeUI() {
+    const t2iEl = document.getElementById("wfm-lab-t2i-mode");
+    const dropZone = document.getElementById("wfm-lab-drop-zone");
+    const previewWrap = document.getElementById("wfm-lab-preview-wrap");
+    const chainEl = document.getElementById("wfm-lab-chain-image");
+    if (t2iEl) t2iEl.checked = _lab.t2iMode;
+    if (dropZone) dropZone.classList.toggle("wfm-disabled", _lab.t2iMode);
+    if (previewWrap && _lab.t2iMode) previewWrap.style.display = "none";
+    if (chainEl) chainEl.disabled = _lab.t2iMode;
+    _updateResultsSourceImage();
 }
 
 // ============================================
@@ -835,22 +878,61 @@ async function _buildIndexImageDataUrl() {
     return canvas.toDataURL("image/png");
 }
 
+// When "Save index image to Output on Run" is checked, builds the same
+// contact-sheet used for Plan files and writes it into ComfyUI's own Output
+// folder (auto-numbered, like a normal generated image) — independent of
+// Plan Save, which always writes its own copy next to the plan file. Once it
+// has a real file in Output, it also feeds it through the same Eagle
+// auto-save path as every other Lab-generated image (single global toggle
+// in Settings, no separate checkbox here).
+async function _maybeSaveIndexImageOnRun() {
+    if (!_lab.saveIndexOnRun) return;
+    try {
+        const dataUrl = await _buildIndexImageDataUrl();
+        if (!dataUrl) return;
+        const res = await fetch("/api/wfm/lab/index-image/save-to-output", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image_base64: dataUrl }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        showToast(t("labIndexImageSaved", json.filename), "success");
+
+        if (getEagleSettings().autoSave) {
+            const viewUrl = `/view?filename=${encodeURIComponent(json.filename)}&subfolder=${encodeURIComponent(json.subfolder || "")}&type=output`;
+            saveToEagle(viewUrl, json.filename, [], { filename: json.filename, subfolder: json.subfolder || "", type: "output" });
+        }
+    } catch (err) {
+        showToast(`${t("labIndexImageSaveFailed")}: ${err.message}`, "error");
+    }
+}
+
 // ============================================
 // Plan save / load / clear
 // ============================================
 
+// Plan files are always saved with the ws_labplan_ prefix so they're easy to
+// spot (and script against) among other files in lab_plan/. Existing plans
+// that already carry it are re-saved as-is rather than double-prefixed.
+function _stripLabPlanPrefix(base) {
+    return base.toLowerCase().startsWith(LAB_PLAN_PREFIX) ? base.slice(LAB_PLAN_PREFIX.length) : base;
+}
+
 async function _savePlan(filenameOverride, forceNewName = false) {
-    let filename = filenameOverride;
-    if (!filename) {
+    let inputName = filenameOverride;
+    if (!inputName) {
         if (forceNewName || !_lab.planFilename) {
-            filename = window.prompt(t("labEnterPlanName"), forceNewName ? "" : (_lab.planFilename || ""));
-            if (!filename) return;
+            inputName = window.prompt(t("labEnterPlanName"), "");
+            if (!inputName) return;
         } else {
-            filename = _lab.planFilename;
+            inputName = _lab.planFilename;
         }
     }
 
-    const data = _buildPlanData(filename.replace(/\.json$/i, ""));
+    const baseName = _stripLabPlanPrefix(inputName.replace(/\.json$/i, ""));
+    const filename = `${LAB_PLAN_PREFIX}${baseName}.json`;
+    const data = _buildPlanData(baseName);
 
     let indexImageBase64 = null;
     try {
@@ -866,6 +948,8 @@ async function _savePlan(filenameOverride, forceNewName = false) {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
         _lab.planFilename = json.filename;
+        _lab.workflowFilename = data.workflow_filename || null;
+        _updatePlanWorkflowUI();
         showToast(t("labPlanSaved"), "success");
     } catch (err) {
         showToast(`${t("labPlanSaveFailed")}: ${err.message}`, "error");
@@ -877,16 +961,23 @@ function _applyPlanData(filename, data) {
     _lab.note = data.note || "";
     _lab.batchCount = data.batch_count || 1;
     _lab.chainImage = !!data.chain_image;
+    _lab.t2iMode = !!data.t2i_mode;
+    _lab.saveIndexOnRun = !!data.save_index_on_run;
     _lab.sourceImageFilename = data.source_image || null;
+    _lab.workflowFilename = data.workflow_filename || null;
     _lab.columns = data.columns || _emptyColumns();
     _lab.results = { images: (data.results?.images || []).slice(0, MAX_RESULTS) };
+    _updatePlanWorkflowUI();
+    _updateT2IModeUI();
 
     const noteEl = document.getElementById("wfm-lab-note");
     const batchEl = document.getElementById("wfm-lab-batch-count");
     const chainEl = document.getElementById("wfm-lab-chain-image");
+    const saveIndexEl = document.getElementById("wfm-lab-save-index-on-run");
     if (noteEl) noteEl.value = _lab.note;
     if (batchEl) batchEl.value = _lab.batchCount;
     if (chainEl) chainEl.checked = _lab.chainImage;
+    if (saveIndexEl) saveIndexEl.checked = _lab.saveIndexOnRun;
 
     const previewWrap = document.getElementById("wfm-lab-preview-wrap");
     const previewImg = document.getElementById("wfm-lab-preview-img");
@@ -944,9 +1035,11 @@ function _clearPlan() {
     const noteEl = document.getElementById("wfm-lab-note");
     const batchEl = document.getElementById("wfm-lab-batch-count");
     const chainEl = document.getElementById("wfm-lab-chain-image");
+    const saveIndexEl = document.getElementById("wfm-lab-save-index-on-run");
     if (noteEl) noteEl.value = "";
     if (batchEl) batchEl.value = _lab.batchCount;
     if (chainEl) chainEl.checked = false;
+    if (saveIndexEl) saveIndexEl.checked = false;
 
     const previewWrap = document.getElementById("wfm-lab-preview-wrap");
     if (previewWrap) previewWrap.style.display = "none";
@@ -954,4 +1047,44 @@ function _clearPlan() {
     _renderAllColumns();
     _renderResultsGrid();
     _updateResultsSourceImage();
+    _updatePlanWorkflowUI();
+    _updateT2IModeUI();
+}
+
+// ============================================
+// Plan → workflow recall
+// ============================================
+
+// Shows/hides the recorded-workflow row in the Plan pane based on _lab.workflowFilename.
+function _updatePlanWorkflowUI() {
+    const row = document.getElementById("wfm-lab-plan-workflow-row");
+    const nameEl = document.getElementById("wfm-lab-plan-workflow-name");
+    if (!row || !nameEl) return;
+    if (_lab.workflowFilename) {
+        nameEl.textContent = _lab.workflowFilename;
+        nameEl.title = _lab.workflowFilename;
+        row.style.display = "";
+    } else {
+        row.style.display = "none";
+    }
+}
+
+// Loads the plan's recorded workflow file into GenerateUI, replacing whatever is
+// currently loaded there. Requires explicit confirmation — Lab never swaps the
+// active workflow on its own (e.g. when a plan is loaded via drag & drop).
+// Uses a dynamic import to avoid a static circular import with generate-tab.js,
+// which already imports initLabTab from this file.
+async function _loadPlanWorkflow() {
+    const filename = _lab.workflowFilename;
+    if (!filename) return;
+    if (!window.confirm(t("labConfirmLoadWorkflow", filename))) return;
+    try {
+        const resp = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(filename)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const { loadWorkflowIntoEditor } = await import("./generate-tab.js");
+        await loadWorkflowIntoEditor(data, filename);
+    } catch (err) {
+        showToast(`${t("labWorkflowLoadFailed")}: ${err.message}`, "error");
+    }
 }

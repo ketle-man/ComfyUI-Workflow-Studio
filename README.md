@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.89-green)
+![Version](https://img.shields.io/badge/version-0.3.90-green)
 
 ## Screenshots
 
@@ -58,7 +58,8 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 
 ## Features
 
-### Workflow Tab
+<details>
+<summary><h3>Workflow Tab</h3></summary>
 
 - **Thumbnail / Table views** — switch between view modes to browse your workflow library
 - **Thumbnail side panel** — preview workflow canvas snapshots in the side panel
@@ -72,14 +73,20 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, group filter, and badge filter (ALL) in one click
 
-### Canvas Snapshot (v0.1.2)
+</details>
+
+<details>
+<summary><h3>Canvas Snapshot (v0.1.2)</h3></summary>
 
 - **One-click capture** — click the camera button in ComfyUI's top bar to snapshot the current workflow canvas
 - **Auto-save as thumbnail** — the snapshot is saved directly to the workflow data folder as a PNG thumbnail
 - **Embedded workflow metadata** — workflow JSON is embedded in the PNG (tEXt chunk), compatible with ComfyUI's drag-and-drop import
 - **Auto-import** — the captured workflow is automatically imported and appears in the Workflow tab
 
-### GenerateUI Tab (v0.3.5)
+</details>
+
+<details>
+<summary><h3>GenerateUI Tab (v0.3.5)</h3></summary>
 
 - **6-tab layout** — Input / Model / Settings / Feeder / Batch / **Lab** tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API
@@ -103,7 +110,10 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **UI-to-API conversion** — automatic conversion supporting subgraphs (nested workflows), COMBO types, and display-only node exclusion; improved analysis covers SDXL multi-hop CONDITIONING chains, CLIPTextEncodeSDXL, SDXLPromptStyler, KSamplerAdvanced, and Guider-based "Advanced Sampling" workflows (`SamplerCustomAdvanced`/`SamplerCustom` + `CFGGuider`/`DualCFGGuider`/`BasicGuider` + `RandomNoise` + `KSamplerSelect` + `*Scheduler` — Flux.2 Klein, LongCat, Boogu, HiDream E1, etc.)
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 
-### Feeder subtab (v0.3.5 / v0.3.42)
+</details>
+
+<details>
+<summary><h3>Feeder subtab (v0.3.5 / v0.3.42)</h3></summary>
 
 Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons at the top of the left pane (persisted in `localStorage`).
 
@@ -128,21 +138,30 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 - **After Gen modes** — Loop (wrap at end and continue indefinitely), Increment (stop automatically when last image is reached), Fixed (always use the same index)
 - **Run / Stop controls** — left pane Run / Stop buttons manage the generation loop; After Gen combo (loop / increment / fixed), ▶ Run, and ■ Stop widgets are also available directly on the WFS_GalleryFeeder node in the ComfyUI canvas (`gallery_feeder_extension.js`)
 
-### Lab subtab (v0.3.87 – v0.3.89)
+</details>
 
-An experimental I2I batch generator: runs the workflow currently loaded in GenerateUI N times, letting Checkpoint / VAE / Prompt / KSampler each change independently starting at a chosen iteration — unlike the Batch tab's single-axis queue, every column keeps its own list of change points. Never mutates the loaded workflow; every iteration runs on a fresh clone.
+<details>
+<summary><h3>Lab subtab (v0.3.87 – v0.3.90)</h3></summary>
+
+An experimental batch generator: runs the workflow currently loaded in GenerateUI N times, letting Checkpoint / VAE / Prompt / KSampler each change independently starting at a chosen iteration — unlike the Batch tab's single-axis queue, every column keeps its own list of change points. Never mutates the loaded workflow; every iteration runs on a fresh clone. Works with both I2I and T2I workflows (v0.3.90).
 
 - **Setting / Results / Plan JSON sub-panels** — Setting: image drop zone + 4 keyframe columns + run controls; Results: source image and up to 9 generated thumbnails (click to enlarge); Plan JSON: the current plan as raw editable JSON (v0.3.88)
 - **Per-column keyframes** — Checkpoint, VAE, Prompt, KSampler each hold an independent list of `{iteration, value}` keyframes; +/− per column adds/removes a keyframe (iteration #1 is fixed and can't be removed); click a cell to edit its value, the iteration it starts applying from, and a "revert to #1's setting" checkbox; the effective value at iteration N is the latest keyframe with iteration ≤ N, carried forward until the next one changes it
 - **Checkpoint / VAE cell filtering** (v0.3.88) — a Filter... box above the value dropdown narrows the list live, same as GenerateUI's Model tab; overlay ✕ clear button matches the Models/Nodes/Workflow/Gallery tab search boxes
 - **Prompt cell extras** (v0.3.88, refined in v0.3.89) — **Get from GenerateUI** fills Positive/Negative from the workflow currently loaded in GenerateUI; **Get from Image** extracts a prompt from the image currently loaded in Lab's own Image drop zone (same detection as the Metadata tab; no separate file picker); **Style** appends whichever style is currently selected in GenerateUI's own top-bar Style checkbox/dropdown to the Positive/Negative text below, comma-separated after any existing text — it never clears what's already there (Lab has no separate style picker of its own)
-- **Use generated image for next** — optional checkbox that chains iterations: from iteration 2 onward the previous iteration's first output image is fed back in as the I2I source instead of the original dropped image, using ComfyUI's `"name [type]"` annotated-filename reference (no re-upload needed)
-- **Plan files** — Plan Save (silently overwrites the loaded plan) / Save As (always asks for a new name) / Plan Clear; plans are stored as `<name>.json` in `user/default/Workflow-Studio/lab_plan/`, alongside an auto-generated `<name>.png` index image (a 3-per-row contact sheet of up to 9 result thumbnails)
+- **T2I workflow support** (v0.3.90) — a **T2I workflow (no source image)** checkbox in the Image pane skips the source-image requirement and never touches a LoadImage node, so workflows with no image input (e.g. plain `EmptyLatentImage` txt2img) can also use the Checkpoint/VAE/Prompt/KSampler keyframes; the Image drop zone and "Use generated image for next" are greyed out (not cleared) while it's on; saved with the plan as `t2i_mode`
+- **Use generated image for next** — optional checkbox that chains iterations: from iteration 2 onward the previous iteration's first output image is fed back in as the I2I source instead of the original dropped image, using ComfyUI's `"name [type]"` annotated-filename reference (no re-upload needed); disabled together with the Image drop zone in T2I mode
+- **Workflow recall** (v0.3.90) — every saved plan records the filename of the workflow that was loaded in GenerateUI at save time (`workflow_filename` in the Plan JSON); after loading a plan, an **Open Workflow** button appears next to it — click to load that exact workflow file back into GenerateUI (asks for confirmation first, since it replaces whatever is currently loaded)
+- **Plan files** — Plan Save (silently overwrites the loaded plan) / Save As (always asks for a new name) / Plan Clear; plans are stored as `ws_labplan_<name>.json` in `user/default/Workflow-Studio/lab_plan/` (the `ws_labplan_` prefix is added automatically, v0.3.90 — type just the plain name when prompted), alongside an auto-generated `ws_labplan_<name>.png` index image (a 3-per-row contact sheet of up to 9 result thumbnails)
 - **Plan Load** — same drag-and-drop / click-to-browse drop zone as the Image slot; drop a plan's `.json` (read directly in the browser) or its `.png` index-image thumbnail (fetches the matching `.json` by filename)
 - **Plan JSON tab** (v0.3.88) — view/edit the current plan as raw JSON (same shape saved to disk); Refresh re-reads it from the Setting tab, Apply to Setting parses your edits and writes them back into the Setting tab's columns/note/batch/chain-image/source-image/results — the same effect as loading that JSON as a plan file, without saving it first
-- **Eagle integration** — every image Lab generates is auto-saved to Eagle the same way as GenerateUI's own Generate button, if enabled in the Settings tab
+- **Save index image to Output on Run** (v0.3.90) — optional checkbox in the run controls; when checked, every completed Run also builds the same contact-sheet index image used for Plan files and saves it directly into ComfyUI's own Output folder as `Lab_index_<counter>_.png` (auto-numbered like a normal generated image, right alongside the images that Run just generated); independent of Plan Save, which always writes its own copy next to the plan file regardless of this checkbox; saved with the plan as `save_index_on_run`
+- **Eagle integration** — every image Lab generates is auto-saved to Eagle the same way as GenerateUI's own Generate button, if enabled in the Settings tab; the Output-folder index image above is included too (v0.3.90) once saved
 
-### Prompt Tab
+</details>
+
+<details>
+<summary><h3>Prompt Tab</h3></summary>
 
 - **3-column layout** — AI Assistant (left), Presets/Preset Manager tab-panel (center), Wildcard support (right)
 - **AI chat assistant** — powered by [Ollama](https://ollama.com/), generate and refine prompts interactively
@@ -156,7 +175,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **Wildcard input toolbar** — one-click buttons to insert `{|}`, `{n$|}`, `__|__`, `<lora::1:LBW=;>` and other wildcard syntax; wraps selected text when applicable
 - **Wildcard file manager** — create, view, and edit `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; click a filename in the file picker to insert `__filename__` at cursor
 
-### Metadata Tab (v0.3.8)
+</details>
+
+<details>
+<summary><h3>Metadata Tab (v0.3.8)</h3></summary>
 
 - **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
 - **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
@@ -167,7 +189,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 / Mage-Flow / LongCat / Boogu / HiDream E1 / FireRed subgraph workflows), SD WebUI, SD Forge, Fooocus
 - **Format note** — supported formats and covered model types are always shown in the left column
 
-### Settings Tab
+</details>
+
+<details>
+<summary><h3>Settings Tab</h3></summary>
 
 - **2-column layout** — left column for all settings; right column shows the Theme panel fixed in place (sticky)
 - **Collapsible sections** — all settings organized in accordion panels for a clean layout
@@ -188,9 +213,13 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **G'MIC-Qt Integration** — set the path to `gmic_qt.exe` for the Image Edit Filter tool; download G'MIC-Qt Standalone from `gmic.eu/download.html` (Windows: `gmic_qt-win64.zip`), extract anywhere, then enter the full path to `gmic_qt.exe` and click Save
 - **Language** — English / Japanese / Chinese
 
-### Gallery Tab (v0.3.44)
+</details>
+
+<details>
+<summary><h3>Gallery Tab (v0.3.44)</h3></summary>
 
 - **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
+- **Folder tree root label** (v0.3.90) — the root entry in the folder tree is labeled simply **[root]**, no longer suffixed with the scanned folder's own directory name (which could be a misleading, environment-specific name — e.g. StabilityMatrix installs where the output folder is a symlink named `Text2Img` — even though the folder holds every kind of generated output, not just text-to-image results)
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
 - **Folder management** — create subfolders ("+ New") or delete the selected folder with all contents ("Del") from the folder tree header
 - **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To..., Export, and Delete File from the multi-select bar
@@ -215,7 +244,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **SVG file support** (v0.3.77) — `.svg` files are browsable, previewable (detail panel and lightbox), and included in favorites/tags/groups/move/delete/export alongside raster formats; served as-is with no rasterized thumbnail, since `<img>` scales vector graphics natively at any size
 - **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
 
-### Nodes Tab (v0.1.7)
+</details>
+
+<details>
+<summary><h3>Nodes Tab (v0.1.7)</h3></summary>
 
 - **Node Browser** — browse all installed ComfyUI nodes from `/object_info` API with Card/Table views
 - **Search & Filter** — full-text search, filter by category, package, tags, groups, and favorites
@@ -227,7 +259,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, category, package, tag, group, and favorites filter in one click
 
-### Models Tab (v0.2.3)
+</details>
+
+<details>
+<summary><h3>Models Tab (v0.2.3)</h3></summary>
 
 - **Model Browser** — browse all installed ComfyUI models (Checkpoint, LoRA, VAE, ControlNet, UNET, TextEncoder, Hypernetwork, Embedding) with sub-tab switching
 - **Thumbnail / Table views** — switch between view modes with pagination (24 items per page); Table view includes **Type** and **Base Model** columns sourced from cached CivitAI data, displayed between the Subdirectory and Extension columns; Enable/Disable column labeled **E/D**
@@ -252,7 +287,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, tag filter, folder filter, group filter, favorites filter, and status filter in one click
 
-### Tagger Tab (v0.3.38)
+</details>
+
+<details>
+<summary><h3>Tagger Tab (v0.3.38)</h3></summary>
 
 - **3 sub-tabs** — Single / Batch / DB for single-image tagging, folder batch processing, and tag database management
 - **Model support** — WD Tagger (ONNX, NCHW/NHWC auto-detect), SwinV2 (ONNX), DeepDanbooru (.h5, requires TensorFlow); place each model in its own subfolder under `ComfyUI/models/tagger/<model-name>/` containing the `.onnx` + `selected_tags.csv` (or `.h5` + label file)
@@ -264,7 +302,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **DB tab** — searchable SQLite database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records
 - **Dependencies** — install into ComfyUI's embedded Python: `python_embedded\python.exe -m pip install -r requirements.txt`; for GPU inference use `onnxruntime-gpu`; TensorFlow (DeepDanbooru) is optional and commented out in `requirements.txt`
 
-### Image Edit Tab (v0.3.65)
+</details>
+
+<details>
+<summary><h3>Image Edit Tab (v0.3.65)</h3></summary>
 
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG
 - **Loading images** — drag & drop onto the canvas, Upload button, or send from the Gallery tab via the **Image Edit** toolbar button; first image becomes Layer 1 (auto-locked), subsequent images are added as new layers scaled to fit the canvas
@@ -286,7 +327,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **Canvas navigation** — scroll-wheel zoom, Space + drag to pan; zoom indicator in the bottom bar
 - **Undo / Redo** — Ctrl+Z / Ctrl+Y (or toolbar buttons); keyboard shortcuts: V (Select), B (Draw), T (Text), S (Shape), Delete (remove selected layer when 2+ exist)
 
-### AI TOOL Tab (v0.3.14)
+</details>
+
+<details>
+<summary><h3>AI TOOL Tab (v0.3.14)</h3></summary>
 
 - **4-pane layout** — Translation | Chat | TOOLS | Settings; all panes always visible simultaneously; no sub-tab switching required
 - **Translation pane** — translate text between Japanese, English, Chinese, or a custom Free language using Ollama, LM Studio, or Lemonade; language selectors with ⇄ swap button (swaps both language selectors and text content); selections saved automatically
@@ -306,7 +350,10 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **URL security** — backend URL validated via `new URL()` to enforce `http://` or `https://` scheme
 - **Lemonade's other endpoints (not integrated)** — Lemonade Server also exposes OpenAI-compatible image generation (`/v1/images/generations`), text-to-speech (`/v1/audio/speech`), and transcription (`/v1/audio/transcriptions`) endpoints; these are not wired up — image generation would duplicate the existing ComfyUI-workflow-based `generate_image` tool call, and audio/TTS has no corresponding UI yet, so both are future considerations rather than a natural extension of the current backend switch
 
-### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
+</details>
+
+<details>
+<summary><h3>Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)</h3></summary>
 
 - **Tab layout (W / N / P / M / I / A)** — compact single-letter tabs with full name shown on hover
 - **W — Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
@@ -329,12 +376,17 @@ An experimental I2I batch generator: runs the workflow currently loaded in Gener
 - **Search** — search within each sub-tab to quickly find items
 - **⚙ Theme settings** — customize panel background, sub-header background, text, border, and secondary text colors; saved to localStorage and applied on every open
 
-### Help & Support Tab (v0.1.3)
+</details>
+
+<details>
+<summary><h3>Help &amp; Support Tab (v0.1.3)</h3></summary>
 
 - **Sidebar navigation** — 2-column layout: left sidebar (15 topics) + right content pane; click any topic to switch the displayed content
 - **Support** — fixed at the bottom of the sidebar; shows GitHub, Ko-fi, **ComfyUI Image Feeder**, and **Mask Editor One** repository links in the right pane
 - **Feature list** — overview of all features organized by tab
 - **Keyboard Shortcuts** and **Troubleshooting** sections included
+
+</details>
 
 ---
 
@@ -424,6 +476,14 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 ---
 
 ## Changelog
+
+### v0.3.90
+
+- **Lab tab — Workflow recall** — every saved plan now records the filename of the workflow that was loaded in GenerateUI at save time (`workflow_filename`); an **Open Workflow** button on a loaded plan reloads that exact workflow into GenerateUI (with confirmation, since it replaces what's currently loaded)
+- **Lab tab — T2I workflow support** — a **T2I workflow (no source image)** checkbox skips the source-image requirement and the LoadImage write step entirely, so workflows without an image input (plain txt2img) can now use Lab's Checkpoint/VAE/Prompt/KSampler keyframes too
+- **Lab tab — Save index image to Output on Run** — new checkbox; when on, every completed Run also saves the contact-sheet index image directly into ComfyUI's Output folder (`Lab_index_<counter>_.png`, auto-numbered) alongside the images just generated, and through Eagle auto-save if enabled — independent of Plan Save's own index image
+- **Lab tab — plan filenames get a `ws_labplan_` prefix** — Plan Save/Save As now prefix the saved `.json`/`.png` with `ws_labplan_` automatically (type just the plain name when prompted), so plan files are easy to pick out among other files in `lab_plan/`
+- **Gallery tab — simplified root folder label** — the folder tree's root entry now reads just **[root]** instead of `[root] <folder name>`, since that name was the scanned folder's own (sometimes misleading, environment-specific) directory name rather than anything meaningful to the user
 
 ### v0.3.89
 

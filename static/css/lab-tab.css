@@ -86,6 +86,27 @@
     margin-top: 12px;
 }
 
+.wfm-lab-plan-workflow-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: var(--wfm-bg-secondary);
+    border: 1px solid var(--wfm-border);
+    border-radius: 4px;
+}
+
+.wfm-lab-plan-workflow-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .wfm-lab-field-row {
     display: flex;
     align-items: center;

@@ -110,6 +110,23 @@ class LabPlanService:
         with open(thumb_path, "wb") as f:
             f.write(image_bytes)
 
+    def save_index_image_to_output(self, image_base64: str, filename_prefix: str = "Lab_index") -> dict:
+        """Saves the contact-sheet index image into ComfyUI's own output folder,
+        alongside the images generated during the run (unlike save_index_image,
+        which saves it next to the plan file in plan_dir)."""
+        b64 = image_base64
+        if "," in b64 and b64.strip().lower().startswith("data:"):
+            b64 = b64.split(",", 1)[1]
+        image_bytes = base64.b64decode(b64)
+
+        import folder_paths  # type: ignore
+        output_dir = folder_paths.get_output_directory()
+        full_output_folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(filename_prefix, output_dir)
+        save_name = f"{filename}_{counter:05}_.png"
+        save_path = Path(full_output_folder) / save_name
+        save_path.write_bytes(image_bytes)
+        return {"filename": save_name, "subfolder": subfolder}
+
     def delete_plan(self, filename: str) -> None:
         path = self._safe_path(filename)
         if path is None:

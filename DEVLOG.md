@@ -2,6 +2,30 @@
 
 ---
 
+## v0.3.90
+
+### 機能拡張: Labタブの進化（ワークフロー呼び出し・T2I対応・Run時インデックス画像Output保存＋Eagle連携・プラン接頭辞）＋Galleryタブのルート表示簡略化
+
+v0.3.87〜v0.3.89で実装したLabタブ（GenerateUI）に対する、実際の運用を通じたユーザーからの一連の追加要望をまとめて対応。
+
+**1. Plan JSONへのワークフロー記録＋呼び出し（Open Workflowボタン）**: これまでLabのPlanには「どのワークフローに対して」実行したキーフレーム設定なのかが記録されておらず、後日Planを見返しても再現できない問題があった。`_buildPlanData()`（`lab-tab.js`）が`#wfm-gen-wf-name`の`dataset.filename`（GenerateUIに現在ロード中のワークフローファイル名）を読み取り`workflow_filename`としてPlan JSONに保存するようにし、Plan読込後にPLANボックス内へ表示される**Open Workflow**ボタンから、その記録されたワークフローファイルを`/api/wfm/workflows/raw`経由で取得し`loadWorkflowIntoEditor()`へ渡してGenerateUIへ読み込み直せるようにした。自動読込はせず、常に`window.confirm`で確認を挟む（現在編集中のワークフローを不意に上書きしない安全策、ユーザー指定）。`loadWorkflowIntoEditor`は`generate-tab.js`にあり、`generate-tab.js`は既に`lab-tab.js`から`initLabTab`をimportしているため、静的importすると循環import（`generate-tab.js`→`lab-tab.js`→`generate-tab.js`）になる。v0.3.87で`getEagleSettings`/`saveToEagle`を`util.js`へ移設して回避した前例があるが、`loadWorkflowIntoEditor`はgenerate-tab.js固有の依存が多く移設は非現実的なため、今回はボタンのクリックハンドラ内で`const { loadWorkflowIntoEditor } = await import("./generate-tab.js");`と**動的import**する方式を採用（`gallery-tab.js`が`tagger-tab.js`に対して既に使っている前例パターンを踏襲）。
+
+**2. T2Iワークフロー対応**: LabはもともとI2Iバッチ生成専用で、ソース画像が無いと`_runLabBatch()`が`labNoSourceImage`エラーで実行をブロックしていた。Imageペイン最上部に**T2I workflow (no source image)**チェックボックスを追加し、ON時は(a) ソース画像必須チェックをスキップ、(b) `_buildWorkflowForIteration()`でLoadImageノードへの書き込みを完全にスキップ（`imageRef = null`）、(c) Imageドロップゾーンと「Use generated image for next」をグレーアウト（既存の画像は削除せず、I2Iに戻したときのため保持）。Resultsパネルのソース画像欄には代わりに「T2I workflow (no source image)」の注記を表示。設定は`t2i_mode`としてPlan JSONに保存。実機確認では、実際にT2Iワークフロー（`EmptyLatentImage`使用、LoadImageノード無し）で画像生成に成功し、Eagle自動保存も正常動作することを確認した（検証中、テスト対象ワークフローのCheckpointが存在しないモデル名だったことによる`/prompt` 400エラーに遭遇したが、これはT2I機能自体のバグではなくテスト環境のモデル設定の問題だった）。
+
+**3. Run時にインデックス画像をOutputフォルダへ保存＋Eagle連携**: 右ペインに**Save index image to Output on Run**チェックボックスを追加。ONの場合、Run完了ごとに`_buildIndexImageDataUrl()`で作った9枚コンタクトシートを新設バックエンドAPI `POST /api/wfm/lab/index-image/save-to-output`へ送信し、`py/services/lab_plan_service.py`の`save_index_image_to_output()`が`folder_paths.get_output_directory()` + `folder_paths.get_save_image_path("Lab_index", output_dir)`を使って、通常の生成画像と同じ自動採番規則で`Lab_index_00001_.png`のように保存する（上書きしない）。Plan Save側の動作（`lab_plan/`への保存）は完全に独立したまま変更していない。続けて「インデックス画像もEagleに保存したい」という追加要望を受け、Output保存が成功した後に既存のグローバル設定（Settingsタブの`eagleAutoSave`、生成画像のEagle保存と同じ仕組み）を流用して`saveToEagle()`を呼ぶだけの実装を追加——Lab専用の別トグルは増やさず、既存パターンにそのまま乗せた。設定は`save_index_on_run`としてPlan JSONに保存。バックエンドのルート登録はComfyUI起動時の1回のみのため、この機能だけはPythonファイル変更を伴い**ComfyUI再起動後に実機確認**（Outputフォルダへの`Lab_index_00001_.png`保存、コンソールの`[Eagle] Saved: Lab_index_00002_.png`ログの両方を確認）。StabilityMatrix環境では`custom_nodes/.../output`が実体`Images/Text2Img`へのsymlinkになっている点に留意（`folder_paths.get_output_directory()`はsymlink越しに正しく解決される）。
+
+**4. プランファイル名への`ws_labplan_`接頭辞自動付与**: `_savePlan()`（Plan Save/Save As共通処理）で、プロンプトに入力された名前から`_stripLabPlanPrefix()`で既存の接頭辞を除去してから`ws_labplan_`を付け直す方式にし、二重接頭辞を防止（ユーザーが手動で接頭辞込みの名前を入力しても安全）。JSON内部の`"name"`フィールドは接頭辞なしのプレーンな名前のまま（表示用と実ファイル名を分離）。Plan JSONサブタブのプレビュー（`_syncLabJsonView`）も同じ接頭辞除去ロジックで統一。
+
+**5. Galleryタブ — ルートフォルダ表示の簡略化**: フォルダツリーのルートエントリが実際のディレクトリ名（例: StabilityMatrix環境の`Text2Img` — outputフォルダが`Images/Text2Img`へのsymlinkになっているため）をそのまま付けて「[root] Text2Img」と表示していたが、ルートにはT2I以外の画像（Lab_indexなど各種生成物）も含まれるため実態と合わず紛らわしいという指摘を受け、`gallery-tab.js`の`renderTreeNode()`で単に「[root]」とだけ表示するよう変更（`label.textContent = isRoot ? "[root]" : node.name;`）。
+
+**README構成の見直し**: Featuresセクションが17個の`### <タブ名>`セクションで非常に長くなっていたため、GitHub Flavored MarkdownのHTML `<details><summary>`要素で各タブセクションを折りたたみ可能にした（見出しレベルは`<summary><h3>...</h3></summary>`として維持）。Changelog等の他セクションは対象外（ユーザー指定は「タブの項目ごと」＝Featuresセクションのみ）。
+
+**検証**: 4機能とも実機（Kapture経由でComfyUIの`http://127.0.0.1:8189/wfm`を直接操作）で確認済み。ワークフロー呼び出しはPlan保存直後にファイル名とボタンが表示されること・クリックで確認ダイアログ→再読込を確認（当初Save経路でUI更新関数`_updatePlanWorkflowUI()`を呼び忘れる不具合があり、実機確認で発覚・修正）。T2Iモードは実際の画像生成成功、Output保存はComfyUI再起動後に`Lab_index_00001_.png`の生成、Eagle連携はコンソールログとファイル両方で確認、Galleryルート表示はスクリーンショットで確認。いずれもテスト用に生成したファイルは検証後に削除（Output画像の削除はユーザー側で実施）。
+
+**How to apply**: (1) Lab関連でstateを更新する処理（Save/Load/Clear）を追加・変更する際は、対応するUI更新関数を**全ての状態変更経路**で呼び忘れていないか確認すること — 今回まさにSave経路で呼び忘れて実機確認で発覚した。(2) `lab-tab.js`から`generate-tab.js`の関数を使いたい場合、`util.js`への機能移設が大げさすぎるなら動的import（`await import("./generate-tab.js")`）を検討する。(3) 新しいLabのRun時副作用（Output保存等）を追加する際は、可能な限り既存のグローバル設定（Eagle自動保存など）に乗せ、機能ごとに新しいトグルを増やさないこと。(4) StabilityMatrix環境のようにComfyUIのoutputフォルダがsymlinkになっている場合でも`folder_paths.get_output_directory()`は正しく解決されるが、`ls -lt`等で直接調査する際はsymlinkの実体を辿る必要がある。
+
+---
+
 ## v0.3.89
 
 ### バグ修正: v0.3.88で追加したLab機能への実動作確認フィードバック3件を反映

@@ -18,6 +18,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/api/wfm/lab/plans/content", handle_get_content)
     app.router.add_post("/api/wfm/lab/plans/save", handle_save)
     app.router.add_post("/api/wfm/lab/plans/delete", handle_delete)
+    app.router.add_post("/api/wfm/lab/index-image/save-to-output", handle_save_index_to_output)
 
 
 async def handle_list(request: web.Request) -> web.Response:
@@ -68,4 +69,17 @@ async def handle_delete(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=400)
     except Exception as e:
         logger.error("Error deleting lab plan: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_save_index_to_output(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+        image_base64 = body.get("image_base64", "")
+        if not image_base64:
+            return web.json_response({"error": "image_base64 required"}, status=400)
+        result = await asyncio.to_thread(_service.save_index_image_to_output, image_base64)
+        return web.json_response({"status": "ok", **result})
+    except Exception as e:
+        logger.error("Error saving lab index image to output: %s", e)
         return web.json_response({"error": str(e)}, status=500)
