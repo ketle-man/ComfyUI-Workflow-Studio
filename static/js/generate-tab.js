@@ -1393,7 +1393,7 @@ async function _expandWildcardText(text) {
 
 const _IMPACT_WC_TYPES = new Set(["ImpactWildcardEncode", "ImpactWildcardProcessor"]);
 
-async function _expandWildcardsInWorkflow(workflow) {
+export async function _expandWildcardsInWorkflow(workflow) {
     let hasWildcard = false;
     outer: for (const node of Object.values(workflow)) {
         if (_IMPACT_WC_TYPES.has(node.class_type)) continue;

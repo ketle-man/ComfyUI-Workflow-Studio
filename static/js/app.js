@@ -404,7 +404,7 @@ function applyI18nToHtml() {
         "wfm-help-lab-3": "helpLab3", "wfm-help-lab-4": "helpLab4",
         "wfm-help-lab-5": "helpLab5", "wfm-help-lab-6": "helpLab6",
         "wfm-help-lab-7": "helpLab7", "wfm-help-lab-8": "helpLab8",
-        "wfm-help-lab-9": "helpLab9",
+        "wfm-help-lab-9": "helpLab9", "wfm-help-lab-10": "helpLab10",
         "wfm-help-lab-card-plan-title": "helpLabCardPlanTitle",
         "wfm-help-lab-plan-1": "helpLabPlan1", "wfm-help-lab-plan-2": "helpLabPlan2",
         "wfm-help-lab-plan-3": "helpLabPlan3", "wfm-help-lab-plan-4": "helpLabPlan4",

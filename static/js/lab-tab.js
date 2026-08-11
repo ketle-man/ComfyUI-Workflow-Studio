@@ -14,7 +14,8 @@ import { showToast, openModal, closeModal } from "./app.js";
 import { t } from "./i18n.js";
 import { escapeHtml, embedPngTextChunk, getEagleSettings, saveToEagle, setupSearchClearBtn } from "./util.js";
 import { extractAllMetadata, readAllPNGTextChunks } from "./metadata-tab.js";
-import { syncJsonHighlight } from "./json-highlight.js";
+import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
+import { _expandWildcardsInWorkflow } from "./generate-tab.js";
 
 const COLUMN_KEYS = ["checkpoint", "vae", "prompt", "ksampler"];
 const MAX_RESULTS = 9;
@@ -23,7 +24,7 @@ const LAB_PLAN_PREFIX = "ws_labplan_";
 const LAB_PLAN_PNG_KEY = "wfm_lab_plan";
 
 function _defaultValueFor(col) {
-    if (col === "prompt") return { positive: "", negative: "" };
+    if (col === "prompt") return { positive: "", negative: "", styleApplied: false, styleName: "" };
     if (col === "ksampler") return { steps: null, cfg: null, sampler_name: "", scheduler: "", denoise: null, seed: null };
     return "";
 }
@@ -44,7 +45,7 @@ function _emptyLabState() {
         batchCount: 4,
         chainImage: false,
         t2iMode: false,
-        saveIndexOnRun: false,
+        saveIndexOnRun: true,
         sourceImageFilename: null,
         workflowFilename: null,
         columns: _emptyColumns(),
@@ -188,6 +189,10 @@ function _initPlanJsonTab() {
         _syncLabJsonView();
         showToast(t("labPlanJsonApplied"), "success");
     });
+
+    const editor = document.getElementById("wfm-lab-planjson-editor");
+    const highlight = document.getElementById("wfm-lab-planjson-highlight");
+    editor?.addEventListener("scroll", () => syncScroll(editor, highlight));
 }
 
 // Serializes the live Setting-tab state into the same shape saved to disk by
@@ -221,11 +226,32 @@ function _syncLabJsonView() {
     syncJsonHighlight(highlight, json);
 }
 
+// Highest atIteration among all columns' keyframes — used to detect keyframes that
+// fall outside the current Batch count (they aren't deleted, just never reached by
+// the run loop, so it's easy to lower Batch count without noticing they went dormant).
+function _maxKeyframeIteration() {
+    let max = 1;
+    for (const col of COLUMN_KEYS) {
+        for (const kf of _lab.columns[col] || []) {
+            if (kf.atIteration > max) max = kf.atIteration;
+        }
+    }
+    return max;
+}
+
+function _warnIfKeyframesExceedBatch() {
+    const maxIter = _maxKeyframeIteration();
+    if (maxIter > _lab.batchCount) {
+        showToast(t("labKeyframesExceedBatch", maxIter, _lab.batchCount), "error");
+    }
+}
+
 function _initRunControls() {
     document.getElementById("wfm-lab-batch-count")?.addEventListener("change", (e) => {
         const v = parseInt(e.target.value, 10);
         _lab.batchCount = (isNaN(v) || v < 1) ? 1 : v;
         e.target.value = _lab.batchCount;
+        _warnIfKeyframesExceedBatch();
     });
     document.getElementById("wfm-lab-note")?.addEventListener("input", (e) => { _lab.note = e.target.value; });
     document.getElementById("wfm-lab-chain-image")?.addEventListener("change", (e) => { _lab.chainImage = e.target.checked; });
@@ -348,7 +374,6 @@ function _isEmptyValue(col, value) {
 function _openCellModal(col, idx) {
     const kf = _lab.columns[col][idx];
     const isFirst = idx === 0;
-    const isLast = idx === _lab.columns[col].length - 1;
 
     let valueFieldsHtml = "";
     if (col === "checkpoint" || col === "vae") {
@@ -380,9 +405,11 @@ function _openCellModal(col, idx) {
                 <label>Negative</label>
                 <textarea id="wfm-lab-modal-negative" class="wfm-input" rows="3">${escapeHtml(v.negative || "")}</textarea>
             </div>
-            <div class="wfm-lab-modal-row">
-                <label>${t("labStyle")}</label>
+            <div class="wfm-lab-modal-checkbox">
+                <input type="checkbox" id="wfm-lab-modal-style-toggle" ${v.styleApplied ? "checked" : ""}>
+                <label for="wfm-lab-modal-style-toggle">${t("labStyle")}</label>
                 <button type="button" id="wfm-lab-modal-style-apply" class="wfm-btn wfm-btn-sm">${t("labApply")}</button>
+                <span id="wfm-lab-modal-style-name" style="color:var(--wfm-text-secondary);">${v.styleApplied && v.styleName ? escapeHtml(v.styleName) : ""}</span>
             </div>`;
     } else if (col === "ksampler") {
         const v = kf.value || {};
@@ -426,7 +453,7 @@ function _openCellModal(col, idx) {
             <label for="wfm-lab-modal-revert">${t("labRevertCheckboxLabel")}</label>
         </div>`;
 
-    const deleteBtn = (!isFirst && isLast)
+    const deleteBtn = !isFirst
         ? `<button id="wfm-lab-modal-delete" class="wfm-btn wfm-btn-danger">${t("delete")}</button>` : "";
 
     const html = `
@@ -473,6 +500,8 @@ function _openCellModal(col, idx) {
                 value = {
                     positive: document.getElementById("wfm-lab-modal-positive")?.value || "",
                     negative: document.getElementById("wfm-lab-modal-negative")?.value || "",
+                    styleApplied: !!document.getElementById("wfm-lab-modal-style-toggle")?.checked,
+                    styleName: document.getElementById("wfm-lab-modal-style-name")?.textContent || "",
                 };
             } else if (col === "ksampler") {
                 const numOrNull = (id) => {
@@ -536,22 +565,24 @@ function _wireLabValueFilter(col) {
 }
 
 // Wires the Prompt-column modal's extra actions: fetch the live GenerateUI prompt,
-// extract a prompt from a dropped image/workflow file, and apply a saved Style.
+// extract a prompt from a dropped image/workflow file, and apply/toggle a saved Style.
 function _wireLabPromptModalExtras() {
-    // Reuses the Style checkbox/dropdown already at the top of the GenerateUI toolbar
-    // (populated by generate-tab.js's _loadStyles()) instead of duplicating a second
-    // style picker inside this modal.
+    // Style NAME always comes from the dropdown already at the top of the GenerateUI
+    // toolbar (populated by generate-tab.js's _loadStyles()) — Lab has no picker of its
+    // own. The Apply button merges it into the text below (independent of the top
+    // toolbar's own enable checkbox); the checkbox only tracks on/off state and shows/
+    // clears the applied name — it never merges text by itself.
+    const styleToggle = document.getElementById("wfm-lab-modal-style-toggle");
     const styleApplyBtn = document.getElementById("wfm-lab-modal-style-apply");
-    const topStyleName = document.getElementById("wfm-style-select")?.value;
-    const topStyleEnabled = !!document.getElementById("wfm-style-enabled")?.checked;
-    if (styleApplyBtn) {
-        styleApplyBtn.textContent = (topStyleEnabled && topStyleName) ? `${t("labApply")}: ${topStyleName}` : t("labApply");
-    }
+    const styleNameEl = document.getElementById("wfm-lab-modal-style-name");
+
+    styleToggle?.addEventListener("change", () => {
+        if (!styleToggle.checked && styleNameEl) styleNameEl.textContent = "";
+    });
 
     styleApplyBtn?.addEventListener("click", async () => {
-        const enabled = !!document.getElementById("wfm-style-enabled")?.checked;
         const styleName = document.getElementById("wfm-style-select")?.value;
-        if (!enabled || !styleName) {
+        if (!styleName) {
             showToast(t("labEnableStyleFirst"), "error");
             return;
         }
@@ -561,13 +592,18 @@ function _wireLabPromptModalExtras() {
             styles = res.ok ? await res.json() : [];
         } catch { styles = []; }
         const style = styles.find((s) => s.name === styleName);
-        if (!style) { showToast(t("labNoStyles"), "error"); return; }
+        if (!style) {
+            showToast(t("labNoStyles"), "error");
+            return;
+        }
 
         const posEl = document.getElementById("wfm-lab-modal-positive");
         const negEl = document.getElementById("wfm-lab-modal-negative");
         const merged = _applyStyleToText(posEl?.value || "", negEl?.value || "", style);
         if (posEl) posEl.value = merged.positive;
         if (negEl) negEl.value = merged.negative;
+        if (styleToggle) styleToggle.checked = true;
+        if (styleNameEl) styleNameEl.textContent = styleName;
         showToast(t("labStyleApplied"), "success");
     });
 
@@ -647,8 +683,19 @@ function _buildWorkflowForIteration(iteration, chainImageRef) {
     }
 
     const vae = _resolveKeyframe("vae", iteration);
-    if (vae && analysis.vae_nodes?.[0]) {
-        write(analysis.vae_nodes[0].id, "vae_name", vae);
+    if (vae) {
+        const vaeNode = analysis.vae_nodes?.[0];
+        if (vaeNode && wf[vaeNode.id]) {
+            write(vaeNode.id, "vae_name", vae);
+        } else {
+            // Workflow has no standalone VAELoader node (VAE baked into the checkpoint) —
+            // inject one and repoint every "vae" input link at it so the override actually applies.
+            const newId = String(Math.max(0, ...Object.keys(wf).map(Number)) + 1);
+            wf[newId] = { class_type: "VAELoader", inputs: { vae_name: vae }, _meta: { title: "VAE Loader" } };
+            for (const node of Object.values(wf)) {
+                if (Array.isArray(node?.inputs?.vae)) node.inputs.vae = [newId, 0];
+            }
+        }
     }
 
     const prompt = _resolveKeyframe("prompt", iteration);
@@ -738,9 +785,10 @@ async function _runLabBatch() {
             if (progressText) progressText.textContent = `[${i}/${_lab.batchCount}] ...`;
             const chainRef = (!_lab.t2iMode && _lab.chainImage && i > 1) ? _lastGeneratedImageRef : null;
             const { workflow, seed } = _buildWorkflowForIteration(i, chainRef);
+            const workflowExpanded = await _expandWildcardsInWorkflow(workflow);
 
             try {
-                const { images } = await comfyUI.generate(workflow, {
+                const { images } = await comfyUI.generate(workflowExpanded, {
                     seedMode: seed != null ? "fixed" : "random",
                     seedValue: seed ?? -1,
                     onProgress: (pct) => {
@@ -1004,6 +1052,7 @@ function _applyPlanData(filename, data) {
     _renderAllColumns();
     _renderResultsGrid();
     _updateResultsSourceImage();
+    _warnIfKeyframesExceedBatch();
 }
 
 // Plan Load reads a dropped/picked .json plan file directly in the browser (no
@@ -1065,8 +1114,8 @@ function _clearPlan() {
     const saveIndexEl = document.getElementById("wfm-lab-save-index-on-run");
     if (noteEl) noteEl.value = "";
     if (batchEl) batchEl.value = _lab.batchCount;
-    if (chainEl) chainEl.checked = false;
-    if (saveIndexEl) saveIndexEl.checked = false;
+    if (chainEl) chainEl.checked = _lab.chainImage;
+    if (saveIndexEl) saveIndexEl.checked = _lab.saveIndexOnRun;
 
     const previewWrap = document.getElementById("wfm-lab-preview-wrap");
     if (previewWrap) previewWrap.style.display = "none";
