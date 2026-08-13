@@ -2,11 +2,9 @@
 Gallery Routes - ギャラリータブ用APIエンドポイント
 """
 import asyncio
-import base64
 import json
 import mimetypes
 import logging
-import re
 from pathlib import Path
 from aiohttp import web
 
@@ -43,7 +41,7 @@ def _init_allowed_root() -> None:
     except Exception as e:
         logger.warning("GalleryRoutes: failed to get ComfyUI output dir: %s", e)
 
-    # Style/Promptギャラリー用に実outputフォルダを常に別途保持する
+    # ImagePrompt/Style Catalogギャラリー用に実outputフォルダを常に別途保持する
     # (Settingsで_allowed_rootが別フォルダに変更されていても影響しないようにするため)
     try:
         import folder_paths  # type: ignore
@@ -51,7 +49,7 @@ def _init_allowed_root() -> None:
         if output_dir and Path(output_dir).is_dir():
             _service.set_comfy_output_root(output_dir)
     except Exception as e:
-        logger.warning("GalleryRoutes: failed to get ComfyUI output dir for style-prompt root: %s", e)
+        logger.warning("GalleryRoutes: failed to get ComfyUI output dir for image-prompt root: %s", e)
 
 
 _init_allowed_root()
@@ -65,9 +63,11 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/image/serve", serve_image)
     app.router.add_get("/wfm/gallery/image/thumb", serve_thumb)
     app.router.add_post("/wfm/gallery/image/meta", save_image_meta)
-    app.router.add_get("/wfm/gallery/style-prompt/root", get_style_prompt_root)
-    app.router.add_post("/wfm/gallery/image/style-prompt", save_style_prompt)
+    app.router.add_get("/wfm/gallery/image-prompt/root", get_image_prompt_root)
+    app.router.add_post("/wfm/gallery/image/image-prompt", save_image_prompt)
+    app.router.add_get("/wfm/gallery/style-catalog/root", get_style_catalog_root)
     app.router.add_post("/wfm/gallery/image/save", save_image_to_gallery)
+    app.router.add_post("/wfm/gallery/image/save-to-folder", save_image_to_folder_route)
     app.router.add_post("/wfm/gallery/image/favorite", toggle_favorite)
     app.router.add_get("/wfm/gallery/groups", list_groups)
     app.router.add_post("/wfm/gallery/groups", create_group)
@@ -262,26 +262,34 @@ async def save_image_meta(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def get_style_prompt_root(request: web.Request) -> web.Response:
-    """GET /wfm/gallery/style-prompt/root — Style/Promptギャラリーのルートフォルダを返す"""
-    root = _service.get_style_prompt_root()
+async def get_image_prompt_root(request: web.Request) -> web.Response:
+    """GET /wfm/gallery/image-prompt/root — ImagePromptギャラリーのルートフォルダを返す"""
+    root = _service.get_image_prompt_root()
     if root is None:
         return web.json_response({"error": "ComfyUI output directory not resolved"}, status=500)
     return web.json_response({"root": root})
 
 
-async def save_style_prompt(request: web.Request) -> web.Response:
-    """POST /wfm/gallery/image/style-prompt — 画像の.txtサイドカーにプロンプトを保存"""
+async def save_image_prompt(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/image/image-prompt — 画像の.txtサイドカーにプロンプトを保存"""
     try:
         body = await request.json()
         img_path = body.get("path", "")
         prompt = body.get("prompt", "")
         if not img_path:
             return web.json_response({"error": "path required"}, status=400)
-        ok = _service.save_style_prompt(img_path, prompt)
+        ok = _service.save_image_prompt(img_path, prompt)
         return web.json_response({"ok": ok})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
+
+
+async def get_style_catalog_root(request: web.Request) -> web.Response:
+    """GET /wfm/gallery/style-catalog/root — Style Catalogギャラリーのルートフォルダを返す"""
+    root = _service.get_style_catalog_root()
+    if root is None:
+        return web.json_response({"error": "ComfyUI output directory not resolved"}, status=500)
+    return web.json_response({"root": root})
 
 
 async def toggle_favorite(request: web.Request) -> web.Response:
@@ -294,15 +302,6 @@ async def toggle_favorite(request: web.Request) -> web.Response:
         return web.json_response({"favorite": new_val})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
-
-
-_SAVE_EXT_BY_MIME = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-    "image/svg+xml": ".svg",
-}
 
 
 async def save_image_to_gallery(request: web.Request) -> web.Response:
@@ -319,30 +318,35 @@ async def save_image_to_gallery(request: web.Request) -> web.Response:
         if _service._allowed_root is None:
             return web.json_response({"error": "Gallery root not configured. Open Gallery tab and set output folder first."}, status=500)
 
-        # data URL から MIME タイプを判定し、拡張子を決定する
-        raw = image_data
-        mime = "image/png"
-        if raw.startswith("data:"):
-            header, _, raw = raw.partition(",")
-            m = re.match(r"data:([^;]+)", header)
-            if m:
-                mime = m.group(1)
-        ext = _SAVE_EXT_BY_MIME.get(mime, ".png")
+        result = _service.save_image_to_folder(str(_service._allowed_root), filename, image_data)
+        if not result["ok"]:
+            return web.json_response({"error": result["error"]}, status=400)
 
-        # ファイル名サニタイズ（OSで使えない文字を除去）
-        safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", filename)
-        if not safe.lower().endswith(ext):
-            safe += ext
-
-        image_bytes = base64.b64decode(raw)
-
-        save_path = _service._allowed_root / safe
-        save_path.write_bytes(image_bytes)
-
-        logger.info("save_image_to_gallery: saved %s (%d bytes)", save_path, len(image_bytes))
-        return web.json_response({"ok": True, "path": str(save_path)})
+        logger.info("save_image_to_gallery: saved %s", result["path"])
+        return web.json_response({"ok": True, "path": result["path"]})
     except Exception as e:
         logger.error("save_image_to_gallery error: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def save_image_to_folder_route(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/image/save-to-folder — 任意フォルダへ画像を保存（同名なら上書き）。
+    Style Catalogのカタログ作成で、スタイル名をファイル名として使う際に利用する。"""
+    try:
+        body = await request.json()
+        folder     = body.get("folder", "").strip()
+        filename   = body.get("filename", "").strip()
+        image_data = body.get("imageData", "")
+
+        if not folder or not filename or not image_data:
+            return web.json_response({"error": "folder, filename and imageData required"}, status=400)
+
+        result = _service.save_image_to_folder(folder, filename, image_data)
+        if not result["ok"]:
+            return web.json_response({"error": result["error"]}, status=400)
+        return web.json_response({"ok": True, "path": result["path"]})
+    except Exception as e:
+        logger.error("save_image_to_folder_route error: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
