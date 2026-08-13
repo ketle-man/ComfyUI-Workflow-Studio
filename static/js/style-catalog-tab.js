@@ -1,21 +1,23 @@
 /**
- * Style/Prompt Gallery — Gallery タブのサブタブ。
- * ws_style_prompt フォルダ配下の画像+.txtサイドカーを閲覧し、
- * クリックで選択→「追加」でプロンプトを組み立てて最終的にコピーする。
+ * Style Catalog Gallery — Gallery タブのサブタブ。
+ * ws_style_catalog フォルダ配下の画像（GenerateUIの「カタログ作成」で生成した、
+ * ファイル名=スタイル名のプレビュー画像）を閲覧し、埋め込みPositive/Negative
+ * プロンプトを表示・コピーする。「Select as Style」でGenerateUIの登録済み
+ * Styleドロップダウンをファイル名と同名のStyleに切り替える。
  */
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { escapeHtml, setupSearchClearBtn } from "./util.js";
+import { extractAllMetadata } from "./metadata-tab.js";
+import { selectStyleByName } from "./generate-tab.js";
 
 const API = {
-    root:        () => `/wfm/gallery/style-prompt/root`,
+    root:        () => `/wfm/gallery/style-catalog/root`,
     folders:     (root)   => `/wfm/gallery/folders?root=${encodeURIComponent(root)}`,
     images:      (params) => `/wfm/gallery/images?${new URLSearchParams(params)}`,
-    imageMeta:   (path)   => `/wfm/gallery/image/meta?path=${encodeURIComponent(path)}`,
     thumb:       (path, w = 200) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}`,
     serveImage:  (path)   => `/wfm/gallery/image/serve?path=${encodeURIComponent(path)}`,
-    savePrompt:            `/wfm/gallery/image/style-prompt`,
 };
 
 const state = {
@@ -24,7 +26,6 @@ const state = {
     search: "",
     images: [],
     selectedImage: null,
-    chips: [], // [{ path, filename, prompt }]
 };
 
 let _initialized = false;
@@ -45,30 +46,29 @@ function debounce(fn, wait) {
 
 // ── 初期化 ────────────────────────────────────────────────────
 
-export function initStyleGalleryTab() {
-    document.getElementById("wfm-style-refresh-btn")?.addEventListener("click", () => {
+export function initStyleCatalogTab() {
+    document.getElementById("wfm-stylecatalog-refresh-btn")?.addEventListener("click", () => {
         loadFolderTree();
         loadImages();
     });
 
-    setupSearchClearBtn("wfm-style-search", "wfm-style-search-clear-btn", () => {
+    setupSearchClearBtn("wfm-stylecatalog-search", "wfm-stylecatalog-search-clear-btn", () => {
         state.search = "";
         loadImages();
     });
 
-    const searchInput = document.getElementById("wfm-style-search");
+    const searchInput = document.getElementById("wfm-stylecatalog-search");
     searchInput?.addEventListener("input", debounce(() => {
         state.search = searchInput.value.trim();
         loadImages();
     }, 300));
 
-    document.getElementById("wfm-style-add-btn")?.addEventListener("click", addSelectedToChips);
-    document.getElementById("wfm-style-save-prompt-btn")?.addEventListener("click", saveSelectedPrompt);
-    document.getElementById("wfm-style-clear-btn")?.addEventListener("click", clearAllChips);
-    document.getElementById("wfm-style-copy-btn")?.addEventListener("click", copyFinalPrompt);
+    document.getElementById("wfm-stylecatalog-copy-positive-btn")?.addEventListener("click", () => copyText("wfm-stylecatalog-positive-text"));
+    document.getElementById("wfm-stylecatalog-copy-negative-btn")?.addEventListener("click", () => copyText("wfm-stylecatalog-negative-text"));
+    document.getElementById("wfm-stylecatalog-select-style-btn")?.addEventListener("click", onSelectStyleClick);
 }
 
-export async function activateStyleGalleryTab() {
+export async function activateStyleCatalogTab() {
     if (_initialized) return;
     _initialized = true;
     try {
@@ -76,7 +76,7 @@ export async function activateStyleGalleryTab() {
         state.root = data.root;
         await loadFolderTree();
     } catch (e) {
-        const tree = document.getElementById("wfm-style-tree");
+        const tree = document.getElementById("wfm-stylecatalog-tree");
         if (tree) tree.innerHTML = `<p class="wfm-placeholder">Error: ${escapeHtml(e.message)}</p>`;
     }
 }
@@ -85,7 +85,7 @@ export async function activateStyleGalleryTab() {
 
 async function loadFolderTree() {
     if (!state.root) return;
-    const tree = document.getElementById("wfm-style-tree");
+    const tree = document.getElementById("wfm-stylecatalog-tree");
     tree.innerHTML = `<p class="wfm-placeholder">${t("loading")}</p>`;
     try {
         const data = await apiFetch(API.folders(state.root));
@@ -125,7 +125,6 @@ function renderTreeNode(node, container, depth, isRoot) {
     const label = document.createElement("span");
     label.className = "wfm-gallery-tree-label";
     label.textContent = isRoot ? "[root]" : node.name;
-    // サブフォルダ内も含めた合計件数（クリックで再帰的に全画像を表示するため）
     const totalCount = node.image_count_total ?? node.image_count;
     if (totalCount > 0) {
         const badge = document.createElement("span");
@@ -136,7 +135,7 @@ function renderTreeNode(node, container, depth, isRoot) {
     item.appendChild(label);
 
     label.addEventListener("click", () => {
-        document.querySelectorAll("#wfm-style-tree .wfm-gallery-tree-item.selected").forEach(el => el.classList.remove("selected"));
+        document.querySelectorAll("#wfm-stylecatalog-tree .wfm-gallery-tree-item.selected").forEach(el => el.classList.remove("selected"));
         item.classList.add("selected");
         state.currentFolder = absPath;
         loadImages();
@@ -175,7 +174,7 @@ function renderTreeNode(node, container, depth, isRoot) {
 
 async function loadImages() {
     if (!state.currentFolder) return;
-    const grid = document.getElementById("wfm-style-grid");
+    const grid = document.getElementById("wfm-stylecatalog-grid");
     grid.innerHTML = `<p class="wfm-placeholder">${t("loading")}</p>`;
 
     // 上位フォルダを選択した場合もサブフォルダの画像をまとめて表示する
@@ -185,7 +184,7 @@ async function loadImages() {
     try {
         const data = await apiFetch(API.images(params));
         state.images = data.images || [];
-        document.getElementById("wfm-style-count").textContent = `${state.images.length} images`;
+        document.getElementById("wfm-stylecatalog-count").textContent = `${state.images.length} images`;
         renderImages();
     } catch (e) {
         grid.innerHTML = `<p class="wfm-placeholder">Error: ${escapeHtml(e.message)}</p>`;
@@ -193,7 +192,7 @@ async function loadImages() {
 }
 
 function renderImages() {
-    const grid = document.getElementById("wfm-style-grid");
+    const grid = document.getElementById("wfm-stylecatalog-grid");
     if (state.images.length === 0) {
         grid.innerHTML = `<p class="wfm-placeholder">${t("galleryNoImages")}</p>`;
         return;
@@ -232,16 +231,20 @@ function createThumbCard(img) {
     return card;
 }
 
-// ── 選択画像 / プロンプト表示 ─────────────────────────────────
+// ── 選択画像 / Positive・Negative表示 ─────────────────────────
+
+function styleNameFromFilename(filename) {
+    return filename.replace(/\.[^.]+$/, "");
+}
 
 async function selectImage(img) {
     state.selectedImage = img;
-    document.querySelectorAll("#wfm-style-grid .wfm-gallery-thumb-card").forEach(el => {
+    document.querySelectorAll("#wfm-stylecatalog-grid .wfm-gallery-thumb-card").forEach(el => {
         el.classList.toggle("selected", el.dataset.path === img.path);
     });
 
-    document.getElementById("wfm-style-selected-name").textContent = img.filename;
-    const preview = document.getElementById("wfm-style-selected-preview");
+    document.getElementById("wfm-stylecatalog-selected-name").textContent = img.filename;
+    const preview = document.getElementById("wfm-stylecatalog-selected-preview");
     preview.innerHTML = "";
     const previewImg = document.createElement("img");
     previewImg.src = API.serveImage(img.path);
@@ -249,115 +252,58 @@ async function selectImage(img) {
     previewImg.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;";
     preview.appendChild(previewImg);
 
-    const promptBox = document.getElementById("wfm-style-selected-prompt");
-    promptBox.value = "";
-    document.getElementById("wfm-style-save-prompt-btn").disabled = true;
-    document.getElementById("wfm-style-add-btn").disabled = true;
+    const positiveText = document.getElementById("wfm-stylecatalog-positive-text");
+    const negativeText = document.getElementById("wfm-stylecatalog-negative-text");
+    const copyPositiveBtn = document.getElementById("wfm-stylecatalog-copy-positive-btn");
+    const copyNegativeBtn = document.getElementById("wfm-stylecatalog-copy-negative-btn");
+    const selectStyleBtn = document.getElementById("wfm-stylecatalog-select-style-btn");
+
+    positiveText.textContent = "";
+    negativeText.textContent = "";
+    copyPositiveBtn.disabled = true;
+    copyNegativeBtn.disabled = true;
+    selectStyleBtn.disabled = false; // ファイル名からのStyle選択はメタデータ抽出に依存しない
 
     try {
-        const meta = await apiFetch(API.imageMeta(img.path));
-        promptBox.value = meta.style_prompt || "";
-        document.getElementById("wfm-style-save-prompt-btn").disabled = false;
-        document.getElementById("wfm-style-add-btn").disabled = !meta.style_prompt;
-    } catch (e) {
-        showToast(t("errorWithMsg", e.message), "error");
-    }
-}
+        const res = await fetch(API.serveImage(img.path));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const file = new File([blob], img.filename, { type: blob.type || "image/png" });
+        const meta = await extractAllMetadata(file);
 
-async function saveSelectedPrompt() {
-    if (!state.selectedImage) return;
-    const promptBox = document.getElementById("wfm-style-selected-prompt");
-    try {
-        const res = await apiFetch(API.savePrompt, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: state.selectedImage.path, prompt: promptBox.value }),
-        });
-        if (res.ok) {
-            showToast(t("styleGalleryPromptSaved"), "success");
-            document.getElementById("wfm-style-add-btn").disabled = !promptBox.value.trim();
+        const positive = meta?.positives?.[0] || "";
+        const negative = meta?.negatives?.[0] || "";
+
+        if (!positive && !negative) {
+            positiveText.textContent = t("stylecatalogNoPromptFound");
         } else {
-            showToast(t("saveFailed"), "error");
+            positiveText.textContent = positive;
+            negativeText.textContent = negative;
+            copyPositiveBtn.disabled = !positive;
+            copyNegativeBtn.disabled = !negative;
         }
     } catch (e) {
-        showToast(t("errorWithMsg", e.message), "error");
+        positiveText.textContent = t("stylecatalogNoPromptFound");
     }
 }
 
-// ── プロンプトビルダー (チップ / 最終プロンプト) ─────────────────
-
-function cleanPromptText(text) {
-    return String(text || "")
-        .replace(/^[,\s]+|[,\s]+$/g, "")
-        .replace(/\s*,\s*/g, ", ")
-        .trim();
+function copyText(elementId) {
+    const el = document.getElementById(elementId);
+    const text = el?.textContent || "";
+    if (!text.trim()) return;
+    navigator.clipboard.writeText(text)
+        .then(() => showToast(t("imagePromptCopiedToast"), "success"))
+        .catch((e) => showToast(t("errorWithMsg", e.message), "error"));
 }
 
-function addSelectedToChips() {
+function onSelectStyleClick() {
     const img = state.selectedImage;
     if (!img) return;
-    const promptBox = document.getElementById("wfm-style-selected-prompt");
-    const prompt = cleanPromptText(promptBox.value);
-    if (!prompt) return;
-    if (state.chips.some(c => c.path === img.path)) {
-        showToast(t("styleGalleryAlreadyAdded"), "info");
-        return;
-    }
-    state.chips.push({ path: img.path, filename: img.filename, prompt });
-    renderChips();
-    rebuildFinalPrompt();
-}
-
-function removeChip(path) {
-    state.chips = state.chips.filter(c => c.path !== path);
-    renderChips();
-    rebuildFinalPrompt();
-}
-
-function clearAllChips() {
-    state.chips = [];
-    renderChips();
-    document.getElementById("wfm-style-final-prompt").value = "";
-}
-
-function renderChips() {
-    const container = document.getElementById("wfm-style-chips");
-    container.innerHTML = "";
-    state.chips.forEach(chip => {
-        const el = document.createElement("span");
-        el.className = "wfm-style-chip";
-        el.title = chip.prompt;
-
-        const text = document.createElement("span");
-        text.className = "wfm-style-chip-text";
-        text.textContent = chip.filename.replace(/\.[^.]+$/, "");
-        el.appendChild(text);
-
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "wfm-style-chip-remove";
-        removeBtn.textContent = "×";
-        removeBtn.addEventListener("click", () => removeChip(chip.path));
-        el.appendChild(removeBtn);
-
-        container.appendChild(el);
-    });
-}
-
-function rebuildFinalPrompt() {
-    const combined = state.chips.map(c => c.prompt).join(", ");
-    document.getElementById("wfm-style-final-prompt").value = cleanPromptText(combined);
-}
-
-async function copyFinalPrompt() {
-    const text = document.getElementById("wfm-style-final-prompt").value;
-    if (!text.trim()) {
-        showToast(t("styleGalleryNothingToCopy"), "info");
-        return;
-    }
-    try {
-        await navigator.clipboard.writeText(text);
-        showToast(t("styleGalleryCopiedToast"), "success");
-    } catch (e) {
-        showToast(t("errorWithMsg", e.message), "error");
+    const name = styleNameFromFilename(img.filename);
+    const ok = selectStyleByName(name);
+    if (ok) {
+        showToast(t("stylecatalogStyleSelected", name), "success");
+    } else {
+        showToast(t("stylecatalogNoMatch"), "error");
     }
 }

@@ -12,7 +12,8 @@ import { comfyWorkflow } from "./comfyui-workflow.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
-import { initStyleGalleryTab, activateStyleGalleryTab } from "./style-gallery-tab.js";
+import { initImagePromptTab, activateImagePromptTab } from "./image-prompt-tab.js";
+import { initStyleCatalogTab, activateStyleCatalogTab } from "./style-catalog-tab.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -912,13 +913,27 @@ async function loadImageDetail(img) {
         state.embeddedWorkflow = wfRes.has_workflow ? wfRes.workflow : null;
         renderWorkflowJson(state.embeddedWorkflow);
         _updateCopyCanvasBtn();
+        renderImagePromptSection(metaRes.image_prompt);
     } catch (e) {
         renderWorkflowJson(null);
         _updateCopyCanvasBtn();
+        renderImagePromptSection(null);
     }
 
     // グループタブ更新
     renderDetailGroup(img);
+}
+
+function renderImagePromptSection(imagePrompt) {
+    const section = document.getElementById("wfm-gallery-image-prompt-section");
+    const text = document.getElementById("wfm-gallery-image-prompt-text");
+    if (!section || !text) return;
+    if (imagePrompt) {
+        text.textContent = imagePrompt;
+        section.style.display = "";
+    } else {
+        section.style.display = "none";
+    }
 }
 
 function renderTagsDisplay(tags) {
@@ -1608,7 +1623,8 @@ export function initGalleryTab() {
 
     bindEvents();
     _initGallerySubtabToggle();
-    initStyleGalleryTab();
+    initImagePromptTab();
+    initStyleCatalogTab();
 }
 
 let _initialized = false;
@@ -1620,7 +1636,7 @@ function onGalleryTabActivated() {
     loadGroups();
 }
 
-// ── サブタブ切替 (Output / Style-Prompt) ────────────────────────
+// ── サブタブ切替 (Output / ImagePrompt / Style_Catalog) ────────────────────────
 
 function _initGallerySubtabToggle() {
     document.querySelectorAll(".wfm-gallery-subtab-btn").forEach((btn) => {
@@ -1629,8 +1645,10 @@ function _initGallerySubtabToggle() {
             document.querySelectorAll(".wfm-gallery-subtab-btn").forEach((b) => b.classList.remove("active"));
             btn.classList.add("active");
             document.getElementById("wfm-gallery-panel-output")?.classList.toggle("active", target === "output");
-            document.getElementById("wfm-gallery-panel-style")?.classList.toggle("active", target === "style");
-            if (target === "style") activateStyleGalleryTab();
+            document.getElementById("wfm-gallery-panel-imageprompt")?.classList.toggle("active", target === "imageprompt");
+            document.getElementById("wfm-gallery-panel-styleCatalog")?.classList.toggle("active", target === "styleCatalog");
+            if (target === "imageprompt") activateImagePromptTab();
+            if (target === "styleCatalog") activateStyleCatalogTab();
         });
     });
 }

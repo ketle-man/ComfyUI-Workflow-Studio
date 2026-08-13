@@ -222,39 +222,63 @@ function applyI18nToHtml() {
     const galleryOpenTaggerBtn = document.getElementById("wfm-gallery-open-tagger-btn");
     if (galleryOpenTaggerBtn) galleryOpenTaggerBtn.textContent = t("tabTagger");
 
-    // Gallery サブタブ (Output / Style-Prompt)
+    // Gallery サブタブ (Output / ImagePrompt / Style_Catalog)
     const galleryOutputSubtab = document.getElementById("wfm-gallery-subtab-output");
     if (galleryOutputSubtab) galleryOutputSubtab.textContent = t("galleryTabOutput");
-    const galleryStyleSubtab = document.getElementById("wfm-gallery-subtab-style");
-    if (galleryStyleSubtab) galleryStyleSubtab.textContent = t("galleryTabStyle");
+    const galleryImagePromptSubtab = document.getElementById("wfm-gallery-subtab-imageprompt");
+    if (galleryImagePromptSubtab) galleryImagePromptSubtab.textContent = t("galleryTabImagePrompt");
+    const galleryStyleCatalogSubtab = document.getElementById("wfm-gallery-subtab-styleCatalog");
+    if (galleryStyleCatalogSubtab) galleryStyleCatalogSubtab.textContent = t("galleryTabStyleCatalog");
 
-    // Style/Prompt ギャラリーパネル
-    const styleSearch = document.getElementById("wfm-style-search");
-    if (styleSearch) styleSearch.placeholder = t("gallerySearchPlaceholder");
-    const styleRefreshBtn = document.getElementById("wfm-style-refresh-btn");
-    if (styleRefreshBtn) styleRefreshBtn.textContent = t("refresh");
-    const styleTreeTitle = document.getElementById("wfm-style-tree-title");
-    if (styleTreeTitle) styleTreeTitle.textContent = t("galleryFolders");
-    const styleListPlaceholder = document.getElementById("wfm-style-list-placeholder");
-    if (styleListPlaceholder) styleListPlaceholder.textContent = t("gallerySelectFolder");
-    const styleNoSelection = document.getElementById("wfm-style-no-selection");
-    if (styleNoSelection) styleNoSelection.textContent = t("galleryNoSelection");
-    const styleSelectedPromptTitle = document.getElementById("wfm-style-selected-prompt-title");
-    if (styleSelectedPromptTitle) styleSelectedPromptTitle.textContent = t("styleGallerySelectedPrompt");
-    const styleSelectedPrompt = document.getElementById("wfm-style-selected-prompt");
-    if (styleSelectedPrompt) styleSelectedPrompt.placeholder = t("styleGalleryNoPrompt");
-    const styleSavePromptBtn = document.getElementById("wfm-style-save-prompt-btn");
-    if (styleSavePromptBtn) styleSavePromptBtn.textContent = t("save");
-    const styleAddBtn = document.getElementById("wfm-style-add-btn");
-    if (styleAddBtn) styleAddBtn.textContent = t("styleGalleryAddBtn");
-    const styleChipsTitle = document.getElementById("wfm-style-chips-title");
-    if (styleChipsTitle) styleChipsTitle.textContent = t("styleGalleryChipsTitle");
-    const styleClearBtn = document.getElementById("wfm-style-clear-btn");
-    if (styleClearBtn) styleClearBtn.textContent = t("styleGalleryClearBtn");
-    const styleFinalPromptTitle = document.getElementById("wfm-style-final-prompt-title");
-    if (styleFinalPromptTitle) styleFinalPromptTitle.textContent = t("styleGalleryFinalPromptTitle");
-    const styleCopyBtn = document.getElementById("wfm-style-copy-btn");
-    if (styleCopyBtn) styleCopyBtn.textContent = t("copy");
+    // ImagePrompt ギャラリーパネル
+    const imagePromptSearch = document.getElementById("wfm-imageprompt-search");
+    if (imagePromptSearch) imagePromptSearch.placeholder = t("gallerySearchPlaceholder");
+    const imagePromptRefreshBtn = document.getElementById("wfm-imageprompt-refresh-btn");
+    if (imagePromptRefreshBtn) imagePromptRefreshBtn.textContent = t("refresh");
+    const imagePromptTreeTitle = document.getElementById("wfm-imageprompt-tree-title");
+    if (imagePromptTreeTitle) imagePromptTreeTitle.textContent = t("galleryFolders");
+    const imagePromptListPlaceholder = document.getElementById("wfm-imageprompt-list-placeholder");
+    if (imagePromptListPlaceholder) imagePromptListPlaceholder.textContent = t("gallerySelectFolder");
+    const imagePromptNoSelection = document.getElementById("wfm-imageprompt-no-selection");
+    if (imagePromptNoSelection) imagePromptNoSelection.textContent = t("galleryNoSelection");
+    const imagePromptSelectedPromptTitle = document.getElementById("wfm-imageprompt-selected-prompt-title");
+    if (imagePromptSelectedPromptTitle) imagePromptSelectedPromptTitle.textContent = t("imagePromptSelectedPrompt");
+    const imagePromptSelectedPrompt = document.getElementById("wfm-imageprompt-selected-prompt");
+    if (imagePromptSelectedPrompt) imagePromptSelectedPrompt.placeholder = t("imagePromptNoPrompt");
+    const imagePromptSavePromptBtn = document.getElementById("wfm-imageprompt-save-prompt-btn");
+    if (imagePromptSavePromptBtn) imagePromptSavePromptBtn.textContent = t("save");
+    const imagePromptAddBtn = document.getElementById("wfm-imageprompt-add-btn");
+    if (imagePromptAddBtn) imagePromptAddBtn.textContent = t("imagePromptAddBtn");
+    const imagePromptChipsTitle = document.getElementById("wfm-imageprompt-chips-title");
+    if (imagePromptChipsTitle) imagePromptChipsTitle.textContent = t("imagePromptChipsTitle");
+    const imagePromptClearBtn = document.getElementById("wfm-imageprompt-clear-btn");
+    if (imagePromptClearBtn) imagePromptClearBtn.textContent = t("imagePromptClearBtn");
+    const imagePromptFinalPromptTitle = document.getElementById("wfm-imageprompt-final-prompt-title");
+    if (imagePromptFinalPromptTitle) imagePromptFinalPromptTitle.textContent = t("imagePromptFinalPromptTitle");
+    const imagePromptCopyBtn = document.getElementById("wfm-imageprompt-copy-btn");
+    if (imagePromptCopyBtn) imagePromptCopyBtn.textContent = t("copy");
+
+    // Style_Catalog ギャラリーパネル
+    const scSearch = document.getElementById("wfm-stylecatalog-search");
+    if (scSearch) scSearch.placeholder = t("stylecatalogSearchPlaceholder");
+    const scRefreshBtn = document.getElementById("wfm-stylecatalog-refresh-btn");
+    if (scRefreshBtn) scRefreshBtn.textContent = t("refresh");
+    const scTreeTitle = document.getElementById("wfm-stylecatalog-tree-title");
+    if (scTreeTitle) scTreeTitle.textContent = t("galleryFolders");
+    const scListPlaceholder = document.getElementById("wfm-stylecatalog-list-placeholder");
+    if (scListPlaceholder) scListPlaceholder.textContent = t("gallerySelectFolder");
+    const scNoSelection = document.getElementById("wfm-stylecatalog-no-selection");
+    if (scNoSelection) scNoSelection.textContent = t("galleryNoSelection");
+    const scPositiveTitle = document.getElementById("wfm-stylecatalog-positive-title");
+    if (scPositiveTitle) scPositiveTitle.textContent = t("stylecatalogPositive");
+    const scCopyPositiveBtn = document.getElementById("wfm-stylecatalog-copy-positive-btn");
+    if (scCopyPositiveBtn) scCopyPositiveBtn.textContent = t("copy");
+    const scNegativeTitle = document.getElementById("wfm-stylecatalog-negative-title");
+    if (scNegativeTitle) scNegativeTitle.textContent = t("stylecatalogNegative");
+    const scCopyNegativeBtn = document.getElementById("wfm-stylecatalog-copy-negative-btn");
+    if (scCopyNegativeBtn) scCopyNegativeBtn.textContent = t("copy");
+    const scSelectStyleBtn = document.getElementById("wfm-stylecatalog-select-style-btn");
+    if (scSelectStyleBtn) scSelectStyleBtn.textContent = t("stylecatalogSelectStyleBtn");
 
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
@@ -416,7 +440,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-19": "helpGen19",
         "wfm-help-gen-20": "helpGen20", "wfm-help-gen-21": "helpGen21",
         "wfm-help-gen-22": "helpGen22", "wfm-help-gen-23": "helpGen23",
-        "wfm-help-gen-24": "helpGen24",
+        "wfm-help-gen-24": "helpGen24", "wfm-help-gen-25": "helpGen25",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",
@@ -483,7 +507,10 @@ function applyI18nToHtml() {
         "wfm-help-gallery-17": "helpGallery17",
         "wfm-help-gallery-18": "helpGallery18", "wfm-help-gallery-19": "helpGallery19",
         "wfm-help-gallery-20": "helpGallery20", "wfm-help-gallery-21": "helpGallery21",
+        "wfm-help-gallery-22": "helpGallery22", "wfm-help-gallery-23": "helpGallery23",
+        "wfm-help-gallery-24": "helpGallery24",
         "wfm-help-gallery-card-styleprompt-title": "helpGalleryCardStyleprompt",
+        "wfm-help-gallery-card-stylecatalog-title": "helpGalleryCardStylecatalog",
         "wfm-help-tagger-title": "helpTaggerTitle",
         "wfm-help-tagger-1": "helpTagger1", "wfm-help-tagger-2": "helpTagger2",
         "wfm-help-tagger-3": "helpTagger3", "wfm-help-tagger-4": "helpTagger4",

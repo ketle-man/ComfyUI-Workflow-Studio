@@ -1293,6 +1293,21 @@ function _rebuildStyleList() {
     );
 }
 
+// Style Catalogギャラリーの「Select as Style」から呼ばれる。名前が一致する登録済み
+// Styleを探し、GenerateUIのStyleドロップダウンをそれに切り替えてタブへ移動する。
+// 画像に埋め込まれたプロンプトを直接適用するのではなく、既存Styleシステムへの
+// 視覚的なショートカットとして機能する（元のStyle JSONが変更・削除されても影響を受けない）。
+export function selectStyleByName(name) {
+    const style = _stylesData.find((s) => s.name === name);
+    if (!style) return false;
+    const sel = document.getElementById("wfm-style-select");
+    if (sel) sel.value = name;
+    const enabled = document.getElementById("wfm-style-enabled");
+    if (enabled) enabled.checked = true;
+    document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
+    return true;
+}
+
 function _applyNamedStyle(workflow, style) {
     if (!style) return workflow;
     const analysis = comfyUI.currentAnalysis;
@@ -1541,7 +1556,9 @@ async function _coreGenerate(silent = false, workflowOverride = null) {
 // ============================================
 
 // 汎用バッチループ: items を順に applyFn(item) → _coreGenerate() で処理する
-async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x)) {
+// onResultFn(item, {images, seed}) が渡された場合、各アイテムの生成結果ごとに呼び出す
+// （Style Catalogのカタログ作成が、生成画像をスタイル名で保存するために使用）
+async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x), onResultFn = null) {
     const batchProgress   = document.getElementById("wfm-ckpt-batch-progress");
     const batchCurrentName = document.getElementById("wfm-ckpt-batch-current-name");
     const batchCount      = document.getElementById("wfm-ckpt-batch-count");
@@ -1576,7 +1593,8 @@ async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x)) {
 
             try {
                 await applyFn(item);
-                await _coreGenerate(true);
+                const result = await _coreGenerate(true);
+                if (onResultFn) await onResultFn(item, result);
                 completed++;
             } catch (err) {
                 if (_ckptBatch.aborted) break;
@@ -1602,6 +1620,132 @@ async function _runBatchLoop(items, applyFn, labelFn = (x) => String(x)) {
         showToast(t("batchStopped", completed, failed), "info");
     } else {
         showToast(t("batchComplete", completed, items.length, failed), failed > 0 ? "error" : "success");
+    }
+}
+
+// ============================================
+// Style Catalog 作成
+// ============================================
+// Batchタブ「Style」サブタブで選択済みのスタイル(_batchStyleSelected)を対象に、
+// 現在ロード中のワークフローでそれぞれ生成し、結果をスタイル名でws_style_catalog
+// 配下の指定フォルダへ保存する（Style Catalogギャラリーからの視覚的スタイル選択に使う）。
+
+function _blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+function _flattenFolderTree(node, acc = [], isRoot = true) {
+    acc.push({ path: isRoot ? "[root]" : node.path, abs_path: node.abs_path });
+    (node.children || []).forEach((c) => _flattenFolderTree(c, acc, false));
+    return acc;
+}
+
+async function openCatalogCreateModal() {
+    const list = _stylesData.filter((s) => _batchStyleSelected.has(s.name));
+    if (list.length === 0) {
+        showToast(t("catalogCreateNoStyles"), "error");
+        return;
+    }
+
+    let catalogRoot = null;
+    let folderTree = null;
+    try {
+        const rootRes = await fetch("/wfm/gallery/style-catalog/root");
+        const rootData = await rootRes.json();
+        catalogRoot = rootData.root;
+        if (!catalogRoot) throw new Error(rootData.error || "Style Catalog root not resolved");
+        const treeRes = await fetch(`/wfm/gallery/folders?root=${encodeURIComponent(catalogRoot)}`);
+        folderTree = await treeRes.json();
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+        return;
+    }
+
+    const folderOptions = folderTree && !folderTree.error ? _flattenFolderTree(folderTree) : [];
+
+    const html = `
+        <p style="margin:0 0 10px;font-size:13px;color:var(--wfm-text-secondary);">${t("catalogCreateSelectedCount", list.length)}</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;">
+                <input type="radio" name="wfm-catalog-dest" value="new" checked>
+                ${t("catalogCreateNewFolder")}
+            </label>
+            <input type="text" id="wfm-catalog-new-folder-name" class="wfm-input" placeholder="folder name" style="margin-left:22px;">
+            <label style="display:flex;align-items:center;gap:6px;">
+                <input type="radio" name="wfm-catalog-dest" value="existing" ${folderOptions.length === 0 ? "disabled" : ""}>
+                ${t("catalogCreateExistingFolder")}
+            </label>
+            <select id="wfm-catalog-existing-folder" class="wfm-input" style="margin-left:22px;" ${folderOptions.length === 0 ? "disabled" : ""}>
+                ${folderOptions.map((f) => `<option value="${escapeHtml(f.abs_path)}">${escapeHtml(f.path)}</option>`).join("")}
+            </select>
+        </div>
+        <button id="wfm-catalog-run-btn" class="wfm-btn wfm-btn-primary" style="width:100%;margin-top:14px;">${t("catalogCreateRun")}</button>
+    `;
+    openModal(t("catalogCreateTitle"), html);
+
+    document.getElementById("wfm-catalog-run-btn")?.addEventListener("click", async () => {
+        const destType = document.querySelector('input[name="wfm-catalog-dest"]:checked')?.value;
+        let destFolder = null;
+
+        if (destType === "new") {
+            const name = document.getElementById("wfm-catalog-new-folder-name")?.value.trim();
+            if (!name) {
+                showToast(t("catalogCreateFolderNameRequired"), "error");
+                return;
+            }
+            try {
+                const res = await fetch("/wfm/gallery/folder", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ parent: catalogRoot, name }),
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || "Failed to create folder");
+                destFolder = data.path;
+            } catch (e) {
+                showToast(t("errorWithMsg", e.message), "error");
+                return;
+            }
+        } else {
+            destFolder = document.getElementById("wfm-catalog-existing-folder")?.value || null;
+            if (!destFolder) {
+                showToast(t("catalogCreateFolderRequired"), "error");
+                return;
+            }
+        }
+
+        closeModal();
+        await _runCatalogCreate(list, destFolder);
+    });
+}
+
+async function _runCatalogCreate(list, destFolder) {
+    try {
+        await _runBatchLoop(
+            list,
+            (style) => { _batchStyleOverride = style; },
+            (s) => s.name,
+            async (style, result) => {
+                const outputImages = (result?.images || []).filter((img) => img.type !== "temp");
+                if (outputImages.length === 0) return;
+                const blob = await comfyUI.getImageBlob(outputImages[0]);
+                const dataUrl = await _blobToDataUrl(blob);
+                const res = await fetch("/wfm/gallery/image/save-to-folder", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ folder: destFolder, filename: style.name, imageData: dataUrl }),
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || "Failed to save catalog image");
+            }
+        );
+    } finally {
+        _batchStyleOverride = null;
     }
 }
 
@@ -1892,6 +2036,25 @@ export async function initGenerateTab() {
             showToast(t("resetFailed", err.message), "error");
         }
     });
+
+    // Style Catalog 作成ボタン
+    const catalogCreateBtn = document.getElementById("wfm-gen-catalog-create-btn");
+    if (catalogCreateBtn) {
+        catalogCreateBtn.textContent = t("catalogCreateBtn");
+        catalogCreateBtn.addEventListener("click", () => {
+            openCatalogCreateModal().catch((e) => showToast(t("errorWithMsg", e.message), "error"));
+        });
+    }
+
+    // Style Catalog を開くボタン（Gallery タブ → Style_Catalog サブタブへ遷移）
+    const catalogOpenBtn = document.getElementById("wfm-gen-catalog-open-btn");
+    if (catalogOpenBtn) {
+        catalogOpenBtn.textContent = t("catalogOpenBtn");
+        catalogOpenBtn.addEventListener("click", () => {
+            document.querySelector('.wfm-tab[data-tab="gallery"]')?.click();
+            document.querySelector('.wfm-gallery-subtab-btn[data-gallery-subtab="styleCatalog"]')?.click();
+        });
+    }
 
     // Generate button
     document.getElementById("wfm-gen-generate-btn")?.addEventListener("click", () => {

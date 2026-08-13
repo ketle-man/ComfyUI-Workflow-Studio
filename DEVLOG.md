@@ -2,6 +2,41 @@
 
 ---
 
+## v0.3.95
+
+### 機能追加: Style/Prompt→ImagePrompt改名 + Style_Catalogギャラリー新設 + GenerateUI「カタログ作成」機能
+
+ユーザーから「GenerateUIタブのスタイルを画像から決めるためのスタイルカタログ機能を追加したい」との要望を受けて実装。まず前提としてGalleryタブの既存Style/Promptサブタブを「ImagePrompt」に改名（Style_Catalogと名前が紛らわしくなるのを避けるため）、続けて新規Style_Catalogサブタブと、GenerateUI側のカタログ生成機能を追加した。ブランチ`feature/style-catalog-imageprompt`（前セッションで未コミットのまま残していた`fix/output-gallery-style-prompt-display`ブランチから分岐、そちらの修正も本エントリに含む）。
+
+**1. Style/Prompt → ImagePrompt 全面リネーム**: ユーザーから「内部ID/関数名/ファイル名も含めて全面リネーム」の指示を受け、タブラベルだけでなく`STYLE_PROMPT_FOLDER_NAME`→`IMAGE_PROMPT_FOLDER_NAME`（値も`ws_style_prompt`→`ws_image_prompt`）、APIルート（`/wfm/gallery/style-prompt/root`→`/wfm/gallery/image-prompt/root`等）、ファイル名（`static/js/style-gallery-tab.js`→`image-prompt-tab.js`）、関数名（`initStyleGalleryTab`→`initImagePromptTab`等）、CSSクラス（`.wfm-style-*`→`.wfm-imageprompt-*`）、i18nキー（`styleGallery*`→`imagePrompt*`）まで一貫して変更。実データフォルダも`mv`でリネーム（既存データはそのまま保持）。GenerateUI Batchタブの「Style」バッチ機能（`_stylesData`/`_batchStyleSelected`等、`DATA_DIR/style/*.json`のFooocus形式スタイルプリセット）とは全く別の概念であるため、こちらは意図的にリネーム対象から除外した。
+
+**2. 事前調査: 既存Style機能・バッチ生成ループの理解**: 実装前にExploreエージェントで調査し、以下を把握した。
+- GenerateUIの「Style」はプリセットJSON（`{name, prompt, negative_prompt}`）を`DATA_DIR/style/`から読み込み、`_applyNamedStyle(workflow, style)`（`generate-tab.js`）がワークフローの複製に対して適用する。Positiveは`{prompt}`プレースホルダ置換または末尾追記、Negativeは常に末尾追記。
+- Batchタブに既に「Style」バッチ種別（複数スタイル選択→順次生成）が存在し、`_runBatchLoop(items, applyFn, labelFn)`という汎用バッチループを使っていた。カタログ作成はこの既存インフラをそのまま流用できると判断（新規バッチシステムを作らない）。
+- Positive/Negativeプロンプトの構造化抽出ロジック（ComfySwitchNode・CLIPTextEncodeEditPlus等の特殊ノード対応込み）は`metadata-tab.js`の`extractAllMetadata(file)`が既にexport済みで、Gallery側からもそのまま呼び出し可能と判明（Python側に同等ロジックは存在しない）。
+
+**3. 新規: Style_Catalogギャラリーサブタブ**: Galleryタブ3つ目のサブタブとして追加。バックエンドは`get_style_catalog_root()`（`get_image_prompt_root()`と同型）のみ新設し、フォルダツリー・画像一覧・作成の各APIは既存の汎用エンドポイント（`root`/`folder`パラメータ対応済み）をそのまま再利用。フロントエンドは新規`static/js/style-catalog-tab.js`で、`image-prompt-tab.js`と同じツリー/グリッド実装を土台にしつつ、右ペインはプロンプトビルダーではなく「選択画像をfetch→Blob→File化→`extractAllMetadata()`でPositive/Negativeを抽出→個別コピーボタン」という読み取り専用パネルにした。「Select as Style」ボタンは、画像ファイル名（拡張子除く）と同名の登録済みStyleを`generate-tab.js`に新規exportした`selectStyleByName(name)`で探し、GenerateUIのStyleドロップダウンを切り替える方式（埋め込みプロンプトを直接適用するのではなく、既存Styleシステムへの視覚的ショートカットとする — ユーザー確認済みの方針）。
+
+**4. 新規: バックエンド `save_image_to_folder`**: 既存の`save_image_to_gallery`（画像保存ルート、常に固定のギャラリールート直下にのみ保存）を一般化し、任意フォルダ+任意ファイル名+上書き保存に対応する`GalleryService.save_image_to_folder(folder_path, filename, image_data)`を新設。data URLデコード・拡張子解決・ファイル名サニタイズのロジックは`_decode_image_data_url()`/`_sanitize_save_filename()`としてモジュール関数に切り出し、既存の`save_image_to_gallery`ハンドラもこちらを使うようリファクタ（重複コード解消、既存動作は不変）。新規ルート`POST /wfm/gallery/image/save-to-folder`。
+
+**5. 新規: GenerateUI「カタログ作成」/「カタログ」ボタン**: Style選択欄の右隣に設置。
+- スタイル選択の対象は、当初「全スタイル/選択中の1件」のラジオ選択UIを新設する設計で計画していたが、ユーザーから「カタログ作成の選択をバッチタブのStyleタブで行えるようにしたい。これにより複数選択も可能にしたい」とのフィードバックを受け、**新規UIを作らずBatchタブStyleサブタブの既存チェックリスト（`_batchStyleSelected`）をそのまま使う**方式に変更（複数選択は元から対応済み）。カタログ作成モーダルは保存先フォルダの指定（新規作成／既存選択）のみを担当する、よりシンプルな設計になった。
+- `_runBatchLoop`に第4引数`onResultFn(item, result)`を追加（既存呼び出し元は省略時no-opのため無影響）。カタログ作成はこのコールバックで、生成結果を`comfyUI.getImageBlob()`→data URL化→`save_image_to_folder`へPOST（ファイル名=スタイル名、拡張子はバックエンド側でBlobの実MIMEタイプから解決）。
+- 「カタログ」ボタン（カタログ作成ボタンの右隣、ユーザーからの追加要望）は、Galleryタブ→Style_Catalogサブタブへワンクリックで遷移するショートカット。
+
+**6. Output Galleryのプロンプト表示修正（前セッションからの持ち越し）**: v0.3.94リリース直後、ユーザーがKapture目視確認で「Output Galleryの詳細パネルにプロンプトが表示されていない」ことを発見（リリースノートには書いたが実装漏れだった）。`gallery-tab.js`の`loadImageDetail()`が`metaRes`（`image_prompt`フィールドを含む）を取得していながら使っていなかったバグで、`renderImagePromptSection()`を追加し表示欄（Info タブ、Tags欄の上）を新設して解消。ユーザーの指示で当時はコミット・リリースまでは行わず、今回のブランチに持ち越して一緒に含めた。
+
+**ヘルプタブ更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、Galleryタブヘルプの「Style/Prompt Gallery」カードを「ImagePrompt Gallery」に改名・`ws_image_prompt`表記に修正、新規「Style_Catalog Gallery」カードを追加。GenerateUIタブヘルプにもCreate Catalog/Catalogボタンの説明を追加。
+
+**検証**: 各段階でNode `--check`（JS構文）・`python -m py_compile`（Python構文）・開発元と実行時`custom_nodes`フォルダの`diff -rq`比較を実施。ユーザー自身が実機でGallery 3サブタブ化・ImagePromptの既存データ動作・カタログ作成→保存→Style_Catalogでの閲覧→Select as Style→カタログボタンでの遷移、を一通り確認済み。
+
+**How to apply**:
+1. 新機能が既存のバッチ処理・生成ループと概念的に重なる場合、専用の新規実装を書く前に「既存のバッチループに小さなフック（コールバック引数など）を追加するだけで実現できないか」を検討する。今回`_runBatchLoop`への1引数追加で、進捗バー・Pause/Resume・エラーハンドリングを含む既存バッチUI全体をタダで手に入れられた。
+2. ユーザーから「選択はA画面で行い、B画面はC機能だけ担当させたい」といった役割分担の指摘を受けたら、独自の選択UIを増やさず既存の選択UI（この場合Batchタブのチェックリスト）を再利用できないか確認する — 実装量が減るだけでなく、ユーザーにとって覚える操作系統が1つで済む。
+3. 「ファイル名を画像から画面Aのデータに紐付ける」機能を作る際、画像に実際に埋め込まれた値をそのまま複製・適用するのか、それとも名前で元のマスターデータ（この場合Style JSON）を検索し直すのかは、ユーザーの意図次第で大きく設計が変わる（前者はスナップショット的、後者は常に最新のマスターデータを参照する）。曖昧なら実装前に確認する。
+
+---
+
 ## v0.3.94
 
 ### 機能追加: Gallery タブのサブタブ化 + Style/Prompt ギャラリー新設（視覚的プロンプトビルダー）

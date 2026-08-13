@@ -533,6 +533,20 @@
     white-space: nowrap;
 }
 
+.wfm-gallery-image-prompt-text {
+    font-size: 12px;
+    color: var(--wfm-text-primary);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--wfm-bg-primary, #16213e);
+    border: 1px solid var(--wfm-border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
 .wfm-gallery-tags-display {
     display: flex;
     flex-wrap: wrap;
@@ -869,10 +883,10 @@
 }
 
 /* ============================================================
-   Style/Prompt ギャラリー (右ペイン: プロンプトビルダー)
+   ImagePrompt / Style_Catalog ギャラリー (右ペイン)
    ============================================================ */
 
-.wfm-style-detail-panel {
+.wfm-imageprompt-detail-panel {
     width: 520px;
     min-width: 520px;
     max-width: 520px;
@@ -880,13 +894,13 @@
     overflow: hidden;
 }
 
-.wfm-style-detail-col {
+.wfm-imageprompt-detail-col {
     display: flex;
     flex-direction: column;
     min-width: 0;
 }
 
-.wfm-style-detail-col-left {
+.wfm-imageprompt-detail-col-left {
     width: 280px;
     min-width: 280px;
     max-width: 280px;
@@ -895,17 +909,17 @@
     padding-bottom: 8px;
 }
 
-.wfm-style-detail-col-right {
+.wfm-imageprompt-detail-col-right {
     flex: 1;
     min-width: 0;
     padding: 8px 10px;
 }
 
-.wfm-style-section {
+.wfm-imageprompt-section {
     padding: 8px 10px;
 }
 
-.wfm-style-prompt-box {
+.wfm-imageprompt-prompt-box {
     width: 100%;
     resize: vertical;
     font-size: 12px;
@@ -917,17 +931,17 @@
     box-sizing: border-box;
 }
 
-.wfm-style-btn-row {
+.wfm-imageprompt-btn-row {
     display: flex;
     gap: 6px;
     margin-top: 6px;
 }
 
-.wfm-style-btn-row .wfm-btn {
+.wfm-imageprompt-btn-row .wfm-btn {
     flex: 1;
 }
 
-.wfm-style-chips {
+.wfm-imageprompt-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
@@ -935,7 +949,7 @@
     min-height: 24px;
 }
 
-.wfm-style-chip {
+.wfm-imageprompt-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -948,14 +962,14 @@
     font-size: 11px;
 }
 
-.wfm-style-chip-text {
+.wfm-imageprompt-chip-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 220px;
 }
 
-.wfm-style-chip-remove {
+.wfm-imageprompt-chip-remove {
     background: none;
     border: none;
     color: inherit;
@@ -966,13 +980,13 @@
     opacity: 0.7;
 }
 
-.wfm-style-chip-remove:hover { opacity: 1; }
+.wfm-imageprompt-chip-remove:hover { opacity: 1; }
 
-.wfm-style-final-section {
+.wfm-imageprompt-final-section {
     height: 100%;
 }
 
-.wfm-style-final-textarea {
+.wfm-imageprompt-final-textarea {
     margin-top: 4px;
     flex: 1;
     min-height: 0;

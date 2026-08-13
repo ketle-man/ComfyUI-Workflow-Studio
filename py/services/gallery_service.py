@@ -1,6 +1,7 @@
 """
 Gallery Service - outputフォルダの画像管理、メタデータ閲覧
 """
+import base64
 import hashlib
 import json
 import logging
@@ -18,6 +19,37 @@ logger = logging.getLogger(__name__)
 # サポートする画像拡張子
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 
+# data URL の MIME タイプ -> 拡張子（save_image_to_gallery / save_image_to_folder共用）
+_SAVE_EXT_BY_MIME = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+}
+
+
+def _decode_image_data_url(image_data: str) -> tuple[bytes, str]:
+    """data URL (data:<mime>;base64,<data>) をデコードし (バイト列, 拡張子) を返す。
+    ヘッダが無ければPNG扱い（旧互換）。"""
+    raw = image_data
+    mime = "image/png"
+    if raw.startswith("data:"):
+        header, _, raw = raw.partition(",")
+        m = re.match(r"data:([^;]+)", header)
+        if m:
+            mime = m.group(1)
+    ext = _SAVE_EXT_BY_MIME.get(mime, ".png")
+    return base64.b64decode(raw), ext
+
+
+def _sanitize_save_filename(filename: str, ext: str) -> str:
+    """OSで使えない文字を除去し、拡張子が無ければ付与する"""
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", filename)
+    if not safe.lower().endswith(ext):
+        safe += ext
+    return safe
+
 # メタデータ保存ファイル (gallery専用)
 from .gallery_metadata import GalleryMetadataStore
 
@@ -30,11 +62,14 @@ _JPEG_READ_MAX = 64 * 1024 * 1024
 # フォルダキャッシュのTTL秒（フォルダmtimeが同じでも念のため）
 _CACHE_TTL = 60.0
 
-# Style/Promptギャラリー: 画像と同名の.txtサイドカーに保存されたプロンプトテキストの最大読み込みサイズ
+# ImagePromptギャラリー: 画像と同名の.txtサイドカーに保存されたプロンプトテキストの最大読み込みサイズ
 _SIDECAR_PROMPT_MAX = 20_000
 
-# Style/Promptギャラリーの管理フォルダ名（ComfyUI実outputフォルダ直下）
-STYLE_PROMPT_FOLDER_NAME = "ws_style_prompt"
+# ImagePromptギャラリーの管理フォルダ名（ComfyUI実outputフォルダ直下）
+IMAGE_PROMPT_FOLDER_NAME = "ws_image_prompt"
+
+# Style Catalogギャラリーの管理フォルダ名（ComfyUI実outputフォルダ直下）
+STYLE_CATALOG_FOLDER_NAME = "ws_style_catalog"
 
 # ponyxlWildcardsVault形式（.yaml + thumbnails/）を検出するための、画像の祖先フォルダ探索上限
 _VAULT_ROOT_SEARCH_DEPTH = 8
@@ -119,7 +154,7 @@ class GalleryService:
         self.metadata_store = GalleryMetadataStore(data_dir / "gallery_metadata.json")
         self._allowed_root: Path | None = None
         # ComfyUI実outputフォルダの不変ルート。Settingsでユーザーが_allowed_rootを
-        # 別フォルダに変更しても、Style/Promptギャラリー(常に実output配下)への
+        # 別フォルダに変更しても、ImagePrompt/Style Catalogギャラリー(常に実output配下)への
         # アクセスが塞がれないようにするため_allowed_rootとは別管理にする
         self._comfy_output_root: Path | None = None
         self._folder_cache = _FolderCache()
@@ -299,7 +334,7 @@ class GalleryService:
 
     def _scan_folder_recursive(self, folder: Path) -> list[tuple[str, str, int, float]]:
         """os.walk() でフォルダ配下を再帰的に列挙する（サブフォルダの画像も含む）。
-        Style/Promptギャラリーのように深い階層に画像が置かれるケース用。
+        ImagePrompt/Style Catalogギャラリーのように深い階層に画像が置かれるケース用。
         キャッシュはしない（フォルダ数が少なく、都度スキャンしても軽い想定）。
         """
         entries = []
@@ -412,17 +447,48 @@ class GalleryService:
         return results
 
     # ──────────────────────────────────────────────────────────────
-    # Style/Promptギャラリー: .txtサイドカーによるプロンプト保存
+    # ImagePromptギャラリー: .txtサイドカーによるプロンプト保存
     # ──────────────────────────────────────────────────────────────
 
-    def get_style_prompt_root(self) -> str | None:
-        """Style/Promptギャラリーのルートフォルダ(ComfyUI実output/ws_style_prompt)を
+    def get_image_prompt_root(self) -> str | None:
+        """ImagePromptギャラリーのルートフォルダ(ComfyUI実output/ws_image_prompt)を
         返す。無ければ作成する。"""
         if self._comfy_output_root is None:
             return None
-        root = self._comfy_output_root / STYLE_PROMPT_FOLDER_NAME
+        root = self._comfy_output_root / IMAGE_PROMPT_FOLDER_NAME
         root.mkdir(parents=True, exist_ok=True)
         return str(root).replace("\\", "/")
+
+    def get_style_catalog_root(self) -> str | None:
+        """Style Catalogギャラリーのルートフォルダ(ComfyUI実output/ws_style_catalog)を
+        返す。無ければ作成する。"""
+        if self._comfy_output_root is None:
+            return None
+        root = self._comfy_output_root / STYLE_CATALOG_FOLDER_NAME
+        root.mkdir(parents=True, exist_ok=True)
+        return str(root).replace("\\", "/")
+
+    def save_image_to_folder(self, folder_path: str, filename: str, image_data: str) -> dict:
+        """任意フォルダへ画像を保存する（data URL想定、同名なら上書き）。
+        Style Catalogのカタログ作成（スタイル名でのファイル保存）で使用。"""
+        folder = Path(folder_path).resolve()
+        if not folder.is_dir():
+            return {"ok": False, "error": "Destination folder not found"}
+        if not self._check_path_allowed(folder):
+            return {"ok": False, "error": "Access denied"}
+        try:
+            image_bytes, ext = _decode_image_data_url(image_data)
+        except Exception as e:
+            return {"ok": False, "error": f"Invalid imageData: {e}"}
+        safe = _sanitize_save_filename(filename, ext)
+        if not safe:
+            return {"ok": False, "error": "Invalid filename"}
+        save_path = folder / safe
+        try:
+            save_path.write_bytes(image_bytes)
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "path": str(save_path).replace("\\", "/")}
 
     def _sidecar_path(self, image_path: Path) -> Path:
         return image_path.with_suffix(".txt")
@@ -486,7 +552,7 @@ class GalleryService:
         leaf_candidate = image_path.name.split(".")[0].lower()
         return leaves.get(leaf_candidate)
 
-    def save_style_prompt(self, image_path: str, text: str) -> bool:
+    def save_image_prompt(self, image_path: str, text: str) -> bool:
         """画像と同名の.txtサイドカーにプロンプトテキストを保存する"""
         p = Path(image_path).resolve()
         if not p.is_file():
@@ -497,7 +563,7 @@ class GalleryService:
             self._sidecar_path(p).write_text((text or "").strip(), encoding="utf-8")
             return True
         except OSError as e:
-            logger.warning("save_style_prompt: failed for %s: %s", p, e)
+            logger.warning("save_image_prompt: failed for %s: %s", p, e)
             return False
 
     # ──────────────────────────────────────────────────────────────
@@ -541,7 +607,7 @@ class GalleryService:
             "tags": saved.get("tags", []),
             "memo": saved.get("memo", ""),
             "groups": saved.get("groups", []),
-            "style_prompt": self._read_sidecar_prompt(path),
+            "image_prompt": self._read_sidecar_prompt(path),
         }
 
     def _read_png_metadata(self, path: Path) -> dict:

@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.94-green)
+![Version](https://img.shields.io/badge/version-0.3.95-green)
 
 ## Screenshots
 
@@ -102,6 +102,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
 - **Style selector** — checkbox and dropdown next to the Reset Workflow button; enable to apply a Fooocus-style JSON to positive and negative prompts at generation time; style files (`*.json`) are loaded from `user/default/Workflow-Studio/style/`; the style's `{prompt}` placeholder is replaced with the original prompt text, or the style is appended if no placeholder exists; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation copy and do not modify the loaded workflow
+- **Create Catalog / Catalog buttons** (v0.3.95) — next to the Style dropdown. **Create Catalog** generates one preview image per Style checked in the Batch tab's Style sub-tab (using the currently loaded workflow, typically T2I), then saves each result into a chosen `ws_style_catalog` subfolder named after the Style (existing files with the same name are overwritten); a modal lets you create a new destination folder or pick an existing one — separate folders are useful for grouping catalogs by checkpoint or by purpose. **Catalog** jumps straight to the Gallery tab's Style_Catalog sub-tab to browse the results (see below)
 - **Batch type selector** — check one of the column header checkboxes in the Batch Queue pane (Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler / Style) to activate that batch type; only one type can be active at a time; the Batch panel below Generate shows the active type, progress, and Pause/Resume/Stop controls
 - **Batch tab** (v0.3.18) — dedicated 3-pane layout for assembling the batch queue:
   - **Left pane** — 4 tabs: **Checkpoints** (file-tree; Filter / All / None), **Sampler** (KSampler sampler list), **Scheduler** (KSampler scheduler list), **Style** (flat list of all styles from `Workflow-Studio/style/`; All / None buttons)
@@ -252,14 +253,24 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 </details>
 
 <details>
-<summary><h3>Style/Prompt Gallery subtab (v0.3.94)</h3></summary>
+<summary><h3>ImagePrompt Gallery subtab (v0.3.94, renamed from Style/Prompt in v0.3.95)</h3></summary>
 
-- **Visual prompt library** — a second Gallery sub-tab for browsing reference images and building prompts from them visually, separate from the Output browser; manages a dedicated `ws_style_prompt` folder, created automatically inside the ComfyUI output directory
+- **Visual prompt library** — a Gallery sub-tab for browsing reference images and building prompts from them visually, separate from the Output browser; manages a dedicated `ws_image_prompt` folder, created automatically inside the ComfyUI output directory
 - **3-column layout** — folder tree (left) | thumbnail grid (center) | prompt builder (right); selecting any folder (including a parent category folder) recursively shows every image in its subfolders too, both in the grid and in the tree's count badges
 - **Prompt builder (right pane)** — clicking a thumbnail previews it and its prompt text without adding it yet; **+ Add** appends it as a removable chip under "Selected Prompts" (**Clear All** to reset); **Save** edits and persists the prompt text for that image; **Final Prompt** combines all chips into one comma-separated, freely-editable text; **Copy** sends it to the clipboard
-- **Plain-text prompt storage** — each image's prompt lives in a `.txt` sidecar file next to it (same base name, no database) — anyone can add their own entries by dropping an image + matching `.txt` file into a subfolder; the Output Gallery's own detail panel reads and displays the same file when browsing into `ws_style_prompt`
+- **Plain-text prompt storage** — each image's prompt lives in a `.txt` sidecar file next to it (same base name, no database) — anyone can add their own entries by dropping an image + matching `.txt` file into a subfolder; the Output Gallery's own detail panel reads and displays the same file when browsing into `ws_image_prompt`
 - **ponyxlWildcardsVault format support** — if no `.txt` sidecar exists, prompts are resolved on the fly from a `*.yaml` + `thumbnails/` (also `thumbnails_option2/`) pack placed directly under the folder, using the same key/tag structure as Navimixu's [PonyXL Wildcards Vault](https://civitai.com/models/615967/ponyxl-wildcards-vault) packs — just drop the downloaded pack folder in, no import step required
-- **Seed data importer** — `tools/import_style_prompt_seed.py` (dev tool, ships no image data) pre-processes a wildcards-vault-style source folder into portable image + `.txt` pairs under `ws_style_prompt`, for archiving a stable, portable copy instead of relying on the on-the-fly YAML fallback
+- **Seed data importer** — `tools/import_style_prompt_seed.py` (dev tool, ships no image data) pre-processes a wildcards-vault-style source folder into portable image + `.txt` pairs under `ws_image_prompt`, for archiving a stable, portable copy instead of relying on the on-the-fly YAML fallback
+
+</details>
+
+<details>
+<summary><h3>Style_Catalog Gallery subtab (v0.3.95)</h3></summary>
+
+- **Visual Style picker** — a third Gallery sub-tab for picking a registered GenerateUI Style (`user/default/Workflow-Studio/style/*.json`) by its preview image instead of its name in a dropdown; manages a dedicated `ws_style_catalog` folder, created automatically inside the ComfyUI output directory; populated by GenerateUI's **Create Catalog** button (see GenerateUI Tab above)
+- **3-column layout** — folder tree (left) | thumbnail grid (center) | Positive/Negative prompt panel (right); like ImagePrompt, selecting a parent folder recursively shows every image in its subfolders
+- **Positive/Negative panel** — clicking a thumbnail reads the Positive/Negative prompt actually embedded in that generated image (reusing the Metadata tab's extraction logic — no separate metadata store), each with its own **Copy** button
+- **Select as Style button** — matches the selected image's filename (without extension) against a registered Style name and switches the GenerateUI tab's Style dropdown to it; a visual shortcut into the existing named-Style system, not a one-off apply of the embedded prompt — if the Style was renamed or deleted since the catalog image was created, a "no matching style" toast is shown instead
 
 </details>
 
@@ -511,7 +522,7 @@ ComfyUI-Workflow-Studio/
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
 │   │   ├── eagle_routes.py      # Eagle integration API
-│   │   └── gallery_routes.py    # Gallery tab API (Output + Style/Prompt sub-tabs)
+│   │   └── gallery_routes.py    # Gallery tab API (Output + ImagePrompt + Style_Catalog sub-tabs)
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
 │       ├── nodes_service.py     # Node metadata & node sets
@@ -534,7 +545,8 @@ ComfyUI-Workflow-Studio/
 │       ├── generate-tab.js      # Generation UI
 │       ├── feeder-tab.js        # Feeder subtab (Image Loop + Gallery modes)
 │       ├── gallery-tab.js       # Gallery tab: Output sub-tab (image browser, groups, metadata) + sub-tab switching
-│       ├── style-gallery-tab.js # Gallery tab: Style/Prompt sub-tab (visual prompt builder)
+│       ├── image-prompt-tab.js  # Gallery tab: ImagePrompt sub-tab (visual prompt builder)
+│       ├── style-catalog-tab.js # Gallery tab: Style_Catalog sub-tab (visual Style picker)
 │       ├── tagger-tab.js        # Tagger tab (WD Tagger, DeepDanbooru, Ollama VLM)
 │       ├── prompt-tab.js        # AI assistant & presets
 │       ├── metadata-tab.js      # Metadata extraction & display (PNG/WebP/JSON)
@@ -553,7 +565,7 @@ ComfyUI-Workflow-Studio/
 │   ├── node_sets_menu.js        # Workflow Studio Library side panel
 │   └── gallery_feeder_extension.js  # WFS_GalleryFeeder canvas widgets (After Gen / Run / Stop)
 ├── tools/
-│   └── import_style_prompt_seed.py  # Dev tool: pre-process a wildcards-vault source into ws_style_prompt (not run by the plugin itself)
+│   └── import_style_prompt_seed.py  # Dev tool: pre-process a wildcards-vault source into ws_image_prompt (not run by the plugin itself)
 └── data/                        # Fallback data dir (used when ComfyUI user/default/ is not found)
 ```
 
