@@ -222,6 +222,40 @@ function applyI18nToHtml() {
     const galleryOpenTaggerBtn = document.getElementById("wfm-gallery-open-tagger-btn");
     if (galleryOpenTaggerBtn) galleryOpenTaggerBtn.textContent = t("tabTagger");
 
+    // Gallery サブタブ (Output / Style-Prompt)
+    const galleryOutputSubtab = document.getElementById("wfm-gallery-subtab-output");
+    if (galleryOutputSubtab) galleryOutputSubtab.textContent = t("galleryTabOutput");
+    const galleryStyleSubtab = document.getElementById("wfm-gallery-subtab-style");
+    if (galleryStyleSubtab) galleryStyleSubtab.textContent = t("galleryTabStyle");
+
+    // Style/Prompt ギャラリーパネル
+    const styleSearch = document.getElementById("wfm-style-search");
+    if (styleSearch) styleSearch.placeholder = t("gallerySearchPlaceholder");
+    const styleRefreshBtn = document.getElementById("wfm-style-refresh-btn");
+    if (styleRefreshBtn) styleRefreshBtn.textContent = t("refresh");
+    const styleTreeTitle = document.getElementById("wfm-style-tree-title");
+    if (styleTreeTitle) styleTreeTitle.textContent = t("galleryFolders");
+    const styleListPlaceholder = document.getElementById("wfm-style-list-placeholder");
+    if (styleListPlaceholder) styleListPlaceholder.textContent = t("gallerySelectFolder");
+    const styleNoSelection = document.getElementById("wfm-style-no-selection");
+    if (styleNoSelection) styleNoSelection.textContent = t("galleryNoSelection");
+    const styleSelectedPromptTitle = document.getElementById("wfm-style-selected-prompt-title");
+    if (styleSelectedPromptTitle) styleSelectedPromptTitle.textContent = t("styleGallerySelectedPrompt");
+    const styleSelectedPrompt = document.getElementById("wfm-style-selected-prompt");
+    if (styleSelectedPrompt) styleSelectedPrompt.placeholder = t("styleGalleryNoPrompt");
+    const styleSavePromptBtn = document.getElementById("wfm-style-save-prompt-btn");
+    if (styleSavePromptBtn) styleSavePromptBtn.textContent = t("save");
+    const styleAddBtn = document.getElementById("wfm-style-add-btn");
+    if (styleAddBtn) styleAddBtn.textContent = t("styleGalleryAddBtn");
+    const styleChipsTitle = document.getElementById("wfm-style-chips-title");
+    if (styleChipsTitle) styleChipsTitle.textContent = t("styleGalleryChipsTitle");
+    const styleClearBtn = document.getElementById("wfm-style-clear-btn");
+    if (styleClearBtn) styleClearBtn.textContent = t("styleGalleryClearBtn");
+    const styleFinalPromptTitle = document.getElementById("wfm-style-final-prompt-title");
+    if (styleFinalPromptTitle) styleFinalPromptTitle.textContent = t("styleGalleryFinalPromptTitle");
+    const styleCopyBtn = document.getElementById("wfm-style-copy-btn");
+    if (styleCopyBtn) styleCopyBtn.textContent = t("copy");
+
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
     if (assistantHeader) assistantHeader.textContent = t("assistantSubtab");
@@ -447,6 +481,9 @@ function applyI18nToHtml() {
         "wfm-help-gallery-13": "helpGallery13", "wfm-help-gallery-14": "helpGallery14",
         "wfm-help-gallery-15": "helpGallery15", "wfm-help-gallery-16": "helpGallery16",
         "wfm-help-gallery-17": "helpGallery17",
+        "wfm-help-gallery-18": "helpGallery18", "wfm-help-gallery-19": "helpGallery19",
+        "wfm-help-gallery-20": "helpGallery20", "wfm-help-gallery-21": "helpGallery21",
+        "wfm-help-gallery-card-styleprompt-title": "helpGalleryCardStyleprompt",
         "wfm-help-tagger-title": "helpTaggerTitle",
         "wfm-help-tagger-1": "helpTagger1", "wfm-help-tagger-2": "helpTagger2",
         "wfm-help-tagger-3": "helpTagger3", "wfm-help-tagger-4": "helpTagger4",

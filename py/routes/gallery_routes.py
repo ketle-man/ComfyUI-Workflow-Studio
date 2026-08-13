@@ -43,6 +43,16 @@ def _init_allowed_root() -> None:
     except Exception as e:
         logger.warning("GalleryRoutes: failed to get ComfyUI output dir: %s", e)
 
+    # Style/Promptギャラリー用に実outputフォルダを常に別途保持する
+    # (Settingsで_allowed_rootが別フォルダに変更されていても影響しないようにするため)
+    try:
+        import folder_paths  # type: ignore
+        output_dir = folder_paths.get_output_directory()
+        if output_dir and Path(output_dir).is_dir():
+            _service.set_comfy_output_root(output_dir)
+    except Exception as e:
+        logger.warning("GalleryRoutes: failed to get ComfyUI output dir for style-prompt root: %s", e)
+
 
 _init_allowed_root()
 
@@ -55,6 +65,8 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/image/serve", serve_image)
     app.router.add_get("/wfm/gallery/image/thumb", serve_thumb)
     app.router.add_post("/wfm/gallery/image/meta", save_image_meta)
+    app.router.add_get("/wfm/gallery/style-prompt/root", get_style_prompt_root)
+    app.router.add_post("/wfm/gallery/image/style-prompt", save_style_prompt)
     app.router.add_post("/wfm/gallery/image/save", save_image_to_gallery)
     app.router.add_post("/wfm/gallery/image/favorite", toggle_favorite)
     app.router.add_get("/wfm/gallery/groups", list_groups)
@@ -104,6 +116,7 @@ async def list_images(request: web.Request) -> web.Response:
     favorite_only = request.rel_url.query.get("favorite", "false") == "true"
     tag_filter = request.rel_url.query.get("tag", "")
     group_filter = request.rel_url.query.get("group", "")
+    recursive = request.rel_url.query.get("recursive", "false") == "true"
 
     if not folder:
         return web.json_response({"error": "folder parameter required"}, status=400)
@@ -117,6 +130,7 @@ async def list_images(request: web.Request) -> web.Response:
             favorite_only=favorite_only,
             tag_filter=tag_filter,
             group_filter=group_filter,
+            recursive=recursive,
         )
         # 検索なしのフォルダロード時にバックグラウンドインデックスを起動
         if not search:
@@ -243,6 +257,28 @@ async def save_image_meta(request: web.Request) -> web.Response:
             return web.json_response({"error": "path required"}, status=400)
         data = {k: v for k, v in body.items() if k != "path"}
         ok = _service.save_image_meta(img_path, data)
+        return web.json_response({"ok": ok})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def get_style_prompt_root(request: web.Request) -> web.Response:
+    """GET /wfm/gallery/style-prompt/root — Style/Promptギャラリーのルートフォルダを返す"""
+    root = _service.get_style_prompt_root()
+    if root is None:
+        return web.json_response({"error": "ComfyUI output directory not resolved"}, status=500)
+    return web.json_response({"root": root})
+
+
+async def save_style_prompt(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/image/style-prompt — 画像の.txtサイドカーにプロンプトを保存"""
+    try:
+        body = await request.json()
+        img_path = body.get("path", "")
+        prompt = body.get("prompt", "")
+        if not img_path:
+            return web.json_response({"error": "path required"}, status=400)
+        ok = _service.save_style_prompt(img_path, prompt)
         return web.json_response({"ok": ok})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)

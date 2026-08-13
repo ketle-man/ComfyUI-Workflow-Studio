@@ -2,6 +2,38 @@
 
 ---
 
+## v0.3.94
+
+### 機能追加: Gallery タブのサブタブ化 + Style/Prompt ギャラリー新設（視覚的プロンプトビルダー）
+
+ユーザーから「Galleryタブをサブタブ化してスタイル・プロンプト用ギャラリーを追加したい。サムネイルによるスタイル/プロンプトの閲覧・プロンプト作成を行いたい」との要望を受けて新規実装。既存のGalleryタブの挙動は「Output」サブタブとしてそのまま残し、隣に「Style/Prompt」サブタブを新設した。参考として`comfyui_prompt_gallery`（CivitAI配布PonyXL wildcardパックをサムネイル一覧化しクリックでプロンプト挿入するツール）と、ユーザーの別プロジェクト`prompt_builder_proto`（CLIP埋め込み検索まで持つ高機能プロトタイプ）の2つが示されたが、後者の3D空間表示・埋め込み検索等は対象外とし、ユーザー指定の「左フォルダツリー／中央サムネイル／右にプロンプト表示＋作成欄／下部コピーボタン」という素の画面構成のみを踏襲した。ブランチ`feature/style-prompt-gallery`で作業。
+
+**1. データ設計判断: プロンプトは`.txt`サイドカーで保存し、`gallery_metadata.json`には触れない**: 既存の`GalleryMetadataStore`（`gallery_metadata.json`）は起動時にメモリへロードし保存時にファイル全体を書き戻す実装のため、ComfyUI実行中に外部スクリプトで数百件を直接書き込むと、サーバー側の別の保存操作で上書き・消失するリスクがあった。加えて`cleanup_stale_images()`はフォルダパスの**前方一致**でメタデータを判定しており、非再帰スキャンで親フォルダをlist_imagesすると、実際はサブフォルダに存在する画像のメタデータを「無くなった」と誤判定して削除してしまう潜在バグが既存コードにあることも判明（Output側のフラットな日付フォルダ構成ではほぼ顕在化しないが、深い階層を持つStyle/Promptギャラリーでは実害が出うる）。これらを踏まえ、プロンプトデータは画像と同名の`.txt`サイドカーファイル（例: `mobile_trooper.png` + `mobile_trooper.txt`）として画像フォルダに直接置く方式にした。実行中のJSONストアを一切触らないため競合リスクがゼロになり、かつ「画像+txtを置くだけ」でユーザー自身が将来データを追加できる最も簡単なフォーマットになる、という一石二鳥の設計。
+
+**2. バックエンド (`gallery_service.py` / `gallery_routes.py`)**: `_read_sidecar_prompt()`/`save_style_prompt()`で`.txt`サイドカーの読み書きを実装し、`get_image_metadata()`の戻り値に`style_prompt`フィールドを追加（Outputギャラリー側からws_style_promptフォルダを閲覧した際にも同じ仕組みでプロンプトが表示される）。`list_images()`の検索フィルタにもサイドカー内容を追加。新規ルート`GET /wfm/gallery/style-prompt/root`・`POST /wfm/gallery/image/style-prompt`を追加。Settingsでユーザーが Output ギャラリーのルートを実outputフォルダ以外に変更していてもStyle/Promptギャラリー(常に実output直下)へアクセスできるよう、`_comfy_output_root`という不変ルートを`_allowed_root`とは別に保持し、`_check_path_allowed()`をいずれか一方の配下なら許可するよう拡張した。
+
+**3. フロントエンド**: `templates/index.html`のGalleryタブ先頭に`lab-tab.js`の`.wfm-lab-subtab-*`と同一パターンの`.wfm-gallery-subtab-nav`を追加し、既存の3カラムmarkupを`#wfm-gallery-panel-output`でラップ、新規`#wfm-gallery-panel-style`を追加。既存`gallery-tab.js`（1994行、favorite/tags/groups/bulk操作等が密結合したシングルトン実装）への機能追加によるregression リスクを避けるため、Style/Prompt専用の新規ファイル`static/js/style-gallery-tab.js`を作成し、既存RESTエンドポイントを再利用しつつレンダリングのみ独自実装した。`i18n.js`はen/ja/zh 3言語に新規キーを追加（既存の`galleryFolders`/`gallerySelectFolder`/`galleryNoImages`/`gallerySearchPlaceholder`等、定義済みだが未使用だったキーをここで初めて実際に使用した）。ヘルプタブは`project_v0336_conventions`メモの「index.html + i18n.js(3言語) + app.jsのhelpIdMapの3点セット」の慣習に従い新規カードを追加。
+
+**4. シードデータ投入**: `tools/import_style_prompt_seed.py`を新規作成（PyYAML不要、`comfyui_prompt_gallery/web/prompt_gallery.js`の`parseYamlForImages`と同じインデントベースの簡易パーサをPythonに移植）。ユーザーの`wildcard_data`フォルダ（`pack: set: category: leaf: [tag_string]`形式のYAML + `thumbnails/`配下の対応画像）のうち、サムネイル画像を伴う6カテゴリ（artstyle/body/expression/job/pose/scene）から、画像とタグの対が実際に揃っている**460枚**のみを`output/ws_style_prompt`へコピー＋`.txt`サイドカー生成した（残り487枚は元データ側にタグ定義が無く「テキストのみ」相当のため、ユーザー指示通りスキップ）。CivitAI配布パックの再配布ライセンス問題を避けるため、実データ画像はリポジトリにコミットせず、書き込み先はユーザー個人のローカルComfyUI outputフォルダのみとした。
+
+**5. フォローアップ改善（実機フィードバックを受けて）**:
+- **再帰的な画像表示**: 親フォルダを選択してもサブフォルダの画像が0件表示になっていた（インポートしたデータが深い階層に配置されるため）。`list_images()`に`recursive`パラメータを追加し`_scan_folder_recursive()`（`os.walk`ベース）を新設、Style/Promptギャラリー側は常に`recursive=true`で呼び出すよう変更。フォルダツリーの`list_folder_tree()`も`image_count`（直下のみ、Output側で従来通り使用）とは別に`image_count_total`（サブフォルダ込みの合計、後方互換で追加）を返すようにし、ツリーの件数バッジもStyle/Prompt側では合計値を表示するよう修正。
+- **右ペイン2カラム化**: 選択画像プレビュー/プロンプト/選択済みチップ（左）と、最終プロンプト（右、縦いっぱいに伸びる）に分割。詳細パネル幅を320px→520pxに拡大。
+- **選択済みプロンプトのチップ表示から拡張子を除去**: `chip.filename`表示時に`.replace(/\.[^.]+$/, "")`。
+- **ponyxlWildcardsVault形式のライブ（未インポート）対応**: ユーザーが`wildcard_data`のカテゴリフォルダ（yaml + thumbnails/、`thumbnails_option2/`の別プレビュー画像`{leaf}.preview3.ext`含む）を生のまま`ws_style_prompt`配下に置いて確認したところ「対応させたい」との要望。`_read_sidecar_prompt()`を「1. `.txt`サイドカーを優先 → 2. 無ければponyxlWildcardsVault形式としてその場でYAML解決」の2段構えに変更。`_find_vault_category_root()`で画像の祖先フォルダを最大8階層遡り`thumbnails`/`thumbnails_option2`を直下に持つフォルダ（=カテゴリルート）を探し、そこに隣接する`*.yaml`を都度パース（YAML群のmtimeシグネチャでインスタンス内キャッシュ）。二重拡張子ファイル名（`alchemist.preview3.jpeg`）にも対応するため、リーフ名候補は`ファイル名.split(".")[0]`で取る。同じロジックを`tools/import_style_prompt_seed.py`側にも移植し、`thumbnails_option2`もスキャン対象に含めた。
+
+**6. フォルダ名タイポ修正**: ユーザーが当初指定したフォルダ名`ws_style_plompt`が実はスペルミス（正しくは`ws_style_prompt`）と判明。実データフォルダを`mv`でリネームし（460枚+vaultフォルダのデータはそのまま保持）、コード内の全参照（`STYLE_PROMPT_FOLDER_NAME`定数、`index.html`、`i18n.js`3言語のヘルプ文、`style-gallery-tab.js`コメント、`import_style_prompt_seed.py`）を一括修正。
+
+**トラブルシューティング: 「ComfyUI再起動したのに404」の切り分け**: バックエンドのルート追加後、ユーザーが「再起動した」と報告したにもかかわらず新規エンドポイントが404/405を返す事象が発生。`curl -i`でヘッダを確認したところ、GETの404レスポンスが`Content-Type: application/octet-stream`＋`Transfer-Encoding: chunked`という、自前のJSON APIハンドラ（常に`web.json_response`でapplication/json）とは異質なシグネチャだったことと、POSTが404ではなく`405 Method Not Allowed`（`Allow: GET,HEAD`）を返したことから、リクエストが自作ルートに全く到達せずaiohttpの静的ファイル系フォールバックに吸収されている＝新しいルート登録が実際には有効化されていないと判断。`netstat`でポートを握っているプロセスを特定し、`Get-Process`でその起動時刻を確認したところ、コード変更よりずっと前から起動し続けているプロセスであることが分かり、「再起動」が実際にはポートを握るプロセスに反映されていなかったことを特定できた。
+
+**How to apply**:
+1. 複数プロセス/外部スクリプトから同時に書き込まれうるJSONストア（`GalleryMetadataStore`のような「起動時ロード→都度書き戻し」実装）に、バッチ処理や別プロセスからデータを注入したい場合は、そのストアを経由せず**ファイルシステム上の独立したファイル**（サイドカー等）に逃がすことを検討する。競合の心配なく安全に外部から書き込める。
+2. `cleanup_stale_images()`のようなフォルダ配下メタデータの「前方一致による孤立削除」処理は、**呼び出し元が実際にスキャンした範囲**（非再帰なら直下のみ）を正しく反映した`existing_paths`を渡さないと、スキャンしていない孫階層のメタデータを誤って削除しうる。再帰スキャンに切り替える際は、この既存ロジックとの整合性を必ず確認すること。
+3. バックエンドAPIの新規エンドポイントが「再起動したのに反映されない」ように見える場合は、`curl -i`でレスポンスヘッダ（Content-Type、Transfer-Encoding、405のAllow等）を確認すると、リクエストが自作ハンドラに届いているか・別のフォールバック機構に吸収されているかの切り分けに使える。合わせて`netstat`でポートを握っているPIDを特定し`Get-Process`/`Get-CimInstance Win32_Process`でそのプロセスの起動時刻を見れば、「再起動」がそのプロセスに実際に反映されているかを客観的に確認できる。
+4. CivitAI等サードパーティ配布のデータセットをローカルで加工・利用する場合、生成物（画像そのもの）はリポジトリにコミットせず、変換・投入スクリプトのみをコミットしてユーザー自身のローカル環境に対して実行する方式にすることで、再配布ライセンス問題を回避できる。
+
+---
+
 ## v0.3.93
 
 ### バグ修正・機能改善: Labタブ VAEキーフレーム不発バグの修正＋Style適用UI刷新＋Plan JSONスクロール同期修正＋キーフレーム個別削除＋Batch数超過警告＋ワイルドカード対応＋Save index image デフォルトON
