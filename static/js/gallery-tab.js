@@ -12,6 +12,7 @@ import { comfyWorkflow } from "./comfyui-workflow.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
+import { initStyleGalleryTab, activateStyleGalleryTab } from "./style-gallery-tab.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -1606,6 +1607,8 @@ export function initGalleryTab() {
     }
 
     bindEvents();
+    _initGallerySubtabToggle();
+    initStyleGalleryTab();
 }
 
 let _initialized = false;
@@ -1615,6 +1618,21 @@ function onGalleryTabActivated() {
     _initialized = true;
     detectOutputPath();
     loadGroups();
+}
+
+// ── サブタブ切替 (Output / Style-Prompt) ────────────────────────
+
+function _initGallerySubtabToggle() {
+    document.querySelectorAll(".wfm-gallery-subtab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const target = btn.dataset.gallerySubtab;
+            document.querySelectorAll(".wfm-gallery-subtab-btn").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            document.getElementById("wfm-gallery-panel-output")?.classList.toggle("active", target === "output");
+            document.getElementById("wfm-gallery-panel-style")?.classList.toggle("active", target === "style");
+            if (target === "style") activateStyleGalleryTab();
+        });
+    });
 }
 
 function bindEvents() {

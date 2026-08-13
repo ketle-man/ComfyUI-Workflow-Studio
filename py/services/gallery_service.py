@@ -30,6 +30,51 @@ _JPEG_READ_MAX = 64 * 1024 * 1024
 # フォルダキャッシュのTTL秒（フォルダmtimeが同じでも念のため）
 _CACHE_TTL = 60.0
 
+# Style/Promptギャラリー: 画像と同名の.txtサイドカーに保存されたプロンプトテキストの最大読み込みサイズ
+_SIDECAR_PROMPT_MAX = 20_000
+
+# Style/Promptギャラリーの管理フォルダ名（ComfyUI実outputフォルダ直下）
+STYLE_PROMPT_FOLDER_NAME = "ws_style_prompt"
+
+# ponyxlWildcardsVault形式（.yaml + thumbnails/）を検出するための、画像の祖先フォルダ探索上限
+_VAULT_ROOT_SEARCH_DEPTH = 8
+_VAULT_THUMB_DIR_NAMES = ("thumbnails", "thumbnails_option2")
+
+
+def _clean_vault_tags(text: str) -> str:
+    """タグ文字列の前後の空白・カンマを整理する（tools/import_style_prompt_seed.py と同じ処理）"""
+    text = text.strip()
+    text = re.sub(r"^[,\s]+|[,\s]+$", "", text)
+    text = re.sub(r"\s*,\s*", ", ", text)
+    return text
+
+
+def _parse_vault_yaml_leaves(yaml_path: Path) -> dict[str, str]:
+    """comfyui_prompt_gallery の parseYamlForImages と同じ簡易パーサ（PyYAML不要）。
+    「key:」行の直後が「- タグ文字列」で始まる行なら key をリーフとみなす。
+    戻り値: {leaf_name(小文字): タグ文字列}
+    """
+    leaves: dict[str, str] = {}
+    try:
+        lines = yaml_path.read_text(encoding="utf-8", errors="replace").split("\n")
+    except OSError:
+        return leaves
+    for i, line in enumerate(lines):
+        trimmed = line.strip()
+        if not trimmed or trimmed.startswith("#") or not trimmed.endswith(":"):
+            continue
+        if i + 1 >= len(lines):
+            continue
+        next_trimmed = lines[i + 1].strip()
+        if not next_trimmed.startswith("-"):
+            continue
+        key = trimmed[:-1].strip()
+        tags = next_trimmed[1:].strip()
+        if not tags or key.lower() == "skip":
+            continue
+        leaves[key.lower()] = _clean_vault_tags(tags)
+    return leaves
+
 
 class _FolderCache:
     """フォルダ単位の画像スキャン結果キャッシュ。
@@ -73,14 +118,25 @@ class GalleryService:
         self.data_dir = data_dir
         self.metadata_store = GalleryMetadataStore(data_dir / "gallery_metadata.json")
         self._allowed_root: Path | None = None
+        # ComfyUI実outputフォルダの不変ルート。Settingsでユーザーが_allowed_rootを
+        # 別フォルダに変更しても、Style/Promptギャラリー(常に実output配下)への
+        # アクセスが塞がれないようにするため_allowed_rootとは別管理にする
+        self._comfy_output_root: Path | None = None
         self._folder_cache = _FolderCache()
         self._bg_cancel = threading.Event()
         self._bg_cancel.set()  # 初期状態: キャンセル済み
+        # ponyxlWildcardsVault形式フォールバック用キャッシュ: category_root文字列 -> (yamlシグネチャ, {leaf: tags})
+        self._vault_leaf_cache: dict[str, tuple[tuple, dict]] = {}
 
     def update_output_root(self, root_path: str) -> None:
         """許可するルートパスを更新する（Settings変更時に呼ぶ）"""
         p = Path(root_path).resolve() if root_path else None
         self._allowed_root = p
+
+    def set_comfy_output_root(self, root_path: str) -> None:
+        """ComfyUI実outputフォルダの不変ルートを設定する（起動時に一度だけ呼ぶ）"""
+        p = Path(root_path).resolve() if root_path else None
+        self._comfy_output_root = p
 
     # ──────────────────────────────────────────────────────────────
     # バックグラウンドインデックス
@@ -147,14 +203,23 @@ class GalleryService:
             logger.debug("BG index error: %s", e)
 
     def _check_path_allowed(self, path: Path) -> bool:
-        """パスが許可ルート配下かチェック（パストラバーサル防止）"""
-        if self._allowed_root is None:
-            return False
-        try:
-            path.resolve().relative_to(self._allowed_root)
-            return True
-        except ValueError:
-            return False
+        """パスが許可ルート配下かチェック（パストラバーサル防止）。
+        Output ギャラリーの _allowed_root、またはComfyUI実outputフォルダの
+        _comfy_output_root のいずれか配下であれば許可する。"""
+        resolved = path.resolve()
+        if self._allowed_root is not None:
+            try:
+                resolved.relative_to(self._allowed_root)
+                return True
+            except ValueError:
+                pass
+        if self._comfy_output_root is not None:
+            try:
+                resolved.relative_to(self._comfy_output_root)
+                return True
+            except ValueError:
+                pass
+        return False
 
     # ──────────────────────────────────────────────────────────────
     # フォルダツリー
@@ -183,11 +248,13 @@ class GalleryService:
             except PermissionError:
                 pass
             children_nodes = [build_tree(path / name, rel_base) for name in sorted(children)]
+            total_count = image_count + sum(c["image_count_total"] for c in children_nodes)
             return {
                 "name": path.name,
                 "path": rel if rel != "." else "",
                 "abs_path": str(path).replace("\\", "/"),
                 "image_count": image_count,
+                "image_count_total": total_count,
                 "children": children_nodes,
             }
 
@@ -230,6 +297,33 @@ class GalleryService:
         self._folder_cache.set(folder, entries)
         return entries
 
+    def _scan_folder_recursive(self, folder: Path) -> list[tuple[str, str, int, float]]:
+        """os.walk() でフォルダ配下を再帰的に列挙する（サブフォルダの画像も含む）。
+        Style/Promptギャラリーのように深い階層に画像が置かれるケース用。
+        キャッシュはしない（フォルダ数が少なく、都度スキャンしても軽い想定）。
+        """
+        entries = []
+        try:
+            for root, dirs, files in os.walk(folder):
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+                for name in files:
+                    if Path(name).suffix.lower() not in IMAGE_EXTENSIONS:
+                        continue
+                    full = Path(root) / name
+                    try:
+                        st = full.stat()
+                        entries.append((
+                            name,
+                            str(full.resolve()).replace("\\", "/"),
+                            st.st_size,
+                            st.st_mtime,
+                        ))
+                    except OSError:
+                        continue
+        except PermissionError:
+            pass
+        return entries
+
     def list_images(
         self,
         folder_path: str,
@@ -238,8 +332,9 @@ class GalleryService:
         favorite_only: bool = False,
         tag_filter: str = "",
         group_filter: str = "",
+        recursive: bool = False,
     ) -> list[dict]:
-        """指定フォルダ内の画像一覧を返す（サブフォルダなし）"""
+        """指定フォルダ内の画像一覧を返す（recursive=Trueならサブフォルダも含める）"""
         folder = Path(folder_path).resolve()
         if not folder.is_dir():
             return []
@@ -253,7 +348,7 @@ class GalleryService:
             group_member_set = self.metadata_store.get_group_member_set(group_filter)
 
         # os.scandir() でファイル情報を一括取得（stat()の個別呼び出しを排除）
-        raw_entries = self._scan_folder(folder)
+        raw_entries = self._scan_folder_recursive(folder) if recursive else self._scan_folder(folder)
 
         # 孤立メタデータを自動クリーンアップ（移動・削除されたファイルの残骸を除去）
         existing_paths = {abs_path for _, abs_path, _, _ in raw_entries}
@@ -289,14 +384,16 @@ class GalleryService:
                 "groups": meta.get("groups", []),
             }
 
-            # 検索フィルタ（ファイル名・メモ・タグ・キャッシュ済みプロンプト）
+            # 検索フィルタ（ファイル名・メモ・タグ・キャッシュ済みプロンプト・.txtサイドカー）
             if search:
                 s = search.lower()
+                sidecar_prompt = self._read_sidecar_prompt(Path(abs_path)) or ""
                 if not (
                     s in name.lower()
                     or s in item["memo"].lower()
                     or any(s in t.lower() for t in tags)
                     or s in meta.get("prompt_cache", "").lower()
+                    or s in sidecar_prompt.lower()
                 ):
                     continue
 
@@ -313,6 +410,95 @@ class GalleryService:
             results.sort(key=lambda x: x["mtime"], reverse=True)
 
         return results
+
+    # ──────────────────────────────────────────────────────────────
+    # Style/Promptギャラリー: .txtサイドカーによるプロンプト保存
+    # ──────────────────────────────────────────────────────────────
+
+    def get_style_prompt_root(self) -> str | None:
+        """Style/Promptギャラリーのルートフォルダ(ComfyUI実output/ws_style_prompt)を
+        返す。無ければ作成する。"""
+        if self._comfy_output_root is None:
+            return None
+        root = self._comfy_output_root / STYLE_PROMPT_FOLDER_NAME
+        root.mkdir(parents=True, exist_ok=True)
+        return str(root).replace("\\", "/")
+
+    def _sidecar_path(self, image_path: Path) -> Path:
+        return image_path.with_suffix(".txt")
+
+    def _read_sidecar_prompt(self, image_path: Path) -> str | None:
+        """画像のプロンプトテキストを返す。
+        1. 画像と同名の .txt サイドカーがあればそれを使う
+        2. 無ければ ponyxlWildcardsVault 形式 (*.yaml + thumbnails/) をフォールバックとして
+           その場で解決する（インポート未実施のフォルダをそのまま置いた場合に対応するため）
+        """
+        sidecar = self._sidecar_path(image_path)
+        try:
+            if sidecar.is_file() and sidecar.stat().st_size <= _SIDECAR_PROMPT_MAX:
+                text = sidecar.read_text(encoding="utf-8", errors="replace").strip()
+                if text:
+                    return text
+        except OSError:
+            pass
+        return self._read_vault_prompt(image_path)
+
+    def _find_vault_category_root(self, image_path: Path) -> Path | None:
+        """image_path の祖先を辿り、直下に thumbnails(_option2) を持つフォルダ
+        (=ponyxlWildcardsVaultのカテゴリルート) を探す"""
+        cur = image_path.parent
+        for _ in range(_VAULT_ROOT_SEARCH_DEPTH):
+            if any((cur / name).is_dir() for name in _VAULT_THUMB_DIR_NAMES):
+                return cur
+            if cur.parent == cur:
+                break
+            cur = cur.parent
+        return None
+
+    def _load_vault_leaves(self, category_root: Path) -> dict[str, str]:
+        yaml_files = sorted(category_root.glob("*.yaml")) + sorted(category_root.glob("*.yml"))
+        if not yaml_files:
+            return {}
+        try:
+            signature = tuple(sorted((str(f), f.stat().st_mtime) for f in yaml_files))
+        except OSError:
+            signature = ()
+        cache_key = str(category_root)
+        cached = self._vault_leaf_cache.get(cache_key)
+        if cached is not None and cached[0] == signature:
+            return cached[1]
+        leaves: dict[str, str] = {}
+        for yf in yaml_files:
+            leaves.update(_parse_vault_yaml_leaves(yf))
+        self._vault_leaf_cache[cache_key] = (signature, leaves)
+        return leaves
+
+    def _read_vault_prompt(self, image_path: Path) -> str | None:
+        """ponyxlWildcardsVault形式のフォールバック解決。
+        thumbnails_option2 の "{leaf}.preview3.ext" のような二重拡張子にも対応するため、
+        ファイル名の最初の "." より前をリーフ名候補として使う。"""
+        category_root = self._find_vault_category_root(image_path)
+        if category_root is None:
+            return None
+        leaves = self._load_vault_leaves(category_root)
+        if not leaves:
+            return None
+        leaf_candidate = image_path.name.split(".")[0].lower()
+        return leaves.get(leaf_candidate)
+
+    def save_style_prompt(self, image_path: str, text: str) -> bool:
+        """画像と同名の.txtサイドカーにプロンプトテキストを保存する"""
+        p = Path(image_path).resolve()
+        if not p.is_file():
+            return False
+        if not self._check_path_allowed(p):
+            return False
+        try:
+            self._sidecar_path(p).write_text((text or "").strip(), encoding="utf-8")
+            return True
+        except OSError as e:
+            logger.warning("save_style_prompt: failed for %s: %s", p, e)
+            return False
 
     # ──────────────────────────────────────────────────────────────
     # 画像メタデータ
@@ -355,6 +541,7 @@ class GalleryService:
             "tags": saved.get("tags", []),
             "memo": saved.get("memo", ""),
             "groups": saved.get("groups", []),
+            "style_prompt": self._read_sidecar_prompt(path),
         }
 
     def _read_png_metadata(self, path: Path) -> dict:

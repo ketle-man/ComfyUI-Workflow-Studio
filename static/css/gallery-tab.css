@@ -2,11 +2,45 @@
    Gallery Tab Styles
    ============================================================ */
 
+/* ── サブタブ (Output / Style-Prompt) ──────────────────────── */
+
+.wfm-gallery-subtab-nav {
+    display: flex;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+
+.wfm-gallery-subtab-btn {
+    padding: 6px 16px;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s;
+}
+
+.wfm-gallery-subtab-btn:hover { color: var(--wfm-text-primary); }
+.wfm-gallery-subtab-btn.active { color: var(--wfm-primary); border-bottom-color: var(--wfm-primary); }
+
+.wfm-gallery-panel {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.wfm-gallery-panel.active { display: flex; }
+
 /* ── 3カラムレイアウト ──────────────────────────────────────── */
 
 .wfm-gallery-layout {
     display: flex;
-    height: calc(100vh - var(--wfm-header-height, 96px));
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
     gap: 0;
 }
@@ -832,4 +866,115 @@
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+}
+
+/* ============================================================
+   Style/Prompt ギャラリー (右ペイン: プロンプトビルダー)
+   ============================================================ */
+
+.wfm-style-detail-panel {
+    width: 520px;
+    min-width: 520px;
+    max-width: 520px;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+.wfm-style-detail-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.wfm-style-detail-col-left {
+    width: 280px;
+    min-width: 280px;
+    max-width: 280px;
+    overflow-y: auto;
+    border-right: 1px solid var(--wfm-border);
+    padding-bottom: 8px;
+}
+
+.wfm-style-detail-col-right {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+}
+
+.wfm-style-section {
+    padding: 8px 10px;
+}
+
+.wfm-style-prompt-box {
+    width: 100%;
+    resize: vertical;
+    font-size: 12px;
+    padding: 6px 8px;
+    background: var(--wfm-bg-primary, #16213e);
+    border: 1px solid var(--wfm-border);
+    border-radius: 4px;
+    color: var(--wfm-text-primary);
+    box-sizing: border-box;
+}
+
+.wfm-style-btn-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.wfm-style-btn-row .wfm-btn {
+    flex: 1;
+}
+
+.wfm-style-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+    min-height: 24px;
+}
+
+.wfm-style-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    background: rgba(79,142,247,0.15);
+    color: var(--wfm-accent, #4f8ef7);
+    border: 1px solid rgba(79,142,247,0.3);
+    border-radius: 10px;
+    padding: 2px 4px 2px 8px;
+    font-size: 11px;
+}
+
+.wfm-style-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+}
+
+.wfm-style-chip-remove {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+.wfm-style-chip-remove:hover { opacity: 1; }
+
+.wfm-style-final-section {
+    height: 100%;
+}
+
+.wfm-style-final-textarea {
+    margin-top: 4px;
+    flex: 1;
+    min-height: 0;
+    resize: none;
 }

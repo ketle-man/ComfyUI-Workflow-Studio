@@ -1555,6 +1555,15 @@
                             </ul>
                         </div>
                         <div class="wfm-help-card">
+                            <h3 id="wfm-help-gallery-card-styleprompt-title">Style/Prompt Gallery</h3>
+                            <ul>
+                                <li id="wfm-help-gallery-18">Second sub-tab next to Output (top of the Gallery tab) for browsing a visual prompt library — manages the <b>ws_style_prompt</b> folder inside the ComfyUI output directory (created automatically)</li>
+                                <li id="wfm-help-gallery-19">Same 3-column layout: folder tree (left) | thumbnails (center) | prompt builder (right). Click a thumbnail to preview it and its prompt text — this does not add it to the prompt yet</li>
+                                <li id="wfm-help-gallery-20">"+ Add" appends the previewed image's prompt as a chip under "Selected Prompts"; chips can be removed individually (×) or all at once ("Clear All"); "Save" edits and persists the prompt text for that image</li>
+                                <li id="wfm-help-gallery-21">"Final Prompt" combines all chips into one comma-separated text (also freely editable); "Copy" copies it to the clipboard. Prompt text is stored as a plain <b>.txt</b> file next to each image, so anyone can add their own entries by dropping an image + matching .txt file into a subfolder</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
                             <h3 id="wfm-help-gallery-card-folder-title">Folder &amp; Selection</h3>
                             <ul>
                                 <li id="wfm-help-gallery-5">Folder tree: click to load images, expand with ▶; "+ New" creates a subfolder inside the selected folder, "Del" deletes it with all contents</li>
@@ -1986,6 +1995,13 @@
 
         <!-- Gallery Tab -->
         <section id="wfm-tab-gallery" class="wfm-tab-content">
+            <div class="wfm-gallery-subtab-nav">
+                <button id="wfm-gallery-subtab-output" class="wfm-gallery-subtab-btn active" data-gallery-subtab="output">Output</button>
+                <button id="wfm-gallery-subtab-style" class="wfm-gallery-subtab-btn" data-gallery-subtab="style">Style/Prompt</button>
+            </div>
+
+            <!-- Output ギャラリーパネル -->
+            <div id="wfm-gallery-panel-output" class="wfm-gallery-panel active">
             <!-- Toolbar -->
             <div class="wfm-toolbar">
                 <div class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;align-items:center;">
@@ -2126,6 +2142,79 @@
                     </div>
                 </div>
             </div>
+            </div>
+            <!-- /Output ギャラリーパネル -->
+
+            <!-- Style/Prompt ギャラリーパネル -->
+            <div id="wfm-gallery-panel-style" class="wfm-gallery-panel">
+                <div class="wfm-toolbar">
+                    <div class="wfm-toolbar-row" style="gap:6px;flex-wrap:wrap;align-items:center;">
+                        <div class="wfm-search-wrap">
+                            <input type="text" id="wfm-style-search" class="wfm-search-input" placeholder="Search prompts...">
+                            <button class="wfm-search-clear-btn" id="wfm-style-search-clear-btn" title="Clear search">✕</button>
+                        </div>
+                        <span id="wfm-style-count" class="wfm-nodes-count"></span>
+                        <button id="wfm-style-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="wfm-gallery-layout">
+                    <!-- 左: フォルダツリー (ws_style_prompt ルート) -->
+                    <div id="wfm-style-tree-panel" class="wfm-gallery-tree-panel">
+                        <div class="wfm-gallery-tree-header">
+                            <span id="wfm-style-tree-title" class="wfm-gallery-tree-title">Folders</span>
+                        </div>
+                        <div id="wfm-style-tree" class="wfm-gallery-tree">
+                            <p class="wfm-placeholder" id="wfm-style-tree-placeholder">Loading...</p>
+                        </div>
+                    </div>
+
+                    <!-- 中: サムネイル一覧 -->
+                    <div id="wfm-style-list-panel" class="wfm-gallery-list-panel">
+                        <div id="wfm-style-grid" class="wfm-gallery-grid wfm-gallery-view-thumb">
+                            <p class="wfm-placeholder" id="wfm-style-list-placeholder">Select a folder to browse images.</p>
+                        </div>
+                    </div>
+
+                    <!-- 右: プロンプトビルダーパネル (2カラム: 選択/チップ | 最終プロンプト) -->
+                    <div id="wfm-style-detail-panel" class="wfm-gallery-detail-panel wfm-style-detail-panel">
+                        <div class="wfm-style-detail-col wfm-style-detail-col-left">
+                            <div class="wfm-gallery-detail-header">
+                                <span id="wfm-style-selected-name" class="wfm-gallery-detail-filename"></span>
+                            </div>
+                            <div id="wfm-style-selected-preview" class="wfm-gallery-detail-preview wfm-gallery-preview-container">
+                                <span id="wfm-style-no-selection" class="wfm-placeholder">No selection</span>
+                            </div>
+
+                            <div class="wfm-style-section">
+                                <div id="wfm-style-selected-prompt-title" class="wfm-gallery-section-title">Prompt</div>
+                                <textarea id="wfm-style-selected-prompt" class="wfm-style-prompt-box" rows="4" placeholder="No prompt data for this image."></textarea>
+                                <div class="wfm-style-btn-row">
+                                    <button id="wfm-style-save-prompt-btn" class="wfm-btn wfm-btn-sm" disabled>Save</button>
+                                    <button id="wfm-style-add-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" disabled>+ Add</button>
+                                </div>
+                            </div>
+
+                            <hr class="wfm-group-divider">
+
+                            <div class="wfm-style-section">
+                                <div class="wfm-gallery-detail-header" style="padding:0;background:none;border:none;display:flex;justify-content:space-between;align-items:center;">
+                                    <span id="wfm-style-chips-title" class="wfm-gallery-section-title">Selected Prompts</span>
+                                    <button id="wfm-style-clear-btn" class="wfm-btn wfm-btn-sm">Clear All</button>
+                                </div>
+                                <div id="wfm-style-chips" class="wfm-style-chips"></div>
+                            </div>
+                        </div>
+
+                        <div class="wfm-style-detail-col wfm-style-detail-col-right wfm-style-final-section">
+                            <div id="wfm-style-final-prompt-title" class="wfm-gallery-section-title">Final Prompt</div>
+                            <textarea id="wfm-style-final-prompt" class="wfm-style-prompt-box wfm-style-final-textarea"></textarea>
+                            <button id="wfm-style-copy-btn" class="wfm-btn wfm-btn-primary" style="width:100%;margin-top:6px;">Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- /Style/Prompt ギャラリーパネル -->
         </section>
 
         <!-- Image Edit Tab -->

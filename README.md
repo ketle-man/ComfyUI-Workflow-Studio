@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.93-green)
+![Version](https://img.shields.io/badge/version-0.3.94-green)
 
 ## Screenshots
 
@@ -222,6 +222,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 <details>
 <summary><h3>Gallery Tab (v0.3.44)</h3></summary>
 
+- **Output / Style-Prompt sub-tabs** (v0.3.94) — the Gallery tab has two sub-tabs at the top: **Output** (the image browser described below) and **Style/Prompt** (a separate visual prompt-building library — see its own section below)
 - **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
 - **Folder tree root label** (v0.3.90) — the root entry in the folder tree is labeled simply **[root]**, no longer suffixed with the scanned folder's own directory name (which could be a misleading, environment-specific name — e.g. StabilityMatrix installs where the output folder is a symlink named `Text2Img` — even though the folder holds every kind of generated output, not just text-to-image results)
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
@@ -247,6 +248,18 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Output folder configurable** — set the scanned output folder from Settings tab
 - **SVG file support** (v0.3.77) — `.svg` files are browsable, previewable (detail panel and lightbox), and included in favorites/tags/groups/move/delete/export alongside raster formats; served as-is with no rasterized thumbnail, since `<img>` scales vector graphics natively at any size
 - **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
+
+</details>
+
+<details>
+<summary><h3>Style/Prompt Gallery subtab (v0.3.94)</h3></summary>
+
+- **Visual prompt library** — a second Gallery sub-tab for browsing reference images and building prompts from them visually, separate from the Output browser; manages a dedicated `ws_style_prompt` folder, created automatically inside the ComfyUI output directory
+- **3-column layout** — folder tree (left) | thumbnail grid (center) | prompt builder (right); selecting any folder (including a parent category folder) recursively shows every image in its subfolders too, both in the grid and in the tree's count badges
+- **Prompt builder (right pane)** — clicking a thumbnail previews it and its prompt text without adding it yet; **+ Add** appends it as a removable chip under "Selected Prompts" (**Clear All** to reset); **Save** edits and persists the prompt text for that image; **Final Prompt** combines all chips into one comma-separated, freely-editable text; **Copy** sends it to the clipboard
+- **Plain-text prompt storage** — each image's prompt lives in a `.txt` sidecar file next to it (same base name, no database) — anyone can add their own entries by dropping an image + matching `.txt` file into a subfolder; the Output Gallery's own detail panel reads and displays the same file when browsing into `ws_style_prompt`
+- **ponyxlWildcardsVault format support** — if no `.txt` sidecar exists, prompts are resolved on the fly from a `*.yaml` + `thumbnails/` (also `thumbnails_option2/`) pack placed directly under the folder, using the same key/tag structure as Navimixu's [PonyXL Wildcards Vault](https://civitai.com/models/615967/ponyxl-wildcards-vault) packs — just drop the downloaded pack folder in, no import step required
+- **Seed data importer** — `tools/import_style_prompt_seed.py` (dev tool, ships no image data) pre-processes a wildcards-vault-style source folder into portable image + `.txt` pairs under `ws_style_prompt`, for archiving a stable, portable copy instead of relying on the on-the-fly YAML fallback
 
 </details>
 
@@ -497,7 +510,8 @@ ComfyUI-Workflow-Studio/
 │   │   ├── prompts_routes.py    # Prompt presets CRUD API
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
-│   │   └── eagle_routes.py      # Eagle integration API
+│   │   ├── eagle_routes.py      # Eagle integration API
+│   │   └── gallery_routes.py    # Gallery tab API (Output + Style/Prompt sub-tabs)
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
 │       ├── nodes_service.py     # Node metadata & node sets
@@ -506,7 +520,9 @@ ComfyUI-Workflow-Studio/
 │       ├── prompts_service.py   # Prompt presets persistence
 │       ├── workflow_analyzer.py # Model/node detection
 │       ├── settings_service.py  # Settings persistence
-│       └── png_extractor.py     # PNG metadata extraction
+│       ├── png_extractor.py     # PNG metadata extraction
+│       ├── gallery_service.py   # Gallery image scanning, .txt sidecar & ponyxlWildcardsVault prompt resolution
+│       └── gallery_metadata.py  # Gallery per-image metadata store (favorites/tags/memo/groups)
 ├── templates/
 │   └── index.html               # SPA template (Workflow/GenerateUI/Prompt/Metadata/Gallery/Nodes/Models/Settings/Help/AI)
 ├── static/
@@ -517,7 +533,8 @@ ComfyUI-Workflow-Studio/
 │       ├── workflow-tab.js      # Workflow browser
 │       ├── generate-tab.js      # Generation UI
 │       ├── feeder-tab.js        # Feeder subtab (Image Loop + Gallery modes)
-│       ├── gallery-tab.js       # Gallery tab (image browser, groups, metadata)
+│       ├── gallery-tab.js       # Gallery tab: Output sub-tab (image browser, groups, metadata) + sub-tab switching
+│       ├── style-gallery-tab.js # Gallery tab: Style/Prompt sub-tab (visual prompt builder)
 │       ├── tagger-tab.js        # Tagger tab (WD Tagger, DeepDanbooru, Ollama VLM)
 │       ├── prompt-tab.js        # AI assistant & presets
 │       ├── metadata-tab.js      # Metadata extraction & display (PNG/WebP/JSON)
@@ -535,6 +552,8 @@ ComfyUI-Workflow-Studio/
 │   ├── top_menu_extension.js    # ComfyUI menu bar integration
 │   ├── node_sets_menu.js        # Workflow Studio Library side panel
 │   └── gallery_feeder_extension.js  # WFS_GalleryFeeder canvas widgets (After Gen / Run / Stop)
+├── tools/
+│   └── import_style_prompt_seed.py  # Dev tool: pre-process a wildcards-vault source into ws_style_prompt (not run by the plugin itself)
 └── data/                        # Fallback data dir (used when ComfyUI user/default/ is not found)
 ```
 
