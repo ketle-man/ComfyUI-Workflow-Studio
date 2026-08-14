@@ -68,6 +68,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/style-catalog/root", get_style_catalog_root)
     app.router.add_post("/wfm/gallery/image/save", save_image_to_gallery)
     app.router.add_post("/wfm/gallery/image/save-to-folder", save_image_to_folder_route)
+    app.router.add_post("/wfm/gallery/output-image/delete", delete_output_image)
     app.router.add_post("/wfm/gallery/image/favorite", toggle_favorite)
     app.router.add_get("/wfm/gallery/groups", list_groups)
     app.router.add_post("/wfm/gallery/groups", create_group)
@@ -347,6 +348,32 @@ async def save_image_to_folder_route(request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "path": result["path"]})
     except Exception as e:
         logger.error("save_image_to_folder_route error: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def delete_output_image(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/output-image/delete — ComfyUI標準の画像参照(filename/subfolder/type)から
+    実ファイルを削除する。Style Catalogのカタログ作成で「Outputフォルダに画像を残さない」
+    オプションが有効な時、カタログへコピー保存した直後の元画像を消すために使う。
+    type="output" 以外は拒否する（temp/inputの誤削除を防止）。"""
+    try:
+        body = await request.json()
+        filename = (body.get("filename") or "").strip()
+        subfolder = body.get("subfolder") or ""
+        img_type = body.get("type") or ""
+        if not filename or img_type != "output":
+            return web.json_response({"error": "filename required and type must be 'output'"}, status=400)
+
+        import folder_paths  # type: ignore
+        output_dir = Path(folder_paths.get_output_directory())
+        target = output_dir / subfolder / filename
+
+        result = await asyncio.to_thread(_service.delete_images, [str(target)])
+        if result["deleted"]:
+            return web.json_response({"ok": True})
+        return web.json_response({"error": "; ".join(result["errors"]) or "File not found"}, status=404)
+    except Exception as e:
+        logger.error("delete_output_image error: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 

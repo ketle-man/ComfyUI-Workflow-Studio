@@ -18,6 +18,10 @@ export const comfyUI = {
     connected: false,
     generating: false,
     currentPromptId: null,
+    // trackProgress() 実行中の Promise を promptId -> reject関数 で保持。
+    // WebSocket切断時に、待機中のPromiseを解決させずに放置してバッチループが
+    // 無言のまま停止する（例: カタログ作成バッチが特定件数で止まる）のを防ぐ。
+    _pendingTrackers: new Map(),
     currentWorkflow: null,
     currentAnalysis: null,
     // ワークフロー読み込み時点のLora Loader (LoraManager)ノードの loras/text 状態。
@@ -69,8 +73,16 @@ export const comfyUI = {
             this.socket = new WebSocket(url);
             this.socket.onopen = () => resolve(true);
             this.socket.onerror = () => resolve(false);
-            this.socket.onclose = () => { this.socket = null; };
+            this.socket.onclose = () => {
+                this.socket = null;
+                this._rejectPendingTrackers(new Error("WebSocket disconnected"));
+            };
         });
+    },
+
+    _rejectPendingTrackers(err) {
+        for (const rejectFn of this._pendingTrackers.values()) rejectFn(err);
+        this._pendingTrackers.clear();
     },
 
     // Node info fetching
@@ -199,12 +211,29 @@ export const comfyUI = {
         return await res.json();
     },
 
-    trackProgress(promptId, progressCallback) {
+    // timeoutMs: この時間内に完了/エラー/中断通知が来なければ強制的にreject。
+    // WebSocketの取りこぼしやexecution_interrupted未処理でPromiseが永久に
+    // ぶら下がり続け、バッチループが無言で停止するのを防ぐための安全弁。
+    trackProgress(promptId, progressCallback, timeoutMs = 10 * 60 * 1000) {
         return new Promise((resolve, reject) => {
             if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
                 reject(new Error("WebSocket not connected"));
                 return;
             }
+            let settled = false;
+            const finish = (isResolve, value) => {
+                if (settled) return;
+                settled = true;
+                this.socket?.removeEventListener("message", handler);
+                clearTimeout(timer);
+                this._pendingTrackers.delete(promptId);
+                if (isResolve) resolve(value); else reject(value);
+            };
+
+            const timer = setTimeout(() => {
+                finish(false, new Error(`Generation timed out after ${Math.round(timeoutMs / 1000)}s (prompt_id=${promptId})`));
+            }, timeoutMs);
+
             const handler = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
@@ -214,17 +243,19 @@ export const comfyUI = {
                     }
                     if (msg.type === "executing" && msg.data?.prompt_id === promptId) {
                         if (msg.data.node === null) {
-                            this.socket.removeEventListener("message", handler);
-                            resolve();
+                            finish(true);
                         }
                     }
                     if (msg.type === "execution_error" && msg.data?.prompt_id === promptId) {
-                        this.socket.removeEventListener("message", handler);
-                        reject(new Error(msg.data.exception_message || "Execution error"));
+                        finish(false, new Error(msg.data.exception_message || "Execution error"));
+                    }
+                    if (msg.type === "execution_interrupted" && msg.data?.prompt_id === promptId) {
+                        finish(false, new Error("Execution interrupted"));
                     }
                 } catch {}
             };
             this.socket.addEventListener("message", handler);
+            this._pendingTrackers.set(promptId, (err) => finish(false, err));
         });
     },
 
@@ -279,7 +310,7 @@ export const comfyUI = {
 
     // High-level generate
     async generate(workflow, options = {}) {
-        const { seedMode = "random", seedValue = -1, onProgress, onComplete, onError } = options;
+        const { seedMode = "random", seedValue = -1, onProgress, onComplete, onError, timeoutMs } = options;
 
         this.generating = true;
         try {
@@ -301,7 +332,7 @@ export const comfyUI = {
             this.currentPromptId = result.prompt_id;
 
             // Track progress
-            await this.trackProgress(result.prompt_id, onProgress);
+            await this.trackProgress(result.prompt_id, onProgress, timeoutMs);
 
             // Get history/results
             const history = await this.getHistory(result.prompt_id);

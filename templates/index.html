@@ -1035,9 +1035,15 @@
                     </div>
                 </div>
 
-                <!-- Col 3: Wildcard support -->
+                <!-- Col 3: Wildcard / Style support -->
                 <div class="wfm-prompt-split-col">
-                    <div class="wfm-prompt-split-header">Wildcard</div>
+                    <div class="wfm-prompt-col3-tabs">
+                        <button class="wfm-prompt-col3-tab active" id="wfm-col3-tab-wildcard-btn" data-col3tab="wildcard">Wildcard</button>
+                        <button class="wfm-prompt-col3-tab" id="wfm-col3-tab-style-btn" data-col3tab="style">Style</button>
+                    </div>
+
+                    <!-- Wildcard タブ -->
+                    <div id="wfm-col3-tab-wildcard" class="wfm-prompt-col3-tab-content">
                     <div class="wfm-wc-panel">
 
                         <!-- Input assistance section -->
@@ -1104,6 +1110,49 @@
                         </div>
 
                     </div>
+                    </div>
+                    <!-- /Wildcard タブ -->
+
+                    <!-- Style タブ -->
+                    <div id="wfm-col3-tab-style" class="wfm-prompt-col3-tab-content" style="display:none;">
+                    <div class="wfm-wc-panel">
+                        <div class="wfm-wc-files-section" style="margin-top:0;border-top:none;padding-top:0;">
+                            <div class="wfm-wc-files-header">
+                                <span class="wfm-wc-files-title">Styles</span>
+                                <div style="display:flex;gap:4px;">
+                                    <button id="wfm-style-new-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New</button>
+                                    <button id="wfm-style-refresh-btn" class="wfm-btn wfm-btn-sm" title="Reload style list">&#8635;</button>
+                                </div>
+                            </div>
+                            <div class="wfm-search-wrap" style="margin:8px 0;">
+                                <input type="text" id="wfm-style-search" class="wfm-search-input" placeholder="Search styles...">
+                                <button class="wfm-search-clear-btn" id="wfm-style-search-clear-btn" title="Clear search">✕</button>
+                            </div>
+                            <!-- Style list -->
+                            <div id="wfm-style-list" class="wfm-wc-file-list">
+                                <p class="wfm-placeholder" style="padding:12px;font-size:12px;">Loading...</p>
+                            </div>
+                            <!-- Editor (shown when a style is selected or New is clicked) -->
+                            <div id="wfm-style-editor" class="wfm-wc-editor" style="display:none;">
+                                <div class="wfm-wc-editor-header">
+                                    <input type="text" id="wfm-style-editor-name" class="wfm-input" placeholder="Style name" style="flex:1;min-width:0;">
+                                </div>
+                                <div class="wfm-wc-editor-hint" id="wfm-style-editor-file-label" style="display:none;"></div>
+                                <div class="wfm-wc-editor-hint" id="wfm-style-editor-prompt-label">Positive prompt (use {prompt} as a placeholder for the user's own prompt)</div>
+                                <textarea id="wfm-style-editor-prompt" class="wfm-textarea wfm-wc-editor-ta" rows="5" placeholder="e.g. cinematic still, {prompt}, dramatic lighting"></textarea>
+                                <div class="wfm-wc-editor-hint" id="wfm-style-editor-negative-label">Negative prompt (optional)</div>
+                                <textarea id="wfm-style-editor-negative" class="wfm-textarea wfm-wc-editor-ta" rows="3" placeholder="e.g. blurry, low quality"></textarea>
+                                <div class="wfm-wc-editor-actions">
+                                    <button id="wfm-style-editor-save-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Save</button>
+                                    <button id="wfm-style-editor-addfile-btn" class="wfm-btn wfm-btn-sm" style="display:none;" title="Add a new style to this same file">+ Add to this file</button>
+                                    <button id="wfm-style-editor-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" style="display:none;">Delete</button>
+                                    <button id="wfm-style-editor-cancel-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                    <!-- /Style タブ -->
                 </div>
             </div>
         </section>
@@ -1272,6 +1321,7 @@
                                 <li id="wfm-help-gen-1">Connect/disconnect ComfyUI and check connection status</li>
                                 <li id="wfm-help-gen-2">Load workflows from Workflow tab (subgraph-containing workflows are supported, e.g. Flux.2 / Qwen-Image / Z-Image / Mage-Flow templates; only ComfyUI's simplified App format [.app.json / Linear Mode] is not); Reset Workflow button re-reads the current workflow file from disk and reloads the editor; <b>Save</b> button (right end of the tab bar) saves the current workflow — including any edits made in the editor — as a new .json file to the Workflow tab; a filename dialog appears with the current workflow name as the default; <b>Style</b> checkbox and dropdown (next to Reset Workflow): enable to apply a Fooocus-style JSON style to the positive and negative prompts at generation time — style files are loaded from <code>user/default/Workflow-Studio/style/*.json</code>; the style's <code>{prompt}</code> placeholder is replaced with the original prompt, or the style text is appended if no placeholder exists</li>
                                 <li id="wfm-help-gen-25"><b>Create Catalog</b> button (next to the Style dropdown): generates one preview image per Style selected in the Batch tab's Style sub-tab (using the currently loaded workflow, typically T2I), then saves each result into a chosen <b>ws_style_catalog</b> subfolder with the Style's own name as the filename (existing files with the same name are overwritten); a modal lets you create a new destination folder or pick an existing one — separate folders are useful for grouping catalogs by checkpoint or by purpose; requires at least one Style checked in Batch tab → Style sub-tab first. <b>Catalog</b> button (right next to it): jumps straight to the Gallery tab's Style_Catalog sub-tab to browse the results</li>
+                                <li id="wfm-help-gen-26">Create Catalog modal — <b>"Don't keep a copy in the Output folder"</b> checkbox: each generation still writes a normal file to ComfyUI's Output folder first (that's simply how the workflow's own Save Image node works), but once its copy has been saved into the catalog folder, checking this deletes that Output-folder original right away — useful for large catalog runs (e.g. all 200+ styles) so the Output folder isn't flooded with near-duplicate files; if a particular style's catalog copy fails to save, its Output file is left alone rather than being deleted</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1439,6 +1489,16 @@
                                 <li id="wfm-help-prompt-9">Wildcard file manager: create/edit/delete .txt/.yaml wildcard files; click filename to insert __filename__ at cursor</li>
                             </ul>
                         </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-prompt-card-style-title">Style</h3>
+                            <ul>
+                                <li id="wfm-help-prompt-10">Right pane's Wildcard/Style tab bar switches the whole panel between the wildcard tools above and this Style manager — same right pane, two modes</li>
+                                <li id="wfm-help-prompt-11">Create/edit/delete registered Styles (the same ones used by GenerateUI's Style dropdown, Batch tab, and the Style Catalog): click a name in the list to edit it, or <b>+ New</b> for a blank entry; <b>Name</b>, <b>Positive prompt</b> (supports the <code>{prompt}</code> placeholder — replaced with the user's own prompt, or appended after it if omitted) and <b>Negative prompt</b> (optional)</li>
+                                <li id="wfm-help-prompt-12">Renaming a style keeps its position in whichever file it was originally defined in; new styles are saved into a dedicated <code>custom.json</code> inside the style folder so the bundled style packs are never modified directly; a name must be unique across all styles</li>
+                                <li id="wfm-help-prompt-13">Saving, renaming, or deleting a style immediately refreshes GenerateUI's Style dropdown, the Batch tab's style checklist, and the Style Catalog's name list — no reload needed</li>
+                                <li id="wfm-help-prompt-14">Each entry in the list shows its source file as a small badge next to the name (e.g. <code>sdxl_styles_diva.json</code>); while editing an existing style, that filename also appears above the Positive prompt field, and a <b>+ Add to this file</b> button appears next to Save — click it to clear the form for a brand-new style that gets appended to that same file instead of the default <code>custom.json</code></li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-metadata">
@@ -1572,6 +1632,7 @@
                                 <li id="wfm-help-gallery-22">Third sub-tab (top of the Gallery tab) for visually picking a registered Style by its preview image — manages the <b>ws_style_catalog</b> folder inside the ComfyUI output directory (created automatically); populated by the GenerateUI tab's <b>Create Catalog</b> button (see GenerateUI Tab help)</li>
                                 <li id="wfm-help-gallery-23">Same 3-column layout: folder tree (left) | thumbnails (center) | Positive/Negative prompt panel (right). Click a thumbnail to read the Positive/Negative prompt actually embedded in that generated image, each with its own <b>Copy</b> button</li>
                                 <li id="wfm-help-gallery-24"><b>Select as Style</b> button: matches the selected image's filename (without extension) against a registered Style name and switches the GenerateUI tab's Style dropdown to it — a visual shortcut into the existing named-Style system, not a one-off apply of the embedded prompt (if the Style was renamed or deleted since the catalog image was created, a "no matching style" toast is shown instead)</li>
+                                <li id="wfm-help-gallery-25"><b>Load in GenerateUI</b> / <b>Open in Metadata Tab</b> buttons: read the workflow embedded in the catalog image itself (the catalog copy carries the same PNG metadata as the original output image) and either load it straight into the GenerateUI editor or open the image in the Metadata tab for inspection — no need to hunt down the original file in the Output folder</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -2296,6 +2357,8 @@
 
                         <div class="wfm-imageprompt-section">
                             <button id="wfm-stylecatalog-select-style-btn" class="wfm-btn wfm-btn-primary" style="width:100%;" disabled>Select as Style</button>
+                            <button id="wfm-stylecatalog-load-genui-btn" class="wfm-btn" style="width:100%;margin-top:6px;" disabled>Load in GenerateUI</button>
+                            <button id="wfm-stylecatalog-open-metadata-btn" class="wfm-btn" style="width:100%;margin-top:6px;" disabled>Open in Metadata Tab</button>
                         </div>
                     </div>
                 </div>

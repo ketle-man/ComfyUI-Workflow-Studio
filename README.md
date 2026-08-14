@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.3.95-green)
+![Version](https://img.shields.io/badge/version-0.3.96-green)
 
 ## Screenshots
 
@@ -103,6 +103,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
 - **Style selector** — checkbox and dropdown next to the Reset Workflow button; enable to apply a Fooocus-style JSON to positive and negative prompts at generation time; style files (`*.json`) are loaded from `user/default/Workflow-Studio/style/`; the style's `{prompt}` placeholder is replaced with the original prompt text, or the style is appended if no placeholder exists; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation copy and do not modify the loaded workflow
 - **Create Catalog / Catalog buttons** (v0.3.95) — next to the Style dropdown. **Create Catalog** generates one preview image per Style checked in the Batch tab's Style sub-tab (using the currently loaded workflow, typically T2I), then saves each result into a chosen `ws_style_catalog` subfolder named after the Style (existing files with the same name are overwritten); a modal lets you create a new destination folder or pick an existing one — separate folders are useful for grouping catalogs by checkpoint or by purpose. **Catalog** jumps straight to the Gallery tab's Style_Catalog sub-tab to browse the results (see below)
+  - **Don't keep a copy in the Output folder** (v0.3.96) — checkbox in the Create Catalog modal; each generation still writes a normal file to the Output folder first (the workflow's own Save Image node always does that), but once its copy has been saved into the catalog folder, checking this deletes that Output-folder original right away — keeps a large catalog run (e.g. every Style at once) from flooding the Output folder with near-duplicate files; if a style's catalog copy fails to save, its Output file is left alone rather than deleted
 - **Batch type selector** — check one of the column header checkboxes in the Batch Queue pane (Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler / Style) to activate that batch type; only one type can be active at a time; the Batch panel below Generate shows the active type, progress, and Pause/Resume/Stop controls
 - **Batch tab** (v0.3.18) — dedicated 3-pane layout for assembling the batch queue:
   - **Left pane** — 4 tabs: **Checkpoints** (file-tree; Filter / All / None), **Sampler** (KSampler sampler list), **Scheduler** (KSampler scheduler list), **Style** (flat list of all styles from `Workflow-Studio/style/`; All / None buttons)
@@ -167,7 +168,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 <details>
 <summary><h3>Prompt Tab</h3></summary>
 
-- **3-column layout** — AI Assistant (left), Presets/Preset Manager tab-panel (center), Wildcard support (right)
+- **3-column layout** — AI Assistant (left), Presets/Preset Manager tab-panel (center), Wildcard/Style support (right)
 - **AI chat assistant** — powered by [Ollama](https://ollama.com/), generate and refine prompts interactively
 - **Image attachment** — attach reference images for vision-capable models
 - **Translation** — JA/EN/ZH translation buttons for multilingual prompt creation
@@ -176,8 +177,14 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Group management** — create groups, assign/remove presets, delete groups from the Presets panel
 - **Clipboard copy** — copy positive/negative prompts individually (PP Copy / NP Copy)
 - **GenUI Set** — apply preset prompts directly to the GenerateUI interface
+- **Wildcard/Style tab bar** (v0.3.96) — the right pane switches between the wildcard tools below and a Style manager (same pane, two modes)
 - **Wildcard input toolbar** — one-click buttons to insert `{|}`, `{n$|}`, `__|__`, `<lora::1:LBW=;>` and other wildcard syntax; wraps selected text when applicable
 - **Wildcard file manager** — create, view, and edit `.txt` / `.yaml` wildcard files stored in `user/default/Workflow-Studio/wildcard/`; click a filename in the file picker to insert `__filename__` at cursor
+- **Style manager** (v0.3.96) — create, edit, and delete registered Styles (the same ones used by GenerateUI's Style dropdown, the Batch tab, and the Style Catalog), using the same list→editor CRUD pattern as the Wildcard file manager above; each entry has a Name, a Positive prompt (supports the `{prompt}` placeholder, or appends if omitted), and an optional Negative prompt
+  - **Source-file badge & in-place editing** — each list entry shows its defining file as a small badge next to its name (e.g. `sdxl_styles_diva.json`); renaming a style keeps its position in that same file rather than moving it; a name must be unique across all styles
+  - **New styles go to a dedicated file** — created via **+ New**, a style is appended to its own `custom.json` inside the style folder, so the bundled style packs are never modified directly
+  - **+ Add to this file** — while editing an existing style, this button clears the form for a brand-new entry that gets appended to that *same* file instead of the default `custom.json` — the way to add a style into one of the bundled packs
+  - Saving, renaming, or deleting a style immediately refreshes GenerateUI's Style dropdown, the Batch tab's checklist, and the Style Catalog's name list — no reload needed
 
 </details>
 
@@ -271,6 +278,8 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **3-column layout** — folder tree (left) | thumbnail grid (center) | Positive/Negative prompt panel (right); like ImagePrompt, selecting a parent folder recursively shows every image in its subfolders
 - **Positive/Negative panel** — clicking a thumbnail reads the Positive/Negative prompt actually embedded in that generated image (reusing the Metadata tab's extraction logic — no separate metadata store), each with its own **Copy** button
 - **Select as Style button** — matches the selected image's filename (without extension) against a registered Style name and switches the GenerateUI tab's Style dropdown to it; a visual shortcut into the existing named-Style system, not a one-off apply of the embedded prompt — if the Style was renamed or deleted since the catalog image was created, a "no matching style" toast is shown instead
+- **Load in GenerateUI / Open in Metadata Tab buttons** (v0.3.96) — read the workflow embedded in the catalog image itself (a byte-identical copy of the original output image, so it carries the same PNG metadata) and either load it straight into the GenerateUI editor or open the image in the Metadata tab — no need to hunt down the original file in the Output folder, and works even on catalog images created before this feature existed
+- **Double-click to enlarge** (v0.3.96) — double-click a thumbnail in the center grid, or the selected-image preview in the right panel, for the same full-size lightbox view as the Output Gallery
 
 </details>
 

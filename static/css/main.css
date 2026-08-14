@@ -2342,6 +2342,38 @@ body {
     flex-shrink: 0;
 }
 
+/* Col3 (Wildcard/Style) タブ切り替え */
+.wfm-prompt-col3-tabs {
+    display: flex;
+    background: var(--wfm-surface);
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+.wfm-prompt-col3-tab {
+    flex: 1;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--wfm-text-secondary);
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.wfm-prompt-col3-tab:hover { color: var(--wfm-text); }
+.wfm-prompt-col3-tab.active {
+    color: var(--wfm-text);
+    border-bottom-color: var(--wfm-primary);
+}
+.wfm-prompt-col3-tab-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
 /* Ollama Assistant */
 .wfm-ollama-assistant {
     display: flex;

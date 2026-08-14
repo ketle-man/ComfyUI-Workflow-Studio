@@ -279,6 +279,10 @@ function applyI18nToHtml() {
     if (scCopyNegativeBtn) scCopyNegativeBtn.textContent = t("copy");
     const scSelectStyleBtn = document.getElementById("wfm-stylecatalog-select-style-btn");
     if (scSelectStyleBtn) scSelectStyleBtn.textContent = t("stylecatalogSelectStyleBtn");
+    const scLoadGenuiBtn = document.getElementById("wfm-stylecatalog-load-genui-btn");
+    if (scLoadGenuiBtn) scLoadGenuiBtn.textContent = t("stylecatalogLoadGenuiBtn");
+    const scOpenMetadataBtn = document.getElementById("wfm-stylecatalog-open-metadata-btn");
+    if (scOpenMetadataBtn) scOpenMetadataBtn.textContent = t("stylecatalogOpenMetadataBtn");
 
     // Prompt tab
     const assistantHeader = document.querySelector(".wfm-prompt-split-left .wfm-prompt-split-header");
@@ -441,6 +445,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-20": "helpGen20", "wfm-help-gen-21": "helpGen21",
         "wfm-help-gen-22": "helpGen22", "wfm-help-gen-23": "helpGen23",
         "wfm-help-gen-24": "helpGen24", "wfm-help-gen-25": "helpGen25",
+        "wfm-help-gen-26": "helpGen26",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",
@@ -478,6 +483,10 @@ function applyI18nToHtml() {
         "wfm-help-prompt-5": "helpPrompt5", "wfm-help-prompt-6": "helpPrompt6",
         "wfm-help-prompt-7": "helpPrompt7", "wfm-help-prompt-8": "helpPrompt8",
         "wfm-help-prompt-9": "helpPrompt9",
+        "wfm-help-prompt-card-style-title": "helpPromptCardStyleTitle",
+        "wfm-help-prompt-10": "helpPrompt10", "wfm-help-prompt-11": "helpPrompt11",
+        "wfm-help-prompt-12": "helpPrompt12", "wfm-help-prompt-13": "helpPrompt13",
+        "wfm-help-prompt-14": "helpPrompt14",
         "wfm-help-settings-1": "helpSettings1", "wfm-help-settings-2": "helpSettings2",
         "wfm-help-settings-3": "helpSettings3", "wfm-help-settings-4": "helpSettings4",
         "wfm-help-settings-5": "helpSettings5", "wfm-help-settings-6": "helpSettings6",
@@ -508,7 +517,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-18": "helpGallery18", "wfm-help-gallery-19": "helpGallery19",
         "wfm-help-gallery-20": "helpGallery20", "wfm-help-gallery-21": "helpGallery21",
         "wfm-help-gallery-22": "helpGallery22", "wfm-help-gallery-23": "helpGallery23",
-        "wfm-help-gallery-24": "helpGallery24",
+        "wfm-help-gallery-24": "helpGallery24", "wfm-help-gallery-25": "helpGallery25",
         "wfm-help-gallery-card-styleprompt-title": "helpGalleryCardStyleprompt",
         "wfm-help-gallery-card-stylecatalog-title": "helpGalleryCardStylecatalog",
         "wfm-help-tagger-title": "helpTaggerTitle",

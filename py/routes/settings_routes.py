@@ -38,6 +38,9 @@ def setup_routes(app: web.Application):
     app.router.add_get("/api/wfm/settings/export", handle_export)
     app.router.add_post("/api/wfm/settings/import", handle_import)
     app.router.add_get("/api/wfm/styles", handle_get_styles)
+    app.router.add_post("/api/wfm/styles", handle_create_style)
+    app.router.add_put("/api/wfm/styles/{name}", handle_update_style)
+    app.router.add_delete("/api/wfm/styles/{name}", handle_delete_style)
 
 
 async def handle_get(request: web.Request) -> web.Response:
@@ -245,18 +248,28 @@ async def handle_import(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
-def _load_styles() -> list:
-    """Load all style JSON files from DATA_DIR/style/ directory."""
+def _style_files() -> list:
     style_dir = DATA_DIR / "style"
-    styles = []
     if not style_dir.is_dir():
-        return styles
-    for json_file in sorted(style_dir.glob("*.json")):
+        return []
+    return sorted(style_dir.glob("*.json"))
+
+
+def _load_styles() -> list:
+    """Load all style JSON files from DATA_DIR/style/ directory.
+    各エントリに定義元ファイル名を "file" として付与する（Promptタブの一覧表示・
+    「このファイルへ追加」機能で使用）。"""
+    styles = []
+    for json_file in _style_files():
         try:
             with open(json_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
-                styles.extend(data)
+                for entry in data:
+                    if isinstance(entry, dict):
+                        entry = dict(entry)
+                        entry["file"] = json_file.name
+                        styles.append(entry)
         except Exception as e:
             logger.warning("Failed to load style file %s: %s", json_file.name, e)
     return styles
@@ -269,4 +282,140 @@ async def handle_get_styles(request: web.Request) -> web.Response:
         return web.json_response(styles)
     except Exception as e:
         logger.error("Error loading styles: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+# Promptタブ「Style」サブタブでの新規作成分の保存先。既存スタイルの編集は
+# 元々そのスタイルが記載されているファイルをそのまま書き換える（他ファイルへは移動しない）。
+_CUSTOM_STYLE_FILENAME = "custom.json"
+
+
+def _find_style(name: str):
+    """名前が一致する最初のスタイルを探し、(ファイルパス, そのファイルの全データ, インデックス) を返す。
+    見つからなければ None。"""
+    for json_file in _style_files():
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            logger.warning("Failed to load style file %s: %s", json_file.name, e)
+            continue
+        if not isinstance(data, list):
+            continue
+        for i, entry in enumerate(data):
+            if isinstance(entry, dict) and entry.get("name") == name:
+                return json_file, data, i
+    return None
+
+
+def _write_style_file(path: Path, data: list) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+async def handle_create_style(request: web.Request) -> web.Response:
+    """POST /api/wfm/styles - 新規スタイルを作成する。
+    body.file を指定すると既存のそのファイルへ追記する（Promptタブの「このファイルへ追加」用、
+    ファイル名はstyleディレクトリに実在するもののみ許可しパストラバーサルを防ぐ）。
+    未指定ならデフォルトのcustom.jsonへ追記する。"""
+    try:
+        body = await request.json()
+        name = (body.get("name") or "").strip()
+        prompt = body.get("prompt", "") or ""
+        negative_prompt = body.get("negative_prompt", "") or ""
+        target_file = (body.get("file") or "").strip()
+        if not name:
+            return web.json_response({"error": "name is required"}, status=400)
+
+        def _create():
+            if _find_style(name) is not None:
+                return "duplicate"
+            style_dir = DATA_DIR / "style"
+            style_dir.mkdir(parents=True, exist_ok=True)
+
+            if target_file:
+                path = next((f for f in _style_files() if f.name == target_file), None)
+                if path is None:
+                    return "file_not_found"
+            else:
+                path = style_dir / _CUSTOM_STYLE_FILENAME
+
+            data = []
+            if path.is_file():
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        loaded = json.load(f)
+                    if isinstance(loaded, list):
+                        data = loaded
+                except Exception as e:
+                    logger.warning("Failed to load %s, recreating: %s", path.name, e)
+            data.append({"name": name, "prompt": prompt, "negative_prompt": negative_prompt})
+            _write_style_file(path, data)
+            return "ok"
+
+        result = await asyncio.to_thread(_create)
+        if result == "duplicate":
+            return web.json_response({"error": f'Style "{name}" already exists'}, status=400)
+        if result == "file_not_found":
+            return web.json_response({"error": f'File "{target_file}" not found'}, status=400)
+        return web.json_response({"ok": True})
+    except Exception as e:
+        logger.error("Error creating style: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_update_style(request: web.Request) -> web.Response:
+    """PUT /api/wfm/styles/{name} - 既存スタイルを更新する（記載元のファイルをそのまま書き換え、リネームも可）。"""
+    try:
+        original_name = request.match_info.get("name", "")
+        body = await request.json()
+        new_name = (body.get("name") or "").strip()
+        prompt = body.get("prompt", "") or ""
+        negative_prompt = body.get("negative_prompt", "") or ""
+        if not new_name:
+            return web.json_response({"error": "name is required"}, status=400)
+
+        def _update():
+            found = _find_style(original_name)
+            if found is None:
+                return "not_found"
+            path, data, idx = found
+            if new_name != original_name and _find_style(new_name) is not None:
+                return "duplicate"
+            data[idx] = {"name": new_name, "prompt": prompt, "negative_prompt": negative_prompt}
+            _write_style_file(path, data)
+            return "ok"
+
+        result = await asyncio.to_thread(_update)
+        if result == "not_found":
+            return web.json_response({"error": "Style not found"}, status=404)
+        if result == "duplicate":
+            return web.json_response({"error": f'Style "{new_name}" already exists'}, status=400)
+        return web.json_response({"ok": True})
+    except Exception as e:
+        logger.error("Error updating style: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_delete_style(request: web.Request) -> web.Response:
+    """DELETE /api/wfm/styles/{name} - スタイルを削除する（記載元のファイルから該当エントリのみ除去）。"""
+    try:
+        name = request.match_info.get("name", "")
+
+        def _delete():
+            found = _find_style(name)
+            if found is None:
+                return False
+            path, data, idx = found
+            del data[idx]
+            _write_style_file(path, data)
+            return True
+
+        ok = await asyncio.to_thread(_delete)
+        if not ok:
+            return web.json_response({"error": "Style not found"}, status=404)
+        return web.json_response({"ok": True})
+    except Exception as e:
+        logger.error("Error deleting style: %s", e)
         return web.json_response({"error": str(e)}, status=500)

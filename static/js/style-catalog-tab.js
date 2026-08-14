@@ -9,8 +9,8 @@
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { escapeHtml, setupSearchClearBtn } from "./util.js";
-import { extractAllMetadata } from "./metadata-tab.js";
-import { selectStyleByName } from "./generate-tab.js";
+import { extractAllMetadata, loadFileIntoMetadataTab } from "./metadata-tab.js";
+import { selectStyleByName, loadWorkflowIntoEditor } from "./generate-tab.js";
 
 const API = {
     root:        () => `/wfm/gallery/style-catalog/root`,
@@ -18,6 +18,7 @@ const API = {
     images:      (params) => `/wfm/gallery/images?${new URLSearchParams(params)}`,
     thumb:       (path, w = 200) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}`,
     serveImage:  (path)   => `/wfm/gallery/image/serve?path=${encodeURIComponent(path)}`,
+    workflow:    (path)   => `/wfm/gallery/image/workflow?path=${encodeURIComponent(path)}`,
 };
 
 const state = {
@@ -66,6 +67,8 @@ export function initStyleCatalogTab() {
     document.getElementById("wfm-stylecatalog-copy-positive-btn")?.addEventListener("click", () => copyText("wfm-stylecatalog-positive-text"));
     document.getElementById("wfm-stylecatalog-copy-negative-btn")?.addEventListener("click", () => copyText("wfm-stylecatalog-negative-text"));
     document.getElementById("wfm-stylecatalog-select-style-btn")?.addEventListener("click", onSelectStyleClick);
+    document.getElementById("wfm-stylecatalog-load-genui-btn")?.addEventListener("click", onLoadGenUIClick);
+    document.getElementById("wfm-stylecatalog-open-metadata-btn")?.addEventListener("click", onOpenMetadataClick);
 }
 
 export async function activateStyleCatalogTab() {
@@ -227,6 +230,7 @@ function createThumbCard(img) {
     card.appendChild(imgEl);
 
     card.addEventListener("click", () => selectImage(img));
+    card.addEventListener("dblclick", () => openLightbox(img));
 
     return card;
 }
@@ -249,7 +253,9 @@ async function selectImage(img) {
     const previewImg = document.createElement("img");
     previewImg.src = API.serveImage(img.path);
     previewImg.alt = img.filename;
-    previewImg.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;";
+    previewImg.title = "Double-click to enlarge";
+    previewImg.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;";
+    previewImg.addEventListener("dblclick", () => openLightbox(img));
     preview.appendChild(previewImg);
 
     const positiveText = document.getElementById("wfm-stylecatalog-positive-text");
@@ -257,12 +263,16 @@ async function selectImage(img) {
     const copyPositiveBtn = document.getElementById("wfm-stylecatalog-copy-positive-btn");
     const copyNegativeBtn = document.getElementById("wfm-stylecatalog-copy-negative-btn");
     const selectStyleBtn = document.getElementById("wfm-stylecatalog-select-style-btn");
+    const loadGenuiBtn = document.getElementById("wfm-stylecatalog-load-genui-btn");
+    const openMetadataBtn = document.getElementById("wfm-stylecatalog-open-metadata-btn");
 
     positiveText.textContent = "";
     negativeText.textContent = "";
     copyPositiveBtn.disabled = true;
     copyNegativeBtn.disabled = true;
     selectStyleBtn.disabled = false; // ファイル名からのStyle選択はメタデータ抽出に依存しない
+    loadGenuiBtn.disabled = false;
+    openMetadataBtn.disabled = false;
 
     try {
         const res = await fetch(API.serveImage(img.path));
@@ -287,6 +297,26 @@ async function selectImage(img) {
     }
 }
 
+// gallery-tab.jsのライトボックスと同じCSSクラスを使う（ESCで閉じる処理もgallery-tab.js側の
+// グローバルkeydownリスナーが共通で担う）。
+function openLightbox(img) {
+    const overlay = document.createElement("div");
+    overlay.className = "wfm-gallery-lightbox";
+    overlay.innerHTML = `
+        <div class="wfm-gallery-lightbox-inner">
+            <img src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" alt="${escapeHtml(img.filename)}">
+            <div class="wfm-gallery-lightbox-footer">${escapeHtml(img.filename)}</div>
+            <button class="wfm-gallery-lightbox-close">&times;</button>
+        </div>
+    `;
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay || e.target.classList.contains("wfm-gallery-lightbox-close")) {
+            overlay.remove();
+        }
+    });
+    document.body.appendChild(overlay);
+}
+
 function copyText(elementId) {
     const el = document.getElementById(elementId);
     const text = el?.textContent || "";
@@ -305,5 +335,39 @@ function onSelectStyleClick() {
         showToast(t("stylecatalogStyleSelected", name), "success");
     } else {
         showToast(t("stylecatalogNoMatch"), "error");
+    }
+}
+
+// カタログ画像は生成元の出力画像と同一バイト列で保存されているため、埋め込みワークフローも
+// そのまま残っている。Outputフォルダ内の元画像を探す必要なく、この画像から直接読み込める。
+async function onLoadGenUIClick() {
+    const img = state.selectedImage;
+    if (!img) return;
+    try {
+        const data = await apiFetch(API.workflow(img.path));
+        if (!data.has_workflow) {
+            showToast(t("galleryNoEmbeddedWorkflow"), "warning");
+            return;
+        }
+        const loaded = await loadWorkflowIntoEditor(data.workflow, img.filename);
+        if (loaded !== false) {
+            document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
+        }
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+    }
+}
+
+async function onOpenMetadataClick() {
+    const img = state.selectedImage;
+    if (!img) return;
+    try {
+        const res = await fetch(API.serveImage(img.path));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const file = new File([blob], img.filename, { type: blob.type || "image/png" });
+        await loadFileIntoMetadataTab(file);
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
     }
 }

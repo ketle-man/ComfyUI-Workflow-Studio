@@ -1265,6 +1265,12 @@ async function _loadStyles() {
     _rebuildStyleList();
 }
 
+// Promptタブ「Style」サブタブでスタイルを作成・編集・削除した後に呼ばれる。
+// GenerateUIのStyleドロップダウン・Batchタブのチェックリストを最新の状態へ再同期する。
+export async function refreshStylesList() {
+    await _loadStyles();
+}
+
 function _renderStyleDropdown() {
     const sel = document.getElementById("wfm-style-select");
     if (!sel) return;
@@ -1683,6 +1689,11 @@ async function openCatalogCreateModal() {
             <select id="wfm-catalog-existing-folder" class="wfm-input" style="margin-left:22px;" ${folderOptions.length === 0 ? "disabled" : ""}>
                 ${folderOptions.map((f) => `<option value="${escapeHtml(f.abs_path)}">${escapeHtml(f.path)}</option>`).join("")}
             </select>
+            <hr class="wfm-group-divider" style="margin:4px 0;">
+            <label style="display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" id="wfm-catalog-skip-output">
+                ${t("catalogCreateSkipOutput")}
+            </label>
         </div>
         <button id="wfm-catalog-run-btn" class="wfm-btn wfm-btn-primary" style="width:100%;margin-top:14px;">${t("catalogCreateRun")}</button>
     `;
@@ -1719,12 +1730,14 @@ async function openCatalogCreateModal() {
             }
         }
 
+        const skipOutput = document.getElementById("wfm-catalog-skip-output")?.checked || false;
+
         closeModal();
-        await _runCatalogCreate(list, destFolder);
+        await _runCatalogCreate(list, destFolder, skipOutput);
     });
 }
 
-async function _runCatalogCreate(list, destFolder) {
+async function _runCatalogCreate(list, destFolder, skipOutput) {
     try {
         await _runBatchLoop(
             list,
@@ -1733,7 +1746,8 @@ async function _runCatalogCreate(list, destFolder) {
             async (style, result) => {
                 const outputImages = (result?.images || []).filter((img) => img.type !== "temp");
                 if (outputImages.length === 0) return;
-                const blob = await comfyUI.getImageBlob(outputImages[0]);
+                const srcImage = outputImages[0];
+                const blob = await comfyUI.getImageBlob(srcImage);
                 const dataUrl = await _blobToDataUrl(blob);
                 const res = await fetch("/wfm/gallery/image/save-to-folder", {
                     method: "POST",
@@ -1742,6 +1756,23 @@ async function _runCatalogCreate(list, destFolder) {
                 });
                 const data = await res.json();
                 if (!data.ok) throw new Error(data.error || "Failed to save catalog image");
+
+                // Outputフォルダに元画像を残さないオプション: カタログへのコピー保存が
+                // 成功した後にのみ、ComfyUIのOutputフォルダ側の元ファイルを削除する
+                // （コピー失敗時は削除せず、元画像を保持したままにする）
+                if (skipOutput) {
+                    try {
+                        await fetch("/wfm/gallery/output-image/delete", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                filename: srcImage.filename,
+                                subfolder: srcImage.subfolder || "",
+                                type: srcImage.type || "output",
+                            }),
+                        });
+                    } catch { /* 削除失敗はカタログ作成自体を止めない */ }
+                }
             }
         );
     } finally {
