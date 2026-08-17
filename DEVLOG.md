@@ -2,6 +2,36 @@
 
 ---
 
+## v0.3.97
+
+### 機能追加・バグ修正: KREA-2ワークフロー対応 + Labタブ拡張（Clear/Get from Previous/Bypass/ライブ反映）+ Input Imageプレースホルダ機能
+
+ユーザーから「KREA2モデルワークフローを生成UIタブ、メタデータ、Workflow Studio LibraryのIタブ他対応させたい」との依頼を受けて着手。実機検証を進める過程で複数の既存バグを発見・修正し、続けてLabタブとInputタブImageサブパネルへの機能追加も行った一連のセッション。
+
+**1. KREA-2ワークフロー対応で発覚した2件の既存バグ修正**: KREA-2 Turbo（`krea2_turbo_int8_convrot.safetensors`、Qwen3VLベースのLLMプロンプト拡張＋サブグラフ構成）の2種類のワークフロー（T2I版・スタイル参照版）を実機で読み込み検証したところ、GenerateUIタブでPositive Promptが誤って`SaveImage`ノードを指し、プロンプト欄が空になる不具合を発見。原因は、ノードタイプ単位の役割伝播ロジック（`comfyui-workflow.js`の`analyzeWorkflow()`）が`PreviewAny`（値タップ中継）と`StringConcatenate`（LoRAトリガーワード連結）という中継ノードタイプを一切考慮しておらず、KREA-2のプロンプト強化トグル配線（`PrimitiveStringMultiline`→`ComfySwitchNode`→`PreviewAny`→`StringConcatenate`→`ComfySwitchNode`→`CLIPTextEncode`)の途中で役割伝播が途切れていたため。同様の理由でスタイル参照版では`TextEncodeQwenImageEditPlus`のリンク値（配列）がテキストとしてそのまま誤表示されるバグも発覚。「KREA2専用」ではなく`PreviewAny`/`StringConcatenate`/リンク経由`TextEncodeQwenImageEditPlus`という汎用ノードタイプ単位の役割伝播ルールとして`comfyui-workflow.js`に追加し、Metadataタブ（`metadata-tab.js`の`resolveLinkedText`系2関数）とサイドパネルIタブの重複実装（`node_sets_menu.js`の`_resolveLinkedText`系2関数）にも同じ汎用キー拡張（`source`/`string_a`）を反映。
+- 修正後、実際に生成を実行したところ**別の既存バグ**で`Prompt outputs failed validation`エラーが発生。調査の結果、`TextGenerate`ノードの`sampling_mode`（`COMFY_DYNAMICCOMBO_V3`型ウィジェット）が選択中オプションのサブフィールド（`temperature`/`top_k`等の必須6個＋`presence_penalty`のoptional1個、計7スロット消費）を持つのに対し、サブグラフの境界値注入ロジック（`_getDynamicComboSubNames`・`_simulateWidgetValues`）がDynamicComboの複数スロット消費を全く理解しておらず単純に1スロットとして扱っていたため、`sampling_mode`より後に宣言されている`thinking`（LLM思考モード、サブグラフ境界に接続）の注入処理が実際には`sampling_mode.temperature`のスロットを誤って上書きし、`temperature`に境界値の`false`（数値比較で0.0扱い）が入り`min: 0.01`バリデーションに抵触していた。`_getDynamicComboSubNames`をrequired/optional両方のサブフィールドを返すよう修正し、`_simulateWidgetValues`にDynamicCombo展開に対応する`comboExpander`引数を追加してスロット数を正しく消費するよう修正。LLMプロンプト拡張（DynamicComboを持つノード）をサブグラフ経由で使うワークフロー全般に影響する汎用バグだったため、KREA-2以外の同様構成のワークフローにも恩恵がある。
+
+**2. Labタブ: プロンプトモーダルにClear/Get from Previousボタン追加**: ユーザー要望「プロンプトモーダルにプロンプトクリアボタンと前の設定からプロンプトを取得ボタンを追加したい（#3で実行、#2のプロンプトをポジティブ、ネガティブ両方コピー）」を実装。Clearは両フィールドを空にするのみ（ワークフローノードには触れない）。Get from Previousは同じカラムの直前のキーフレーム（`idx-1`）からPositive/Negative両方をコピー。キーフレーム#1には「前」が存在しないためボタン自体を非表示。
+
+**3. Labタブ: Setting 1（キーフレーム#1）のライブ反映**: ユーザー要望「設定1のそれぞれのモーダルに生成UIタブの内容を初期自動反映したい（ワークフローの設定まま）表示は編集された場合に表示を変更したい」を実装。各カラム（Checkpoint/VAE/Prompt/KSampler）のキーフレーム#1が、まだ明示的に上書き保存されていない間は、GenerateUIタブで現在読み込まれているワークフローの実際の値（`comfyUI.currentAnalysis`から取得）をグリッドセル（破線ボーダー）と編集モーダル（フィールド事前入力＋ヒント文言）の両方に表示する。何も変更せず保存しただけでも実際の上書き値として確定し、以後はライブ反映されなくなる（`_isEmptyValue(col, kf.value)`が false になるため）。GenerateUIタブの他サブタブからLabサブタブへ切り替えるたびに`refreshLabLiveDefaults()`で再描画し、常に最新のGenerateUI状態を反映する。「Get from Previous」ボタンも`_effectiveDisplayValue()`経由でこのライブ反映値を透過的に扱う。
+
+**4. Labタブ: Bypassチェックボックス追加**: ユーザーから「バイパスボタンを追加したい」との要望を受け、追加箇所（Labタブの各列 vs Model タブ vs Raw JSONパネル）と動作仕様（ComfyUIノードを実際にBypassモードにするか、Labタブ内部だけでキーフレーム行を無効化するか）の2点をAskUserQuestionで確認。KSamplerは入出力が同じLATENT型のため実際のBypass（mode:4）が構造的に成立するが、Checkpoint/VAE/Promptの各ローダー/エンコーダーは入力を持たないため下流が未接続になり生成エラーを誘発するリスクがあるとユーザーに説明した上で、「そのキーフレーム行を無効化（Labタブ内のみ）」を選択いただいた。各キーフレームに`bypassed`フラグを追加し、`_resolveKeyframe()`でbypassedな行を「存在しないもの」として完全スキップ（直前に有効だった設定がそのまま使われる）。キーフレーム#1自体もBypass可能で、その場合はライブ反映表示より優先される。BypassチェックはRevertチェックと排他（両方同時には使えない）。
+
+**5. GenerateUI Inputタブ Imageサブパネル: Clearボタン + プレースホルダ画像機能**: ユーザー要望「クリアボタンと上部にプレースホルダ画像機能を追加したい。プレースホルダ画像機能は色と画像が選べ...LoadImageのプレースホルダボタンを押下した際、画像を作成し既存の画像を差し替えます...デフォルト画像の設定は記憶されます」を実装（`comfyui-editor.js`の`renderImageTab`）。各LoadImageカードにClear（保留中の選択/プレビューをリセット、ノードには触れない）とPlaceholderの2ボタンを追加。パネル上部に共有のPlaceholder Image設定：Colorモード（幅・高さ・色を指定、押下時にキャンバスでその場生成しアップロード）とImageモード（デフォルト画像を1枚アップロードし記憶、押下時は再アップロードせずファイル名を再利用）。設定は`localStorage`（`wfm_i2i_placeholder`）に永続化。各カード自身のPlaceholderボタンで個別に差し替え可能。
+- **フォローアップ（低頻度機能のため折りたたみ化）**: ユーザーから「使用頻度は高くないため。折りたたみにしたい」とのフィードバックを受け、Settingsタブと同じ`<details>/<summary>`アコーディオンパターン（`.wfm-settings-section`/`.wfm-settings-summary`）に変更し、デフォルトで折りたたみ状態に。
+
+**ヘルプタブ更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、GenerateUI Tabヘルプに Imageサブパネルのプレースホルダ機能を1項目追加（`gen-27`）、Lab subtabヘルプにClear/Get from Previous・ライブ反映・Bypassの3項目を追加（`lab-11`〜`lab-13`）。EN側は`app.js`の`helpIdMap`が`el.textContent = t(key)`でHTMLタグを問答無用に上書きするため、新規追加時はi18n.js側の全言語ブロック（EN含む）に対応キーを用意しないとリッチHTML（`<b>`/`<code>`タグ）がプレーンテキストで消えてしまう点に注意して実装。
+
+**検証**: 各修正について、実際にComfyUI（127.0.0.1:8189）とWorkflow Studioの実行時ComfyUI_5インスタンスへPlaywrightで接続し、KREA-2両ワークフローの読み込み・GenerateUI/Metadata/IタブでのPositive Prompt検出・実際の生成実行（バリデーション通過・画像出力まで）・Labタブの新機能（Clear/Get from Previous/ライブ反映/Bypass）の各UI操作・Input ImageサブパネルのColor/Imageモード双方でのPlaceholder適用とリロード後の設定復元・ヘルプタブのEN/JA両言語表示、をすべて実機で確認。開発元リポジトリと実行時`custom_nodes`フォルダはハッシュ比較で同一性を検証。
+
+**How to apply**:
+1. ノードタイプ単位の汎用ロジック（役割伝播、ウィジェット値のインデックス復元など）を持つコードベースでは、特定モデル対応の不具合であっても「そのモデル専用」の分岐を足すのではなく、原因となっているノードタイプ（今回は`PreviewAny`/`StringConcatenate`/`COMFY_DYNAMICCOMBO_V3`）を汎用ロジック側に正しく組み込む修正を優先する。結果として対象モデル以外の同構成ワークフローにも自動的に恩恵が及ぶ。
+2. ウィジェット値の「インデックスから名前への復元」ロジックが複数箇所（今回は`_flattenSubgraphs`内の境界値注入と、最終API変換ループ）に重複実装されている場合、片方だけがDynamicCombo等の可変長ウィジェットを正しく理解していても、もう片方が単純な1対1対応を仮定しているとデータ破損が起きる。両方の実装が同じスロット数計算ロジックを共有しているか必ず確認する。
+3. 「バイパス」のような一般的な語でも、対象ノードの入出力型構成によって実際に構造的なComfyUI Bypassが成立するかは列ごとに異なりうる（LATENT型のKSamplerは素通し可能、入力を持たないLoader/Encoderは不可）。曖昧な機能要望は、AskUserQuestionで実装方式の選択肢とその技術的トレードオフを具体的に提示してから着手する。
+4. 低頻度機能をUIに追加する際は、既存のアコーディオン/折りたたみパターン（今回は`<details>/<summary>`+ `.wfm-settings-section`）を新規CSSクラスを増やさず再利用できないか確認する。
+
+---
+
 ## v0.3.96
 
 ### バグ修正: カタログ作成バッチが特定件数で無言停止する問題の修正 + Style Catalog/Promptタブ機能拡張

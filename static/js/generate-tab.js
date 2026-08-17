@@ -9,7 +9,7 @@ import { comfyEditor } from "./comfyui-editor.js";
 import { t } from "./i18n.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js";
-import { initLabTab } from "./lab-tab.js";
+import { initLabTab, refreshLabLiveDefaults } from "./lab-tab.js";
 import { getSettings, readJsonStorage, escapeHtml, getEagleSettings, saveToEagle } from "./util.js";
 
 // ============================================
@@ -2139,6 +2139,10 @@ export async function initGenerateTab() {
             if (target === "model" && comfyUI.currentAnalysis) {
                 comfyEditor.renderLoraPane(comfyUI.currentAnalysis, "wfm-gen-lora-fields");
             }
+            // Re-render Lab's column grid so Setting 1's live-reflected cells (checkpoint/
+            // VAE/prompt/KSampler) pick up whatever is currently loaded in GenerateUI, not
+            // whatever was loaded the last time Lab was rendered.
+            if (target === "lab") refreshLabLiveDefaults();
             // Lab has its own Run/Results panel — hide the shared Generate/Seed/Batch column
             const rightCol = document.querySelector(".wfm-gen-right");
             if (rightCol) rightCol.style.display = (target === "lab") ? "none" : "";

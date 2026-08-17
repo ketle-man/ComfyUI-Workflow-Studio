@@ -2917,6 +2917,29 @@ body {
    Image Input (I2I) Slots
    ============================================ */
 
+/* Container/header styling comes from .wfm-settings-section / .wfm-settings-summary
+   (shared details/summary accordion used by the Settings tab) — collapsed by default
+   since this is a low-frequency feature. */
+
+.wfm-i2i-placeholder-mode {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.wfm-i2i-placeholder-mode label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.wfm-i2i-placeholder-fields input[type="color"] {
+    padding: 2px;
+    height: 30px;
+}
+
 .wfm-i2i-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

@@ -31,10 +31,10 @@ function _defaultValueFor(col) {
 
 function _emptyColumns() {
     return {
-        checkpoint: [{ atIteration: 1, value: "", revertToBase: false }],
-        vae: [{ atIteration: 1, value: "", revertToBase: false }],
-        prompt: [{ atIteration: 1, value: _defaultValueFor("prompt"), revertToBase: false }],
-        ksampler: [{ atIteration: 1, value: _defaultValueFor("ksampler"), revertToBase: false }],
+        checkpoint: [{ atIteration: 1, value: "", revertToBase: false, bypassed: false }],
+        vae: [{ atIteration: 1, value: "", revertToBase: false, bypassed: false }],
+        prompt: [{ atIteration: 1, value: _defaultValueFor("prompt"), revertToBase: false, bypassed: false }],
+        ksampler: [{ atIteration: 1, value: _defaultValueFor("ksampler"), revertToBase: false, bypassed: false }],
     };
 }
 
@@ -74,6 +74,15 @@ export function initLabTab() {
     _renderAllColumns();
     _renderResultsGrid();
     _updateT2IModeUI();
+}
+
+// Re-renders the column grid so Setting 1's live-reflected cells (see _isLiveDisplay)
+// pick up whatever is currently loaded in GenerateUI. Called by generate-tab.js each
+// time its own Lab subtab is switched to — cells are static HTML rendered once, so
+// without this they'd stay frozen at whatever GenerateUI showed the last time Lab was
+// rendered, not "initially" reflecting the workflow as the user opens Lab now.
+export function refreshLabLiveDefaults() {
+    _renderAllColumns();
 }
 
 function _initDropZone() {
@@ -293,7 +302,7 @@ function _initColumnButtons() {
                 showToast(t("labBatchCountTooSmall"), "error");
                 return;
             }
-            kfs.push({ atIteration: lastIter + 1, value: _defaultValueFor(col), revertToBase: false });
+            kfs.push({ atIteration: lastIter + 1, value: _defaultValueFor(col), revertToBase: false, bypassed: false });
             _renderColumn(col);
             _openCellModal(col, kfs.length - 1);
         });
@@ -325,20 +334,28 @@ function _renderColumn(col) {
 
 function _cellHtml(col, kf, idx) {
     const revertClass = kf.revertToBase ? " wfm-lab-cell-revert" : "";
+    const bypassClass = kf.bypassed ? " wfm-lab-cell-bypassed" : "";
     if (idx === 0) {
-        return `<div class="wfm-lab-cell${revertClass}" data-idx="${idx}">
+        // Bypassed takes priority over the live-reflect display — an explicit "skip this
+        // row" toggle shouldn't be masked by Setting 1's usual "show the workflow's
+        // current value" behavior (see _isLiveDisplay).
+        const live = !kf.bypassed && _isLiveDisplay(col, idx);
+        const liveClass = live ? " wfm-lab-cell-live" : "";
+        const label = live ? _cellLabel(col, { value: _liveValueFor(col), revertToBase: false, bypassed: false }) : _cellLabel(col, kf);
+        return `<div class="wfm-lab-cell${revertClass}${bypassClass}${liveClass}" data-idx="${idx}">
             <span class="wfm-lab-cell-index">${kf.atIteration}:</span>
-            <span class="wfm-lab-cell-value">${_cellLabel(col, kf)}</span>
+            <span class="wfm-lab-cell-value">${label}</span>
         </div>`;
     }
     // Iteration #2 and beyond: value on its own line, applied-at iteration below it
-    return `<div class="wfm-lab-cell${revertClass}" data-idx="${idx}">
+    return `<div class="wfm-lab-cell${revertClass}${bypassClass}" data-idx="${idx}">
         <div class="wfm-lab-cell-value">${_cellLabel(col, kf)}</div>
         <div class="wfm-lab-cell-applied">${t("labAppliedAt", kf.atIteration)}</div>
     </div>`;
 }
 
 function _cellLabel(col, kf) {
+    if (kf.bypassed) return t("labBypassed");
     if (kf.revertToBase) return t("labRevertToBase");
     if (col === "checkpoint" || col === "vae") {
         return kf.value ? escapeHtml(kf.value) : t("labUseWorkflowDefault");
@@ -371,9 +388,64 @@ function _isEmptyValue(col, value) {
     return true;
 }
 
+// Reads the currently loaded GenerateUI workflow's live setting for a column. Used so
+// Setting 1 (the baseline keyframe, idx 0) visibly "keeps the workflow's setting" —
+// both in its grid cell and pre-filled into its modal — for as long as the user hasn't
+// explicitly saved an override on it. Returns null when nothing is loaded or the
+// workflow has no matching node, in which case callers fall back to the plain
+// "(workflow default)" placeholder as before.
+function _liveValueFor(col) {
+    const analysis = comfyUI.currentAnalysis;
+    if (!analysis) return null;
+    if (col === "checkpoint") {
+        return analysis.checkpoint_nodes?.[0]?.ckpt_name || null;
+    }
+    if (col === "vae") {
+        return analysis.vae_nodes?.[0]?.vae_name || null;
+    }
+    if (col === "prompt") {
+        const posNode = analysis.prompt_nodes?.find((n) => n.role === "positive");
+        const negNode = analysis.prompt_nodes?.find((n) => n.role === "negative");
+        if (!posNode && !negNode) return null;
+        return { positive: posNode?.text || "", negative: negNode?.text || "", styleApplied: false, styleName: "" };
+    }
+    if (col === "ksampler") {
+        const s = analysis.sampler_nodes?.[0];
+        if (!s) return null;
+        return {
+            steps: s.steps ?? null, cfg: s.cfg ?? null,
+            sampler_name: s.sampler_name || "", scheduler: s.scheduler || "",
+            denoise: s.denoise ?? null, seed: s.seed ?? null,
+        };
+    }
+    return null;
+}
+
+// True when a column/keyframe is currently showing the live GenerateUI value instead of
+// its own stored value — i.e. Setting 1, never explicitly overridden, with a workflow
+// actually loaded. Once the user saves an edit on it (even re-saving the same live
+// values), _isEmptyValue(col, kf.value) becomes false and this permanently stops
+// applying — the cell/modal switch to showing that saved override instead.
+function _isLiveDisplay(col, idx) {
+    if (idx !== 0) return false;
+    const kf = _lab.columns[col][0];
+    if (kf.bypassed || !_isEmptyValue(col, kf.value)) return false;
+    return _liveValueFor(col) != null;
+}
+
+// Resolves what a keyframe should actually display/prefill with: its own stored value,
+// or — for a live-displaying Setting 1 — the current GenerateUI value in its place.
+function _effectiveDisplayValue(col, idx) {
+    if (_isLiveDisplay(col, idx)) return _liveValueFor(col);
+    return _lab.columns[col][idx]?.value;
+}
+
 function _openCellModal(col, idx) {
     const kf = _lab.columns[col][idx];
     const isFirst = idx === 0;
+    const live = _isLiveDisplay(col, idx);
+    const effectiveValue = live ? _liveValueFor(col) : kf.value;
+    const hasPrevious = col === "prompt" && idx > 0;
 
     let valueFieldsHtml = "";
     if (col === "checkpoint" || col === "vae") {
@@ -387,15 +459,17 @@ function _openCellModal(col, idx) {
                 </div>
                 <select id="wfm-lab-modal-value" class="wfm-select">
                     <option value="">${t("labUseWorkflowDefault")}</option>
-                    ${options.map((m) => `<option value="${escapeHtml(m)}" ${m === kf.value ? "selected" : ""}>${escapeHtml(m)}</option>`).join("")}
+                    ${options.map((m) => `<option value="${escapeHtml(m)}" ${m === effectiveValue ? "selected" : ""}>${escapeHtml(m)}</option>`).join("")}
                 </select>
             </div>`;
     } else if (col === "prompt") {
-        const v = kf.value || {};
+        const v = effectiveValue || {};
         valueFieldsHtml = `
             <div class="wfm-lab-modal-btnrow">
                 <button type="button" id="wfm-lab-modal-get-genui" class="wfm-btn wfm-btn-sm">${t("labGetFromGenUI")}</button>
                 <button type="button" id="wfm-lab-modal-get-image" class="wfm-btn wfm-btn-sm">${t("labGetFromImage")}</button>
+                ${hasPrevious ? `<button type="button" id="wfm-lab-modal-get-previous" class="wfm-btn wfm-btn-sm">${t("labGetFromPrevious")}</button>` : ""}
+                <button type="button" id="wfm-lab-modal-clear" class="wfm-btn wfm-btn-sm">${t("labClearPrompt")}</button>
             </div>
             <div class="wfm-lab-modal-row">
                 <label>Positive</label>
@@ -412,7 +486,7 @@ function _openCellModal(col, idx) {
                 <span id="wfm-lab-modal-style-name" style="color:var(--wfm-text-secondary);">${v.styleApplied && v.styleName ? escapeHtml(v.styleName) : ""}</span>
             </div>`;
     } else if (col === "ksampler") {
-        const v = kf.value || {};
+        const v = effectiveValue || {};
         const samplers = comfyEditor.models.samplers || [];
         const schedulers = comfyEditor.models.schedulers || [];
         valueFieldsHtml = `
@@ -453,29 +527,52 @@ function _openCellModal(col, idx) {
             <label for="wfm-lab-modal-revert">${t("labRevertCheckboxLabel")}</label>
         </div>`;
 
+    // Bypass is available on every row, including Setting 1: skip this keyframe's
+    // override entirely (as if the row didn't exist) so whatever was active before it
+    // keeps running — see _resolveKeyframe. Lab-internal only; never touches the actual
+    // ComfyUI node's mode.
+    const bypassRow = `
+        <div class="wfm-lab-modal-checkbox">
+            <input type="checkbox" id="wfm-lab-modal-bypass" ${kf.bypassed ? "checked" : ""}>
+            <label for="wfm-lab-modal-bypass">${t("labBypassCheckboxLabel")}</label>
+        </div>`;
+
     const deleteBtn = !isFirst
         ? `<button id="wfm-lab-modal-delete" class="wfm-btn wfm-btn-danger">${t("delete")}</button>` : "";
 
+    const liveHint = live ? `<p class="wfm-lab-modal-hint">${t("labLiveHint")}</p>` : "";
+
     const html = `
+        ${liveHint}
         <div id="wfm-lab-modal-fields">${valueFieldsHtml}</div>
         ${atIterRow}
+        ${bypassRow}
         ${revertRow}
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
             ${deleteBtn}
             <button id="wfm-lab-modal-save" class="wfm-btn wfm-btn-primary">${t("save")}</button>
         </div>`;
     openModal(`${col} #${idx + 1}`, html);
-    if (col === "prompt") _wireLabPromptModalExtras();
+    if (col === "prompt") _wireLabPromptModalExtras(idx);
     if (col === "checkpoint" || col === "vae") _wireLabValueFilter(col);
 
+    // Bypass disables everything else on the modal (value fields AND the Revert
+    // checkbox) — the two are mutually exclusive since bypass already means "ignore
+    // this row", making a simultaneous revertToBase moot.
     const revertCb = document.getElementById("wfm-lab-modal-revert");
+    const bypassCb = document.getElementById("wfm-lab-modal-bypass");
     const fieldsWrap = document.getElementById("wfm-lab-modal-fields");
+    const revertRowEl = revertCb?.closest(".wfm-lab-modal-checkbox");
     const syncDisabled = () => {
-        const disabled = !!revertCb?.checked;
-        if (fieldsWrap) fieldsWrap.style.opacity = disabled ? "0.4" : "1";
-        fieldsWrap?.querySelectorAll("input,select,textarea").forEach((el) => { el.disabled = disabled; });
+        const bypassed = !!bypassCb?.checked;
+        const fieldsDisabled = bypassed || !!revertCb?.checked;
+        if (fieldsWrap) fieldsWrap.style.opacity = fieldsDisabled ? "0.4" : "1";
+        fieldsWrap?.querySelectorAll("input,select,textarea").forEach((el) => { el.disabled = fieldsDisabled; });
+        if (revertCb) revertCb.disabled = bypassed;
+        if (revertRowEl) revertRowEl.style.opacity = bypassed ? "0.4" : "1";
     };
     revertCb?.addEventListener("change", syncDisabled);
+    bypassCb?.addEventListener("change", syncDisabled);
     syncDisabled();
 
     document.getElementById("wfm-lab-modal-delete")?.addEventListener("click", () => {
@@ -486,6 +583,7 @@ function _openCellModal(col, idx) {
 
     document.getElementById("wfm-lab-modal-save")?.addEventListener("click", () => {
         const revert = !!document.getElementById("wfm-lab-modal-revert")?.checked;
+        const bypassed = !!document.getElementById("wfm-lab-modal-bypass")?.checked;
         let atIteration = kf.atIteration;
         if (!isFirst) {
             const parsed = parseInt(document.getElementById("wfm-lab-modal-iter")?.value, 10);
@@ -493,7 +591,7 @@ function _openCellModal(col, idx) {
         }
 
         let value = kf.value;
-        if (!revert) {
+        if (!revert && !bypassed) {
             if (col === "checkpoint" || col === "vae") {
                 value = document.getElementById("wfm-lab-modal-value")?.value || "";
             } else if (col === "prompt") {
@@ -519,7 +617,7 @@ function _openCellModal(col, idx) {
             }
         }
 
-        _lab.columns[col][idx] = { atIteration, value, revertToBase: revert };
+        _lab.columns[col][idx] = { atIteration, value, revertToBase: revert, bypassed };
         _lab.columns[col].sort((a, b) => a.atIteration - b.atIteration);
         _renderColumn(col);
         closeModal();
@@ -565,8 +663,32 @@ function _wireLabValueFilter(col) {
 }
 
 // Wires the Prompt-column modal's extra actions: fetch the live GenerateUI prompt,
-// extract a prompt from a dropped image/workflow file, and apply/toggle a saved Style.
-function _wireLabPromptModalExtras() {
+// extract a prompt from a dropped image/workflow file, copy the previous keyframe's
+// prompt, clear the fields, and apply/toggle a saved Style. idx is this keyframe's own
+// position in _lab.columns.prompt (needed for the "Get from Previous" lookup).
+function _wireLabPromptModalExtras(idx) {
+    document.getElementById("wfm-lab-modal-clear")?.addEventListener("click", () => {
+        const posEl = document.getElementById("wfm-lab-modal-positive");
+        const negEl = document.getElementById("wfm-lab-modal-negative");
+        if (posEl) posEl.value = "";
+        if (negEl) negEl.value = "";
+        showToast(t("labPromptCleared"), "success");
+    });
+
+    // Copies BOTH positive and negative from the keyframe immediately before this one
+    // (idx - 1) in the same column — e.g. editing #3 copies #2's prompt wholesale. If #2
+    // is itself the unedited Setting 1, this naturally picks up its live GenerateUI value
+    // via _effectiveDisplayValue() rather than an empty string.
+    document.getElementById("wfm-lab-modal-get-previous")?.addEventListener("click", () => {
+        if (idx <= 0) return;
+        const prev = _effectiveDisplayValue("prompt", idx - 1) || {};
+        const posEl = document.getElementById("wfm-lab-modal-positive");
+        const negEl = document.getElementById("wfm-lab-modal-negative");
+        if (posEl) posEl.value = prev.positive || "";
+        if (negEl) negEl.value = prev.negative || "";
+        showToast(t("labPromptCopiedFromPrevious"), "success");
+    });
+
     // Style NAME always comes from the dropdown already at the top of the GenerateUI
     // toolbar (populated by generate-tab.js's _loadStyles()) — Lab has no picker of its
     // own. The Apply button merges it into the text below (independent of the top
@@ -653,17 +775,22 @@ function _wireLabPromptModalExtras() {
 // Effective-value resolution & workflow build
 // ============================================
 
+// A bypassed keyframe is skipped entirely when picking which row is "in effect" for a
+// given iteration — as if it weren't there — so whatever was active before it (an
+// earlier keyframe, or ultimately nothing) just keeps running. This only affects
+// which row *applies*; the bypassed row's own value/atIteration stay untouched so
+// un-bypassing it later restores it exactly as configured.
 function _resolveKeyframe(col, iteration) {
     const kfs = _lab.columns[col];
     let applicable = null;
     for (const kf of kfs) {
-        if (kf.atIteration <= iteration) applicable = kf;
-        else break;
+        if (kf.atIteration > iteration) break;
+        if (!kf.bypassed) applicable = kf;
     }
     if (!applicable) return null;
     if (applicable.revertToBase) {
         const row1 = kfs.find((k) => k.atIteration === 1);
-        return (row1 && !_isEmptyValue(col, row1.value)) ? row1.value : null;
+        return (row1 && !row1.bypassed && !_isEmptyValue(col, row1.value)) ? row1.value : null;
     }
     return _isEmptyValue(col, applicable.value) ? null : applicable.value;
 }

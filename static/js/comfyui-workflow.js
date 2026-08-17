@@ -160,6 +160,13 @@ function _getWidgetInputTypes(objectInfo, classType) {
 /**
  * Resolve the sub-input names for a DynamicCombo's currently-selected option.
  * objectInfo spec shape: ["COMFY_DYNAMICCOMBO_V3", { options: [{ key, inputs: { required: {...} } }, ...] }]
+ *
+ * Includes both required AND optional sub-fields: ComfyUI serializes every sub-field of the
+ * selected option into widgets_values regardless of which bucket it's declared in (e.g.
+ * TextGenerate's "on" option puts temperature/top_k/.../seed under required but
+ * presence_penalty under optional — all 7 still occupy a widgets_values slot). Dropping the
+ * optional ones here under-counts how many slots the combo actually consumed, misaligning
+ * every widget declared after it in the node's schema.
  */
 function _getDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey) {
     const info = objectInfo[classType];
@@ -167,7 +174,10 @@ function _getDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey
     const options = spec?.[1]?.options;
     if (!Array.isArray(options)) return [];
     const opt = options.find((o) => o.key === selectedKey) || options[0];
-    return Object.keys(opt?.inputs?.required || {});
+    return [
+        ...Object.keys(opt?.inputs?.required || {}),
+        ...Object.keys(opt?.inputs?.optional || {}),
+    ];
 }
 
 /**
@@ -221,8 +231,15 @@ function _isLinkedWidgetName(remappedNode, sgDef, origInternalId, redirectedTarg
  * `continue`s before ever looking at the extra, leaving it unconsumed and silently misread as the
  * value of whatever non-linked widget comes after. Stripping a linked widget's position alone
  * (without its swallowed extra) reproduces exactly that bug one level up, in the injection step.
+ *
+ * comboExpander(name, selectedKey) — when a widget's type is COMFY_DYNAMICCOMBO_V3, its own turn
+ * only consumes the *selector* slot (the chosen option's key); the selected option's sub-fields
+ * (e.g. TextGenerate's sampling_mode → temperature/top_k/.../seed/presence_penalty) each occupy
+ * one more widgets_values slot right after it. Without expanding those here too, every widget
+ * declared later in the node's schema (e.g. TextGenerate's "thinking") gets matched against a
+ * slot that's actually still inside the combo's sub-field span, corrupting both values.
  */
-function _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, skipLinked) {
+function _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, skipLinked, comboExpander) {
     let idx = 0;
     const positions = {};
     const consumedIndices = {};
@@ -246,6 +263,13 @@ function _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinked
             p = idx;
             idx++;
         }
+        if (widgetTypes[nIdx] === "COMFY_DYNAMICCOMBO_V3" && comboExpander) {
+            const subNames = comboExpander(name, widgetsValues[p]);
+            for (let s = 0; s < subNames.length && idx < widgetsValues.length; s++) {
+                consumed.push(idx);
+                idx++;
+            }
+        }
         positions[name] = p;
         consumedIndices[name] = consumed;
     }
@@ -268,16 +292,17 @@ function _stripLegacyLinkedWidgetValues(objectInfo, remappedNode, sgDef, origInt
     const widgetNames = _getWidgetInputNames(objectInfo, remappedNode.type);
     const widgetTypes = _getWidgetInputTypes(objectInfo, remappedNode.type);
     const isLinkedName = (name) => _isLinkedWidgetName(remappedNode, sgDef, origInternalId, redirectedTargets, name);
+    const comboExpander = (name, selectedKey) => _getDynamicComboSubNames(objectInfo, remappedNode.type, name, selectedKey);
 
     // If skipping linked widgets already accounts for every entry, widgets_values is already in
     // the modern (no dangling linked entries) format — nothing to strip.
-    const skipSim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, true);
+    const skipSim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, true, comboExpander);
     if (skipSim.consumed === widgetsValues.length) return;
 
     // Otherwise it's "legacy full": recompute with every widget present to find exactly which
     // indices the linked ones occupy — including any control_after_generate extra a linked
     // widget's own turn would have consumed, which must be dropped too (see _simulateWidgetValues).
-    const fullSim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, false);
+    const fullSim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, false, comboExpander);
     const linkedIdx = new Set();
     for (const name of widgetNames) {
         if (isLinkedName(name)) {
@@ -301,7 +326,8 @@ function _findInjectedWidgetIndex(objectInfo, remappedNode, sgDef, origInternalI
     const widgetTypes = _getWidgetInputTypes(objectInfo, remappedNode.type);
     const widgetsValues = remappedNode.widgets_values || [];
     const isLinkedName = (name) => _isLinkedWidgetName(remappedNode, sgDef, origInternalId, redirectedTargets, name);
-    const sim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, true);
+    const comboExpander = (name, selectedKey) => _getDynamicComboSubNames(objectInfo, remappedNode.type, name, selectedKey);
+    const sim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, true, comboExpander);
     return sim.positions[targetName] ?? -1;
 }
 
@@ -1026,6 +1052,37 @@ export const comfyWorkflow = {
                         }
                     }
                 }
+                // TextEncodeQwenImageEditPlus/TextEncodeQwenImageEdit — propagate role through its
+                // linked "prompt" input when prompt-enhancement wiring feeds it via a switch chain
+                // instead of a literal string (e.g. Krea-2's image-reference workflow).
+                if (ct === "TextEncodeQwenImageEditPlus" || ct === "TextEncodeQwenImageEdit") {
+                    const tv = inputs.prompt;
+                    if (Array.isArray(tv)) {
+                        if (isPos) samplerPositiveRef[tv[0]] = true;
+                        if (isNeg) samplerNegativeRef[tv[0]] = true;
+                    }
+                }
+                // PreviewAny — generic value tap/relay used mid-chain in prompt-enhancement wiring
+                // (e.g. Krea-2's "Refine Prompt?" switch output tap); pass role through its
+                // "source" input unchanged.
+                if (ct === "PreviewAny") {
+                    const sv = inputs.source;
+                    if (Array.isArray(sv)) {
+                        if (isPos) samplerPositiveRef[sv[0]] = true;
+                        if (isNeg) samplerNegativeRef[sv[0]] = true;
+                    }
+                }
+                // StringConcatenate — appends e.g. a LoRA trigger word onto the prompt text
+                // (Krea-2); propagate role through both operands so the upstream literal is found.
+                if (ct === "StringConcatenate") {
+                    for (const key of ["string_a", "string_b"]) {
+                        const tv = inputs[key];
+                        if (Array.isArray(tv)) {
+                            if (isPos) samplerPositiveRef[tv[0]] = true;
+                            if (isNeg) samplerNegativeRef[tv[0]] = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -1180,13 +1237,17 @@ export const comfyWorkflow = {
             }
 
             // Qwen-based image+text encoder (Plus variant takes up to 3 reference images;
-            // the base variant takes one — both share the same "prompt" widget)
+            // the base variant takes one — both share the same "prompt" widget). Only add when
+            // "prompt" is a direct string; if linked (e.g. Krea-2's prompt-enhancement wiring),
+            // the upstream literal node is resolved instead via the role propagation above.
             if (ct === "TextEncodeQwenImageEditPlus" || ct === "TextEncodeQwenImageEdit") {
-                result.prompt_nodes.push({
-                    id, type: ct, title, role: getRole(),
-                    text: inputs.prompt || "",
-                    textKey: "prompt",
-                });
+                const textVal = inputs.prompt;
+                if (typeof textVal === "string") {
+                    result.prompt_nodes.push({
+                        id, type: ct, title, role: getRole(),
+                        text: textVal, textKey: "prompt",
+                    });
+                }
             }
 
             // TextEncodeBooguEdit (Boogu image-edit model) — prompt + negative_prompt in one node

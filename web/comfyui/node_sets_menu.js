@@ -2978,8 +2978,10 @@ function _resolveLinkedTextInNodeSet(nodeMap, linkOrigin, linkSlot, srcId, slot,
     }
     const v = srcNode.widgets_values?.[slot] ?? srcNode.widgets_values?.[0];
     if (v && typeof v === "string") return v;
+    // "source" = PreviewAny（値タップ中継）, "string_a" = StringConcatenate（LoRAトリガーワード
+    // 連結等）— Krea-2のプロンプト強化配線で使われる中継ノード
     if (Array.isArray(srcNode.inputs)) {
-        const nextInput = srcNode.inputs.find(i => ["text", "value", "prompt", "string"].includes(i.name));
+        const nextInput = srcNode.inputs.find(i => ["text", "value", "prompt", "string", "source", "string_a"].includes(i.name));
         if (nextInput?.link != null) {
             const originId = linkOrigin.get(nextInput.link);
             const originSlot = linkSlot.get(nextInput.link) ?? 0;
@@ -3137,7 +3139,8 @@ function _resolveLinkedText(wf, srcId, slot, depth = 0) {
         }
         return null;
     }
-    const keys = slot === 0 ? ["text_positive", "text", "text_g", "prompt", "value"] : ["text_negative", "text_l"];
+    // "source" = PreviewAny の値タップ中継、"string_a" = StringConcatenate の主オペランド
+    const keys = slot === 0 ? ["text_positive", "text", "text_g", "prompt", "value", "source", "string_a"] : ["text_negative", "text_l", "source", "string_a"];
     for (const k of keys) {
         const v = src.inputs?.[k];
         if (typeof v === "string" && v) return v;

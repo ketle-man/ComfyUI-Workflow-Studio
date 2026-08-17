@@ -27,6 +27,114 @@ function _saveLatentPresets(list) {
     localStorage.setItem(_LATENT_PRESET_KEY, JSON.stringify(list));
 }
 
+// ── I2I placeholder image (Input tab / Image sub-panel) ──────────────────
+// One shared default (color-generated or a fixed uploaded image), remembered across
+// sessions. Each LoadImage slot's own "Placeholder" button applies this same default
+// to just that slot — see renderImageTab.
+const _I2I_PLACEHOLDER_KEY = "wfm_i2i_placeholder";
+const _I2I_PLACEHOLDER_DEFAULT = { mode: "color", color: "#808080", width: 512, height: 512, imageFilename: "" };
+
+function _loadI2IPlaceholderConfig() {
+    try {
+        const raw = localStorage.getItem(_I2I_PLACEHOLDER_KEY);
+        return raw ? { ..._I2I_PLACEHOLDER_DEFAULT, ...JSON.parse(raw) } : { ..._I2I_PLACEHOLDER_DEFAULT };
+    } catch { return { ..._I2I_PLACEHOLDER_DEFAULT }; }
+}
+
+function _saveI2IPlaceholderConfig(cfg) {
+    localStorage.setItem(_I2I_PLACEHOLDER_KEY, JSON.stringify(cfg));
+}
+
+// Renders a solid-color PNG on an offscreen canvas and returns it as a File, ready to
+// upload through comfyUI.uploadImage() the same way a picked/dropped file would be.
+function _generateColorImageFile(width, height, color) {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, width || 512);
+        canvas.height = Math.max(1, height || 512);
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = color || "#808080";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+            if (!blob) { reject(new Error("Failed to render placeholder image")); return; }
+            resolve(new File([blob], `placeholder_${canvas.width}x${canvas.height}.png`, { type: "image/png" }));
+        }, "image/png");
+    });
+}
+
+// Wires the placeholder config panel at the top of the Image sub-panel (mode switch,
+// color/size fields, default-image drop zone). Every change is persisted immediately via
+// _saveI2IPlaceholderConfig so it's remembered next time the panel is rendered — this
+// panel is display-only config, it doesn't touch any workflow node itself; only each
+// slot's own Placeholder button (see renderImageTab) does that.
+function _wireI2IPlaceholderConfig(scopeEl) {
+    const colorModeRadio = scopeEl.querySelector("#wfm-i2i-ph-mode-color");
+    const imageModeRadio = scopeEl.querySelector("#wfm-i2i-ph-mode-image");
+    const colorFields = scopeEl.querySelector("#wfm-i2i-ph-color-fields");
+    const imageFields = scopeEl.querySelector("#wfm-i2i-ph-image-fields");
+    const widthInput = scopeEl.querySelector("#wfm-i2i-ph-width");
+    const heightInput = scopeEl.querySelector("#wfm-i2i-ph-height");
+    const colorInput = scopeEl.querySelector("#wfm-i2i-ph-color");
+    const dropZone = scopeEl.querySelector("#wfm-i2i-ph-drop");
+    const fileInput = scopeEl.querySelector("#wfm-i2i-ph-file");
+    const previewWrap = scopeEl.querySelector("#wfm-i2i-ph-preview-wrap");
+    const previewImg = scopeEl.querySelector("#wfm-i2i-ph-preview-img");
+    const statusEl = scopeEl.querySelector("#wfm-i2i-ph-status");
+    if (!colorModeRadio) return; // no LoadImage slots rendered — panel doesn't exist
+
+    const setMode = (mode) => {
+        if (colorFields) colorFields.style.display = mode === "color" ? "" : "none";
+        if (imageFields) imageFields.style.display = mode === "image" ? "" : "none";
+        _saveI2IPlaceholderConfig({ ..._loadI2IPlaceholderConfig(), mode });
+    };
+    colorModeRadio.addEventListener("change", () => { if (colorModeRadio.checked) setMode("color"); });
+    imageModeRadio?.addEventListener("change", () => { if (imageModeRadio.checked) setMode("image"); });
+
+    widthInput?.addEventListener("change", () => {
+        const width = Math.max(1, parseInt(widthInput.value, 10) || 512);
+        widthInput.value = width;
+        _saveI2IPlaceholderConfig({ ..._loadI2IPlaceholderConfig(), width });
+    });
+    heightInput?.addEventListener("change", () => {
+        const height = Math.max(1, parseInt(heightInput.value, 10) || 512);
+        heightInput.value = height;
+        _saveI2IPlaceholderConfig({ ..._loadI2IPlaceholderConfig(), height });
+    });
+    colorInput?.addEventListener("change", () => {
+        _saveI2IPlaceholderConfig({ ..._loadI2IPlaceholderConfig(), color: colorInput.value });
+    });
+
+    // Default image: uploaded to ComfyUI immediately (its filename is what actually gets
+    // reused later, not the raw file) so every slot's Placeholder button can apply it
+    // without re-uploading.
+    const applyDefaultImageFile = async (file) => {
+        if (!file || !file.type.startsWith("image/")) return;
+        if (statusEl) statusEl.textContent = t("i2iPlaceholderUploading");
+        try {
+            const result = await comfyUI.uploadImage(file, file.name);
+            if (!result.name) throw new Error("Upload returned no filename");
+            _saveI2IPlaceholderConfig({ ..._loadI2IPlaceholderConfig(), imageFilename: result.name });
+            if (previewImg) previewImg.src = `/view?filename=${encodeURIComponent(result.name)}&type=input`;
+            if (previewWrap) previewWrap.style.display = "";
+            if (statusEl) { statusEl.textContent = `✓ ${result.name}`; statusEl.style.color = "var(--wfm-success)"; }
+        } catch (err) {
+            if (statusEl) { statusEl.textContent = `✗ ${err.message}`; statusEl.style.color = "var(--wfm-danger)"; }
+        }
+    };
+    fileInput?.addEventListener("change", () => {
+        if (fileInput.files.length > 0) applyDefaultImageFile(fileInput.files[0]);
+    });
+    if (dropZone) {
+        dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+        dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+        dropZone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropZone.classList.remove("drag-over");
+            if (e.dataTransfer.files.length > 0) applyDefaultImageFile(e.dataTransfer.files[0]);
+        });
+    }
+}
+
 function _buildPresetOptions(customPresets) {
     const customs = customPresets.map((p) =>
         `<option value="${p.w}x${p.h}">${p.w}x${p.h}</option>`
@@ -1360,8 +1468,34 @@ export const comfyEditor = {
         const slots = loadNodes.slice(0, 4);
         // Mask Editor One ノード（画像+マスクを内包、常に両方必須）— 別枠で最大2件表示
         const meoSlots = meoNodes.slice(0, 2);
+        const phCfg = _loadI2IPlaceholderConfig();
+        const isColorMode = phCfg.mode !== "image";
         el.innerHTML = `
             ${slots.length === 0 ? "" : `
+            <details class="wfm-settings-section wfm-i2i-placeholder-config">
+                <summary class="wfm-settings-summary">${t("i2iPlaceholderTitle")}</summary>
+                <div class="wfm-i2i-placeholder-mode">
+                    <label><input type="radio" name="wfm-i2i-ph-mode" id="wfm-i2i-ph-mode-color" value="color" ${isColorMode ? "checked" : ""}> ${t("i2iPlaceholderColor")}</label>
+                    <label><input type="radio" name="wfm-i2i-ph-mode" id="wfm-i2i-ph-mode-image" value="image" ${isColorMode ? "" : "checked"}> ${t("i2iPlaceholderImage")}</label>
+                </div>
+                <div id="wfm-i2i-ph-color-fields" class="wfm-i2i-placeholder-fields wfm-lab-modal-inline" style="${isColorMode ? "" : "display:none;"}">
+                    <div><label>${t("i2iPlaceholderWidth")}</label><input type="number" min="1" id="wfm-i2i-ph-width" class="wfm-input" value="${Number(phCfg.width) || 512}"></div>
+                    <div><label>${t("i2iPlaceholderHeight")}</label><input type="number" min="1" id="wfm-i2i-ph-height" class="wfm-input" value="${Number(phCfg.height) || 512}"></div>
+                    <div><label>${t("i2iPlaceholderColorLabel")}</label><input type="color" id="wfm-i2i-ph-color" class="wfm-input" value="${escapeHtml(/^#[0-9a-fA-F]{6}$/.test(phCfg.color) ? phCfg.color : "#808080")}"></div>
+                </div>
+                <div id="wfm-i2i-ph-image-fields" class="wfm-i2i-placeholder-fields" style="${isColorMode ? "display:none;" : ""}">
+                    <div class="wfm-i2i-preview-wrap" id="wfm-i2i-ph-preview-wrap" style="${phCfg.imageFilename ? "" : "display:none;"}">
+                        <img class="wfm-i2i-preview-img" id="wfm-i2i-ph-preview-img" src="${phCfg.imageFilename ? `/view?filename=${encodeURIComponent(phCfg.imageFilename)}&type=input` : ""}">
+                    </div>
+                    <div class="wfm-i2i-drop-zone" id="wfm-i2i-ph-drop">
+                        <label class="wfm-i2i-drop-label">
+                            ${t("i2iPlaceholderDropImage")}
+                            <input type="file" accept="image/*" id="wfm-i2i-ph-file" style="display:none;">
+                        </label>
+                    </div>
+                    <span class="wfm-i2i-status" id="wfm-i2i-ph-status"></span>
+                </div>
+            </details>
             <div class="wfm-i2i-grid">
                 ${slots.map((node, i) => `
                     <div class="wfm-i2i-slot" data-slot="${i}" data-node-id="${node.id}">
@@ -1395,8 +1529,10 @@ export const comfyEditor = {
                             </div>
                         </div>
                         ` : ""}
-                        <div style="display:flex;gap:6px;margin-top:6px;">
+                        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
                             <button class="wfm-btn wfm-btn-sm wfm-btn-primary wfm-i2i-apply" data-slot="${i}" disabled>Apply</button>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-i2i-placeholder-btn" data-slot="${i}">${t("i2iPlaceholderApply")}</button>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-i2i-clear" data-slot="${i}">${t("clear")}</button>
                             <span class="wfm-i2i-status" id="wfm-i2i-status-${i}"></span>
                         </div>
                     </div>
@@ -1557,7 +1693,63 @@ export const comfyEditor = {
                     applyBtn.disabled = false;
                 }
             });
+
+            // Clear: reset this slot's staged/preview state back to empty. Doesn't touch
+            // the workflow node itself — LoadImage always needs *some* valid filename, so
+            // there's nothing meaningful to "unset" there; this just lets the user cancel
+            // a pending pick and start over.
+            const clearBtn = el.querySelector(`.wfm-i2i-clear[data-slot="${i}"]`);
+            clearBtn?.addEventListener("click", () => {
+                pendingFile = null;
+                previewImg.src = "";
+                previewWrap.style.display = "none";
+                filenameEl.textContent = "";
+                if (fileInput) fileInput.value = "";
+                applyBtn.disabled = !pendingMaskFile;
+                statusEl.textContent = "";
+            });
+
+            // Placeholder: generate (color mode) or reuse (image mode) the shared default
+            // configured at the top of the panel, and replace this slot's image
+            // immediately — no separate Apply click needed, matching the "one button,
+            // one slot" behavior described for this feature.
+            const placeholderBtn = el.querySelector(`.wfm-i2i-placeholder-btn[data-slot="${i}"]`);
+            placeholderBtn?.addEventListener("click", async () => {
+                const cfg = _loadI2IPlaceholderConfig();
+                placeholderBtn.disabled = true;
+                statusEl.textContent = t("i2iPlaceholderGenerating");
+                try {
+                    let filename;
+                    if (cfg.mode === "image") {
+                        if (!cfg.imageFilename) throw new Error(t("i2iPlaceholderNoDefaultImage"));
+                        filename = cfg.imageFilename;
+                    } else {
+                        const file = await _generateColorImageFile(cfg.width, cfg.height, cfg.color);
+                        const result = await comfyUI.uploadImage(file, file.name);
+                        if (!result.name) throw new Error("Upload returned no filename");
+                        filename = result.name;
+                    }
+                    if (comfyUI.currentWorkflow?.[node.id]) {
+                        comfyUI.currentWorkflow[node.id].inputs.image = filename;
+                    }
+                    pendingFile = null;
+                    previewImg.src = `/view?filename=${encodeURIComponent(filename)}&type=input`;
+                    previewWrap.style.display = "";
+                    filenameEl.textContent = filename;
+                    applyBtn.disabled = !pendingMaskFile;
+                    statusEl.textContent = `✓ ${filename}`;
+                    statusEl.style.color = "var(--wfm-success)";
+                    _syncRawJson();
+                } catch (err) {
+                    statusEl.textContent = `✗ ${err.message}`;
+                    statusEl.style.color = "var(--wfm-danger)";
+                } finally {
+                    placeholderBtn.disabled = false;
+                }
+            });
         });
+
+        _wireI2IPlaceholderConfig(el);
 
         // Initialize each Mask Editor One slot（画像+マスク両方が揃って初めてApply可能）
         meoSlots.forEach((node, i) => {

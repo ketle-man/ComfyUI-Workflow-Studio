@@ -212,6 +212,29 @@
     font-style: italic;
 }
 
+/* Setting 1, not yet explicitly overridden: showing the live GenerateUI value instead of
+   its own stored one (see _isLiveDisplay in lab-tab.js). Dashed border distinguishes it
+   from a saved override (solid border) at a glance. */
+.wfm-lab-cell.wfm-lab-cell-live {
+    border-style: dashed;
+}
+
+.wfm-lab-cell.wfm-lab-cell-live .wfm-lab-cell-value {
+    color: var(--wfm-text-secondary);
+}
+
+/* This keyframe row is skipped entirely (see _resolveKeyframe's bypassed handling) —
+   amber to read as "temporarily disabled", distinct from the neutral gray used for
+   revert/live. Takes priority over both of those in _cellHtml. */
+.wfm-lab-cell.wfm-lab-cell-bypassed {
+    border-color: var(--wfm-warning);
+    opacity: 0.6;
+}
+
+.wfm-lab-cell.wfm-lab-cell-bypassed .wfm-lab-cell-value {
+    color: var(--wfm-warning);
+}
+
 .wfm-lab-cell-applied {
     margin-top: 3px;
     padding-top: 3px;
@@ -252,6 +275,13 @@
     flex-wrap: wrap;
     gap: 6px;
     margin-bottom: 10px;
+}
+
+.wfm-lab-modal-hint {
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    font-style: italic;
+    margin: 0 0 10px;
 }
 
 .wfm-lab-modal-inline > div {
