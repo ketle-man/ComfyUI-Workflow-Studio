@@ -102,6 +102,7 @@ export const AI_BACKEND_DEFAULT_URLS = {
     ollama: "http://localhost:11434",
     lmstudio: "http://localhost:1234",
     lemonade: "http://localhost:13305",
+    unsloth: "http://localhost:8888",
 };
 
 export function getAiBackendDefaultUrl(backend) {

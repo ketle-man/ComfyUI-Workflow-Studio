@@ -86,6 +86,18 @@ async function callVLM(url, backend, model, prompt, base64Image, mimeType, setti
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const text = (await res.json()).response || "";
         return settings.thinkingMode ? text : stripThinkingTags(text);
+    } else if (backend === "unsloth") {
+        const body = _applyGenOptions({
+            model,
+            messages: [{ role: "user", content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } },
+            ]}],
+            stream: false,
+        }, backend, settings);
+        const data = await unslothProxy(url, "/v1/chat/completions", "POST", body);
+        const text = _unslothContent(data.choices?.[0]?.message);
+        return settings.thinkingMode ? text : stripThinkingTags(text);
     } else {
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
@@ -103,6 +115,35 @@ async function callVLM(url, backend, model, prompt, base64Image, mimeType, setti
         const text = (await res.json()).choices?.[0]?.message?.content || "";
         return settings.thinkingMode ? text : stripThinkingTags(text);
     }
+}
+
+// ============================================
+// Unsloth proxy (server relays the request, attaching the API key from .env
+// so it never reaches the frontend — see py/routes/unsloth_routes.py)
+// ============================================
+
+async function unslothProxy(baseUrl, path, method, payload) {
+    const res = await fetch("/api/wfm/unsloth/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl, path, method, payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    return data;
+}
+
+// Unlike Ollama/LM Studio/Lemonade (which inline reasoning as <think> tags
+// inside content), Unsloth's OpenAI-compatible API returns it in a separate
+// `reasoning_content` field. Fold it back into a <think> block so the
+// existing Thinking-mode show/strip logic (_applyGenOptions/stripThinkingTags)
+// still applies uniformly. Without this, a low max_tokens can make the model
+// spend its whole budget reasoning and return an empty `content` with no
+// visible explanation.
+function _unslothContent(message) {
+    const reasoning = message?.reasoning_content;
+    const content = message?.content || "";
+    return reasoning ? `<think>${reasoning}</think>${content}` : content;
 }
 
 // ============================================
@@ -128,6 +169,9 @@ async function fetchModels(url, backend) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         return (data.models || []).map((m) => m.name);
+    } else if (backend === "unsloth") {
+        const data = await unslothProxy(url, "/v1/models", "GET");
+        return (data.data || []).map((m) => m.id);
     } else {
         // LM Studio (OpenAI-compatible)
         const res = await fetch(`${url}/v1/models`);
@@ -152,6 +196,11 @@ async function callLLM(url, backend, model, prompt, settings = {}) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const text = data.response || "";
+        return settings.thinkingMode ? text : stripThinkingTags(text);
+    } else if (backend === "unsloth") {
+        const body = _applyGenOptions({ model, messages: [{ role: "user", content: prompt }], stream: false }, backend, settings);
+        const data = await unslothProxy(url, "/v1/chat/completions", "POST", body);
+        const text = _unslothContent(data.choices?.[0]?.message);
         return settings.thinkingMode ? text : stripThinkingTags(text);
     } else {
         // LM Studio (OpenAI-compatible)
@@ -542,6 +591,13 @@ async function callChat(url, backend, model, messages, tools, settings = {}) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const message = (await res.json()).message || {};
         const content = message.content || "";
+        return { content: settings.thinkingMode ? content : stripThinkingTags(content), toolCalls: message.tool_calls || null };
+    } else if (backend === "unsloth") {
+        const body = _applyGenOptions({ model, messages: formattedMessages, stream: false }, backend, settings);
+        if (tools) { body.tools = tools; body.tool_choice = "auto"; }
+        const data = await unslothProxy(url, "/v1/chat/completions", "POST", body);
+        const message = data.choices?.[0]?.message || {};
+        const content = _unslothContent(message);
         return { content: settings.thinkingMode ? content : stripThinkingTags(content), toolCalls: message.tool_calls || null };
     } else {
         const body = _applyGenOptions({ model, messages: formattedMessages, stream: false }, backend, settings);

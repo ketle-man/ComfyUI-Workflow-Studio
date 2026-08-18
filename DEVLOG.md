@@ -2,6 +2,34 @@
 
 ---
 
+## v0.3.99
+
+### 機能追加: AI TOOLタブ + サイドパネルAタブにUnslothバックエンド追加（APIキーは.env管理、SSRF脆弱性修正、reasoning_content対応）
+
+ユーザーから「作業計画のUnslothをAI TOOLタブ、サイドパネルAタブに導入したい。APIキーは.envファイルで設定したい」との依頼を受けて着手。v0.3.98時点で「今回は見送り」として`project_next_tasks`メモリに保留していたUnslothバックエンド追加を実装した一連のセッション。
+
+**1. Unslothバックエンド追加**: Ollama/LM Studio/Lemonadeに続く4つ目のバックエンドとしてUnsloth（OpenAI互換API、既定`http://localhost:8888`）を追加。既存3バックエンドと異なりローカルアクセスでも常にAPIキー認証が必須（`Authorization: Bearer sk-unsloth-...`）なため、フロントエンドから直接fetchする既存方式ではなく、新設したサーバー側プロキシ（`py/routes/unsloth_routes.py`, `POST /api/wfm/unsloth/proxy`）経由にした。CivitAI連携（`civitai_service.py`）のAPIキー管理パターン（環境変数優先）を踏襲しつつ、今回はユーザーの要望通りAPIキーを`.env`ファイル（`UNSLOTH_API_KEY`）で管理する方式にした。`python-dotenv`を新規依存として追加し、ノードインポート前に実行される唯一のタイミングである`prestartup_script.py`（新規作成）で`.env`を読み込み`os.environ`へ反映する。フロントエンドはSPA（`ai-tab.js`）・サイドパネル（`node_sets_menu.js`）の両方で`fetchModels`/`callLLM`/`callVLM`/`callChat`各関数に`backend === "unsloth"`分岐を追加（既存の重複実装パターンを踏襲）。
+
+**2. セキュリティレビュー対応（SSRF修正）**: 実装直後の自動セキュリティレビューで、プロキシがクライアント指定の`baseUrl`をそのまま信頼しており、悪意のあるページが`baseUrl`に任意の外部URLを指定すれば`UNSLOTH_API_KEY`を外部へ流出させられる脆弱性（SSRF経由の資格情報窃取）が指摘された。`baseUrl`のホスト名を`localhost`/`127.0.0.1`/`::1`のみに限定するアローリスト検証を追加して修正（ポート番号は自由のままとし、Unslothのカスタムポート起動に対応）。
+
+**3. `.env.example`のコメントアウトの罠**: 動作確認時、ユーザーが`.env.example`の`# UNSLOTH_API_KEY=sk-unsloth-...`という例示行をそのまま`.env`にコピーし、先頭の`#`を消し忘れてコメントアウトされたまま値を入力してしまい「UNSLOTH_API_KEY is not set」エラーが発生。テンプレート自体を「空の実行可能な行」（`UNSLOTH_API_KEY=`）＋手順コメントの形に変更し、同じ罠が再発しないようにした。
+
+**4. Unsloth Desktop側「モデル自動切り替え」設定の仕様判明**: 動作確認中、Unsloth側の「モデル自動切り替え (OpenAI API)」設定がOFFだと、Unsloth Studio UI上で事前にモデルを手動ロードしていない限りAPIリクエストがHTTP 404で失敗することが判明（公式ドキュメント調査で確認：未知のモデル名は安全に現在ロード中のモデルへフォールバックするが、通常は明示的にONにしてAPI経由のモデル切り替えを許可する必要がある仕様）。本プラグイン側の不具合ではなくUnsloth Desktop自体の仕様のため、ヘルプ（`ai-6`）とREADMEに「Unsloth Desktop側でこの設定をONにする必要がある」旨を追記した。
+
+**5. `reasoning_content`未対応バグ修正**: 「モデル自動切り替え」をONにした後も、会話が数ターン進むとチャットの応答が空のバブルになる不具合が発生。Unsloth Studioのサーバーログ（`~/.unsloth/studio/logs/server/`）と、ブラウザ操作MCP（kapture）の`evaluate`経由でプロキシへ生のAPIリクエストを直接送って実レスポンスを検証した結果、Unslothのreasoningモデル（`gemma-4-12B-it-QAT-GGUF`）はOpenAI互換APIで思考過程を`message.content`ではなく別フィールド`message.reasoning_content`に返す仕様であることが判明した。Ollama/LM Studio/Lemonadeはインラインの`<think>...</think>`タグ方式のため既存のThinking mode処理で問題にならなかったが、Unslothは別フィールド方式のため、Max tokens不足（初期値512）で思考中にトークンを使い切ると（`finish_reason: "length"`）、`content`が常に空文字列のまま返り、チャットに中身のないバブルだけが残っていた。`reasoning_content`を`<think>...</think>`として`content`に合成してから既存のThinking mode ON/OFF処理（`stripThinkingTags`）に流すよう修正し、SPA・サイドパネル両方に適用。Max tokensが小さすぎると根本的に回答本文が生成されない制約自体は残るため、ヘルプに「Unslothのreasoningモデルを使う場合はMax tokensを2048以上に」という推奨値も追記した。
+
+**ヘルプタブ更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMap）に従い、AI TOOL TabヘルプのSettings pane説明（`ai-6`）にUnsloth関連3項目（APIキーの`.env`設定・モデル自動切り替え要件・`reasoning_content`/Max tokens注意）を追記。`sidepanel-16`・`ai-2`にもバックエンド一覧へUnslothを追加。README.mdのBackend support・Settings pane等の該当箇所も同様に更新。
+
+**検証**: 全JS/PythonファイルをそれぞれNode.jsの構文チェック（`node --check`）・`ast.parse()`で確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更の都度`diff`で意図した差分のみであることを確認してから両フォルダへ同期し、`cmp`でファイル同一性を検証。実行時フォルダの`__pycache__`もクリア。最終的にユーザー自身が実機（Unsloth Desktop + ComfyUI）で一通り動作確認済み。
+
+**How to apply**:
+1. 外部APIキーが常に必須なバックエンドを追加する場合、既存バックエンドと同じ「フロントエンドから直接fetch」方式は使えない（APIキーがブラウザに露出する）。サーバー側プロキシ方式が必須になる。
+2. サーバー側プロキシでクライアント指定のURLをそのまま信頼してAuthorizationヘッダーを付与すると、SSRF経由の資格情報漏洩につながる。ホスト名のアローリスト検証は必須。
+3. `.env`テンプレートに「コメントアウトされた例」を書くと、ユーザーが`#`を消し忘れてハマる典型パターンになる。テンプレートは「空の実行可能な行」＋説明コメントの形にする。
+4. サードパーティAPIサーバーの独自拡張（`reasoning_content`等）は、標準的なOpenAI Chat Completions仕様と食い違うことがある。空応答やトークン切れなど不可解な挙動が出たら、実際の生レスポンスをブラウザから直接fetchして中身を見るのが最も早い切り分け方法（kaptureの`evaluate`ツールでプロキシへ直接リクエストを送るのが有効だった）。
+
+---
+
 ## v0.3.98
 
 ### 機能追加・バグ修正: AI TOOL翻訳の信頼性向上 + GenerateUI Modelタブ再構成（ハイライト色・折りたたみ・並び替え）+ Thinking mode/Max tokens設定

@@ -80,11 +80,12 @@ class WorkflowStudio:
         app.router.add_get("/wfm", serve_index_page)
 
         # API routes
-        from .routes import workflow_routes, settings_routes, ollama_routes, eagle_routes, nodes_routes, prompts_routes, models_routes, gallery_routes, wildcard_routes, tagger_routes, gmic_routes, skill_routes, lab_routes
+        from .routes import workflow_routes, settings_routes, ollama_routes, unsloth_routes, eagle_routes, nodes_routes, prompts_routes, models_routes, gallery_routes, wildcard_routes, tagger_routes, gmic_routes, skill_routes, lab_routes
 
         workflow_routes.setup_routes(app)
         settings_routes.setup_routes(app)
         ollama_routes.setup_routes(app)
+        unsloth_routes.setup_routes(app)
         eagle_routes.setup_routes(app)
         nodes_routes.setup_routes(app)
         prompts_routes.setup_routes(app)

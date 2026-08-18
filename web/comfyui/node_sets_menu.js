@@ -3622,9 +3622,36 @@ const AI_BACKEND_DEFAULT_URLS = {
     ollama: "http://localhost:11434",
     lmstudio: "http://localhost:1234",
     lemonade: "http://localhost:13305",
+    unsloth: "http://localhost:8888",
 };
 function getAiBackendDefaultUrl(backend) {
     return AI_BACKEND_DEFAULT_URLS[backend] || AI_BACKEND_DEFAULT_URLS.ollama;
+}
+
+// Server relays the request, attaching the Unsloth API key from .env so it
+// never reaches the frontend — see py/routes/unsloth_routes.py.
+async function aiUnslothProxy(baseUrl, path, method, payload) {
+    const r = await fetch("/api/wfm/unsloth/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl, path, method, payload }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.message || `HTTP ${r.status}`);
+    return data;
+}
+
+// Unlike Ollama/LM Studio/Lemonade (which inline reasoning as <think> tags
+// inside content), Unsloth's OpenAI-compatible API returns it in a separate
+// `reasoning_content` field. Fold it back into a <think> block so the
+// existing Thinking-mode show/strip logic (_aiApplyGenOptions/aiStripThinkingTags)
+// still applies uniformly. Without this, a low max_tokens can make the model
+// spend its whole budget reasoning and return an empty `content` with no
+// visible explanation.
+function _aiUnslothContent(message) {
+    const reasoning = message?.reasoning_content;
+    const content = message?.content || "";
+    return reasoning ? `<think>${reasoning}</think>${content}` : content;
 }
 
 function isValidAiUrl(url) {
@@ -3676,6 +3703,11 @@ async function aiCallLLM(url, backend, model, prompt, settings = {}) {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const text = (await r.json()).response || "";
         return settings.thinkingMode ? text : aiStripThinkingTags(text);
+    } else if (backend === "unsloth") {
+        const body = _aiApplyGenOptions({ model, messages: [{ role: "user", content: prompt }], stream: false }, backend, settings);
+        const d = await aiUnslothProxy(url, "/v1/chat/completions", "POST", body);
+        const text = _aiUnslothContent(d.choices?.[0]?.message);
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     } else {
         const r = await fetch(`${url}/v1/chat/completions`, {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -3709,6 +3741,18 @@ async function aiCallVLM(url, backend, model, prompt, base64Image, mimeType, set
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const text = (await r.json()).response || "";
         return settings.thinkingMode ? text : aiStripThinkingTags(text);
+    } else if (backend === "unsloth") {
+        const body = _aiApplyGenOptions({
+            model,
+            messages: [{ role: "user", content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } },
+            ]}],
+            stream: false,
+        }, backend, settings);
+        const d = await aiUnslothProxy(url, "/v1/chat/completions", "POST", body);
+        const text = _aiUnslothContent(d.choices?.[0]?.message);
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     } else {
         const r = await fetch(`${url}/v1/chat/completions`, {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -3735,6 +3779,11 @@ async function aiCallChat(url, backend, model, messages, settings = {}) {
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const text = (await r.json()).message?.content || "";
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
+    } else if (backend === "unsloth") {
+        const body = _aiApplyGenOptions({ model, messages, stream: false }, backend, settings);
+        const d = await aiUnslothProxy(url, "/v1/chat/completions", "POST", body);
+        const text = _aiUnslothContent(d.choices?.[0]?.message);
         return settings.thinkingMode ? text : aiStripThinkingTags(text);
     } else {
         const r = await fetch(`${url}/v1/chat/completions`, {
@@ -3773,6 +3822,9 @@ async function aiFetchModels(url, backend) {
         const r = await fetch(`${url}/api/tags`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return ((await r.json()).models || []).map(m => m.name);
+    } else if (backend === "unsloth") {
+        const d = await aiUnslothProxy(url, "/v1/models", "GET");
+        return (d.data || []).map(m => m.id);
     } else {
         const r = await fetch(`${url}/v1/models`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -3924,6 +3976,7 @@ const renderAiTab = (container) => {
                             <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="ollama"> Ollama</label>
                             <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="lmstudio"> LM Studio</label>
                             <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="lemonade"> Lemonade</label>
+                            <label class="wfm-nlp-ai-radio"><input type="radio" name="wfm-nlp-ai-backend" value="unsloth"> Unsloth</label>
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">

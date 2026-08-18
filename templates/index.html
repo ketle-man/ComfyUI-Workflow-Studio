@@ -1756,7 +1756,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-sidepanel-card-ai-title">AI TOOL tab</h3>
                             <ul>
-                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, or Lemonade; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage</li>
+                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, Lemonade, or Unsloth; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1779,7 +1779,7 @@
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-ai-card-translate-title">Translation pane</h3>
-                            <p id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama, LM Studio, or Lemonade; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</p>
+                            <p id="wfm-help-ai-2">Translation pane: translate text between Japanese, English, Chinese, or a custom Free language using Ollama, LM Studio, Lemonade, or Unsloth; ⇄ swap button swaps both language selectors and text content; selections are saved automatically</p>
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-ai-card-chat-title">Chat pane</h3>
@@ -1803,7 +1803,7 @@
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-ai-card-settings-title">Settings pane</h3>
-                            <p id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade), set API URL, test connection, select model; Generation section — Thinking mode toggle (off by default; Ollama receives a `think` flag, and regardless of backend any &lt;think&gt;...&lt;/think&gt; block is stripped from the output when off, so reasoning models don't clutter Translation/Chat/TOOLS results) and Max tokens (Ollama: num_predict, LM Studio/Lemonade: max_tokens; 0 = unlimited); configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</p>
+                            <p id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade / Unsloth), set API URL, test connection, select model; Unsloth always requires an API key even for local access — set UNSLOTH_API_KEY in a .env file in the plugin folder (copy .env.example) and restart ComfyUI, the key is read server-side and never sent to the browser; Unsloth also requires "Auto model switching (OpenAI API)" to be turned ON in the Unsloth Desktop app itself (its own Settings screen) — without it, requests fail with HTTP 404 unless a model was already manually loaded in the Unsloth Studio UI; Unsloth reasoning models return their thinking in a separate reasoning_content field rather than inline &lt;think&gt; tags, so a low Max tokens can make the model spend its whole budget reasoning and return an empty reply — increase Max tokens (2048+) if replies come back blank; Generation section — Thinking mode toggle (off by default; Ollama receives a `think` flag, and regardless of backend any &lt;think&gt;...&lt;/think&gt; block is stripped from the output when off, so reasoning models don't clutter Translation/Chat/TOOLS results) and Max tokens (Ollama: num_predict, LM Studio/Lemonade/Unsloth: max_tokens; 0 = unlimited); configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</p>
                         </div>
                     </div>
 
@@ -2810,6 +2810,9 @@
                             </label>
                             <label class="wfm-ai-radio-label">
                                 <input type="radio" name="wfm-ai-backend" value="lemonade"> Lemonade
+                            </label>
+                            <label class="wfm-ai-radio-label">
+                                <input type="radio" name="wfm-ai-backend" value="unsloth"> Unsloth
                             </label>
                         </div>
                     </div>
