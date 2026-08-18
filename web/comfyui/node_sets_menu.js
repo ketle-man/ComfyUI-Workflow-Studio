@@ -3645,22 +3645,46 @@ function saveAiCfg(patch) {
     return d;
 }
 
-async function aiCallLLM(url, backend, model, prompt) {
+// Ollamaは `think` (bool) と `options.num_predict` で制御できるが、
+// LM Studio/LemonadeはOpenAI互換APIのため max_tokens のみ標準対応。
+// thinking mode切替は非対応バックエンド／モデル向けに、出力からの
+// <think>タグ除去でも担保する（aiStripThinkingTagsを参照）。
+function _aiApplyGenOptions(body, backend, settings) {
+    const maxTokens = parseInt(settings?.maxTokens, 10);
+    if (backend === "ollama") {
+        body.think = !!settings?.thinkingMode;
+        if (maxTokens > 0) body.options = { ...(body.options || {}), num_predict: maxTokens };
+    } else if (maxTokens > 0) {
+        body.max_tokens = maxTokens;
+    }
+    return body;
+}
+
+function aiStripThinkingTags(text) {
+    return (text || "")
+        .replace(/<think>[\s\S]*?<\/think>/gi, "")
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+        .trim();
+}
+
+async function aiCallLLM(url, backend, model, prompt, settings = {}) {
     if (backend === "ollama") {
         const r = await fetch(`${url}/api/generate`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, prompt, stream: false }),
+            body: JSON.stringify(_aiApplyGenOptions({ model, prompt, stream: false }, backend, settings)),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()).response || "";
+        const text = (await r.json()).response || "";
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     } else {
         const r = await fetch(`${url}/v1/chat/completions`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], stream: false }),
+            body: JSON.stringify(_aiApplyGenOptions({ model, messages: [{ role: "user", content: prompt }], stream: false }, backend, settings)),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
-        return d.choices?.[0]?.message?.content || "";
+        const text = d.choices?.[0]?.message?.content || "";
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     }
 }
 
@@ -3676,47 +3700,72 @@ function aiFileToBase64(file) {
     });
 }
 
-async function aiCallVLM(url, backend, model, prompt, base64Image, mimeType) {
+async function aiCallVLM(url, backend, model, prompt, base64Image, mimeType, settings = {}) {
     if (backend === "ollama") {
         const r = await fetch(`${url}/api/generate`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, prompt, images: [base64Image], stream: false }),
+            body: JSON.stringify(_aiApplyGenOptions({ model, prompt, images: [base64Image], stream: false }, backend, settings)),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()).response || "";
+        const text = (await r.json()).response || "";
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     } else {
         const r = await fetch(`${url}/v1/chat/completions`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            body: JSON.stringify(_aiApplyGenOptions({
                 model,
                 messages: [{ role: "user", content: [
                     { type: "text", text: prompt },
                     { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } },
                 ]}],
                 stream: false,
-            }),
+            }, backend, settings)),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()).choices?.[0]?.message?.content || "";
+        const text = (await r.json()).choices?.[0]?.message?.content || "";
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     }
 }
 
-async function aiCallChat(url, backend, model, messages) {
+async function aiCallChat(url, backend, model, messages, settings = {}) {
     if (backend === "ollama") {
         const r = await fetch(`${url}/api/chat`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, messages, stream: false }),
+            body: JSON.stringify(_aiApplyGenOptions({ model, messages, stream: false }, backend, settings)),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()).message?.content || "";
+        const text = (await r.json()).message?.content || "";
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     } else {
         const r = await fetch(`${url}/v1/chat/completions`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, messages, stream: false }),
+            body: JSON.stringify(_aiApplyGenOptions({ model, messages, stream: false }, backend, settings)),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()).choices?.[0]?.message?.content || "";
+        const text = (await r.json()).choices?.[0]?.message?.content || "";
+        return settings.thinkingMode ? text : aiStripThinkingTags(text);
     }
+}
+
+// Strips common LLM wrapping/preamble artifacts that survive despite the system prompt.
+function cleanAiTranslationOutput(raw) {
+    let s = (raw || "").trim();
+    s = s.replace(/^(sure[,.]?\s*)?(here('|)s|here is)?\s*(the\s+)?translation\s*:?\s*/i, "");
+    s = s.replace(/^(翻訳|译文|翻译)\s*[::]\s*/, "");
+    if (s.length >= 2) {
+        const first = s[0], last = s[s.length - 1];
+        const pairs = { '"': '"', "'": "'", "“": "”", "「": "」" };
+        if (pairs[first] === last) s = s.slice(1, -1).trim();
+    }
+    return s;
+}
+
+// Heuristic: if the cleaned output is (near-)identical to the input, the
+// model most likely echoed the source instead of translating it.
+function aiLooksUntranslated(input, output) {
+    const normalize = (s) => s.trim().toLowerCase().replace(/[\s.,!?"'。、！？「」]/g, "");
+    const a = normalize(input), b = normalize(output);
+    return a.length > 0 && a === b;
 }
 
 async function aiFetchModels(url, backend) {
@@ -3895,6 +3944,18 @@ const renderAiTab = (container) => {
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">
+                        <div class="wfm-nlp-ai-sec-title">Generation</div>
+                        <div class="wfm-nlp-ai-row">
+                            <label class="wfm-nlp-ai-lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                <input type="checkbox" id="wfm-nlp-ai-thinking-mode"> Thinking mode
+                            </label>
+                        </div>
+                        <div class="wfm-nlp-ai-row">
+                            <span class="wfm-nlp-ai-lbl">Max tokens</span>
+                            <input type="number" id="wfm-nlp-ai-max-tokens" class="wfm-nlp-ai-input" min="0" step="1" placeholder="0 = unlimited" style="flex:1;">
+                        </div>
+                    </div>
+                    <div class="wfm-nlp-ai-sec">
                         <div class="wfm-nlp-ai-sec-title">Free language</div>
                         <div class="wfm-nlp-ai-row">
                             <span class="wfm-nlp-ai-lbl">Source</span>
@@ -3947,6 +4008,11 @@ const setupAiHandlers = (container) => {
     if (freeSrcInput && cfg.freeSrcLang) freeSrcInput.value = cfg.freeSrcLang;
     if (freeDstInput && cfg.freeDstLang) freeDstInput.value = cfg.freeDstLang;
 
+    const thinkingModeInput = container.querySelector("#wfm-nlp-ai-thinking-mode");
+    if (thinkingModeInput) thinkingModeInput.checked = !!cfg.thinkingMode;
+    const maxTokensInput = container.querySelector("#wfm-nlp-ai-max-tokens");
+    if (maxTokensInput && cfg.maxTokens) maxTokensInput.value = cfg.maxTokens;
+
     const srcSel = container.querySelector("#wfm-nlp-ai-src");
     const dstSel = container.querySelector("#wfm-nlp-ai-dst");
     if (srcSel && cfg.srcLang) srcSel.value = cfg.srcLang;
@@ -3978,10 +4044,13 @@ const setupAiHandlers = (container) => {
 
         const srcLang = srcSel?.value || "ja";
         const dstLang = dstSel?.value || "en";
-        const srcName = srcLang === "free" ? (c.freeSrcLang || "Auto") : AI_LANG_NAMES[srcLang];
-        const dstName = dstLang === "free" ? (c.freeDstLang || "English") : AI_LANG_NAMES[dstLang];
-        const fromPart = srcLang === "free" ? "" : `from ${srcName} `;
-        const prompt = `Translate the following text ${fromPart}to ${dstName}. Output only the translated text, nothing else.\n\n${text}`;
+        const srcName = srcLang === "free" ? (c.freeSrcLang || "").trim() : AI_LANG_NAMES[srcLang];
+        const dstName = dstLang === "free" ? (c.freeDstLang || "English").trim() || "English" : AI_LANG_NAMES[dstLang];
+        const fromPart = srcName ? ` from ${srcName}` : "";
+        const systemPrompt = `You are a professional translator. Translate the text the user sends${fromPart} into ${dstName}. `
+            + `Reply with ONLY the translated text and nothing else: no explanations, no notes, no preamble like "Here is the translation:", `
+            + `no surrounding quotes, and do not repeat or echo the original text.`;
+        const messages = [{ role: "system", content: systemPrompt }, { role: "user", content: text }];
 
         const transBtn = container.querySelector("#wfm-nlp-ai-trans-btn");
         const statusEl = container.querySelector("#wfm-nlp-ai-status");
@@ -3992,10 +4061,14 @@ const setupAiHandlers = (container) => {
         outputEl.value = "";
 
         try {
-            const result = await aiCallLLM(url, backend, model, prompt);
-            outputEl.value = result.trim();
+            const result = await aiCallChat(url, backend, model, messages, c);
+            const cleaned = cleanAiTranslationOutput(result);
+            outputEl.value = cleaned;
             statusEl.textContent = "完了";
             statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";
+            if (srcLang !== dstLang && aiLooksUntranslated(text, cleaned)) {
+                showToast("モデルが原文をそのまま返しました。翻訳されていない可能性があります。別のモデルをお試しください。", "error");
+            }
         } catch (err) {
             statusEl.textContent = `エラー: ${err.message}`;
             statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
@@ -4069,11 +4142,13 @@ const setupAiHandlers = (container) => {
         const model = container.querySelector("#wfm-nlp-ai-model")?.value || "";
         const freeSrcLang = container.querySelector("#wfm-nlp-ai-free-src")?.value?.trim() || "";
         const freeDstLang = container.querySelector("#wfm-nlp-ai-free-dst")?.value?.trim() || "";
+        const thinkingMode = !!container.querySelector("#wfm-nlp-ai-thinking-mode")?.checked;
+        const maxTokens = Math.max(0, parseInt(container.querySelector("#wfm-nlp-ai-max-tokens")?.value, 10) || 0);
         if (url && !isValidAiUrl(url)) {
             showToast("URLは http:// または https:// で始まる必要があります", "error");
             return;
         }
-        saveAiCfg({ backend, backendUrl: url, model, freeSrcLang, freeDstLang });
+        saveAiCfg({ backend, backendUrl: url, model, freeSrcLang, freeDstLang, thinkingMode, maxTokens });
         showToast("Settings saved", "success");
     });
 
@@ -4119,7 +4194,7 @@ const setupAiHandlers = (container) => {
             const messagesToSend = skillPrompt
                 ? [{ role: "system", content: skillPrompt }, ...chatHistory]
                 : chatHistory;
-            const reply = await aiCallChat(url, backend, model, messagesToSend);
+            const reply = await aiCallChat(url, backend, model, messagesToSend, c);
             chatHistory.push({ role: "assistant", content: reply });
             appendChatBubble("assistant", reply);
             chatStatusEl.textContent = "";
@@ -4351,7 +4426,7 @@ const setupAiHandlers = (container) => {
 
             const prompt = `Generate ${count} wildcard entries for the category "${name}". Output only plain text in English, one entry per line, no numbers, no markdown, no asterisks, no bold, nothing else.`;
             try {
-                const result = await aiCallLLM(url, backend, model, prompt);
+                const result = await aiCallLLM(url, backend, model, prompt, c);
                 vlmResult.value = result.trim()
                     .split("\n")
                     .map(l => l.replace(/\*\*/g, "").replace(/^\*\s*/, "").replace(/^\d+\.\s*/, "").trim())
@@ -4376,7 +4451,7 @@ const setupAiHandlers = (container) => {
         vlmResult.value = "";
 
         try {
-            const result = await aiCallVLM(url, backend, model, VLM_PROMPTS[task], vlmImage.base64, vlmImage.mimeType);
+            const result = await aiCallVLM(url, backend, model, VLM_PROMPTS[task], vlmImage.base64, vlmImage.mimeType, c);
             vlmResult.value = result.trim();
             vlmStatus.textContent = "完了";
             vlmStatus.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";

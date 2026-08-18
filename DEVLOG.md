@@ -2,6 +2,34 @@
 
 ---
 
+## v0.3.98
+
+### 機能追加・バグ修正: AI TOOL翻訳の信頼性向上 + GenerateUI Modelタブ再構成（ハイライト色・折りたたみ・並び替え）+ Thinking mode/Max tokens設定
+
+ユーザーから「AI TOOLタブの翻訳、英語から日本語がうまく動かない（英語のまま、完了で翻訳されない）」との報告を受けて着手。原因調査後、関連するGenerateUI Modelタブの表示改善、AI TOOLタブへのLLM生成パラメータ設定追加と、複数の要望を連続して実装した一連のセッション。
+
+**1. AI TOOL翻訳の信頼性向上**: 調査の結果、翻訳処理がOllamaの`/api/generate`（system role無しの生プロンプト文字列）またはLM Studio/Lemonadeの`/v1/chat/completions`（user roleのみ、system message無し）でLLMへ丸投げしており、指示追従が弱い小型・非力なローカルモデルが「翻訳してください」という指示を無視して原文をそのまま返すことがあった。それでもHTTPレスポンス自体は正常なため、画面上は「完了」と表示されたまま実際には未翻訳、という状態が発生していた。既にChatペインで使われていた`callChat()`（system role対応のchat API）を翻訳にも流用し、system promptで「翻訳結果のみを出力し、説明・前置き・原文の繰り返しをしない」と明確に指示するよう変更。加えてモデルが前置き文（"Here is the translation:"等）や引用符を付けて返す場合の後処理除去（`cleanTranslationOutput`）と、出力が原文とほぼ同一＝未翻訳の疑いがある場合の警告トースト（`looksUntranslated`）を追加。SPA（`ai-tab.js`）とサイドパネルAタブ（`node_sets_menu.js`）は全く同じ不具合パターンの重複実装だったため、両方に同じ修正を適用（設定は同じ`localStorage`キー`wfm_ai_settings`を共有）。
+
+**2. GenerateUI Modelタブ: ハイライト色機能**: ユーザーから「読み込んだワークフローに関係なく項目を並べているため該当する項目（Checkpointなど）の色を変更表示、デフォルトは明るい緑、設定タブに色変更設定を追加したい」との要望。既存の「RAW JSON Colors」機能（`<style>`タグ動的注入＋`localStorage`保存＋Resetボタン）と全く同じパターンを踏襲し、`applyModelTabActiveColor()`を新設。`renderModelTab()`で各セクション（Checkpoint/VAE/Diffusion Model/Text Encoder/ControlNet/Hypernetwork）のラベルとLoRA列見出しに、対応するノードが実際にワークフローへ含まれる場合のみ`wfm-model-label-active`クラスを付与。既存CSS`.wfm-form-group label { color: var(--wfm-text-secondary); }`の方が詳細度が高く単純なクラス指定では上書きされなかったため、注入CSS側のセレクタを`.wfm-form-group label.wfm-model-label-active`（および後続の折りたたみ対応でsummary要素向けセレクタも追加）として詳細度を確実に上回るよう実装。
+
+**3. ControlNet/Hypernetwork折りたたみ化 + Text Encoder並び替え**: 「使用頻度が低い、意図的に利用するControlNet、Hypernetworkは折りたたみにし、最新モデルで主流のText EncoderをControlNetの上にしたい」とのフィードバックを受け、表示順をCheckpoint→VAE→Diffusion Model→**Text Encoder**→ControlNet→Hypernetworkに変更。ControlNet/Hypernetworkは`Image Editタブのプレースホルダ設定`（v0.3.97）で既に使われていた`<details>/<summary>` + `.wfm-settings-section`パターンをそのまま再利用し、デフォルト折りたたみ状態に。折りたたんだ状態でもハイライト色（#2の機能）は見出し文字に残るため、展開しなくても「このワークフローはControlNetを使っているか」が一目で分かる設計とした。続けて「LoRAもハイライト可能にしたい」との追加要望で、`templates/index.html`のLoRA列見出し`<span>`にid付与、`renderLoraPane()`でワークフローにLoRAノードが1件でもあればハイライトクラスをtoggleするよう対応。
+
+**4. AI TOOLタブ: Thinking mode / Max tokens設定**: 「Thinking mode ON/OFF、Max tokens設定を追加したい」との要望を受け実装。Ollamaは`think`パラメータ（bool）と`options.num_predict`で標準対応しているが、LM Studio/Lemonade（OpenAI互換API）には標準的なthinking切替パラメータが存在しないため`max_tokens`のみ送信し、代わりにThinking mode OFF時は出力から`<think>...</think>`（`<thinking>...</thinking>`も）タグをクライアント側で正規表現除去する方式を採用。これはOllama自身がパラメータを無視した場合の保険としても機能し、バックエンドを問わず一貫した挙動になる。SPA（`callLLM`/`callChat`/`callVLM`）とサイドパネル（`aiCallLLM`/`aiCallChat`/`aiCallVLM`）の両方に`_applyGenOptions()`ヘルパーとタグ除去処理を追加し、Translation/Chat/TOOLS(VLM)/Wildcard生成の全呼び出し経路に反映。
+- **付随調査（見送り）**: 「Unsloth Desktopアプリのバックエンド追加は可能か」との質問を受け、公式ドキュメントを調査。OpenAI/Anthropic互換APIを同一ポート（既定`localhost:8888`）で提供する点は好条件だが、既存3バックエンドと異なり**ローカルアクセスであってもAPIキー認証が常に必須**（`Authorization: Bearer sk-unsloth-...`、無いと401）と判明。実装には新規UI（APIキー入力欄）が必要になるためユーザー判断で今回は見送り、将来の作業候補として`project_next_tasks`メモリに記録。
+
+**ヘルプタブ更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、GenerateUI TabヘルプにModelタブの新しい表示順・折りたたみ挙動（`gen-5`更新）とハイライト色機能（新規`gen-28`）、AI TOOL TabヘルプにThinking mode/Max tokens（`ai-6`更新）、SettingsタブヘルプにModelタブハイライト色設定（新規`settings-14`）を追加。この作業中に、以前から`index.html`にだけ存在し`i18n.js`（英語含む全言語）に対応キーが用意されていなかったため実際には一度も表示されていなかった「LoRA Stack — Apply writes...」の説明文を発見・復旧（`app.js`の`el.textContent = t(key)`は未定義キーでもキー名をそのまま返してHTML側の内容を問答無用に上書きするため、i18n.js側の追加漏れは静かな表示欠落を引き起こす）。
+
+**検証**: 全JSファイルについて`node --check`で構文確認。開発元git リポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更の都度`diff`で意図した差分のみであることを確認してから両フォルダへ同期、CRLF/LF不一致がないことも`file`コマンドで事前チェック。各機能追加後にユーザー自身が実機（ComfyUI再起動後）で動作確認し、フィードバックを都度反映する形で進行。
+
+**How to apply**:
+1. SPA（`ai-tab.js`）とサイドパネル（`node_sets_menu.js`）のように、同じ機能が2箇所に重複実装されている場合（設定は共通の`localStorage`キーを共有していても、API呼び出しロジック自体は別ファイルにコピーされている）、片方だけ修正すると「サイドパネル版だけ直っていない」という見落としが起きる。ai-tab.js相当の修正が必要な要望が来たら、必ずnode_sets_menu.js側の対応箇所も同時に確認する。
+2. ローカルLLM APIへの指示は、user発話に埋め込んだ「〜だけ出力して」という指示より、system roleとして明示的に分離した方が小型モデルの指示追従率が上がる。それでも従わないモデルへの保険として、クライアント側での出力後処理（前置き除去、echo検知）を組み合わせるとより堅牢になる。
+3. 動的注入`<style>`タグでハイライト色のような「上書き用クラス」を追加する場合、既存CSSがelement+classなど複合セレクタで詳細度を持っていると単純なクラス指定では負ける。読み込み順に依存せず確実に上書きするには、注入側のセレクタも同等以上の詳細度（同じ複合セレクタ構造にクラスを足す）にする。
+4. 折りたたみ（`<details>`）と色ハイライトを組み合わせる設計は、「低頻度機能は隠したいが、関連情報があるかどうかは常に見えていてほしい」という要望に対する良い組み合わせになる——折りたたんだ見出し自体を色の表示場所として使う。
+5. i18n.jsの「3点セット」規約が守られていないと、HTML側にどれだけ内容を書いてもJS側の`t(key)`上書きで静かに消える。ヘルプ文言を追加・編集する際は、既存の該当キーが本当に全言語ブロックに存在するか（特に英語）を都度確認する。
+
+---
+
 ## v0.3.97
 
 ### 機能追加・バグ修正: KREA-2ワークフロー対応 + Labタブ拡張（Clear/Get from Previous/Bypass/ライブ反映）+ Input Imageプレースホルダ機能

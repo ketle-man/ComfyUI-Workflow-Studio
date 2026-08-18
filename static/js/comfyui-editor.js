@@ -616,10 +616,14 @@ export const comfyEditor = {
         const el = document.getElementById(containerId);
         if (!el) return;
 
-        const sections = [
+        // 使用頻度の高い順: Checkpoint/VAE/Diffusion Model/Text Encoder は常時表示。
+        // ControlNet/Hypernetwork は意図的に使う場面が限られるため折りたたみにする。
+        const mainSections = [
             { label: "Checkpoint", key: "checkpoints", nodes: analysis.checkpoint_nodes, inputKey: "ckpt_name" },
             { label: "VAE", key: "vaes", nodes: analysis.vae_nodes, inputKey: "vae_name" },
             { label: "Diffusion Model", key: "diffusionModels", nodes: analysis.diffusion_model_nodes, inputKey: "unet_name" },
+        ];
+        const collapsibleSections = [
             { label: "ControlNet", key: "controlNets", nodes: analysis.controlnet_nodes, inputKey: "control_net_name" },
             {
                 label: "Hypernetwork", key: "hypernetworks", nodes: analysis.hypernetwork_nodes, inputKey: "hypernetwork_name",
@@ -627,46 +631,65 @@ export const comfyEditor = {
             },
         ];
 
-        el.innerHTML = sections
-            .map((s) => {
-                const models = this.models[s.key] || [];
-                const currentVal = s.nodes?.[0]?.[s.inputKey] || "";
-                const isMissing = !!currentVal && !models.includes(currentVal);
-                const targetOpts = s.nodes
-                    .map((n) => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`)
-                    .join("");
-                const extrasHtml = (s.extras || []).map((ex) => {
-                    const curVal = s.nodes?.[0]?.[ex.inputKey] ?? ex.defaultVal;
-                    return `<div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
-                        <label style="font-size:12px;white-space:nowrap;color:var(--wfm-text-secondary);">${ex.label}</label>
-                        <input type="${ex.type}" class="wfm-input wfm-model-extra" id="wfm-model-${s.key}-${ex.inputKey}"
-                            data-key="${s.key}" data-input-key="${ex.inputKey}"
-                            value="${curVal}" step="${ex.step}" min="${ex.min}" max="${ex.max}"
-                            style="width:80px;">
-                    </div>`;
-                }).join("");
+        const renderSectionBody = (s) => {
+            const models = this.models[s.key] || [];
+            const currentVal = s.nodes?.[0]?.[s.inputKey] || "";
+            const isMissing = !!currentVal && !models.includes(currentVal);
+            const targetOpts = s.nodes
+                .map((n) => `<option value="${n.id}">ID:${n.id} (${n.title})</option>`)
+                .join("");
+            const extrasHtml = (s.extras || []).map((ex) => {
+                const curVal = s.nodes?.[0]?.[ex.inputKey] ?? ex.defaultVal;
+                return `<div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+                    <label style="font-size:12px;white-space:nowrap;color:var(--wfm-text-secondary);">${ex.label}</label>
+                    <input type="${ex.type}" class="wfm-input wfm-model-extra" id="wfm-model-${s.key}-${ex.inputKey}"
+                        data-key="${s.key}" data-input-key="${ex.inputKey}"
+                        value="${curVal}" step="${ex.step}" min="${ex.min}" max="${ex.max}"
+                        style="width:80px;">
+                </div>`;
+            }).join("");
 
-                return `
-                <div class="wfm-form-group" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;">
-                    <label>${s.label}</label>
-                    <div class="wfm-search-wrap" style="margin-bottom:4px;width:100%;">
-                        <input type="text" class="wfm-input wfm-search-input wfm-model-filter" id="wfm-model-${s.key}-filter" placeholder="Filter..." data-target="wfm-model-${s.key}">
-                        <button type="button" class="wfm-search-clear-btn" id="wfm-model-${s.key}-filter-clear" title="Clear search">✕</button>
-                    </div>
-                    <select class="wfm-select ${isMissing ? "wfm-select-missing" : ""}" id="wfm-model-${s.key}" style="margin-bottom:4px;">
-                        ${isMissing ? `<option value="${escapeHtml(currentVal)}" selected>⚠ ${escapeHtml(currentVal)} (${t("modelNotFound")})</option>` : ""}
-                        ${models.map((m) => `<option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>`).join("")}
-                    </select>
-                    ${isMissing ? `<div class="wfm-model-missing-hint">${t("modelNotFoundHint")}</div>` : ""}
-                    ${extrasHtml}
-                    <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
-                        <select class="wfm-select" id="wfm-model-${s.key}-target" style="flex:1;">${targetOpts}</select>
-                        <button class="wfm-btn wfm-btn-sm wfm-model-apply" data-key="${s.key}" data-input="${s.inputKey}" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
-                    </div>
+            return `
+                <div class="wfm-search-wrap" style="margin-bottom:4px;width:100%;">
+                    <input type="text" class="wfm-input wfm-search-input wfm-model-filter" id="wfm-model-${s.key}-filter" placeholder="Filter..." data-target="wfm-model-${s.key}">
+                    <button type="button" class="wfm-search-clear-btn" id="wfm-model-${s.key}-filter-clear" title="Clear search">✕</button>
+                </div>
+                <select class="wfm-select ${isMissing ? "wfm-select-missing" : ""}" id="wfm-model-${s.key}" style="margin-bottom:4px;">
+                    ${isMissing ? `<option value="${escapeHtml(currentVal)}" selected>⚠ ${escapeHtml(currentVal)} (${t("modelNotFound")})</option>` : ""}
+                    ${models.map((m) => `<option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>`).join("")}
+                </select>
+                ${isMissing ? `<div class="wfm-model-missing-hint">${t("modelNotFoundHint")}</div>` : ""}
+                ${extrasHtml}
+                <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+                    <select class="wfm-select" id="wfm-model-${s.key}-target" style="flex:1;">${targetOpts}</select>
+                    <button class="wfm-btn wfm-btn-sm wfm-model-apply" data-key="${s.key}" data-input="${s.inputKey}" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                 </div>
             `;
-            })
-            .join("") + '<div class="wfm-form-group" id="wfm-te-section" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;"><label>Text Encoder</label></div>';
+        };
+
+        const mainHtml = mainSections.map((s) => {
+            const hasNodes = (s.nodes?.length || 0) > 0;
+            return `
+            <div class="wfm-form-group" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;">
+                <label class="${hasNodes ? "wfm-model-label-active" : ""}">${s.label}</label>
+                ${renderSectionBody(s)}
+            </div>`;
+        }).join("");
+
+        const teHtml = '<div class="wfm-form-group" id="wfm-te-section" style="border-bottom:1px solid var(--wfm-border);padding-bottom:12px;"><label>Text Encoder</label></div>';
+
+        const collapsibleHtml = collapsibleSections.map((s) => {
+            const hasNodes = (s.nodes?.length || 0) > 0;
+            return `
+            <details class="wfm-settings-section">
+                <summary class="wfm-settings-summary ${hasNodes ? "wfm-model-label-active" : ""}">${s.label}</summary>
+                <div class="wfm-form-group" style="margin-bottom:0;">
+                    ${renderSectionBody(s)}
+                </div>
+            </details>`;
+        }).join("");
+
+        el.innerHTML = mainHtml + teHtml + collapsibleHtml;
 
         // Filter inputs
         el.querySelectorAll(".wfm-model-filter").forEach((input) => {
@@ -724,6 +747,7 @@ export const comfyEditor = {
         if (!el) return;
 
         const loraNodes = analysis.lora_nodes || [];
+        document.getElementById("wfm-gen-lora-col-title")?.classList.toggle("wfm-model-label-active", loraNodes.length > 0);
         const loras = this.models.loras || [];
         const defaultStackTarget = (loraNodes.find((n) => n.is_lora_manager) || loraNodes[0])?.id;
         const hasLoraManager = loraNodes.some((n) => n.is_lora_manager);
@@ -2092,7 +2116,7 @@ async function _initTextEncoderSection(analysis, textEncoders, containerEl) {
     const deviceOpts = ["default", "cpu"].map(d => `<option value="${d}" ${d === currentDevice ? "selected" : ""}>${d}</option>`).join("");
 
     section.innerHTML = `
-        <label>Text Encoder</label>
+        <label class="wfm-model-label-active">Text Encoder</label>
         <input type="text" class="wfm-input" id="wfm-te-filter" placeholder="Filter..." style="margin-bottom:4px;">
         <select class="wfm-select" id="wfm-te-clip1" style="margin-bottom:4px;">${clip1Opts}</select>
         ${isDual ? `<select class="wfm-select" id="wfm-te-clip2" style="margin-bottom:4px;">${clip2Opts}</select>` : ""}

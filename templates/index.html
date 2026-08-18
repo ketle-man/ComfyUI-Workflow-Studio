@@ -350,7 +350,7 @@
                             </div>
                             <div class="wfm-gen-lora-col">
                                 <div class="wfm-gen-lora-col-header">
-                                    <span>LoRA</span>
+                                    <span id="wfm-gen-lora-col-title">LoRA</span>
                                     <button class="wfm-btn wfm-btn-xs wfm-lora-refresh-btn" id="wfm-lora-stack-refresh" title="Refresh Stack group">🔄</button>
                                 </div>
                                 <div id="wfm-gen-lora-fields" class="wfm-gen-lora-col-body">
@@ -1330,7 +1330,8 @@
                             <ul>
                                 <li id="wfm-help-gen-3">5-tab layout — Input (Prompt + Image), Model, Settings, Feeder, Batch — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
                                 <li id="wfm-help-gen-4">Input tab: inner tabs — <b>Prompt</b> and <b>Image</b> (drag-and-drop upload); Prompt tab has Positive Prompt, Negative Prompt, and an <b>Embeddings</b> selector at the bottom — select a model, set Weight (default 1.0), then click <b>Paste</b> to insert <code>(embedding:Name:weight)</code> at the cursor position of the last focused textarea (defaults to Positive if neither is focused); a <b>↺</b> button next to each Apply button reverts the textarea to the node's currently applied value; select text (or just place the cursor on a word/parenthesis block) and press <b>Ctrl+↑/↓</b> to adjust its emphasis weight in <code>(text:weight)</code> syntax by ±0.05 — the parentheses are removed automatically when the weight returns to 1.0</li>
-                                <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, LoRA (Single/Stack tabs), ControlNet, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors), Hypernetwork (with Strength field) selectors with filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones</li>
+                                <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors) are always shown; ControlNet and Hypernetwork (with Strength field) are collapsed by default since they're used less often — click their header to expand; LoRA (Single/Stack tabs) has its own column to the right; all selectors have a filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones</li>
+                                <li id="wfm-help-gen-28">Model tab — Highlight color: the label of each model type (Checkpoint, VAE, Diffusion Model, Text Encoder, ControlNet, Hypernetwork) and the LoRA column header turn a distinct color (default bright green) when the loaded workflow actually contains that type of node; this stays visible even while ControlNet/Hypernetwork are collapsed, so you can tell at a glance whether they're in use without expanding them; the color is customizable in the Settings tab</li>
                                 <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
                                 <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow; if the loaded workflow has Bypass or Mute nodes, a note listing them appears above the search bar (Bypass nodes are excluded with their wires reconnected around them; Mute nodes are excluded with no reconnection, matching ComfyUI itself)</li>
                             </ul>
@@ -1567,6 +1568,7 @@
                             <ul>
                                 <li id="wfm-help-settings-11">Text Size: one slider (10–28 px) adjusts font size for all prompt and chat textareas at once — Generate UI positive/negative prompts, AI Assistant chat input, Preset positive/negative, Wildcard prompt and file editor, and Metadata prompt full preview; takes effect immediately and saved with Save Settings</li>
                                 <li id="wfm-help-settings-12">RAW JSON Colors: customize the 6 syntax highlight colors for the Raw JSON editor in Generate UI — Default Text, Name/Scheduler, Title, Width/Height, Prompt/Text, Image/File; changes apply immediately on color pick; Reset Defaults restores the original color scheme</li>
+                                <li id="wfm-help-settings-14">GenerateUI Model Tab Highlight: pick the color used to mark Checkpoint/VAE/Diffusion Model/Text Encoder/ControlNet/Hypernetwork labels and the LoRA column header in GenerateUI's Model tab when the loaded workflow actually contains that type of node; default bright green; changes apply immediately, Reset Defaults restores it</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1801,7 +1803,7 @@
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-ai-card-settings-title">Settings pane</h3>
-                            <p id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade), set API URL, test connection, select model, configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</p>
+                            <p id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade), set API URL, test connection, select model; Generation section — Thinking mode toggle (off by default; Ollama receives a `think` flag, and regardless of backend any &lt;think&gt;...&lt;/think&gt; block is stripped from the output when off, so reasoning models don't clutter Translation/Chat/TOOLS results) and Max tokens (Ollama: num_predict, LM Studio/Lemonade: max_tokens; 0 = unlimited); configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</p>
                         </div>
                     </div>
 
@@ -2829,6 +2831,19 @@
                                 <option value="">-- Select model --</option>
                             </select>
                             <button id="wfm-ai-model-refresh-btn" class="wfm-btn">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-generation-title">Generation</div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                <input type="checkbox" id="wfm-ai-thinking-mode-checkbox">
+                                <span id="wfm-ai-thinking-mode-label">Thinking mode</span>
+                            </label>
+                        </div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" id="wfm-ai-max-tokens-label">Max tokens</label>
+                            <input type="number" id="wfm-ai-max-tokens" class="wfm-input" min="0" step="1" placeholder="0 = unlimited">
                         </div>
                     </div>
                     <div class="wfm-ai-settings-section">

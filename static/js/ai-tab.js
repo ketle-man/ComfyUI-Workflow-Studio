@@ -50,30 +50,58 @@ function fileToBase64(file) {
     });
 }
 
-async function callVLM(url, backend, model, prompt, base64Image, mimeType) {
+// ============================================
+// Thinking mode / Max tokens (shared by callLLM / callChat / callVLM)
+// ============================================
+
+// Ollamaは `think` (bool) と `options.num_predict` で制御できるが、
+// LM Studio/LemonadeはOpenAI互換APIのため max_tokens のみ標準対応。
+// thinking mode切替は非対応バックエンド／モデル向けに、出力からの
+// <think>タグ除去でも担保する（stripThinkingTagsを参照）。
+function _applyGenOptions(body, backend, settings) {
+    const maxTokens = parseInt(settings?.maxTokens, 10);
+    if (backend === "ollama") {
+        body.think = !!settings?.thinkingMode;
+        if (maxTokens > 0) body.options = { ...(body.options || {}), num_predict: maxTokens };
+    } else if (maxTokens > 0) {
+        body.max_tokens = maxTokens;
+    }
+    return body;
+}
+
+function stripThinkingTags(text) {
+    return (text || "")
+        .replace(/<think>[\s\S]*?<\/think>/gi, "")
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+        .trim();
+}
+
+async function callVLM(url, backend, model, prompt, base64Image, mimeType, settings = {}) {
     if (backend === "ollama") {
         const res = await fetch(`${url}/api/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, prompt, images: [base64Image], stream: false }),
+            body: JSON.stringify(_applyGenOptions({ model, prompt, images: [base64Image], stream: false }, backend, settings)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).response || "";
+        const text = (await res.json()).response || "";
+        return settings.thinkingMode ? text : stripThinkingTags(text);
     } else {
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            body: JSON.stringify(_applyGenOptions({
                 model,
                 messages: [{ role: "user", content: [
                     { type: "text", text: prompt },
                     { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } },
                 ]}],
                 stream: false,
-            }),
+            }, backend, settings)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).choices?.[0]?.message?.content || "";
+        const text = (await res.json()).choices?.[0]?.message?.content || "";
+        return settings.thinkingMode ? text : stripThinkingTags(text);
     }
 }
 
@@ -114,30 +142,32 @@ async function testConnection(url, backend) {
     return models.length;
 }
 
-async function callLLM(url, backend, model, prompt) {
+async function callLLM(url, backend, model, prompt, settings = {}) {
     if (backend === "ollama") {
         const res = await fetch(`${url}/api/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, prompt, stream: false }),
+            body: JSON.stringify(_applyGenOptions({ model, prompt, stream: false }, backend, settings)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        return data.response || "";
+        const text = data.response || "";
+        return settings.thinkingMode ? text : stripThinkingTags(text);
     } else {
         // LM Studio (OpenAI-compatible)
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            body: JSON.stringify(_applyGenOptions({
                 model,
                 messages: [{ role: "user", content: prompt }],
                 stream: false,
-            }),
+            }, backend, settings)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        const text = data.choices?.[0]?.message?.content || "";
+        return settings.thinkingMode ? text : stripThinkingTags(text);
     }
 }
 
@@ -145,11 +175,41 @@ async function callLLM(url, backend, model, prompt) {
 // Translation prompt builder
 // ============================================
 
-function buildTranslationPrompt(text, srcLang, dstLang, settings) {
-    const srcName = srcLang === "free" ? (settings.freeSrcLang || "Auto") : LANG_NAMES[srcLang];
-    const dstName = dstLang === "free" ? (settings.freeDstLang || "English") : LANG_NAMES[dstLang];
-    const fromPart = srcLang === "free" ? "" : `from ${srcName} `;
-    return `Translate the following text ${fromPart}to ${dstName}. Output only the translated text, nothing else.\n\n${text}`;
+// Uses a system role (via callChat) rather than a single raw prompt string —
+// local models follow "translate only, no commentary" far more reliably
+// when it's a system instruction instead of buried inside the user text.
+function buildTranslationMessages(text, srcLang, dstLang, settings) {
+    const srcName = srcLang === "free" ? (settings.freeSrcLang || "").trim() : LANG_NAMES[srcLang];
+    const dstName = dstLang === "free" ? (settings.freeDstLang || "English").trim() || "English" : LANG_NAMES[dstLang];
+    const fromPart = srcName ? ` from ${srcName}` : "";
+    const system = `You are a professional translator. Translate the text the user sends${fromPart} into ${dstName}. `
+        + `Reply with ONLY the translated text and nothing else: no explanations, no notes, no preamble like "Here is the translation:", `
+        + `no surrounding quotes, and do not repeat or echo the original text.`;
+    return [
+        { role: "system", content: system },
+        { role: "user", content: text },
+    ];
+}
+
+// Strips common LLM wrapping/preamble artifacts that survive despite the system prompt.
+function cleanTranslationOutput(raw) {
+    let s = (raw || "").trim();
+    s = s.replace(/^(sure[,.]?\s*)?(here('|)s|here is)?\s*(the\s+)?translation\s*:?\s*/i, "");
+    s = s.replace(/^(翻訳|译文|翻译)\s*[::]\s*/, "");
+    if (s.length >= 2) {
+        const first = s[0], last = s[s.length - 1];
+        const pairs = { '"': '"', "'": "'", "“": "”", "「": "」" };
+        if (pairs[first] === last) s = s.slice(1, -1).trim();
+    }
+    return s;
+}
+
+// Heuristic: if the cleaned output is (near-)identical to the input, the
+// model most likely echoed the source instead of translating it.
+function looksUntranslated(input, output) {
+    const normalize = (s) => s.trim().toLowerCase().replace(/[\s.,!?"'。、！？「」]/g, "");
+    const a = normalize(input), b = normalize(output);
+    return a.length > 0 && a === b;
 }
 
 // ============================================
@@ -217,11 +277,19 @@ function initTranslateTab() {
         outputEl.value = "";
 
         try {
-            const prompt = buildTranslationPrompt(text, srcLangSel.value, dstLangSel.value, settings);
-            const result = await callLLM(url, backend, model, prompt);
-            outputEl.value = result.trim();
-            statusEl.textContent = t("aiStatusDone");
-            statusEl.className = "wfm-ai-trans-status wfm-ai-status-ok";
+            const messages = buildTranslationMessages(text, srcLangSel.value, dstLangSel.value, settings);
+            const { content } = await callChat(url, backend, model, messages, undefined, settings);
+            const cleaned = cleanTranslationOutput(content);
+            outputEl.value = cleaned;
+
+            if (srcLangSel.value !== dstLangSel.value && looksUntranslated(text, cleaned)) {
+                statusEl.textContent = t("aiStatusDone");
+                statusEl.className = "wfm-ai-trans-status wfm-ai-status-error";
+                showToast(t("aiToastMaybeNotTranslated"), "error");
+            } else {
+                statusEl.textContent = t("aiStatusDone");
+                statusEl.className = "wfm-ai-trans-status wfm-ai-status-ok";
+            }
         } catch (err) {
             statusEl.textContent = `${t("aiStatusConnectFail")}${err.message}`;
             statusEl.className = "wfm-ai-trans-status wfm-ai-status-error";
@@ -287,6 +355,11 @@ function initSettingsTab() {
 
     const urlInput = document.getElementById("wfm-ai-backend-url");
     if (urlInput && saved.backendUrl) urlInput.value = saved.backendUrl;
+
+    const thinkingModeCheckbox = document.getElementById("wfm-ai-thinking-mode-checkbox");
+    if (thinkingModeCheckbox) thinkingModeCheckbox.checked = !!saved.thinkingMode;
+    const maxTokensInput = document.getElementById("wfm-ai-max-tokens");
+    if (maxTokensInput && saved.maxTokens) maxTokensInput.value = saved.maxTokens;
 
     // Switch URL to the new backend's default when the user changes backend
     backendRadios.forEach((r) => {
@@ -395,6 +468,8 @@ function initSettingsTab() {
         const chatGenDedicatedFilename = chatGenSelect?.value || "";
         const chatGenI2IDedicatedEnabled = !!chatGenI2ICheckbox?.checked;
         const chatGenI2IDedicatedFilename = chatGenI2ISelect?.value || "";
+        const thinkingMode = !!thinkingModeCheckbox?.checked;
+        const maxTokens = Math.max(0, parseInt(maxTokensInput?.value, 10) || 0);
 
         if (url && !isValidBackendUrl(url)) {
             showToast(t("aiToastInvalidUrl"), "error");
@@ -403,6 +478,7 @@ function initSettingsTab() {
 
         saveAiSettings({
             backend, backendUrl: url, model, freeSrcLang, freeDstLang,
+            thinkingMode, maxTokens,
             chatGenDedicatedEnabled, chatGenDedicatedFilename,
             chatGenI2IDedicatedEnabled, chatGenI2IDedicatedFilename,
         });
@@ -453,10 +529,10 @@ function _formatMessagesForBackend(messages, backend) {
     });
 }
 
-async function callChat(url, backend, model, messages, tools) {
+async function callChat(url, backend, model, messages, tools, settings = {}) {
     const formattedMessages = _formatMessagesForBackend(messages, backend);
     if (backend === "ollama") {
-        const body = { model, messages: formattedMessages, stream: false };
+        const body = _applyGenOptions({ model, messages: formattedMessages, stream: false }, backend, settings);
         if (tools) body.tools = tools;
         const res = await fetch(`${url}/api/chat`, {
             method: "POST",
@@ -465,9 +541,10 @@ async function callChat(url, backend, model, messages, tools) {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const message = (await res.json()).message || {};
-        return { content: message.content || "", toolCalls: message.tool_calls || null };
+        const content = message.content || "";
+        return { content: settings.thinkingMode ? content : stripThinkingTags(content), toolCalls: message.tool_calls || null };
     } else {
-        const body = { model, messages: formattedMessages, stream: false };
+        const body = _applyGenOptions({ model, messages: formattedMessages, stream: false }, backend, settings);
         if (tools) { body.tools = tools; body.tool_choice = "auto"; }
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
@@ -476,7 +553,8 @@ async function callChat(url, backend, model, messages, tools) {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const message = (await res.json()).choices?.[0]?.message || {};
-        return { content: message.content || "", toolCalls: message.tool_calls || null };
+        const content = message.content || "";
+        return { content: settings.thinkingMode ? content : stripThinkingTags(content), toolCalls: message.tool_calls || null };
     }
 }
 
@@ -909,7 +987,7 @@ function initChatTab() {
             const messagesToSend = skillPrompt
                 ? [{ role: "system", content: skillPrompt }, ...chatHistory]
                 : chatHistory;
-            const reply = await callChat(url, backend, model, messagesToSend, tools);
+            const reply = await callChat(url, backend, model, messagesToSend, tools, settings);
             const toolCall = reply.toolCalls?.find(
                 (tc) => (tc.function?.name || tc.name) === "generate_image"
             );
@@ -1069,7 +1147,7 @@ function initVlmTab() {
             const prompt = `Generate ${count} wildcard entries for the category "${name}". Output only plain text in English, one entry per line, no numbers, no markdown, no asterisks, no bold, nothing else.`;
 
             try {
-                const result = await callLLM(url, backend, model, prompt);
+                const result = await callLLM(url, backend, model, prompt, settings);
                 resultEl.value = result.trim()
                     .split("\n")
                     .map(l => l.replace(/\*\*/g, "").replace(/^\*\s*/, "").replace(/^\d+\.\s*/, "").trim())
@@ -1095,7 +1173,7 @@ function initVlmTab() {
         resultEl.value = "";
 
         try {
-            const result = await callVLM(url, backend, model, VLM_PROMPTS[task], _toolsImage.base64, _toolsImage.mimeType);
+            const result = await callVLM(url, backend, model, VLM_PROMPTS[task], _toolsImage.base64, _toolsImage.mimeType, settings);
             resultEl.value = result.trim();
             statusEl.textContent = t("aiStatusDone");
             statusEl.className = "wfm-ai-trans-status wfm-ai-status-ok";

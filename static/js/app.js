@@ -364,6 +364,14 @@ function applyI18nToHtml() {
     }
     const aiModelRefreshBtn = document.getElementById("wfm-ai-model-refresh-btn");
     if (aiModelRefreshBtn) aiModelRefreshBtn.textContent = t("aiSettingsRefreshBtn");
+    const aiGenerationTitle = document.getElementById("wfm-ai-settings-generation-title");
+    if (aiGenerationTitle) aiGenerationTitle.textContent = t("aiSettingsGenerationTitle");
+    const aiThinkingModeLabel = document.getElementById("wfm-ai-thinking-mode-label");
+    if (aiThinkingModeLabel) aiThinkingModeLabel.textContent = t("aiSettingsThinkingMode");
+    const aiMaxTokensLabel = document.getElementById("wfm-ai-max-tokens-label");
+    if (aiMaxTokensLabel) aiMaxTokensLabel.textContent = t("aiSettingsMaxTokens");
+    const aiMaxTokensInput = document.getElementById("wfm-ai-max-tokens");
+    if (aiMaxTokensInput) aiMaxTokensInput.placeholder = t("aiSettingsMaxTokensPlaceholder");
     const aiFreeLangTitle = document.getElementById("wfm-ai-settings-freelang-title");
     if (aiFreeLangTitle) aiFreeLangTitle.textContent = t("aiSettingsFreeLang");
     const aiFreeSrcLabel = document.getElementById("wfm-ai-free-src-label");
@@ -446,6 +454,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-22": "helpGen22", "wfm-help-gen-23": "helpGen23",
         "wfm-help-gen-24": "helpGen24", "wfm-help-gen-25": "helpGen25",
         "wfm-help-gen-26": "helpGen26", "wfm-help-gen-27": "helpGen27",
+        "wfm-help-gen-28": "helpGen28",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",
@@ -495,7 +504,7 @@ function applyI18nToHtml() {
         "wfm-help-settings-7": "helpSettings7", "wfm-help-settings-8": "helpSettings8",
         "wfm-help-settings-9": "helpSettings9", "wfm-help-settings-10": "helpSettings10",
         "wfm-help-settings-11": "helpSettings11", "wfm-help-settings-12": "helpSettings12",
-        "wfm-help-settings-13": "helpSettings13",
+        "wfm-help-settings-13": "helpSettings13", "wfm-help-settings-14": "helpSettings14",
         "wfm-help-nodes-1": "helpNodes1", "wfm-help-nodes-2": "helpNodes2",
         "wfm-help-nodes-3": "helpNodes3", "wfm-help-nodes-4": "helpNodes4",
         "wfm-help-nodes-5": "helpNodes5", "wfm-help-nodes-6": "helpNodes6",
@@ -756,7 +765,7 @@ import { initWorkflowTab } from "./workflow-tab.js";
 import { initNodesTab } from "./nodes-tab.js";
 import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
-import { initSettingsTab, applyTheme, getSavedTheme, applyTextareaFontSize, applyJsonColors } from "./settings-tab.js";
+import { initSettingsTab, applyTheme, getSavedTheme, applyTextareaFontSize, applyJsonColors, applyModelTabActiveColor } from "./settings-tab.js";
 import { initModelsTab } from "./models-tab.js";
 import { initGalleryTab } from "./gallery-tab.js";
 import { initMetadataTab } from "./metadata-tab.js";
@@ -772,6 +781,7 @@ try {
     const _s = getSettings();
     if (_s.textareaFontSize) applyTextareaFontSize(_s.textareaFontSize);
     applyJsonColors(_s.jsonColors);
+    applyModelTabActiveColor(_s.modelTabActiveColor);
 } catch {}
 
 function initHelpTab() {

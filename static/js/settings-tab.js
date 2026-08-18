@@ -366,6 +366,21 @@ export function applyJsonColors(colors) {
     ].join("\n");
 }
 
+// GenerateUI Model tab: highlight color for section labels that match the loaded workflow
+const MODEL_ACTIVE_COLOR_STYLE_ID = "wfm-model-active-color-style";
+const MODEL_ACTIVE_COLOR_DEFAULT = "#4ade80";
+
+export function applyModelTabActiveColor(color) {
+    const val = color || MODEL_ACTIVE_COLOR_DEFAULT;
+    let el = document.getElementById(MODEL_ACTIVE_COLOR_STYLE_ID);
+    if (!el) {
+        el = document.createElement("style");
+        el.id = MODEL_ACTIVE_COLOR_STYLE_ID;
+        document.head.appendChild(el);
+    }
+    el.textContent = `.wfm-form-group label.wfm-model-label-active,\n.wfm-settings-summary.wfm-model-label-active,\n#wfm-gen-lora-col-title.wfm-model-label-active { color: ${val}; }`;
+}
+
 export function applyTheme(themeId) {
     if (themeId) {
         document.documentElement.setAttribute("data-theme", themeId);
@@ -574,6 +589,21 @@ export async function initSettingsTab() {
                     }).join("")}
                 </div>
                 <button class="wfm-btn wfm-btn-sm" id="wfm-json-color-reset" style="margin-top:8px;">${t("jsonColorReset") || "デフォルトに戻す"}</button>
+            </div>
+        </details>
+
+        <!-- GenerateUI Model Tab Highlight Color -->
+        <details class="wfm-settings-section" open>
+            <summary class="wfm-settings-summary">${t("modelTabColorSection") || "GenerateUI Modelタブ ハイライト色"}</summary>
+            <div class="wfm-form-group">
+                <label>${t("modelTabColorLabel") || "ワークフローに含まれる項目の色"}</label>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <input type="color" id="wfm-model-active-color" value="${settings.modelTabActiveColor || MODEL_ACTIVE_COLOR_DEFAULT}">
+                    <button class="wfm-btn wfm-btn-sm" id="wfm-model-active-color-reset">${t("jsonColorReset") || "デフォルトに戻す"}</button>
+                </div>
+                <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-top:4px;">
+                    ${t("modelTabColorHint") || "GenerateUIのModelタブで、読み込んだワークフローに実際に含まれる項目（Checkpoint / VAE など）のラベルをこの色で表示します"}
+                </small>
             </div>
         </details>
 
@@ -1330,6 +1360,22 @@ export async function initSettingsTab() {
             const def = JSON_COLOR_DEFS.find(d => d.id === inp.dataset.jsonColor);
             if (def) inp.value = def.def;
         });
+        showToast(t("settingsSaved"), "success");
+    });
+
+    // --- GenerateUI Model tab highlight color ---
+    document.getElementById("wfm-model-active-color")?.addEventListener("input", (e) => {
+        saveLocalSettings({ modelTabActiveColor: e.target.value });
+        applyModelTabActiveColor(e.target.value);
+    });
+
+    document.getElementById("wfm-model-active-color-reset")?.addEventListener("click", () => {
+        const cur = loadLocalSettings();
+        delete cur.modelTabActiveColor;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(cur));
+        applyModelTabActiveColor(undefined);
+        const inp = document.getElementById("wfm-model-active-color");
+        if (inp) inp.value = MODEL_ACTIVE_COLOR_DEFAULT;
         showToast(t("settingsSaved"), "success");
     });
 
