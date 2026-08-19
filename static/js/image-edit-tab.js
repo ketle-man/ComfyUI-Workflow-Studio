@@ -15,6 +15,7 @@ import { GmicIntegration }     from "./image-edit/GmicIntegration.js";
 import { BlurTool }            from "./image-edit/BlurTool.js";
 import { BgRemove }            from "./image-edit/BgRemove.js";
 import { Sam3Segmentation }    from "./image-edit/Sam3Segmentation.js";
+import { InpaintI2IActions }   from "./image-edit/InpaintI2IActions.js";
 import { showToast }           from "./app.js";
 import { comfyUI }             from "./comfyui-client.js";
 import { comfyEditor }         from "./comfyui-editor.js";
@@ -112,19 +113,11 @@ class ImageEditTab {
         // ABR brush (Mask Editor One) — optional feature
         this._abrAvailable = false;
         this._abrBrushTree = [];
-        // Inpaint ツール
-        this._inpaintPositive   = "";
-        this._inpaintNegative   = "";
-        this._inpaintGrowMaskBy = null;  // null = 未初期化（ワークフローの現在値から初期化）
-        this._inpaintDenoise    = null;  // null = 未初期化（ワークフローの現在値から初期化）
-        this._inpaintRunning    = false;
-        this._inpaintResultUrl  = null;
-        // Select I2I（Comic Creator連携、マスク不要のI2I外部実行）
-        this._i2iExternalRunning = false;
-        // Inpaint 専用ワークフロー（OFF時は GenerateUI で読み込み中のワークフローを使用）
-        this._inpaintUseDedicated     = false;
-        this._inpaintDedicatedFilename = null;
-        this._inpaintWorkflowList      = [];
+        // Inpaint / I2I（Comic Creator連携の外部実行も含む）
+        this._inpaint = new InpaintI2IActions({
+            getLayerManager: () => this._layerMgr,
+            buildBgCanvas:   () => this._buildBgCanvas()
+        });
     }
 
     // ── 初期化 ────────────────────────────────────
@@ -143,19 +136,9 @@ class ImageEditTab {
         this._sam3.checkAvailability();
         this._checkAbrAvailability();
         // Inpaint「専用ワークフロー」選択肢のため、保存済みワークフロー一覧を取得
-        this._fetchInpaintWorkflowList();
-    }
-
-    async _fetchInpaintWorkflowList() {
-        try {
-            const resp = await fetch(`${comfyUI.baseUrl}/api/wfm/workflows`);
-            if (!resp.ok) return;
-            const list = await resp.json();
-            this._inpaintWorkflowList = (list || []).map((w) => w.filename).filter(Boolean);
-            if (this._activeTool === "inpaint") this._renderInpaintProps();
-        } catch {
-            this._inpaintWorkflowList = [];
-        }
+        this._inpaint.fetchWorkflowList(() => {
+            if (this._activeTool === "inpaint") this._inpaint.renderPanel();
+        });
     }
 
     async _checkAbrAvailability() {
@@ -563,7 +546,7 @@ class ImageEditTab {
 
         } else if (toolId === "inpaint") {
             el.innerHTML = "";
-            this._renderInpaintProps();
+            this._inpaint.renderPanel();
         } else {
             const def = TOOL_DEFS.find(d => d.id === toolId);
             el.innerHTML = `<span style="font-size:12px;color:var(--wfm-text-secondary);">${def?.label ?? toolId}: coming soon</span>`;
@@ -1049,261 +1032,14 @@ class ImageEditTab {
         return canvas;
     }
 
-    // ── Inpaint ツール ─────────────────────────────
-    // マスクレイヤー(透過背景+白ペイント)を黒背景に合成し、白=インペイント対象/黒=維持の
-    // 不透明なグレースケールPNGとして書き出す（LayerのgetThumbnailDataURLと同じ規約）。
-    _exportMaskCanvas(maskLayer) {
-        const w = maskLayer.canvas.width, h = maskLayer.canvas.height;
-        const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(maskLayer.canvas, 0, 0);
-        return canvas;
-    }
-
-    _renderInpaintProps() {
-        const pane  = document.getElementById("ie-props-pane");
-        const body  = document.getElementById("ie-props-body");
-        const title = document.getElementById("ie-props-title");
-        if (!pane || !body) return;
-        pane.style.display = "flex";
-        if (title) title.textContent = "Inpaint";
-
-        // 未初期化ならワークフローの現在値から初期化（VAEEncodeForInpaint.grow_mask_by / KSampler.denoise）
-        if (this._inpaintGrowMaskBy == null) {
-            this._inpaintGrowMaskBy = comfyUI.currentAnalysis?.inpaint_encode_nodes?.[0]?.grow_mask_by ?? 6;
-        }
-        if (this._inpaintDenoise == null) {
-            const samplerNode = (comfyUI.currentAnalysis?.sampler_nodes || []).find((n) => n.denoise !== undefined);
-            this._inpaintDenoise = samplerNode?.denoise ?? 1.0;
-        }
-
-        body.innerHTML = `
-            <div class="ie-props-row">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                    <input type="checkbox" id="ie-inpaint-use-dedicated" ${this._inpaintUseDedicated ? "checked" : ""}>
-                    Use dedicated workflow
-                </label>
-            </div>
-            <div class="ie-props-row" id="ie-inpaint-dedicated-row" style="${this._inpaintUseDedicated ? "" : "display:none;"}">
-                <select id="ie-inpaint-dedicated-select" style="flex:1;">
-                    <option value="">-- select workflow --</option>
-                    ${this._inpaintWorkflowList.map((f) => `<option value="${f}" ${f === this._inpaintDedicatedFilename ? "selected" : ""}>${f}</option>`).join("")}
-                </select>
-            </div>
-            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
-                <label>Positive Prompt</label>
-                <textarea id="ie-inpaint-positive" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._inpaintPositive}</textarea>
-            </div>
-            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
-                <label>Negative Prompt</label>
-                <textarea id="ie-inpaint-negative" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._inpaintNegative}</textarea>
-            </div>
-            <div class="ie-props-row">
-                <label>Grow Mask By</label>
-                <input type="number" id="ie-inpaint-grow-mask" min="0" max="200" step="1" value="${this._inpaintGrowMaskBy}" style="width:60px;">
-            </div>
-            <div class="ie-props-row">
-                <label>Denoise</label>
-                <input type="number" id="ie-inpaint-denoise" min="0" max="1" step="0.01" value="${this._inpaintDenoise}" style="width:60px;">
-            </div>
-            <div class="ie-props-row">
-                <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="ie-inpaint-run-btn" style="flex:1;" ${this._inpaintRunning ? "disabled" : ""}>
-                    ${this._inpaintRunning ? "Running..." : "Run"}
-                </button>
-            </div>
-            <span id="ie-inpaint-status" style="font-size:11px;color:var(--wfm-text-secondary);"></span>
-            ${this._inpaintResultUrl ? `
-            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
-                <label>Result</label>
-                <img src="${this._inpaintResultUrl}" style="max-width:100%;border-radius:var(--wfm-radius-sm);border:1px solid var(--wfm-border);">
-            </div>
-            ` : ""}
-        `;
-
-        document.getElementById("ie-inpaint-use-dedicated")?.addEventListener("change", e => {
-            this._inpaintUseDedicated = e.target.checked;
-            this._renderInpaintProps();
-        });
-        document.getElementById("ie-inpaint-dedicated-select")?.addEventListener("change", e => {
-            this._inpaintDedicatedFilename = e.target.value || null;
-        });
-        document.getElementById("ie-inpaint-positive")?.addEventListener("input", e => { this._inpaintPositive = e.target.value; });
-        document.getElementById("ie-inpaint-negative")?.addEventListener("input", e => { this._inpaintNegative = e.target.value; });
-        document.getElementById("ie-inpaint-grow-mask")?.addEventListener("input", e => {
-            this._inpaintGrowMaskBy = parseInt(e.target.value) || 0;
-        });
-        document.getElementById("ie-inpaint-denoise")?.addEventListener("input", e => {
-            this._inpaintDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
-            if (Number.isNaN(this._inpaintDenoise)) this._inpaintDenoise = 1.0;
-        });
-        document.getElementById("ie-inpaint-run-btn")?.addEventListener("click", () => this._runInpaint());
-    }
-
-    async _runInpaint() {
-        if (this._inpaintRunning) return;
-        if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
-
-        // 非表示のマスクレイヤーはInpaint対象から除外する（目玉アイコンOFF=対象外）
-        const maskLayer = (this._layerMgr.activeLayer?.type === "mask" && this._layerMgr.activeLayer.visible)
-            ? this._layerMgr.activeLayer
-            : this._layerMgr.layers.find(l => l.type === "mask" && l.visible);
-        if (!maskLayer) { showToast("Create or show a mask layer first (Mask tool)", "info"); return; }
-
-        if (this._inpaintUseDedicated) {
-            if (!this._inpaintDedicatedFilename) { showToast("Select a dedicated workflow first", "info"); return; }
-        } else if (!comfyUI.currentAnalysis) {
-            showToast("Load a workflow in GenerateUI first", "info");
-            return;
-        }
-
-        const runBtn    = document.getElementById("ie-inpaint-run-btn");
-        const statusEl  = document.getElementById("ie-inpaint-status");
-        const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
-
-        this._inpaintRunning = true;
-        if (runBtn) { runBtn.disabled = true; runBtn.textContent = "Running..."; }
-        setStatus(this._inpaintUseDedicated ? "Loading dedicated workflow..." : "Compositing...");
-
-        try {
-            // 専用ワークフロー使用時は GenerateUI の comfyUI.currentWorkflow/currentAnalysis には
-            // 一切触れず、ここでロード・解析したローカルなワークフロー/解析結果だけを使う。
-            let overrideOpts = {};
-
-            if (this._inpaintUseDedicated) {
-                const resp = await fetch(`${comfyUI.baseUrl}/api/wfm/workflows/raw?filename=${encodeURIComponent(this._inpaintDedicatedFilename)}`);
-                if (!resp.ok) throw new Error(`Failed to load workflow (HTTP ${resp.status})`);
-                let dedicatedWorkflow = await resp.json();
-                const format = comfyWorkflow.detectFormat(dedicatedWorkflow, this._inpaintDedicatedFilename);
-                if (format === "ui") {
-                    dedicatedWorkflow = await comfyWorkflow.convertUiToApi(dedicatedWorkflow);
-                } else if (format !== "api") {
-                    throw new Error("Unsupported or unrecognized workflow format");
-                }
-                overrideOpts = { workflow: dedicatedWorkflow, analysis: comfyWorkflow.analyzeWorkflow(dedicatedWorkflow) };
-            }
-
-            setStatus("Compositing...");
-            const bgCanvas   = this._buildBgCanvas();
-            const imageBlob  = await new Promise((resolve) => bgCanvas.toBlob(resolve, "image/png"));
-            const maskCanvas = this._exportMaskCanvas(maskLayer);
-            const maskBlob   = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
-
-            const resultUrl = await this._runInpaintWithImages(imageBlob, maskBlob, {
-                positive: this._inpaintPositive,
-                negative: this._inpaintNegative,
-                growMaskBy: this._inpaintGrowMaskBy,
-                denoise: this._inpaintDenoise,
-                overrideOpts,
-                onStatus: setStatus,
-            });
-            if (resultUrl) this._inpaintResultUrl = resultUrl;
-
-            setStatus("Done");
-            showToast("Inpaint generation complete", "success");
-        } catch (err) {
-            setStatus("Error");
-            showToast(`Inpaint failed: ${err.message}`, "error");
-        } finally {
-            this._inpaintRunning = false;
-            this._renderInpaintProps();
-        }
-    }
-
-    // 共通処理: 画像+マスクBlobを対象ノード（LoadImage/MaskEditorOne）へ反映し、
-    // プロンプト/grow_mask_by/denoiseを設定してGenerate UIで実行、結果URLを返す。
-    // UI駆動の _runInpaint() と外部（Comic Creator等）向けの runInpaintExternal() の両方から使う。
-    async _runInpaintWithImages(imageBlob, maskBlob, { positive, negative, growMaskBy, denoise, overrideOpts = {}, onStatus } = {}) {
-        const setStatus = onStatus || (() => {});
-
-        // LoadImage(の MASK 出力が使われている)スロットを優先し、無ければ Mask Editor One
-        // ノード（LoadImage を介さず画像/マスクを内包する custom node）にフォールバックする
-        const analysisForLookup = overrideOpts.analysis || comfyUI.currentAnalysis;
-        if (!analysisForLookup) throw new Error("No workflow loaded in GenerateUI");
-        const slotIndex = (analysisForLookup.load_image_nodes || []).findIndex(n => n.mask_used);
-        const meoNode = (analysisForLookup.mask_editor_one_nodes || [])[0];
-        if (slotIndex === -1 && !meoNode) {
-            throw new Error("No inpaint-capable LoadImage or Mask Editor One node found in the workflow");
-        }
-
-        setStatus("Uploading...");
-        if (slotIndex !== -1) {
-            await comfyEditor.applyImageAndMaskToSlot(imageBlob, maskBlob, slotIndex, overrideOpts);
-        } else {
-            await comfyEditor.applyImageAndMaskToMaskEditorOneNode(imageBlob, maskBlob, meoNode.id, overrideOpts);
-        }
-
-        comfyEditor.setPromptText("positive", positive, overrideOpts);
-        comfyEditor.setPromptText("negative", negative, overrideOpts);
-        comfyEditor.setInpaintParams({ growMaskBy, denoise, ...overrideOpts });
-
-        if (!window._wfmGenerateTab?.generate) throw new Error("GenerateUI is not ready yet");
-
-        setStatus("Generating...");
-        await window._wfmGenerateTab.generate(overrideOpts.workflow || undefined);
-
-        const resultImg = document.getElementById("wfm-gen-result-img");
-        return resultImg?.src || null;
-    }
-
     // Comic Creator等、同一オリジンiframe越しの外部呼び出し専用エントリポイント。
-    // 専用ワークフロー選択(_inpaintUseDedicated)は扱わず、常にGenerate UIに現在
-    // ロード中のワークフロー（comfyUI.currentWorkflow/currentAnalysis）を対象にする。
-    async runInpaintExternal(imageBlob, maskBlob, { positive = "", negative = "", growMaskBy = 6, denoise = 1.0 } = {}) {
-        if (this._inpaintRunning) throw new Error("Inpaint is already running");
-        this._inpaintRunning = true;
-        try {
-            const resultUrl = await this._runInpaintWithImages(imageBlob, maskBlob, { positive, negative, growMaskBy, denoise });
-            if (!resultUrl) throw new Error("No result image produced");
-            return { ok: true, url: resultUrl };
-        } finally {
-            this._inpaintRunning = false;
-        }
-    }
-
-    // 共通処理: 画像Blob（マスクなし）を対象LoadImageノード(slot 0)へ反映し、
-    // プロンプト/denoiseを設定してGenerate UIで実行、結果URLを返す。
-    // _runInpaintWithImages のマスクなし版（Comic CreatorのSelect I2I連携専用）。
-    async _runI2IWithImage(imageBlob, { positive, negative, denoise, overrideOpts = {}, onStatus } = {}) {
-        const setStatus = onStatus || (() => {});
-
-        const analysisForLookup = overrideOpts.analysis || comfyUI.currentAnalysis;
-        if (!analysisForLookup) throw new Error("No workflow loaded in GenerateUI");
-        if (!(analysisForLookup.load_image_nodes?.length > 0)) {
-            throw new Error("No LoadImage node found in the workflow");
-        }
-
-        setStatus("Uploading...");
-        const file = new File([imageBlob], `i2i_${Math.random().toString(36).slice(2, 10)}.png`, { type: "image/png" });
-        await comfyEditor.applyImageToSlot(file, 0, overrideOpts);
-
-        comfyEditor.setPromptText("positive", positive, overrideOpts);
-        comfyEditor.setPromptText("negative", negative, overrideOpts);
-        comfyEditor.setInpaintParams({ denoise, ...overrideOpts });
-
-        if (!window._wfmGenerateTab?.generate) throw new Error("GenerateUI is not ready yet");
-
-        setStatus("Generating...");
-        await window._wfmGenerateTab.generate(overrideOpts.workflow || undefined);
-
-        const resultImg = document.getElementById("wfm-gen-result-img");
-        return resultImg?.src || null;
+    async runInpaintExternal(imageBlob, maskBlob, opts) {
+        return this._inpaint.runExternal(imageBlob, maskBlob, opts);
     }
 
     // Comic Creator等、同一オリジンiframe越しの外部呼び出し専用エントリポイント（I2I版）。
-    // runInpaintExternal と対になる、マスク不要のシンプルなI2I実行。
-    async runI2IExternal(imageBlob, { positive = "", negative = "", denoise = 1.0 } = {}) {
-        if (this._i2iExternalRunning) throw new Error("I2I is already running");
-        this._i2iExternalRunning = true;
-        try {
-            const resultUrl = await this._runI2IWithImage(imageBlob, { positive, negative, denoise });
-            if (!resultUrl) throw new Error("No result image produced");
-            return { ok: true, url: resultUrl };
-        } finally {
-            this._i2iExternalRunning = false;
-        }
+    async runI2IExternal(imageBlob, opts) {
+        return this._inpaint.runI2IExternal(imageBlob, opts);
     }
 
     _renderMaskLayerOverlay(ctx, maskLayer) {
