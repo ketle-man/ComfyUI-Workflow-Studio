@@ -10,6 +10,8 @@ import { comfyEditor } from "./comfyui-editor.js";
 import { escapeHtml, setupSearchClearBtn } from "./util.js";
 import { state, RESERVED_GROUPS, BATCH_MODEL_TYPES, STACK_MODEL_TYPES, FETCH_MAP, TYPE_LABELS, GENUI_TYPE_MAP } from "./models/state.js";
 import { getBadgePalette, modelBadgesHtml, openBadgeEditModal, renderBadgeFilter, setGridChangeCallback } from "./models/badges.js";
+import { parseModelPath, getExtension, getStem, previewUrl, loadPreviewImage } from "./models/helpers.js";
+import { getCurrentModels, isModelDisabled, filterModels, renderTagFilter, renderGroupFilter, renderDirFilter } from "./models/filters.js";
 
 export { openBadgeEditModal };
 
@@ -134,63 +136,6 @@ function applyEmbeddingToPrompt(modelName, promptType) {
     const syntax = `(embedding:${stem}:1.0)`;
     comfyEditor.appendEmbeddingToPrompt(syntax, promptType);
     showToast(`Embedding → ${promptType === "positive" ? "PP" : "NP"}: ${stem}`, "success");
-}
-
-// ── Helpers ───────────────────────────────────────────────
-
-
-function parseModelPath(fullName) {
-    const lastSlash = Math.max(fullName.lastIndexOf("/"), fullName.lastIndexOf("\\"));
-    if (lastSlash === -1) return { dir: "", name: fullName };
-    return { dir: fullName.substring(0, lastSlash), name: fullName.substring(lastSlash + 1) };
-}
-
-function getExtension(name) {
-    const dot = name.lastIndexOf(".");
-    return dot >= 0 ? name.substring(dot) : "";
-}
-
-function getStem(name) {
-    const dot = name.lastIndexOf(".");
-    return dot >= 0 ? name.substring(0, dot) : name;
-}
-
-function previewUrl(modelName, modelType) {
-    const type = modelType || state.activeModelType;
-    return `/api/wfm/models/preview?type=${encodeURIComponent(type)}&name=${encodeURIComponent(modelName)}`;
-}
-
-/**
- * Load preview image. Uses img onload/onerror instead of HEAD request
- * (aiohttp add_get does not auto-handle HEAD method).
- * Falls back to CivitAI cached image if no local preview exists.
- */
-function loadPreviewImage(imgEl, placeholderEl, modelName, modelType) {
-    const url = previewUrl(modelName, modelType);
-    imgEl.onload = () => {
-        imgEl.style.display = "";
-        if (placeholderEl) placeholderEl.style.display = "none";
-    };
-    imgEl.onerror = () => {
-        // Fallback: use CivitAI cached image if available
-        const meta = state.modelMetadata[modelName] || {};
-        const sha256 = meta.sha256;
-        const civitai = sha256 && state.civitaiCache[sha256];
-        const civitaiImg = civitai && civitai.images && civitai.images[0];
-        if (civitaiImg) {
-            imgEl.onerror = () => {
-                imgEl.style.display = "none";
-                if (placeholderEl) placeholderEl.style.display = "";
-            };
-            imgEl.src = civitaiImg;
-            imgEl.style.display = "";
-            if (placeholderEl) placeholderEl.style.display = "none";
-        } else {
-            imgEl.style.display = "none";
-            if (placeholderEl) placeholderEl.style.display = "";
-        }
-    };
-    imgEl.src = url;
 }
 
 // ── API ───────────────────────────────────────────────────
@@ -501,11 +446,6 @@ async function bulkMoveModels(destSubdir) {
 
 // ── Enable / Disable helpers ──────────────────────────────
 
-function isModelDisabled(modelName) {
-    const s = state.disabledModels[state.activeModelType];
-    return s ? s.has(modelName) : false;
-}
-
 async function fetchDisabledModels(type) {
     try {
         const res = await fetch(`/api/wfm/models/disabled?type=${encodeURIComponent(type)}`);
@@ -600,172 +540,6 @@ async function saveModelMetadata(modelName, updates) {
 }
 
 // ── Filtering ─────────────────────────────────────────────
-
-function getCurrentModels() {
-    return state.modelsByType[state.activeModelType] || [];
-}
-
-function filterModels() {
-    let models = getCurrentModels();
-
-    if (state.statusFilter === "enabled") {
-        models = models.filter((m) => !isModelDisabled(m));
-    } else if (state.statusFilter === "disabled") {
-        models = models.filter((m) => isModelDisabled(m));
-    }
-
-    if (state.showFavoritesOnly) {
-        models = models.filter((m) => {
-            const meta = state.modelMetadata[m];
-            return meta && meta.favorite;
-        });
-    }
-
-    if (state.showBatchOnly) {
-        const batchMembers = state.modelGroups["Batch"] || [];
-        models = models.filter((m) => batchMembers.includes(m));
-    }
-
-    if (state.tagFilter) {
-        models = models.filter((m) => {
-            const meta = state.modelMetadata[m];
-            return meta && meta.tags && meta.tags.includes(state.tagFilter);
-        });
-    }
-
-    if (state.badgeFilter) {
-        models = models.filter((m) => {
-            const meta = state.modelMetadata[m];
-            return meta && meta.badges && meta.badges.includes(state.badgeFilter);
-        });
-    }
-
-    if (state.dirFilter) {
-        models = models.filter((m) => {
-            const { dir } = parseModelPath(m);
-            return dir === state.dirFilter;
-        });
-    }
-
-    if (state.groupFilter) {
-        const members = state.modelGroups[state.groupFilter] || [];
-        models = models.filter((m) => members.includes(m));
-    }
-
-    if (state.searchText) {
-        const q = state.searchText.toLowerCase();
-        models = models.filter((m) => {
-            const meta = state.modelMetadata[m];
-            const searchable = [m, ...(meta?.tags || []), meta?.memo || ""]
-                .join(" ")
-                .toLowerCase();
-            return searchable.includes(q);
-        });
-    }
-
-    return sortModels(models);
-}
-
-function sortKeyOf(modelName) {
-    const meta = state.modelMetadata[modelName] || {};
-    switch (state.sortColumn) {
-        case "fav":
-            return meta.favorite ? 1 : 0;
-        case "filename":
-            return parseModelPath(modelName).name.toLowerCase();
-        case "subdir":
-            return parseModelPath(modelName).dir.toLowerCase();
-        case "civtype": {
-            const civ = meta.sha256 && state.civitaiCache[meta.sha256];
-            return (civ?.type || "").toLowerCase();
-        }
-        case "basemodel": {
-            const civ = meta.sha256 && state.civitaiCache[meta.sha256];
-            return (civ?.baseModel || "").toLowerCase();
-        }
-        case "ext":
-            return getExtension(parseModelPath(modelName).name).toLowerCase();
-        case "tags":
-            return (meta.tags || []).join(", ").toLowerCase();
-        case "memo":
-            return (meta.memo || "").toLowerCase();
-        case "enabled":
-            return isModelDisabled(modelName) ? 1 : 0;
-        default:
-            return 0;
-    }
-}
-
-function sortModels(models) {
-    if (!state.sortColumn) return models;
-    // ソートキーを1モデル1回だけ計算（比較ごとのparseModelPath等の再計算を回避）
-    const dir = state.sortDir === "asc" ? 1 : -1;
-    return models
-        .map((m) => [sortKeyOf(m), m])
-        .sort((a, b) => (a[0] < b[0] ? -dir : a[0] > b[0] ? dir : 0))
-        .map((pair) => pair[1]);
-}
-
-function getAllTags() {
-    const set = new Set();
-    const models = getCurrentModels();
-    models.forEach((m) => {
-        const meta = state.modelMetadata[m];
-        if (meta?.tags) meta.tags.forEach((tag) => set.add(tag));
-    });
-    return [...set].sort();
-}
-
-// ── Render: Tag Filter ────────────────────────────────────
-
-function renderTagFilter() {
-    const select = document.getElementById("wfm-models-tag-filter");
-    if (!select) return;
-    const tags = getAllTags();
-    select.innerHTML =
-        `<option value="">${t("modelsAllTags")}</option>` +
-        tags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join("");
-    select.value = state.tagFilter;
-}
-
-function renderGroupFilter() {
-    const select = document.getElementById("wfm-models-group-filter");
-    if (!select) return;
-
-    const groups = state.allModelGroups[state.activeModelType] || {};
-    const names = Object.keys(groups).sort();
-
-    // 選択中のグループが削除された場合はフィルターをリセット
-    if (state.groupFilter && !groups[state.groupFilter]) {
-        state.groupFilter = "";
-    }
-
-    const currentValue = state.groupFilter
-        ? `${state.activeModelType}::${state.groupFilter}`
-        : "";
-
-    select.innerHTML =
-        `<option value="">${t("modelsAllGroups")}</option>` +
-        names.map((name) => {
-            const value = `${state.activeModelType}::${name}`;
-            const isActive = value === currentValue;
-            return `<option value="${escapeHtml(value)}"${isActive ? " selected" : ""}>${escapeHtml(name)}</option>`;
-        }).join("");
-}
-
-function renderDirFilter() {
-    const select = document.getElementById("wfm-models-dir-filter");
-    if (!select) return;
-    const dirs = [...new Set(
-        getCurrentModels()
-            .map((m) => parseModelPath(m).dir)
-            .filter((d) => d !== "")
-    )].sort();
-    select.innerHTML =
-        `<option value="">${t("modelsAllDirs")}</option>` +
-        dirs.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
-    select.value = state.dirFilter;
-}
 
 async function fetchModelGroups() {
     try {
