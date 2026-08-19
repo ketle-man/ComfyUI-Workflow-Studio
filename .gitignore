@@ -5,3 +5,12 @@ __pycache__/
 .venv
 *.egg-info/
 data/
+
+# graphify: keep the knowledge graph itself under version control,
+# but exclude the run-by-run cost/token log, the local extraction
+# cache (both churn every rebuild and have no value to other clones),
+# and the machine-local interpreter/scan-root pointers.
+graphify-out/cost.json
+graphify-out/cache/
+graphify-out/.graphify_python
+graphify-out/.graphify_root

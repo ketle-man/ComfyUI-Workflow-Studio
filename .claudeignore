@@ -1,0 +1,5 @@
+# graphify: keep graph.json/graphify-out/ out of Claude Code's automatic
+# context so re-running `graphify extract` doesn't churn the prompt cache
+# on every rebuild. These are still tracked by git (see .gitignore).
+graph.json
+graphify-out/
