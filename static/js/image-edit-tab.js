@@ -16,6 +16,7 @@ import { BlurTool }            from "./image-edit/BlurTool.js";
 import { BgRemove }            from "./image-edit/BgRemove.js";
 import { Sam3Segmentation }    from "./image-edit/Sam3Segmentation.js";
 import { InpaintI2IActions }   from "./image-edit/InpaintI2IActions.js";
+import { FileExport }          from "./image-edit/FileExport.js";
 import { showToast }           from "./app.js";
 import { comfyUI }             from "./comfyui-client.js";
 import { comfyEditor }         from "./comfyui-editor.js";
@@ -117,6 +118,14 @@ class ImageEditTab {
         this._inpaint = new InpaintI2IActions({
             getLayerManager: () => this._layerMgr,
             buildBgCanvas:   () => this._buildBgCanvas()
+        });
+        // ファイル出力（PNG保存 / Gallery保存 / ComfyUIアップロード）
+        this._fileExport = new FileExport({
+            getLayerManager:  () => this._layerMgr,
+            getCanvasSize:    () => ({ w: this._canvasW, h: this._canvasH }),
+            getBaseName:      () => this._baseName,
+            renderMaskedLayer: (ctx, target, maskLayer, targetLayer, showOverlay) =>
+                this._renderMaskedLayer(ctx, target, maskLayer, targetLayer, showOverlay)
         });
     }
 
@@ -1085,9 +1094,9 @@ class ImageEditTab {
         document.getElementById("ie-new-btn")?.addEventListener("click", () => this._newCanvas());
         document.getElementById("ie-undo-btn")?.addEventListener("click", () => this._undo());
         document.getElementById("ie-redo-btn")?.addEventListener("click", () => this._redo());
-        document.getElementById("ie-save-btn")?.addEventListener("click", () => this._savePng());
-        document.getElementById("ie-save-gallery-btn")?.addEventListener("click", () => this._saveToGallery());
-        document.getElementById("ie-upload-comfy-btn")?.addEventListener("click", () => this._uploadToComfyUI());
+        document.getElementById("ie-save-btn")?.addEventListener("click", () => this._fileExport.savePng());
+        document.getElementById("ie-save-gallery-btn")?.addEventListener("click", () => this._fileExport.saveToGallery());
+        document.getElementById("ie-upload-comfy-btn")?.addEventListener("click", () => this._fileExport.uploadToComfyUI());
         document.getElementById("ie-zoom-fit")?.addEventListener("click", () => this._fitToView());
         document.getElementById("ie-zoom-100")?.addEventListener("click", () => {
             this._panOffset = { x: 0, y: 0 }; this._setZoom(1.0);
@@ -1920,106 +1929,6 @@ class ImageEditTab {
         this._refreshLayerList();
     }
 
-    // ── 合成・保存 ─────────────────────────────────
-
-    _buildCompositeCanvas() {
-        const canvas = document.createElement("canvas");
-        canvas.width  = this._canvasW;
-        canvas.height = this._canvasH;
-        if (!this._layerMgr) return canvas;
-        this._compositeForExport(canvas);
-        return canvas;
-    }
-
-    // 保存用合成: maskApply=true のクリッピングを適用、マスクオーバーレイは除外
-    _compositeForExport(target) {
-        const ctx = target.getContext("2d");
-        ctx.clearRect(0, 0, target.width, target.height);
-        const layers = this._layerMgr.layers;
-        const maskedIndices = new Set();
-        for (let i = 0; i < layers.length; i++) {
-            if (layers[i].type === "mask" && layers[i].maskApply && layers[i].visible && i + 1 < layers.length) {
-                maskedIndices.add(i + 1);
-            }
-        }
-        for (let i = layers.length - 1; i >= 0; i--) {
-            const layer = layers[i];
-            if (!layer.visible) continue;
-            if (maskedIndices.has(i)) continue;
-            if (layer.type === "mask") {
-                if (layer.maskApply && i + 1 < layers.length) {
-                    this._renderMaskedLayer(ctx, target, layer, layers[i + 1], false);
-                }
-                // maskApply=false のマスクはエクスポートに含めない
-            } else {
-                ctx.save();
-                ctx.globalAlpha = layer.opacity;
-                ctx.globalCompositeOperation = layer.blendMode;
-                Layer.applyTransform(ctx, layer);
-                ctx.drawImage(layer.canvas, -layer.canvas.width / 2, -layer.canvas.height / 2);
-                ctx.restore();
-            }
-        }
-    }
-
-    _savePng() {
-        if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
-        const canvas = this._buildCompositeCanvas();
-        const a = document.createElement("a");
-        a.href     = canvas.toDataURL("image/png");
-        a.download = (this._baseName || "wfs-edit") + "-output.png";
-        a.click();
-        showToast("PNG saved", "success");
-    }
-
-    async _saveToGallery() {
-        if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
-
-        // デフォルトファイル名: wfs-image-YYYYMMDDHHmmss
-        const now = new Date();
-        const pad = n => String(n).padStart(2, "0");
-        const ts  = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        const defaultName = `wfs-image-${ts}`;
-
-        const filename = window.prompt("Save to Gallery — file name (without extension):", defaultName);
-        if (filename === null) return; // キャンセル
-        const safeName = filename.trim() || defaultName;
-
-        const canvas   = this._buildCompositeCanvas();
-        const imageData = canvas.toDataURL("image/png");
-
-        try {
-            const r = await fetch("/wfm/gallery/image/save", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: safeName, imageData }),
-            });
-            if (!r.ok) {
-                const e = await r.json().catch(() => ({}));
-                throw new Error(e.error || r.statusText);
-            }
-            showToast(`Saved to Gallery: ${safeName}.png`, "success");
-        } catch (err) {
-            showToast(`Gallery save failed: ${err.message}`, "error");
-        }
-    }
-
-    async _uploadToComfyUI() {
-        if (!this._layerMgr) { showToast("No image loaded", "error"); return; }
-        const canvas = this._buildCompositeCanvas();
-        const blob   = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-        const file   = new File([blob], (this._baseName || "wfs-edit") + "-output.png", { type: "image/png" });
-        const form   = new FormData();
-        form.append("image", file);
-        form.append("overwrite", "true");
-        try {
-            const r    = await fetch("/upload/image", { method: "POST", body: form });
-            const data = await r.json();
-            showToast(`Uploaded: ${data.name}`, "success");
-        } catch {
-            showToast("Upload failed", "error");
-        }
-    }
 
     /** ギャラリーなど外部から画像URLをロード */
     async loadFromUrl(url, name) {
