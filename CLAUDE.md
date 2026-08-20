@@ -199,3 +199,13 @@ os.environ["HF_HOME"] = "D:\\hf_cache"
 5. `gh release create vX.Y.Z` でリリースを作成（リリースノート本文に変更点を記載する — v0.3.90でREADME.mdのChangelogセクションは廃止したため、以後のバージョン履歴はGitHub Releaseのリリースノートのみで管理する）
 
 `pyproject.toml` のバージョン変更が GitHub Actions のトリガー（`paths: pyproject.toml`）になっており、ComfyUI Registry への自動公開もここで行われる。バージョン更新を忘れると Registry に反映されない。
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
