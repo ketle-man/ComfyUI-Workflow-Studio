@@ -42,10 +42,31 @@ export function showToast(message, type = "info", duration = 3000) {
 
 export function openModal(title, contentHtml) {
     const overlay = document.getElementById("wfm-modal-overlay");
-    const titleEl = document.getElementById("wfm-modal-title");
+    let titleEl = document.getElementById("wfm-modal-title");
     const bodyEl = document.getElementById("wfm-modal-body");
+    const titleInput = document.getElementById("wfm-modal-title-input");
 
     if (!overlay || !titleEl || !bodyEl) return;
+
+    // This modal shell is shared by every caller (Workflow/Models/Nodes detail
+    // modals, Lab's keyframe editor, etc.). Some callers (e.g. workflow-tab.js's
+    // openDetailModal) inject extra header chrome after calling openModal() — a
+    // favorite star button, and a click-to-rename listener + tooltip/cursor on the
+    // title — but nothing ever tore that down again. The next caller to reuse this
+    // same DOM inherited it as stale leftovers: a Lab cell modal could show a
+    // favorite star wired to the PREVIOUS caller's workflow object, and clicking it
+    // silently toggled that unrelated workflow's favorite state. Clean slate every
+    // time, before any caller-specific chrome is added back on top.
+    titleEl.parentElement?.querySelectorAll(".wfm-fav-btn").forEach((el) => el.remove());
+    const freshTitleEl = titleEl.cloneNode(false); // drops any addEventListener from a prior caller
+    freshTitleEl.removeAttribute("title");
+    freshTitleEl.removeAttribute("style"); // also clears any leftover display:none from an interrupted rename
+    titleEl.replaceWith(freshTitleEl);
+    titleEl = freshTitleEl;
+    if (titleInput) {
+        titleInput.style.display = "none";
+        titleInput.value = "";
+    }
 
     titleEl.textContent = title;
     bodyEl.innerHTML = contentHtml;
