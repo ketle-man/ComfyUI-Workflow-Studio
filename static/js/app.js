@@ -602,6 +602,7 @@ function applyI18nToHtml() {
         "wfm-help-imageedit-mask-9": "helpImageEditMask9", "wfm-help-imageedit-mask-10": "helpImageEditMask10",
         "wfm-help-imageedit-mask-11": "helpImageEditMask11", "wfm-help-imageedit-mask-12": "helpImageEditMask12",
         "wfm-help-imageedit-mask-13": "helpImageEditMask13",
+        "wfm-help-imageedit-mask-14": "helpImageEditMask14",
         "wfm-help-imageedit-gmic-title": "helpImageEditGmicTitle",
         "wfm-help-imageedit-gmic-1": "helpImageEditGmic1", "wfm-help-imageedit-gmic-2": "helpImageEditGmic2",
         "wfm-help-imageedit-gmic-3": "helpImageEditGmic3", "wfm-help-imageedit-gmic-4": "helpImageEditGmic4",

@@ -15,6 +15,7 @@ import { GmicIntegration }     from "./image-edit/GmicIntegration.js";
 import { BlurTool }            from "./image-edit/BlurTool.js";
 import { BgRemove }            from "./image-edit/BgRemove.js";
 import { Sam3Segmentation }    from "./image-edit/Sam3Segmentation.js";
+import { MaskEditorOneBridge } from "./image-edit/MaskEditorOneBridge.js";
 import { InpaintI2IActions }   from "./image-edit/InpaintI2IActions.js";
 import { FileExport }          from "./image-edit/FileExport.js";
 import { showToast }           from "./app.js";
@@ -114,6 +115,14 @@ class ImageEditTab {
         // ABR brush (Mask Editor One) — optional feature
         this._abrAvailable = false;
         this._abrBrushTree = [];
+        // Mask Editor One 連携ボタン（既存ノード再利用方式）
+        this._maskEditorBridge = new MaskEditorOneBridge({
+            getLayerManager:     () => this._layerMgr,
+            saveUndo:            () => this._saveUndo(),
+            updateCompositeView: () => this._updateCompositeView(),
+            refreshLayerList:    () => this._refreshLayerList(),
+            buildBgCanvas:       () => this._buildBgCanvas()
+        });
         // Inpaint / I2I（Comic Creator連携の外部実行も含む）
         this._inpaint = new InpaintI2IActions({
             getLayerManager: () => this._layerMgr,
@@ -572,6 +581,8 @@ class ImageEditTab {
 
         if (sub === "paint" && this._maskTool) {
             const t = this._maskTool;
+            this._maskEditorBridge.refresh();
+            const meoBridge = this._maskEditorBridge;
             body.innerHTML = `
                 <div class="ie-props-row">
                     <label>Mode</label>
@@ -601,6 +612,12 @@ class ImageEditTab {
                         title="${t.brushName ?? "Circle"}">${t.brushName ?? "Circle"}</span>
                     <button class="wfm-btn wfm-btn-sm" id="ie-mask-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;" ${this._abrAvailable ? "" : "disabled"}>Select</button>
                     ${t.brushImage ? `<button class="wfm-btn wfm-btn-sm" id="ie-mask-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
+                </div>
+                <div class="ie-props-row">
+                    <button class="wfm-btn wfm-btn-sm" id="ie-mask-editor-one-open" style="flex:1;font-size:11px;" ${meoBridge.available ? "" : "disabled"}
+                        title="${meoBridge.available ? "Send the current canvas to the Mask Editor One node in this workflow and edit interactively" : "Requires a Mask Editor One node in the loaded workflow"}">
+                        Edit in Mask Editor One →
+                    </button>
                 </div>
                 ${t.brushImage ? `
                 <div class="ie-props-row">
@@ -646,6 +663,7 @@ class ImageEditTab {
                 this._maskTool._stamp = null;
             });
             document.getElementById("ie-mask-select-brush")?.addEventListener("click", () => this._openAbrBrushPicker());
+            document.getElementById("ie-mask-editor-one-open")?.addEventListener("click", () => this._maskEditorBridge.openEditor());
             document.getElementById("ie-mask-clear-brush")?.addEventListener("click", () => {
                 this._maskTool?.clearImageBrush();
                 this._renderMaskProps("paint");

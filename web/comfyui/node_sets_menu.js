@@ -583,6 +583,62 @@ window.wfmReceiveWorkflow = async (data) => {
     await loadDataOnCanvas(data);
 };
 
+// ============================================
+// Cross-window bridge for SPA Mask Editor One integration
+// ============================================
+// WFS Image Edit タブから呼ばれる。現在のグラフ上にある既存の MaskEditorOne ノードへ
+// 画像を送り込み、そのノード自身の「Edit Mask」ウィジェット（node._editMaskWidget.callback）を
+// 疑似クリックしてモーダルを開く。モーダルの overlay DOM (.me-overlay) が非表示に戻ったタイミングで
+// Apply 後のマスク（node._maskDataUrl、グレースケール PNG data URL）を呼び出し元へ返す。
+// Cancel/×で閉じた場合はマスクが更新されていないため null を返す。
+window.wfmOpenMaskEditorForNode = async (nodeId, imageDataUrl) => {
+    const node = app.graph.getNodeById(nodeId);
+    if (!node || node.type !== "MaskEditorOne") {
+        throw new Error(`MaskEditorOne node ${nodeId} not found in the current graph`);
+    }
+    if (typeof node._editMaskWidget?.callback !== "function") {
+        throw new Error("MaskEditorOne node is missing its Edit Mask control (unsupported version?)");
+    }
+
+    const resp = await fetch("/mask_editor/store_image", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ node_id: String(nodeId), bg_image_b64: imageDataUrl }),
+    });
+    if (!resp.ok) throw new Error("Failed to send image to Mask Editor One");
+
+    // ノード側のプレビュー/モーダル背景を、送信した画像に同期させる
+    node._bgDataUrl = imageDataUrl;
+    node._bgImg = await new Promise((r) => {
+        const img = new Image();
+        img.onload  = () => r(img);
+        img.onerror = () => r(null);
+        img.src = imageDataUrl;
+    });
+    node._previewMode = "image";
+    node.setDirtyCanvas?.(true, true);
+
+    const prevMaskUrl = node._maskDataUrl;
+    node._editMaskWidget.callback();
+
+    // openMaskEditor() は同期的に overlay DOM を構築・表示するため、callback() 直後に取得できる
+    const overlays = [...document.querySelectorAll(".me-overlay")];
+    const overlay  = overlays.find((o) => o.style.display !== "none") || overlays[overlays.length - 1];
+    if (!overlay) throw new Error("Mask Editor One modal did not open");
+
+    window.focus();
+
+    return new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+            if (overlay.style.display === "none") {
+                observer.disconnect();
+                resolve(node._maskDataUrl && node._maskDataUrl !== prevMaskUrl ? node._maskDataUrl : null);
+            }
+        });
+        observer.observe(overlay, { attributes: true, attributeFilter: ["style"] });
+    });
+};
+
 const loadWorkflowOnCanvas = async (filename) => {
     const displayName = filename.replace(/\.json$/i, "");
     showToast(`Loading "${displayName}"...`, "info");
