@@ -2,6 +2,24 @@
 
 ---
 
+## v0.4.1
+
+### UX改善: Mask Editor One連携ボタンを「選択中ノード優先」方式に再設計
+
+v0.4.0でリリースした「Edit in Mask Editor One →」ボタンは、WFS生成UIタブに対象ワークフロー（MaskEditorOneノードを含むもの）を事前に読み込んでおく必要があり、`comfyUI.currentAnalysis.mask_editor_one_nodes`にボタンの有効/無効判定を依存させていた。ユーザーから「体感が悪い」とのフィードバックを受け、既存の「Send to Workflow」ボタンと全く同じ「ComfyUIキャンバス上で選択中のノードを優先、無ければグラフ内で最初に見つかったノードにフォールバック」方式に再設計した。
+
+**実装**: `MaskEditorOneBridge.js`から`comfyUI.currentAnalysis`依存・`refresh()`/`available`/`node`プロパティを全撤去し、ボタンを常時有効化（Send to Workflowと同様、クリック時にノードが見つからなければトーストでエラー表示）。`node_sets_menu.js`側は`window.wfmOpenMaskEditorForNode`のシグネチャから`nodeId`引数を除去し、内部で`_wfmFindMaskEditorOneNode()`（`_wfmFindImageWidget()`と同一ロジック）がノードを自動探索するよう変更。これにより「WFS生成UIタブへワークフローを読み込む」という間接的な手順が完全に不要になり、ComfyUIキャンバス上でMaskEditorOneノードを選択してボタンを押すだけで使えるようになった。
+
+**副次的な発見**: 実装過程の実機検証で、「続けて描画」しても2回目のMask Editor One送信内容が変わらないという不具合報告があったが、調査の結果コードのバグではなく、新規マスクレイヤー作成時に自動的にそのレイヤーがアクティブになる（BG Remove/SAM3等、他のマスク生成ツールと共通の仕様）ため、レイヤー切り替えなしに続けて描画するとマスクレイヤーへの追記になり、エクスポート合成（`maskApply=false`のマスクは除外）に反映されないことが原因と判明。
+
+**検証**: 全JSファイルを`node --check`で構文確認。kapture MCP経由でComfyUI+WFS実機2タブを操作し、ComfyUIキャンバスに新規MaskEditorOneノードを追加・選択した状態で、WFS生成UIタブに何も読み込まずボタンをクリック→モーダルが正しく開く→Apply後もマスクレイヤーが正しくインポートされることを確認。
+
+**How to apply**:
+1. WFS側の`comfyUI.currentAnalysis`（ワークフロー読み込み状態）に依存する設計は、ComfyUIキャンバスの実際のグラフ状態とズレるリスクがある。ComfyUI実グラフを直接操作できる機能（`window.opener`ブリッジ経由）では、「選択中ノード優先・フォールバック」パターン（Send to Workflowが最初の実装例）をデフォルトの設計として検討するとよい。
+2. Image Editタブの「新規マスクレイヤー作成時に自動アクティブ化」は全ツール共通の仕様のため、ある機能だけを個別に変更すると一貫性が崩れる。類似の不可解な挙動報告があった場合は、まずこの共通仕様が原因でないか確認する。
+
+---
+
 ## v0.4.0
 
 ### リファクタリング: image-edit-tab.js / models-tab.js の低凝集度モジュール分割

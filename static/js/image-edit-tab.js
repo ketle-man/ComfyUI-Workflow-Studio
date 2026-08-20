@@ -581,8 +581,6 @@ class ImageEditTab {
 
         if (sub === "paint" && this._maskTool) {
             const t = this._maskTool;
-            this._maskEditorBridge.refresh();
-            const meoBridge = this._maskEditorBridge;
             body.innerHTML = `
                 <div class="ie-props-row">
                     <label>Mode</label>
@@ -614,8 +612,8 @@ class ImageEditTab {
                     ${t.brushImage ? `<button class="wfm-btn wfm-btn-sm" id="ie-mask-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
                 </div>
                 <div class="ie-props-row">
-                    <button class="wfm-btn wfm-btn-sm" id="ie-mask-editor-one-open" style="flex:1;font-size:11px;" ${meoBridge.available ? "" : "disabled"}
-                        title="${meoBridge.available ? "Send the current canvas to the Mask Editor One node in this workflow and edit interactively" : "Requires a Mask Editor One node in the loaded workflow"}">
+                    <button class="wfm-btn wfm-btn-sm" id="ie-mask-editor-one-open" style="flex:1;font-size:11px;"
+                        title="Send the current canvas to the Mask Editor One node on the ComfyUI canvas (selected node preferred, falls back to the first one found) and edit interactively">
                         Edit in Mask Editor One →
                     </button>
                 </div>

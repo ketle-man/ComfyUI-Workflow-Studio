@@ -586,19 +586,41 @@ window.wfmReceiveWorkflow = async (data) => {
 // ============================================
 // Cross-window bridge for SPA Mask Editor One integration
 // ============================================
-// WFS Image Edit タブから呼ばれる。現在のグラフ上にある既存の MaskEditorOne ノードへ
-// 画像を送り込み、そのノード自身の「Edit Mask」ウィジェット（node._editMaskWidget.callback）を
-// 疑似クリックしてモーダルを開く。モーダルの overlay DOM (.me-overlay) が非表示に戻ったタイミングで
-// Apply 後のマスク（node._maskDataUrl、グレースケール PNG data URL）を呼び出し元へ返す。
-// Cancel/×で閉じた場合はマスクが更新されていないため null を返す。
-window.wfmOpenMaskEditorForNode = async (nodeId, imageDataUrl) => {
-    const node = app.graph.getNodeById(nodeId);
-    if (!node || node.type !== "MaskEditorOne") {
-        throw new Error(`MaskEditorOne node ${nodeId} not found in the current graph`);
+// WFS Image Edit タブから呼ばれる。「Send to Workflow」の image ウィジェット探索
+// （_wfmFindImageWidget）と同じ「選択中ノード優先・フォールバック」方式で
+// MaskEditorOne ノードをComfyUIキャンバス上から探す。
+function _wfmFindMaskEditorOneNode() {
+    const graph = app.graph;
+    if (!graph) return null;
+
+    let selected = [];
+    try {
+        const sel = app.canvas?.selected_nodes;
+        if (sel) selected = Object.values(sel);
+    } catch { /* ignore */ }
+
+    const pools = [selected, graph._nodes || []];
+    for (const pool of pools) {
+        for (const node of pool) {
+            if (node?.type === "MaskEditorOne") return node;
+        }
+    }
+    return null;
+}
+
+// 見つけた MaskEditorOne ノードへ画像を送り込み、そのノード自身の「Edit Mask」ウィジェット
+// （node._editMaskWidget.callback）を疑似クリックしてモーダルを開く。モーダルの overlay DOM
+// (.me-overlay) が非表示に戻ったタイミングで Apply 後のマスク（node._maskDataUrl、グレースケール
+// PNG data URL）を呼び出し元へ返す。Cancel/×で閉じた場合はマスクが更新されていないため null を返す。
+window.wfmOpenMaskEditorForNode = async (imageDataUrl, maskDataUrl) => {
+    const node = _wfmFindMaskEditorOneNode();
+    if (!node) {
+        throw new Error("No Mask Editor One node found (select one on the canvas, or add one to the workflow)");
     }
     if (typeof node._editMaskWidget?.callback !== "function") {
         throw new Error("MaskEditorOne node is missing its Edit Mask control (unsupported version?)");
     }
+    const nodeId = node.id;
 
     const resp = await fetch("/mask_editor/store_image", {
         method:  "POST",
@@ -606,6 +628,17 @@ window.wfmOpenMaskEditorForNode = async (nodeId, imageDataUrl) => {
         body:    JSON.stringify({ node_id: String(nodeId), bg_image_b64: imageDataUrl }),
     });
     if (!resp.ok) throw new Error("Failed to send image to Mask Editor One");
+
+    // WFS側で既にマスクレイヤーを描いていた場合、それを初期マスクとしてそのまま引き継ぐ
+    // （applyImageAndMaskToMaskEditorOneNode の layer_data 形式と同じスキーマ）
+    if (maskDataUrl) {
+        const layerWidget = node.widgets?.find((w) => w.name === "layer_data");
+        if (layerWidget) {
+            layerWidget.value = JSON.stringify({
+                layers: [{ visible: true, opacity: 1, operation: "add", imageData: maskDataUrl }],
+            });
+        }
+    }
 
     // ノード側のプレビュー/モーダル背景を、送信した画像に同期させる
     node._bgDataUrl = imageDataUrl;

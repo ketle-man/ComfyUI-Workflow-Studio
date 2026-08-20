@@ -1,14 +1,15 @@
 /**
  * Image Edit Tab - Mask Editor One 連携ブリッジ
- * WFS Image Edit タブの合成画像を、現在のワークフロー中にある MaskEditorOne ノードへ送り、
- * window.opener（ComfyUIタブ）側で実際のモーダルを開いて編集させ、
- * Apply 後の結果マスクを新規マスクレイヤーとして WFS 側に取り込む。
+ * WFS Image Edit タブの合成画像を、ComfyUIキャンバス上のMaskEditorOneノード（選択中のノードを
+ * 優先、無ければグラフ内で最初に見つかったもの）へ送り、window.opener（ComfyUIタブ）側で実際の
+ * モーダルを開いて編集させ、Apply後の結果マスクを新規マスクレイヤーとしてWFS側に取り込む。
+ * 「Send to Workflow」の image ウィジェット探索と同じ「選択中優先・フォールバック」方式のため、
+ * WFS側のワークフロー読み込み状況とは無関係に動作する。
  * モーダル自体は ComfyUI ページの LiteGraph ノードに強く依存するため、WFS 側からは
  * window.opener.wfmOpenMaskEditorForNode()（web/comfyui/node_sets_menu.js 側で定義）を介して操作する。
  */
 
 import { showToast } from "../app.js";
-import { comfyUI }   from "../comfyui-client.js";
 
 export class MaskEditorOneBridge {
     /**
@@ -21,16 +22,7 @@ export class MaskEditorOneBridge {
      */
     constructor(callbacks) {
         this._cb = callbacks;
-        this.available = false;
-        this.node      = null;   // { id, title } の Mask Editor One ノード（先頭の1件）
-        this.running   = false;
-    }
-
-    // window.opener 側でタブ移動・リロードが起きうるため、ボタン描画のたびに再評価する
-    refresh() {
-        const meoNodes = comfyUI.currentAnalysis?.mask_editor_one_nodes || [];
-        this.node      = meoNodes[0] || null;
-        this.available = !!this.node;
+        this.running = false;
     }
 
     get bridgeReady() {
@@ -39,11 +31,6 @@ export class MaskEditorOneBridge {
 
     async openEditor() {
         if (this.running) return;
-        this.refresh();
-        if (!this.node) {
-            showToast("No Mask Editor One node found in the current workflow", "error");
-            return;
-        }
         if (!this.bridgeReady) {
             showToast("Open Workflow Studio from ComfyUI's top menu to use this feature", "error");
             return;
@@ -54,10 +41,14 @@ export class MaskEditorOneBridge {
         this.running = true;
         try {
             const dataUrl = this._cb.buildBgCanvas().toDataURL("image/png");
+            // アクティブレイヤーが既存のマスクレイヤーなら、その内容もそのまま Mask Editor One の
+            // 初期マスクとして渡す（画像だけでなく、今描いているマスクも引き継ぐ）
+            const activeLayer = layerMgr.activeLayer;
+            const existingMaskDataUrl = activeLayer?.type === "mask" ? activeLayer.canvas.toDataURL("image/png") : null;
             window.opener.focus();
             showToast("Switch to the ComfyUI tab, edit the mask, then click Apply", "info");
 
-            const maskDataUrl = await window.opener.wfmOpenMaskEditorForNode(this.node.id, dataUrl);
+            const maskDataUrl = await window.opener.wfmOpenMaskEditorForNode(dataUrl, existingMaskDataUrl);
             if (!maskDataUrl) {
                 showToast("Mask Editor One: cancelled (no changes)", "info");
                 return;
