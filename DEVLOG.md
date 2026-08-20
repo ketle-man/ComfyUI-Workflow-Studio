@@ -2,6 +2,41 @@
 
 ---
 
+## v0.4.0
+
+### リファクタリング: image-edit-tab.js / models-tab.js の低凝集度モジュール分割
+
+graphifyのコミュニティ分析で、`static/js/image-edit-tab.js`（3665行/85メソッド）と`static/js/models-tab.js`（2522行/76関数）が異常に低いコミュニティ凝集度（density 0.07〜0.08）を示す「神クラス/神モジュール」と判明したため、段階的な分割計画を立てて1セッションで両ファイルとも完走した。
+
+- **image-edit-tab.js**（3665→2577行、約30%削減）: G'MIC統合・Blur/Mosaicツール・背景除去（imgly+BiRefNet）・SAM3セグメンテーション・Inpaint/I2I実行・ファイル出力（PNG/Gallery/ComfyUIアップロード）の6モジュールを`static/js/image-edit/`配下へ切り出し。コールバック注入パターン（一方向依存）を採用し、Mask Editor One連携ディスパッチや画像ロード系など密結合な部分は意図的に本体へ残した。
+- **models-tab.js**（2522→592行、約77%削減）: 共有state・バッジ機能・フィルタ/ソート・グリッド描画/選択操作/詳細パネルの5フェーズを`static/js/models/`配下へ切り出し。グリッド描画↔選択/サイドパネル↔詳細モーダルが相互に再描画をトリガーする構造のため、Phase 5のみ循環importで解決した。
+- **graphifyによる定量検証**: image-edit-tab.js側は各モジュールが独立した高凝集度コミュニティ（density 0.18〜0.48）を形成し2〜6倍改善。一方models-tab.js側は循環import設計のため、ファイル分割・可読性は向上したもののコミュニティ凝集度は改善しなかった（旧グラフとほぼ同じdensity 0.096）——コールバック注入で切り出せるモジュールは凝集度も改善するが、循環importで切り出したモジュールは凝集度が改善しないという教訓が得られた。
+
+### 機能追加: Mask Editor One 連携ボタン（DEVLOGフェーズ2計画の実装）
+
+Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタンを追加。ワークフロー中に既存の`MaskEditorOne`ノードがある場合のみ有効化され、クリックすると現在のキャンバス合成画像をそのノードへ送信し、`window.opener`経由でComfyUI側の実際のモーダルエディタ（Paint/SAM3/BiRefNet/Shape等フル機能）を開く。Applyクリック後、結果マスクを新規マスクレイヤーとしてWorkflow Studio側に取り込む。
+
+計画段階では「`window.maskEditorOpen()`のようなグローバル起動関数」を想定していたが、実際のMask Editor One（v0.1.9+）ソースを調査した結果そのような関数は存在せず、モーダルは実際のグラフノードオブジェクト（`node.widgets`/`node.graph`）に強く依存していることが判明。WFSは別ウィンドウで動くSPAのため直接モーダルをインポートできず、ユーザーに「既存ノード再利用方式」（自動ノード生成方式との二択）を確認の上、`window.opener`経由でノードの「Edit Mask」ウィジェットを疑似クリックし、モーダルのoverlay DOM(`.me-overlay`)の表示変化を`MutationObserver`で監視して結果を受け取るブリッジ関数（`window.wfmOpenMaskEditorForNode`、`web/comfyui/node_sets_menu.js`）を実装した。kapture MCP経由でComfyUI+WFS 2タブを実機操作し、モーダル起動→Apply→マスクレイヤー取り込みまでのエンドツーエンド動作を確認済み。
+
+### 機能追加: Image Edit タブ「Send to Workflow」ボタン + 「Send to ComfyUI」→「Save to Input」改名
+
+既存の「Send to ComfyUI」（`/upload/image`へアップロードするだけ）とは別に、アップロード後にComfyUI側で選択中のノードの`image`ウィジェットへファイル名まで自動反映する「Send to Workflow」ボタンを追加。ユーザーが別プロジェクト`chat_TE`カスタムノードの同名ボタンを参照として提示し、同じロジック（選択中ノード優先、無ければグラフ内の最初の該当ノードへフォールバック）を`window.opener`ブリッジ（`window.wfmSendImageToSelectedNode`）で再実装した。
+
+新ボタン追加に伴い、紛らわしくなった既存ボタン名「Send to ComfyUI」を「Save to Input」に改名（実際の動作＝ComfyUIのinputフォルダへ保存、を正確に表す名前に変更）。
+
+### ヘルプ・README更新
+
+`project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMap の3点セット）に従い、Image Edit タブヘルプの Mask Tool カードに「Edit in Mask Editor One」項目（`imageedit-mask-14`）、Export & Navigation カードに「Send to Workflow」項目（`imageedit-19b`、既存番号を保持するため文字サフィックス方式で挿入）を追加し、「Save to Input」への改名も反映。README.mdのImage Edit Tabセクションにも同内容を追記。
+
+**検証**: 全JSファイルを`node --check`で構文確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイルのみ両フォルダへ同期しハッシュ一致を確認。Mask Editor One連携・Send to Workflowともkapture MCP経由でComfyUI+WFS実機2タブ操作によるエンドツーエンド動作確認済み。
+
+**How to apply**:
+1. WFSはComfyUI本体とは別ウィンドウで動くSPAのため、ComfyUIの実グラフ（`app.graph`）を操作する機能を追加する場合は`window.opener`経由のクロスウィンドウブリッジパターン（`web/comfyui/node_sets_menu.js`に`window.wfmXxx`関数を追加）を使う。WFS側は`window.opener`が無い場合のエラー表示（「ComfyUIのトップメニューからWorkflow Studioを開いてください」）を必ず用意する。
+2. カスタムノード等の他プロジェクトの類似機能を参照実装として提示された場合、まずそのロジック（widget検索の優先順位、フォールバック条件など）を正確に読み取ってから、WFSのウィンドウ分離アーキテクチャに合わせて移植する。
+3. 低凝集度モジュールの分割は、機能同士が本質的に相互依存している場合（循環import必須）はファイルサイズ削減・可読性向上は達成できてもコミュニティ凝集度は改善しないと事前に期待値を揃えておく。
+
+---
+
 ## v0.3.99
 
 ### 機能追加: AI TOOLタブ + サイドパネルAタブにUnslothバックエンド追加（APIキーは.env管理、SSRF脆弱性修正、reasoning_content対応）
