@@ -120,4 +120,33 @@ export class FileExport {
             showToast("Upload failed", "error");
         }
     }
+
+    // Uploads the composite like uploadToComfyUI(), then (via window.opener,
+    // since WFS runs in its own window — same cross-window pattern as
+    // wfmReceiveWorkflow/wfmOpenMaskEditorForNode) writes the resulting
+    // filename into the "image" widget of the currently selected ComfyUI
+    // node (falling back to the first node in the graph with one), mirroring
+    // the chat_TE custom node's "Send to workflow" button.
+    async sendToWorkflow() {
+        if (!this._cb.getLayerManager()) { showToast("No image loaded", "error"); return; }
+        if (!window.opener || typeof window.opener.wfmSendImageToSelectedNode !== "function") {
+            showToast("Open Workflow Studio from ComfyUI's top menu to use this feature", "error");
+            return;
+        }
+        const canvas = this._buildCompositeCanvas();
+        const blob   = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+        const file   = new File([blob], (this._cb.getBaseName() || "wfs-edit") + "-output.png", { type: "image/png" });
+        const form   = new FormData();
+        form.append("image", file);
+        form.append("overwrite", "true");
+        try {
+            const r    = await fetch("/upload/image", { method: "POST", body: form });
+            const data = await r.json();
+            const filename = data.subfolder ? `${data.subfolder}/${data.name}` : data.name;
+            window.opener.wfmSendImageToSelectedNode(filename);
+            showToast(`Sent "${filename}" to workflow`, "success");
+        } catch (err) {
+            showToast(`Send to workflow failed: ${err.message}`, "error");
+        }
+    }
 }

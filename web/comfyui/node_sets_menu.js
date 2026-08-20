@@ -639,6 +639,47 @@ window.wfmOpenMaskEditorForNode = async (nodeId, imageDataUrl) => {
     });
 };
 
+// ============================================
+// Cross-window bridge for SPA "Send to Workflow"
+// ============================================
+// WFS Image Edit タブから呼ばれる。アップロード済みの画像ファイル名を、現在ComfyUIキャンバス上で
+// 選択中のノードの "image" ウィジェット（LoadImage / LoadImage 互換ノード）へ書き込む。
+// 選択ノードに該当ウィジェットが無ければグラフ内の最初の該当ノードにフォールバックする。
+// chat_TE カスタムノードの "Send to workflow" ボタンと同じロジック。
+function _wfmFindImageWidget() {
+    const graph = app.graph;
+    if (!graph) return null;
+
+    let selected = [];
+    try {
+        const sel = app.canvas?.selected_nodes;
+        if (sel) selected = Object.values(sel);
+    } catch { /* ignore */ }
+
+    const pools = [selected, graph._nodes || []];
+    for (const pool of pools) {
+        for (const node of pool) {
+            const widget = node?.widgets?.find((w) => w.name === "image");
+            if (widget) return widget;
+        }
+    }
+    return null;
+}
+
+window.wfmSendImageToSelectedNode = (filename) => {
+    const widget = _wfmFindImageWidget();
+    if (!widget) {
+        throw new Error("No image widget found (select a LoadImage-type node)");
+    }
+    if (widget.options?.values && !widget.options.values.includes(filename)) {
+        widget.options.values.unshift(filename);
+    }
+    widget.value = filename;
+    widget.callback?.(widget.value);
+    app.graph.setDirtyCanvas(true, true);
+    return true;
+};
+
 const loadWorkflowOnCanvas = async (filename) => {
     const displayName = filename.replace(/\.json$/i, "");
     showToast(`Loading "${displayName}"...`, "info");
