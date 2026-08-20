@@ -1,8 +1,8 @@
 /**
  * Lab Tab - Experimental I2I batch generation.
  *
- * Runs the currently loaded workflow N times, letting Checkpoint / VAE / Prompt /
- * KSampler each be overridden independently starting at a chosen iteration
+ * Runs the currently loaded workflow N times, letting Model (Checkpoint/LoRA/VAE) /
+ * Prompt / KSampler each be overridden independently starting at a chosen iteration
  * ("keyframe"). Never mutates comfyUI.currentWorkflow — everything is applied to a
  * fresh deep clone per iteration so it can't interfere with the Input/Model/Settings/
  * Batch subtabs.
@@ -17,25 +17,70 @@ import { extractAllMetadata, readAllPNGTextChunks } from "./metadata-tab.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { _expandWildcardsInWorkflow } from "./generate-tab.js";
 
-const COLUMN_KEYS = ["checkpoint", "vae", "prompt", "ksampler"];
+const COLUMN_KEYS = ["model", "prompt", "ksampler"];
 const MAX_RESULTS = 9;
 const RESULTS_GRID_COLS = 3;
 const LAB_PLAN_PREFIX = "ws_labplan_";
 const LAB_PLAN_PNG_KEY = "wfm_lab_plan";
 
 function _defaultValueFor(col) {
+    if (col === "model") return { checkpoint: "", lora: { name: "", strengthModel: 1.0, strengthClip: 1.0 }, vae: "" };
     if (col === "prompt") return { positive: "", negative: "", styleApplied: false, styleName: "" };
     if (col === "ksampler") return { steps: null, cfg: null, sampler_name: "", scheduler: "", denoise: null, seed: null };
     return "";
 }
 
+// Fills in defaults for a possibly-partial "model" column value — both for legacy
+// plan data migrated by _migrateLabColumns (which never sets a lora) and defensively
+// for any hand-edited Plan JSON.
+function _normalizeModelValue(v) {
+    return {
+        checkpoint: v?.checkpoint || "",
+        lora: {
+            name: v?.lora?.name || "",
+            strengthModel: v?.lora?.strengthModel ?? 1.0,
+            strengthClip: v?.lora?.strengthClip ?? 1.0,
+        },
+        vae: v?.vae || "",
+    };
+}
+
 function _emptyColumns() {
     return {
-        checkpoint: [{ atIteration: 1, value: "", revertToBase: false, bypassed: false }],
-        vae: [{ atIteration: 1, value: "", revertToBase: false, bypassed: false }],
+        model: [{ atIteration: 1, value: _defaultValueFor("model"), revertToBase: false, bypassed: false }],
         prompt: [{ atIteration: 1, value: _defaultValueFor("prompt"), revertToBase: false, bypassed: false }],
         ksampler: [{ atIteration: 1, value: _defaultValueFor("ksampler"), revertToBase: false, bypassed: false }],
     };
+}
+
+// Legacy Plan JSON (pre "Model column" merge) stored separate checkpoint/vae columns.
+// Merges them into one "model" column keyed by atIteration so old .json/.png plans
+// still load correctly. LoRA is left empty since the old format never had it.
+function _migrateLabColumns(columns) {
+    if (!columns) return _emptyColumns();
+    if (columns.model) return columns;
+
+    const ckptKfs = columns.checkpoint || [];
+    const vaeKfs = columns.vae || [];
+    const { checkpoint, vae, ...rest } = columns;
+
+    if (ckptKfs.length === 0 && vaeKfs.length === 0) {
+        return { ...rest, model: _emptyColumns().model };
+    }
+
+    const iterations = [...new Set([1, ...ckptKfs.map((k) => k.atIteration), ...vaeKfs.map((k) => k.atIteration)])].sort((a, b) => a - b);
+    const findAt = (kfs, iter) => kfs.find((k) => k.atIteration === iter);
+    const model = iterations.map((iter) => {
+        const ck = findAt(ckptKfs, iter);
+        const vk = findAt(vaeKfs, iter);
+        return {
+            atIteration: iter,
+            bypassed: !!(ck?.bypassed || vk?.bypassed),
+            revertToBase: !!(ck?.revertToBase || vk?.revertToBase),
+            value: { checkpoint: ck?.value || "", lora: { name: "", strengthModel: 1.0, strengthClip: 1.0 }, vae: vk?.value || "" },
+        };
+    });
+    return { ...rest, model };
 }
 
 function _emptyLabState() {
@@ -59,6 +104,11 @@ let _aborted = false;
 let _resumeResolve = null;
 let _lastGeneratedImageRef = null; // ComfyUI "name [type]" annotated ref of the previous iteration's first output
 
+// Which single field the Model column's cells currently display (C/L/V toggle in its
+// header) — purely a display preference, not part of the Plan data, so it's not saved
+// with the plan and simply resets to "checkpoint" on page load.
+let _modelViewMode = "checkpoint";
+
 // ============================================
 // Init
 // ============================================
@@ -68,6 +118,7 @@ export function initLabTab() {
     _initPlanDropZone();
     _initSubtabToggle();
     _initColumnButtons();
+    _initModelViewToggle();
     _initRunControls();
     _initPlanButtons();
     _initPlanJsonTab();
@@ -318,6 +369,19 @@ function _initColumnButtons() {
     });
 }
 
+// Wires the Model column header's C/L/V buttons — switches which single field its cells
+// summarize (see _modelViewMode) and re-renders just that column. Purely a display
+// filter: the underlying keyframe data (all three fields) is untouched either way.
+function _initModelViewToggle() {
+    document.querySelectorAll(".wfm-lab-model-view-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            _modelViewMode = btn.dataset.view;
+            document.querySelectorAll(".wfm-lab-model-view-btn").forEach((b) => b.classList.toggle("active", b === btn));
+            _renderColumn("model");
+        });
+    });
+}
+
 function _renderAllColumns() {
     COLUMN_KEYS.forEach(_renderColumn);
 }
@@ -325,11 +389,28 @@ function _renderAllColumns() {
 function _renderColumn(col) {
     const container = document.getElementById(`wfm-lab-col-cells-${col}`);
     if (!container) return;
+    if (col === "model") _updateModelViewHighlight();
     const keyframes = _lab.columns[col];
     container.innerHTML = keyframes.map((kf, idx) => _cellHtml(col, kf, idx)).join("");
     container.querySelectorAll(".wfm-lab-cell").forEach((el) => {
         el.addEventListener("click", () => _openCellModal(col, parseInt(el.dataset.idx, 10)));
     });
+}
+
+// Colors the header's C/L/V buttons the same "this node type actually exists in the
+// loaded workflow" highlight GenerateUI's Model tab uses (wfm-model-label-active,
+// colored via settings-tab.js applyModelTabActiveColor) — independent of which one is
+// currently selected/active. Re-run on every model column render so it stays in sync
+// with whatever's loaded (initial render, keyframe edits, toggle clicks, plan load/
+// apply, and refreshLabLiveDefaults() when switching into the Lab subtab).
+function _updateModelViewHighlight() {
+    const analysis = comfyUI.currentAnalysis;
+    const hasCheckpoint = (analysis?.checkpoint_nodes?.length || 0) > 0;
+    const hasLora = (analysis?.lora_nodes?.length || 0) > 0;
+    const hasVae = (analysis?.vae_nodes?.length || 0) > 0;
+    document.querySelector('.wfm-lab-model-view-btn[data-view="checkpoint"]')?.classList.toggle("wfm-model-label-active", hasCheckpoint);
+    document.querySelector('.wfm-lab-model-view-btn[data-view="lora"]')?.classList.toggle("wfm-model-label-active", hasLora);
+    document.querySelector('.wfm-lab-model-view-btn[data-view="vae"]')?.classList.toggle("wfm-model-label-active", hasVae);
 }
 
 function _cellHtml(col, kf, idx) {
@@ -357,8 +438,19 @@ function _cellHtml(col, kf, idx) {
 function _cellLabel(col, kf) {
     if (kf.bypassed) return t("labBypassed");
     if (kf.revertToBase) return t("labRevertToBase");
-    if (col === "checkpoint" || col === "vae") {
-        return kf.value ? escapeHtml(kf.value) : t("labUseWorkflowDefault");
+    if (col === "model") {
+        // The header's C/L/V toggle (_modelViewMode) picks which single field this cell
+        // summarizes. Real keyframes (atIteration set) resolve the field's inherited/
+        // effective value via _resolveModelKeyframe — e.g. a keyframe that only touches
+        // LoRA still shows whatever Checkpoint is actually in effect when viewing "C",
+        // not a blank. The synthetic live-preview object built for keyframe #1 (no
+        // atIteration) already IS that resolved value, so it's used as-is.
+        const resolved = (kf.atIteration != null) ? _resolveModelKeyframe(kf.atIteration) : _normalizeModelValue(kf.value);
+        let display = "";
+        if (_modelViewMode === "checkpoint") display = resolved.checkpoint;
+        else if (_modelViewMode === "vae") display = resolved.vae;
+        else if (_modelViewMode === "lora" && resolved.lora.name) display = `${resolved.lora.name} (${resolved.lora.strengthModel}/${resolved.lora.strengthClip})`;
+        return display ? escapeHtml(display) : t("labUseWorkflowDefault");
     }
     if (col === "prompt") {
         const p = kf.value?.positive || "";
@@ -379,7 +471,10 @@ function _cellLabel(col, kf) {
 }
 
 function _isEmptyValue(col, value) {
-    if (col === "checkpoint" || col === "vae") return !value;
+    if (col === "model") {
+        const v = _normalizeModelValue(value);
+        return !v.checkpoint && !v.lora.name && !v.vae;
+    }
     if (col === "prompt") return !value || (!value.positive && !value.negative);
     if (col === "ksampler") {
         return !value || (value.steps == null && value.cfg == null && value.denoise == null &&
@@ -397,11 +492,13 @@ function _isEmptyValue(col, value) {
 function _liveValueFor(col) {
     const analysis = comfyUI.currentAnalysis;
     if (!analysis) return null;
-    if (col === "checkpoint") {
-        return analysis.checkpoint_nodes?.[0]?.ckpt_name || null;
-    }
-    if (col === "vae") {
-        return analysis.vae_nodes?.[0]?.vae_name || null;
+    if (col === "model") {
+        const ckpt = analysis.checkpoint_nodes?.[0]?.ckpt_name || "";
+        const vae = analysis.vae_nodes?.[0]?.vae_name || "";
+        // LoRA is intentionally left out of the live-reflected value — there's no safe
+        // way to pick "the" active LoRA back out of a workflow node to prefill with.
+        if (!ckpt && !vae) return null;
+        return { checkpoint: ckpt, lora: { name: "", strengthModel: 1.0, strengthClip: 1.0 }, vae };
     }
     if (col === "prompt") {
         const posNode = analysis.prompt_nodes?.find((n) => n.role === "positive");
@@ -448,20 +545,52 @@ function _openCellModal(col, idx) {
     const hasPrevious = col === "prompt" && idx > 0;
 
     let valueFieldsHtml = "";
-    if (col === "checkpoint" || col === "vae") {
-        const options = comfyEditor.models[col === "checkpoint" ? "checkpoints" : "vaes"] || [];
-        valueFieldsHtml = `
-            <div class="wfm-lab-modal-row">
-                <label>${col === "checkpoint" ? "Checkpoint" : "VAE"}</label>
-                <div class="wfm-search-wrap" style="margin-bottom:4px;width:100%;">
-                    <input type="text" id="wfm-lab-modal-value-filter" class="wfm-input wfm-search-input" placeholder="Filter...">
-                    <button type="button" class="wfm-search-clear-btn" id="wfm-lab-modal-value-filter-clear" title="Clear search">✕</button>
-                </div>
-                <select id="wfm-lab-modal-value" class="wfm-select">
-                    <option value="">${t("labUseWorkflowDefault")}</option>
-                    ${options.map((m) => `<option value="${escapeHtml(m)}" ${m === effectiveValue ? "selected" : ""}>${escapeHtml(m)}</option>`).join("")}
-                </select>
-            </div>`;
+    if (col === "model") {
+        // Shows ONLY the field matching the column header's C/L/V toggle (_modelViewMode)
+        // — no in-modal tab switcher — so what's open in the modal always matches what the
+        // cell/header are currently showing. To edit a different field, switch the header
+        // toggle first, then reopen the cell; Save only touches the field being shown here
+        // (see the save handler below), leaving the other two exactly as already stored.
+        const v = _normalizeModelValue(effectiveValue);
+        // What this row would inherit for the shown field if left blank (everything up to,
+        // but not including, this keyframe's own atIteration) — shown as the blank option's
+        // label so it's clear leaving it untouched still carries a value forward, rather
+        // than resetting to the workflow's own default. Only meaningful past #1.
+        const inherited = isFirst ? null : _resolveModelKeyframe(kf.atIteration - 1);
+        const selectFieldHtml = (idPrefix, options, currentVal, inheritedVal) => `
+            <div class="wfm-search-wrap" style="width:100%;">
+                <input type="text" id="wfm-lab-modal-${idPrefix}-filter" class="wfm-input wfm-search-input" placeholder="Filter...">
+                <button type="button" class="wfm-search-clear-btn" id="wfm-lab-modal-${idPrefix}-filter-clear" title="Clear search">✕</button>
+            </div>
+            <select id="wfm-lab-modal-${idPrefix}-select" class="wfm-select">
+                <option value="">${escapeHtml(inheritedVal ? t("labInheritsFrom", inheritedVal) : t("labUseWorkflowDefault"))}</option>
+                ${options.map((m) => `<option value="${escapeHtml(m)}" ${m === currentVal ? "selected" : ""}>${escapeHtml(m)}</option>`).join("")}
+            </select>`;
+        if (_modelViewMode === "checkpoint") {
+            valueFieldsHtml = `
+                <div class="wfm-lab-modal-row">
+                    <label>Checkpoint</label>
+                    ${selectFieldHtml("ckpt", comfyEditor.models.checkpoints || [], v.checkpoint, inherited?.checkpoint)}
+                </div>`;
+        } else if (_modelViewMode === "lora") {
+            valueFieldsHtml = `
+                <div class="wfm-lab-modal-row">
+                    <label>LoRA</label>
+                    ${selectFieldHtml("lora", comfyEditor.models.loras || [], v.lora.name, inherited?.lora?.name)}
+                    <div class="wfm-lora-strength-single" style="margin-top:6px;">
+                        <span>M</span>
+                        <input type="number" class="wfm-input" id="wfm-lab-modal-lora-strmodel" value="${v.lora.strengthModel}" step="0.05" min="0" max="2">
+                        <span>C</span>
+                        <input type="number" class="wfm-input" id="wfm-lab-modal-lora-strclip" value="${v.lora.strengthClip}" step="0.05" min="0" max="2">
+                    </div>
+                </div>`;
+        } else if (_modelViewMode === "vae") {
+            valueFieldsHtml = `
+                <div class="wfm-lab-modal-row">
+                    <label>VAE</label>
+                    ${selectFieldHtml("vae", comfyEditor.models.vaes || [], v.vae, inherited?.vae)}
+                </div>`;
+        }
     } else if (col === "prompt") {
         const v = effectiveValue || {};
         valueFieldsHtml = `
@@ -554,7 +683,7 @@ function _openCellModal(col, idx) {
         </div>`;
     openModal(`${col} #${idx + 1}`, html);
     if (col === "prompt") _wireLabPromptModalExtras(idx);
-    if (col === "checkpoint" || col === "vae") _wireLabValueFilter(col);
+    if (col === "model") _wireLabModelFieldFilter();
 
     // Bypass disables everything else on the modal (value fields AND the Revert
     // checkbox) — the two are mutually exclusive since bypass already means "ignore
@@ -592,8 +721,23 @@ function _openCellModal(col, idx) {
 
         let value = kf.value;
         if (!revert && !bypassed) {
-            if (col === "checkpoint" || col === "vae") {
-                value = document.getElementById("wfm-lab-modal-value")?.value || "";
+            if (col === "model") {
+                // Only the field the modal actually shows (_modelViewMode) gets updated —
+                // the other two are carried over from this row's own currently-saved
+                // value untouched, since their fields aren't in the DOM to read from.
+                const next = _normalizeModelValue(kf.value);
+                if (_modelViewMode === "checkpoint") {
+                    next.checkpoint = document.getElementById("wfm-lab-modal-ckpt-select")?.value || "";
+                } else if (_modelViewMode === "lora") {
+                    next.lora = {
+                        name: document.getElementById("wfm-lab-modal-lora-select")?.value || "",
+                        strengthModel: parseFloat(document.getElementById("wfm-lab-modal-lora-strmodel")?.value) || 1.0,
+                        strengthClip: parseFloat(document.getElementById("wfm-lab-modal-lora-strclip")?.value) || 1.0,
+                    };
+                } else if (_modelViewMode === "vae") {
+                    next.vae = document.getElementById("wfm-lab-modal-vae-select")?.value || "";
+                }
+                value = next;
             } else if (col === "prompt") {
                 value = {
                     positive: document.getElementById("wfm-lab-modal-positive")?.value || "",
@@ -640,26 +784,28 @@ function _applyStyleToText(positive, negative, style) {
     };
 }
 
-// Filter box above the Checkpoint/VAE modal's <select>, same behavior as the
-// Model tab's filter inputs (comfyui-editor.js renderModelTab): rebuild the
-// option list on every keystroke, always keeping the "workflow default" option.
-// The overlay ✕ clear button reuses the same setupSearchClearBtn() helper as the
-// Models/Nodes/Workflow/Gallery tab search boxes and the Raw JSON search bar.
-function _wireLabValueFilter(col) {
-    const filterInput = document.getElementById("wfm-lab-modal-value-filter");
-    const select = document.getElementById("wfm-lab-modal-value");
-    if (!filterInput || !select) return;
-    const options = comfyEditor.models[col === "checkpoint" ? "checkpoints" : "vaes"] || [];
-
-    const applyFilter = () => {
-        const filter = filterInput.value.toLowerCase();
-        select.innerHTML = `<option value="">${t("labUseWorkflowDefault")}</option>` +
-            options.filter((m) => m.toLowerCase().includes(filter))
-                .map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+// Wires the filter box above whichever single field the Model-column modal is
+// currently showing (_modelViewMode picks which one exists in the DOM — the other two
+// calls below are harmless no-ops since their elements aren't present). Same filter
+// behavior as GenerateUI's Model tab filter inputs (comfyui-editor.js renderModelTab).
+function _wireLabModelFieldFilter() {
+    const wireFilter = (idPrefix, modelsKey) => {
+        const filterInput = document.getElementById(`wfm-lab-modal-${idPrefix}-filter`);
+        const select = document.getElementById(`wfm-lab-modal-${idPrefix}-select`);
+        if (!filterInput || !select) return;
+        const options = comfyEditor.models[modelsKey] || [];
+        const applyFilter = () => {
+            const filter = filterInput.value.toLowerCase();
+            select.innerHTML = `<option value="">${t("labUseWorkflowDefault")}</option>` +
+                options.filter((m) => m.toLowerCase().includes(filter))
+                    .map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+        };
+        filterInput.addEventListener("input", applyFilter);
+        setupSearchClearBtn(filterInput.id, `${filterInput.id}-clear`, applyFilter);
     };
-
-    filterInput.addEventListener("input", applyFilter);
-    setupSearchClearBtn("wfm-lab-modal-value-filter", "wfm-lab-modal-value-filter-clear", applyFilter);
+    wireFilter("ckpt", "checkpoints");
+    wireFilter("lora", "loras");
+    wireFilter("vae", "vaes");
 }
 
 // Wires the Prompt-column modal's extra actions: fetch the live GenerateUI prompt,
@@ -795,6 +941,36 @@ function _resolveKeyframe(col, iteration) {
     return _isEmptyValue(col, applicable.value) ? null : applicable.value;
 }
 
+// Unlike _resolveKeyframe (which swaps in one keyframe's whole value), the Model column
+// bundles three independent settings — Checkpoint/LoRA/VAE — into a single row, so a
+// keyframe that only sets a LoRA must NOT blank out a Checkpoint/VAE chosen by an earlier
+// keyframe. This resolves each of the three fields separately: walking keyframes up to
+// `iteration` in order, each field keeps whatever value it last saw set (non-empty),
+// carrying forward across keyframes that leave it blank. A `revertToBase` keyframe resets
+// all three fields at once to iteration #1's row (mirrors _resolveKeyframe's revert
+// semantics) rather than being treated as a per-field value of its own. Bypassed keyframes
+// are skipped entirely, as elsewhere.
+function _resolveModelKeyframe(iteration) {
+    const kfs = _lab.columns.model;
+    const row1 = kfs.find((k) => k.atIteration === 1);
+    const row1Value = (row1 && !row1.bypassed) ? _normalizeModelValue(row1.value) : null;
+
+    let current = _defaultValueFor("model");
+    for (const kf of kfs) {
+        if (kf.atIteration > iteration) break;
+        if (kf.bypassed) continue;
+        if (kf.revertToBase) {
+            current = row1Value ? _normalizeModelValue(row1Value) : _defaultValueFor("model");
+            continue;
+        }
+        const v = _normalizeModelValue(kf.value);
+        if (v.checkpoint) current.checkpoint = v.checkpoint;
+        if (v.lora.name) current.lora = { ...v.lora };
+        if (v.vae) current.vae = v.vae;
+    }
+    return current;
+}
+
 function _buildWorkflowForIteration(iteration, chainImageRef) {
     const wf = JSON.parse(JSON.stringify(comfyUI.currentWorkflow || {}));
     const analysis = comfyUI.currentAnalysis;
@@ -804,25 +980,28 @@ function _buildWorkflowForIteration(iteration, chainImageRef) {
         if (nodeId != null && wf[nodeId]) wf[nodeId].inputs[key] = val;
     };
 
-    const ckpt = _resolveKeyframe("checkpoint", iteration);
-    if (ckpt && analysis.checkpoint_nodes?.[0]) {
-        write(analysis.checkpoint_nodes[0].id, "ckpt_name", ckpt);
+    const model = _resolveModelKeyframe(iteration);
+    if (model.checkpoint && analysis.checkpoint_nodes?.[0]) {
+        write(analysis.checkpoint_nodes[0].id, "ckpt_name", model.checkpoint);
     }
 
-    const vae = _resolveKeyframe("vae", iteration);
-    if (vae) {
+    if (model.vae) {
         const vaeNode = analysis.vae_nodes?.[0];
         if (vaeNode && wf[vaeNode.id]) {
-            write(vaeNode.id, "vae_name", vae);
+            write(vaeNode.id, "vae_name", model.vae);
         } else {
             // Workflow has no standalone VAELoader node (VAE baked into the checkpoint) —
             // inject one and repoint every "vae" input link at it so the override actually applies.
             const newId = String(Math.max(0, ...Object.keys(wf).map(Number)) + 1);
-            wf[newId] = { class_type: "VAELoader", inputs: { vae_name: vae }, _meta: { title: "VAE Loader" } };
+            wf[newId] = { class_type: "VAELoader", inputs: { vae_name: model.vae }, _meta: { title: "VAE Loader" } };
             for (const node of Object.values(wf)) {
                 if (Array.isArray(node?.inputs?.vae)) node.inputs.vae = [newId, 0];
             }
         }
+    }
+
+    if (model.lora.name) {
+        _applyLabLoraToWorkflow(wf, analysis, model.lora);
     }
 
     const prompt = _resolveKeyframe("prompt", iteration);
@@ -851,6 +1030,49 @@ function _buildWorkflowForIteration(iteration, chainImageRef) {
     }
 
     return { workflow: wf, seed };
+}
+
+// True once a "no LoRA node in this workflow" warning has already been shown during the
+// current Run — reset at the start of _runLabBatch so the toast fires at most once per
+// run instead of once per iteration.
+let _labLoraWarned = false;
+
+// Applies a Lab-configured LoRA (Single only — no Stack support here) to the given
+// per-iteration workflow clone. Mirrors models-tab.js's applyToGenUI LoRA branch: prefer
+// analysis.lora_nodes[0] (correctly picks up "Lora Loader (LoraManager)" nodes via
+// is_lora_manager), else fall back to any node with a lora_name input. If the workflow
+// has no LoRA node at all, this warns once and does nothing — unlike VAE above, Lab does
+// NOT auto-inject a LoraLoader node, since that would require rewiring model/clip links
+// between the checkpoint and every downstream consumer, not just overwriting one input.
+function _applyLabLoraToWorkflow(wf, analysis, lora) {
+    let nodeId = analysis.lora_nodes?.[0]?.id;
+    let isLoraManager = !!analysis.lora_nodes?.[0]?.is_lora_manager;
+    if (nodeId == null) {
+        nodeId = Object.keys(wf).find((id) => wf[id]?.inputs && "lora_name" in wf[id].inputs);
+        isLoraManager = false;
+    }
+
+    if (nodeId == null || !wf[nodeId]) {
+        if (!_labLoraWarned) {
+            _labLoraWarned = true;
+            showToast(t("labLoraNoNode"), "warning");
+        }
+        return;
+    }
+
+    const strModel = lora.strengthModel ?? 1.0;
+    const strClip = lora.strengthClip ?? 1.0;
+    if (isLoraManager) {
+        const stem = lora.name.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+        wf[nodeId].inputs.loras = {
+            __value__: [{ name: stem, strength: strModel, active: true, expanded: false, clipStrength: strClip, locked: false }],
+        };
+        wf[nodeId].inputs.text = `<lora:${stem}:${strModel}:${strClip}>`;
+    } else {
+        wf[nodeId].inputs.lora_name = comfyEditor.resolveLoraName(lora.name);
+        wf[nodeId].inputs.strength_model = strModel;
+        wf[nodeId].inputs.strength_clip = strClip;
+    }
 }
 
 // ComfyUI's LoadImage accepts "name [type]" (optionally "subfolder/name [type]") to
@@ -893,6 +1115,7 @@ async function _runLabBatch() {
 
     _paused = false;
     _aborted = false;
+    _labLoraWarned = false;
     _lastGeneratedImageRef = null;
     _lab.results.images = [];
     _renderResultsGrid();
@@ -1153,7 +1376,7 @@ function _applyPlanData(filename, data) {
     _lab.saveIndexOnRun = !!data.save_index_on_run;
     _lab.sourceImageFilename = data.source_image || null;
     _lab.workflowFilename = data.workflow_filename || null;
-    _lab.columns = data.columns || _emptyColumns();
+    _lab.columns = _migrateLabColumns(data.columns);
     _lab.results = { images: (data.results?.images || []).slice(0, MAX_RESULTS) };
     _updatePlanWorkflowUI();
     _updateT2IModeUI();

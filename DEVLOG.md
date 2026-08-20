@@ -1,4 +1,32 @@
+異性
+
 # DEVLOG - ComfyUI-Workflow-Studio
+
+---
+
+## v0.4.2
+
+### 機能追加: Lab「Model」列統合（Checkpoint / LoRA Single / VAE）+ フィールド単位継承 + C/L/V表示切替
+
+ユーザーから「生成UIタブのLabサブタブを改善したい。現在のCheckpoint、VAEのみのモデル設定をModelとしてタブ化しCheckpoint、Lora、VAEとし、Modelタブのワークフローの該当するモデルのハイライト表示を取り入れたい」との要望を受けて着手。LabのSettingパネルで別々だったcheckpoint列・vae列を1つの「Model」列に統合し、LoRA（Single、実験的機能のため今回はStack非対応）を新規追加した一連のセッション。
+
+**1. データモデル統合**: `COLUMN_KEYS`を`["checkpoint","vae","prompt","ksampler"]`から`["model","prompt","ksampler"]`に変更。Model列の1キーフレームは`{ checkpoint, lora: {name, strengthModel, strengthClip}, vae }`をまとめて保持する。旧形式（checkpoint/vae 2列）で保存済みのPlan JSON/PNGは`_migrateLabColumns()`でiteration単位に自動マージして読み込めるよう後方互換を維持した。
+
+**2. フィールド単位の継承（当初リリース後にユーザー指摘で修正）**: 初回実装では「そのキーフレームの値をまるごと差し替え」方式だったため、「LoRAだけ設定したキーフレームを追加するとCheckpoint/VAEがワークフロー本来の値に戻ってしまう」という直感に反する挙動になっていた。ユーザーから「未設定の項目は直前のキーフレームの値を引き継ぐという認識でいいか」との確認を受け、`_resolveModelKeyframe()`を新設しCheckpoint/LoRA/VAEを個別に前方向へフォワードフィルする方式に修正。編集モーダルの未設定項目には「（引き継ぎ: ファイル名）」というヒントを表示し、実際に適用される値が一目でわかるようにした。「1回目の設定に戻す」は3項目まとめてキーフレーム#1へ戻る挙動を維持している。
+
+**3. C/L/V表示切替（列ヘッダー）**: 「Modelとしては1列だが、[C][L][V]ボタンで列の表示を切り替えたい」との要望を受け、Model列ヘッダーに`[C][L][V]`トグルボタンを追加。選択中の1項目だけをセルに単一行表示し（表示値はフィールド単位継承後の実効値）、続けて「セルをクリックして開くモーダルの表示も選択に応じて1つにしたい。ユーザーの思考と操作（表示）が一致しやすい」との要望で、モーダル内のCheckpoint/LoRA/VAEタブ切替UIを廃止し、ヘッダーで選択中の1項目だけを表示・編集する設計に変更した（Save時もその1項目だけを更新し、他の2項目は既存の保存値をそのまま維持）。あわせて「C、L、Vがハイライトする形にしたい」との要望で、GenerateUI Modelタブと同じ「ワークフロー内に該当ノードが実在する場合にラベルをハイライト色にする」仕組みをC/L/Vボタン自体に移植した。
+
+**4. LoRA(Single)適用ロジック**: `_applyLabLoraToWorkflow()`を新設し、既存GenerateUI Model側（`models-tab.js`の`applyToGenUI`）と同じ「`analysis.lora_nodes[0]`優先、無ければ`lora_name`入力を持つノードへフォールバック」ロジックを踏襲した。ワークフロー内にLoRAノードが1つも存在しない場合は、Run実行全体で1回だけ警告トーストを出しスキップする（VAEと異なりLoraLoaderノードの自動挿入は行わない — CheckpointのModel/CLIP出力を下流ノードへ配線し直す必要があり、単純な入力上書きでは済まないため）。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMap の3点セット）に従い、Lab関連ヘルプ（`helpLabDesc`/`helpLab3`/`helpLab6`/`helpLab9`/`helpLab12`/新規`helpLab14`・`helpLab15`）を英/日/中3言語で更新し、README.mdのLabセクションも同内容に更新した。
+
+**検証**: 全JSファイルを`node --check`で構文確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイルのみ両フォルダへ同期しハッシュ一致を確認。Playwright MCP経由で実機ブラウザ操作: 3列表示・モーダルでのCheckpoint/LoRA選択保存・Plan JSONのデータ構造・旧形式Plan JSONのマイグレーション・実ワークフロー（Checkpoint+LoRAノードあり／VAEノードなし）でのハイライト表示・フィールド単位継承の実効値表示・C/L/V単一項目モーダル、を一通りエンドツーエンドで確認。実際の画像生成を伴うRun実行（GPU負荷がかかるため）は割愛した。
+
+**How to apply**:
+
+1. 複数の独立した設定（旧: checkpoint列/vae列）を1つのUI要素に統合する際、「キーフレーム=行まるごと差し替え」という既存の解決ロジックをそのまま流用すると、統合前は独立していたフィールド同士が意図せず道連れで上書きされる罠がある。フィールドをバンドルする場合は、解決ロジックもフィールド単位に分解しないと直感に反する挙動になる。
+2. UIの「今見ている/選択している項目」と「編集対象」が食い違う設計（列ヘッダーのトグルと別にモーダル内タブがある等）は、機能的には可能でも認知負荷が上がる。「操作と表示を一致させる」というシンプルな原則に立ち返ると設計がすっきりすることがある。
+3. 新規ノード自動追加（VAELoaderの単純な入力上書き）と、ノードをグラフの配線経路に割り込ませる操作（LoraLoaderのmodel/clip出力を下流へ再配線）は難易度が全く異なる。前者のパターンをそのまま後者に流用しようとする前に、既存コード（`models-tab.js`の`applyToGenUI`）に「ノードが無ければ警告のみ」という前例が無いか確認するとよい。
 
 ---
 
@@ -15,6 +43,7 @@ v0.4.0でリリースした「Edit in Mask Editor One →」ボタンは、WFS�
 **検証**: 全JSファイルを`node --check`で構文確認。kapture MCP経由でComfyUI+WFS実機2タブを操作し、ComfyUIキャンバスに新規MaskEditorOneノードを追加・選択した状態で、WFS生成UIタブに何も読み込まずボタンをクリック→モーダルが正しく開く→Apply後もマスクレイヤーが正しくインポートされることを確認。
 
 **How to apply**:
+
 1. WFS側の`comfyUI.currentAnalysis`（ワークフロー読み込み状態）に依存する設計は、ComfyUIキャンバスの実際のグラフ状態とズレるリスクがある。ComfyUI実グラフを直接操作できる機能（`window.opener`ブリッジ経由）では、「選択中ノード優先・フォールバック」パターン（Send to Workflowが最初の実装例）をデフォルトの設計として検討するとよい。
 2. Image Editタブの「新規マスクレイヤー作成時に自動アクティブ化」は全ツール共通の仕様のため、ある機能だけを個別に変更すると一貫性が崩れる。類似の不可解な挙動報告があった場合は、まずこの共通仕様が原因でないか確認する。
 
@@ -49,6 +78,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **検証**: 全JSファイルを`node --check`で構文確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイルのみ両フォルダへ同期しハッシュ一致を確認。Mask Editor One連携・Send to Workflowともkapture MCP経由でComfyUI+WFS実機2タブ操作によるエンドツーエンド動作確認済み。
 
 **How to apply**:
+
 1. WFSはComfyUI本体とは別ウィンドウで動くSPAのため、ComfyUIの実グラフ（`app.graph`）を操作する機能を追加する場合は`window.opener`経由のクロスウィンドウブリッジパターン（`web/comfyui/node_sets_menu.js`に`window.wfmXxx`関数を追加）を使う。WFS側は`window.opener`が無い場合のエラー表示（「ComfyUIのトップメニューからWorkflow Studioを開いてください」）を必ず用意する。
 2. カスタムノード等の他プロジェクトの類似機能を参照実装として提示された場合、まずそのロジック（widget検索の優先順位、フォールバック条件など）を正確に読み取ってから、WFSのウィンドウ分離アーキテクチャに合わせて移植する。
 3. 低凝集度モジュールの分割は、機能同士が本質的に相互依存している場合（循環import必須）はファイルサイズ削減・可読性向上は達成できてもコミュニティ凝集度は改善しないと事前に期待値を揃えておく。
@@ -76,6 +106,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **検証**: 全JS/PythonファイルをそれぞれNode.jsの構文チェック（`node --check`）・`ast.parse()`で確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更の都度`diff`で意図した差分のみであることを確認してから両フォルダへ同期し、`cmp`でファイル同一性を検証。実行時フォルダの`__pycache__`もクリア。最終的にユーザー自身が実機（Unsloth Desktop + ComfyUI）で一通り動作確認済み。
 
 **How to apply**:
+
 1. 外部APIキーが常に必須なバックエンドを追加する場合、既存バックエンドと同じ「フロントエンドから直接fetch」方式は使えない（APIキーがブラウザに露出する）。サーバー側プロキシ方式が必須になる。
 2. サーバー側プロキシでクライアント指定のURLをそのまま信頼してAuthorizationヘッダーを付与すると、SSRF経由の資格情報漏洩につながる。ホスト名のアローリスト検証は必須。
 3. `.env`テンプレートに「コメントアウトされた例」を書くと、ユーザーが`#`を消し忘れてハマる典型パターンになる。テンプレートは「空の実行可能な行」＋説明コメントの形にする。
@@ -96,6 +127,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **3. ControlNet/Hypernetwork折りたたみ化 + Text Encoder並び替え**: 「使用頻度が低い、意図的に利用するControlNet、Hypernetworkは折りたたみにし、最新モデルで主流のText EncoderをControlNetの上にしたい」とのフィードバックを受け、表示順をCheckpoint→VAE→Diffusion Model→**Text Encoder**→ControlNet→Hypernetworkに変更。ControlNet/Hypernetworkは`Image Editタブのプレースホルダ設定`（v0.3.97）で既に使われていた`<details>/<summary>` + `.wfm-settings-section`パターンをそのまま再利用し、デフォルト折りたたみ状態に。折りたたんだ状態でもハイライト色（#2の機能）は見出し文字に残るため、展開しなくても「このワークフローはControlNetを使っているか」が一目で分かる設計とした。続けて「LoRAもハイライト可能にしたい」との追加要望で、`templates/index.html`のLoRA列見出し`<span>`にid付与、`renderLoraPane()`でワークフローにLoRAノードが1件でもあればハイライトクラスをtoggleするよう対応。
 
 **4. AI TOOLタブ: Thinking mode / Max tokens設定**: 「Thinking mode ON/OFF、Max tokens設定を追加したい」との要望を受け実装。Ollamaは`think`パラメータ（bool）と`options.num_predict`で標準対応しているが、LM Studio/Lemonade（OpenAI互換API）には標準的なthinking切替パラメータが存在しないため`max_tokens`のみ送信し、代わりにThinking mode OFF時は出力から`<think>...</think>`（`<thinking>...</thinking>`も）タグをクライアント側で正規表現除去する方式を採用。これはOllama自身がパラメータを無視した場合の保険としても機能し、バックエンドを問わず一貫した挙動になる。SPA（`callLLM`/`callChat`/`callVLM`）とサイドパネル（`aiCallLLM`/`aiCallChat`/`aiCallVLM`）の両方に`_applyGenOptions()`ヘルパーとタグ除去処理を追加し、Translation/Chat/TOOLS(VLM)/Wildcard生成の全呼び出し経路に反映。
+
 - **付随調査（見送り）**: 「Unsloth Desktopアプリのバックエンド追加は可能か」との質問を受け、公式ドキュメントを調査。OpenAI/Anthropic互換APIを同一ポート（既定`localhost:8888`）で提供する点は好条件だが、既存3バックエンドと異なり**ローカルアクセスであってもAPIキー認証が常に必須**（`Authorization: Bearer sk-unsloth-...`、無いと401）と判明。実装には新規UI（APIキー入力欄）が必要になるためユーザー判断で今回は見送り、将来の作業候補として`project_next_tasks`メモリに記録。
 
 **ヘルプタブ更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、GenerateUI TabヘルプにModelタブの新しい表示順・折りたたみ挙動（`gen-5`更新）とハイライト色機能（新規`gen-28`）、AI TOOL TabヘルプにThinking mode/Max tokens（`ai-6`更新）、SettingsタブヘルプにModelタブハイライト色設定（新規`settings-14`）を追加。この作業中に、以前から`index.html`にだけ存在し`i18n.js`（英語含む全言語）に対応キーが用意されていなかったため実際には一度も表示されていなかった「LoRA Stack — Apply writes...」の説明文を発見・復旧（`app.js`の`el.textContent = t(key)`は未定義キーでもキー名をそのまま返してHTML側の内容を問答無用に上書きするため、i18n.js側の追加漏れは静かな表示欠落を引き起こす）。
@@ -103,6 +135,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **検証**: 全JSファイルについて`node --check`で構文確認。開発元git リポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更の都度`diff`で意図した差分のみであることを確認してから両フォルダへ同期、CRLF/LF不一致がないことも`file`コマンドで事前チェック。各機能追加後にユーザー自身が実機（ComfyUI再起動後）で動作確認し、フィードバックを都度反映する形で進行。
 
 **How to apply**:
+
 1. SPA（`ai-tab.js`）とサイドパネル（`node_sets_menu.js`）のように、同じ機能が2箇所に重複実装されている場合（設定は共通の`localStorage`キーを共有していても、API呼び出しロジック自体は別ファイルにコピーされている）、片方だけ修正すると「サイドパネル版だけ直っていない」という見落としが起きる。ai-tab.js相当の修正が必要な要望が来たら、必ずnode_sets_menu.js側の対応箇所も同時に確認する。
 2. ローカルLLM APIへの指示は、user発話に埋め込んだ「〜だけ出力して」という指示より、system roleとして明示的に分離した方が小型モデルの指示追従率が上がる。それでも従わないモデルへの保険として、クライアント側での出力後処理（前置き除去、echo検知）を組み合わせるとより堅牢になる。
 3. 動的注入`<style>`タグでハイライト色のような「上書き用クラス」を追加する場合、既存CSSがelement+classなど複合セレクタで詳細度を持っていると単純なクラス指定では負ける。読み込み順に依存せず確実に上書きするには、注入側のセレクタも同等以上の詳細度（同じ複合セレクタ構造にクラスを足す）にする。
@@ -118,6 +151,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 ユーザーから「KREA2モデルワークフローを生成UIタブ、メタデータ、Workflow Studio LibraryのIタブ他対応させたい」との依頼を受けて着手。実機検証を進める過程で複数の既存バグを発見・修正し、続けてLabタブとInputタブImageサブパネルへの機能追加も行った一連のセッション。
 
 **1. KREA-2ワークフロー対応で発覚した2件の既存バグ修正**: KREA-2 Turbo（`krea2_turbo_int8_convrot.safetensors`、Qwen3VLベースのLLMプロンプト拡張＋サブグラフ構成）の2種類のワークフロー（T2I版・スタイル参照版）を実機で読み込み検証したところ、GenerateUIタブでPositive Promptが誤って`SaveImage`ノードを指し、プロンプト欄が空になる不具合を発見。原因は、ノードタイプ単位の役割伝播ロジック（`comfyui-workflow.js`の`analyzeWorkflow()`）が`PreviewAny`（値タップ中継）と`StringConcatenate`（LoRAトリガーワード連結）という中継ノードタイプを一切考慮しておらず、KREA-2のプロンプト強化トグル配線（`PrimitiveStringMultiline`→`ComfySwitchNode`→`PreviewAny`→`StringConcatenate`→`ComfySwitchNode`→`CLIPTextEncode`)の途中で役割伝播が途切れていたため。同様の理由でスタイル参照版では`TextEncodeQwenImageEditPlus`のリンク値（配列）がテキストとしてそのまま誤表示されるバグも発覚。「KREA2専用」ではなく`PreviewAny`/`StringConcatenate`/リンク経由`TextEncodeQwenImageEditPlus`という汎用ノードタイプ単位の役割伝播ルールとして`comfyui-workflow.js`に追加し、Metadataタブ（`metadata-tab.js`の`resolveLinkedText`系2関数）とサイドパネルIタブの重複実装（`node_sets_menu.js`の`_resolveLinkedText`系2関数）にも同じ汎用キー拡張（`source`/`string_a`）を反映。
+
 - 修正後、実際に生成を実行したところ**別の既存バグ**で`Prompt outputs failed validation`エラーが発生。調査の結果、`TextGenerate`ノードの`sampling_mode`（`COMFY_DYNAMICCOMBO_V3`型ウィジェット）が選択中オプションのサブフィールド（`temperature`/`top_k`等の必須6個＋`presence_penalty`のoptional1個、計7スロット消費）を持つのに対し、サブグラフの境界値注入ロジック（`_getDynamicComboSubNames`・`_simulateWidgetValues`）がDynamicComboの複数スロット消費を全く理解しておらず単純に1スロットとして扱っていたため、`sampling_mode`より後に宣言されている`thinking`（LLM思考モード、サブグラフ境界に接続）の注入処理が実際には`sampling_mode.temperature`のスロットを誤って上書きし、`temperature`に境界値の`false`（数値比較で0.0扱い）が入り`min: 0.01`バリデーションに抵触していた。`_getDynamicComboSubNames`をrequired/optional両方のサブフィールドを返すよう修正し、`_simulateWidgetValues`にDynamicCombo展開に対応する`comboExpander`引数を追加してスロット数を正しく消費するよう修正。LLMプロンプト拡張（DynamicComboを持つノード）をサブグラフ経由で使うワークフロー全般に影響する汎用バグだったため、KREA-2以外の同様構成のワークフローにも恩恵がある。
 
 **2. Labタブ: プロンプトモーダルにClear/Get from Previousボタン追加**: ユーザー要望「プロンプトモーダルにプロンプトクリアボタンと前の設定からプロンプトを取得ボタンを追加したい（#3で実行、#2のプロンプトをポジティブ、ネガティブ両方コピー）」を実装。Clearは両フィールドを空にするのみ（ワークフローノードには触れない）。Get from Previousは同じカラムの直前のキーフレーム（`idx-1`）からPositive/Negative両方をコピー。キーフレーム#1には「前」が存在しないためボタン自体を非表示。
@@ -127,6 +161,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **4. Labタブ: Bypassチェックボックス追加**: ユーザーから「バイパスボタンを追加したい」との要望を受け、追加箇所（Labタブの各列 vs Model タブ vs Raw JSONパネル）と動作仕様（ComfyUIノードを実際にBypassモードにするか、Labタブ内部だけでキーフレーム行を無効化するか）の2点をAskUserQuestionで確認。KSamplerは入出力が同じLATENT型のため実際のBypass（mode:4）が構造的に成立するが、Checkpoint/VAE/Promptの各ローダー/エンコーダーは入力を持たないため下流が未接続になり生成エラーを誘発するリスクがあるとユーザーに説明した上で、「そのキーフレーム行を無効化（Labタブ内のみ）」を選択いただいた。各キーフレームに`bypassed`フラグを追加し、`_resolveKeyframe()`でbypassedな行を「存在しないもの」として完全スキップ（直前に有効だった設定がそのまま使われる）。キーフレーム#1自体もBypass可能で、その場合はライブ反映表示より優先される。BypassチェックはRevertチェックと排他（両方同時には使えない）。
 
 **5. GenerateUI Inputタブ Imageサブパネル: Clearボタン + プレースホルダ画像機能**: ユーザー要望「クリアボタンと上部にプレースホルダ画像機能を追加したい。プレースホルダ画像機能は色と画像が選べ...LoadImageのプレースホルダボタンを押下した際、画像を作成し既存の画像を差し替えます...デフォルト画像の設定は記憶されます」を実装（`comfyui-editor.js`の`renderImageTab`）。各LoadImageカードにClear（保留中の選択/プレビューをリセット、ノードには触れない）とPlaceholderの2ボタンを追加。パネル上部に共有のPlaceholder Image設定：Colorモード（幅・高さ・色を指定、押下時にキャンバスでその場生成しアップロード）とImageモード（デフォルト画像を1枚アップロードし記憶、押下時は再アップロードせずファイル名を再利用）。設定は`localStorage`（`wfm_i2i_placeholder`）に永続化。各カード自身のPlaceholderボタンで個別に差し替え可能。
+
 - **フォローアップ（低頻度機能のため折りたたみ化）**: ユーザーから「使用頻度は高くないため。折りたたみにしたい」とのフィードバックを受け、Settingsタブと同じ`<details>/<summary>`アコーディオンパターン（`.wfm-settings-section`/`.wfm-settings-summary`）に変更し、デフォルトで折りたたみ状態に。
 
 **ヘルプタブ更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、GenerateUI Tabヘルプに Imageサブパネルのプレースホルダ機能を1項目追加（`gen-27`）、Lab subtabヘルプにClear/Get from Previous・ライブ反映・Bypassの3項目を追加（`lab-11`〜`lab-13`）。EN側は`app.js`の`helpIdMap`が`el.textContent = t(key)`でHTMLタグを問答無用に上書きするため、新規追加時はi18n.js側の全言語ブロック（EN含む）に対応キーを用意しないとリッチHTML（`<b>`/`<code>`タグ）がプレーンテキストで消えてしまう点に注意して実装。
@@ -134,6 +169,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **検証**: 各修正について、実際にComfyUI（127.0.0.1:8189）とWorkflow Studioの実行時ComfyUI_5インスタンスへPlaywrightで接続し、KREA-2両ワークフローの読み込み・GenerateUI/Metadata/IタブでのPositive Prompt検出・実際の生成実行（バリデーション通過・画像出力まで）・Labタブの新機能（Clear/Get from Previous/ライブ反映/Bypass）の各UI操作・Input ImageサブパネルのColor/Imageモード双方でのPlaceholder適用とリロード後の設定復元・ヘルプタブのEN/JA両言語表示、をすべて実機で確認。開発元リポジトリと実行時`custom_nodes`フォルダはハッシュ比較で同一性を検証。
 
 **How to apply**:
+
 1. ノードタイプ単位の汎用ロジック（役割伝播、ウィジェット値のインデックス復元など）を持つコードベースでは、特定モデル対応の不具合であっても「そのモデル専用」の分岐を足すのではなく、原因となっているノードタイプ（今回は`PreviewAny`/`StringConcatenate`/`COMFY_DYNAMICCOMBO_V3`）を汎用ロジック側に正しく組み込む修正を優先する。結果として対象モデル以外の同構成ワークフローにも自動的に恩恵が及ぶ。
 2. ウィジェット値の「インデックスから名前への復元」ロジックが複数箇所（今回は`_flattenSubgraphs`内の境界値注入と、最終API変換ループ）に重複実装されている場合、片方だけがDynamicCombo等の可変長ウィジェットを正しく理解していても、もう片方が単純な1対1対応を仮定しているとデータ破損が起きる。両方の実装が同じスロット数計算ロジックを共有しているか必ず確認する。
 3. 「バイパス」のような一般的な語でも、対象ノードの入出力型構成によって実際に構造的なComfyUI Bypassが成立するかは列ごとに異なりうる（LATENT型のKSamplerは素通し可能、入力を持たないLoader/Encoderは不可）。曖昧な機能要望は、AskUserQuestionで実装方式の選択肢とその技術的トレードオフを具体的に提示してから着手する。
@@ -156,6 +192,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **4. Style Catalogタブ: ダブルクリックでの拡大表示**: `gallery-tab.js`既存の`openLightbox()`と同じCSSクラスをそのまま流用し、右ペインのプレビュー画像に加えて中央ペインのサムネイルカード自体にも`dblclick`を追加（Output Galleryと同一の操作感になるよう、ユーザーからの「操作が異なるため都度、間違える」というフィードバックを受けて追加）。ESCで閉じる処理はgallery-tab.js側の既存グローバルリスナーがクラス名ベースで拾うため追加実装不要だった。
 
 **5. Promptタブ右ペインにStyle管理サブタブを新設**: 右ペイン（旧Wildcard専用）をタブ化し、Wildcard/Styleの2モードを切り替えられるようにした。Wildcardファイルマネージャー（一覧→エディタ→保存/削除/キャンセル）と同一のUXパターンで、登録済みStyle（`DATA_DIR/style/*.json`）の作成・編集・削除を実装。
+
 - バックエンドに`POST /api/wfm/styles`（新規作成）・`PUT /api/wfm/styles/{name}`（更新・リネーム）・`DELETE /api/wfm/styles/{name}`（削除）を新設。リネーム時は元々定義されていたファイル内でその場を書き換え（他ファイルへ移動しない）、名前は全スタイル横断で一意になるよう検証。新規作成は既定で`style/custom.json`へ追記し、同梱のスタイルパックファイル（`sdxl_styles_*.json`）は直接変更しない設計とした。
 - 保存・削除の都度、`generate-tab.js`に新規exportした`refreshStylesList()`を呼び出し、GenerateUIのStyleドロップダウン・Batchタブのチェックリストをリロード無しで再同期する。
 - 一時ディレクトリを使った単体テスト（`_find_style`のファイル横断検索、リネーム時の位置保持、重複名の拒否など）で動作確認。
@@ -168,6 +205,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **検証**: 各段階でNode `--check`（JS構文）・`python -c ast.parse`（Python構文）・一時ディレクトリでのバックエンドロジック単体テスト（スタイルCRUD、ファイル横断検索、削除経路の安全性）・開発元と実行時`custom_nodes`フォルダの`diff`比較を実施。ComfyUI再起動を要する変更（バックエンドAPI追加）の都度ユーザーへ明示。
 
 **How to apply**:
+
 1. WebSocketやポーリングで「完了通知を待つ」Promiseには、必ずタイムアウトを設定する。通知が絶対に届く保証はネットワークにもサーバー実装にも無く、タイムアウト無しのPromiseはバッチ処理のような長時間ループで「無言のまま停止する」最悪のバグを生む。周辺のtry/catchが正しく書かれていても、例外が投げられなければ意味が無い。
 2. 画像のバイト列そのものをコピー保存する機能（今回のStyle Catalog）では、コピー先の画像自体に元のメタデータ（埋め込みワークフロー等）がそのまま残っていることを活用すれば、コピー元との対応関係を別途記録・追跡する仕組みを作らずに済む場合がある。「元データへの参照を持つ」設計と「元データの複製として自己完結させる」設計のどちらが適切かは、コピー後に元データが削除・移動されうるかどうかで判断するとよい。
 3. 「Outputフォルダにファイルを残さない」系のオプションを実装する際、生成自体を変更する（ワークフローのSaveImageノードをPreviewImageに差し替える等）よりも、「一旦生成させてから、後続処理が成功したのを確認した上で元ファイルを削除する」方が実装が単純で、かつ後続処理が失敗した場合にデータを失わない安全な設計になる。
@@ -183,6 +221,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **1. Style/Prompt → ImagePrompt 全面リネーム**: ユーザーから「内部ID/関数名/ファイル名も含めて全面リネーム」の指示を受け、タブラベルだけでなく`STYLE_PROMPT_FOLDER_NAME`→`IMAGE_PROMPT_FOLDER_NAME`（値も`ws_style_prompt`→`ws_image_prompt`）、APIルート（`/wfm/gallery/style-prompt/root`→`/wfm/gallery/image-prompt/root`等）、ファイル名（`static/js/style-gallery-tab.js`→`image-prompt-tab.js`）、関数名（`initStyleGalleryTab`→`initImagePromptTab`等）、CSSクラス（`.wfm-style-*`→`.wfm-imageprompt-*`）、i18nキー（`styleGallery*`→`imagePrompt*`）まで一貫して変更。実データフォルダも`mv`でリネーム（既存データはそのまま保持）。GenerateUI Batchタブの「Style」バッチ機能（`_stylesData`/`_batchStyleSelected`等、`DATA_DIR/style/*.json`のFooocus形式スタイルプリセット）とは全く別の概念であるため、こちらは意図的にリネーム対象から除外した。
 
 **2. 事前調査: 既存Style機能・バッチ生成ループの理解**: 実装前にExploreエージェントで調査し、以下を把握した。
+
 - GenerateUIの「Style」はプリセットJSON（`{name, prompt, negative_prompt}`）を`DATA_DIR/style/`から読み込み、`_applyNamedStyle(workflow, style)`（`generate-tab.js`）がワークフローの複製に対して適用する。Positiveは`{prompt}`プレースホルダ置換または末尾追記、Negativeは常に末尾追記。
 - Batchタブに既に「Style」バッチ種別（複数スタイル選択→順次生成）が存在し、`_runBatchLoop(items, applyFn, labelFn)`という汎用バッチループを使っていた。カタログ作成はこの既存インフラをそのまま流用できると判断（新規バッチシステムを作らない）。
 - Positive/Negativeプロンプトの構造化抽出ロジック（ComfySwitchNode・CLIPTextEncodeEditPlus等の特殊ノード対応込み）は`metadata-tab.js`の`extractAllMetadata(file)`が既にexport済みで、Gallery側からもそのまま呼び出し可能と判明（Python側に同等ロジックは存在しない）。
@@ -192,6 +231,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **4. 新規: バックエンド `save_image_to_folder`**: 既存の`save_image_to_gallery`（画像保存ルート、常に固定のギャラリールート直下にのみ保存）を一般化し、任意フォルダ+任意ファイル名+上書き保存に対応する`GalleryService.save_image_to_folder(folder_path, filename, image_data)`を新設。data URLデコード・拡張子解決・ファイル名サニタイズのロジックは`_decode_image_data_url()`/`_sanitize_save_filename()`としてモジュール関数に切り出し、既存の`save_image_to_gallery`ハンドラもこちらを使うようリファクタ（重複コード解消、既存動作は不変）。新規ルート`POST /wfm/gallery/image/save-to-folder`。
 
 **5. 新規: GenerateUI「カタログ作成」/「カタログ」ボタン**: Style選択欄の右隣に設置。
+
 - スタイル選択の対象は、当初「全スタイル/選択中の1件」のラジオ選択UIを新設する設計で計画していたが、ユーザーから「カタログ作成の選択をバッチタブのStyleタブで行えるようにしたい。これにより複数選択も可能にしたい」とのフィードバックを受け、**新規UIを作らずBatchタブStyleサブタブの既存チェックリスト（`_batchStyleSelected`）をそのまま使う**方式に変更（複数選択は元から対応済み）。カタログ作成モーダルは保存先フォルダの指定（新規作成／既存選択）のみを担当する、よりシンプルな設計になった。
 - `_runBatchLoop`に第4引数`onResultFn(item, result)`を追加（既存呼び出し元は省略時no-opのため無影響）。カタログ作成はこのコールバックで、生成結果を`comfyUI.getImageBlob()`→data URL化→`save_image_to_folder`へPOST（ファイル名=スタイル名、拡張子はバックエンド側でBlobの実MIMEタイプから解決）。
 - 「カタログ」ボタン（カタログ作成ボタンの右隣、ユーザーからの追加要望）は、Galleryタブ→Style_Catalogサブタブへワンクリックで遷移するショートカット。
@@ -203,6 +243,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **検証**: 各段階でNode `--check`（JS構文）・`python -m py_compile`（Python構文）・開発元と実行時`custom_nodes`フォルダの`diff -rq`比較を実施。ユーザー自身が実機でGallery 3サブタブ化・ImagePromptの既存データ動作・カタログ作成→保存→Style_Catalogでの閲覧→Select as Style→カタログボタンでの遷移、を一通り確認済み。
 
 **How to apply**:
+
 1. 新機能が既存のバッチ処理・生成ループと概念的に重なる場合、専用の新規実装を書く前に「既存のバッチループに小さなフック（コールバック引数など）を追加するだけで実現できないか」を検討する。今回`_runBatchLoop`への1引数追加で、進捗バー・Pause/Resume・エラーハンドリングを含む既存バッチUI全体をタダで手に入れられた。
 2. ユーザーから「選択はA画面で行い、B画面はC機能だけ担当させたい」といった役割分担の指摘を受けたら、独自の選択UIを増やさず既存の選択UI（この場合Batchタブのチェックリスト）を再利用できないか確認する — 実装量が減るだけでなく、ユーザーにとって覚える操作系統が1つで済む。
 3. 「ファイル名を画像から画面Aのデータに紐付ける」機能を作る際、画像に実際に埋め込まれた値をそのまま複製・適用するのか、それとも名前で元のマスターデータ（この場合Style JSON）を検索し直すのかは、ユーザーの意図次第で大きく設計が変わる（前者はスナップショット的、後者は常に最新のマスターデータを参照する）。曖昧なら実装前に確認する。
@@ -224,6 +265,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **4. シードデータ投入**: `tools/import_style_prompt_seed.py`を新規作成（PyYAML不要、`comfyui_prompt_gallery/web/prompt_gallery.js`の`parseYamlForImages`と同じインデントベースの簡易パーサをPythonに移植）。ユーザーの`wildcard_data`フォルダ（`pack: set: category: leaf: [tag_string]`形式のYAML + `thumbnails/`配下の対応画像）のうち、サムネイル画像を伴う6カテゴリ（artstyle/body/expression/job/pose/scene）から、画像とタグの対が実際に揃っている**460枚**のみを`output/ws_style_prompt`へコピー＋`.txt`サイドカー生成した（残り487枚は元データ側にタグ定義が無く「テキストのみ」相当のため、ユーザー指示通りスキップ）。CivitAI配布パックの再配布ライセンス問題を避けるため、実データ画像はリポジトリにコミットせず、書き込み先はユーザー個人のローカルComfyUI outputフォルダのみとした。
 
 **5. フォローアップ改善（実機フィードバックを受けて）**:
+
 - **再帰的な画像表示**: 親フォルダを選択してもサブフォルダの画像が0件表示になっていた（インポートしたデータが深い階層に配置されるため）。`list_images()`に`recursive`パラメータを追加し`_scan_folder_recursive()`（`os.walk`ベース）を新設、Style/Promptギャラリー側は常に`recursive=true`で呼び出すよう変更。フォルダツリーの`list_folder_tree()`も`image_count`（直下のみ、Output側で従来通り使用）とは別に`image_count_total`（サブフォルダ込みの合計、後方互換で追加）を返すようにし、ツリーの件数バッジもStyle/Prompt側では合計値を表示するよう修正。
 - **右ペイン2カラム化**: 選択画像プレビュー/プロンプト/選択済みチップ（左）と、最終プロンプト（右、縦いっぱいに伸びる）に分割。詳細パネル幅を320px→520pxに拡大。
 - **選択済みプロンプトのチップ表示から拡張子を除去**: `chip.filename`表示時に`.replace(/\.[^.]+$/, "")`。
@@ -234,6 +276,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **トラブルシューティング: 「ComfyUI再起動したのに404」の切り分け**: バックエンドのルート追加後、ユーザーが「再起動した」と報告したにもかかわらず新規エンドポイントが404/405を返す事象が発生。`curl -i`でヘッダを確認したところ、GETの404レスポンスが`Content-Type: application/octet-stream`＋`Transfer-Encoding: chunked`という、自前のJSON APIハンドラ（常に`web.json_response`でapplication/json）とは異質なシグネチャだったことと、POSTが404ではなく`405 Method Not Allowed`（`Allow: GET,HEAD`）を返したことから、リクエストが自作ルートに全く到達せずaiohttpの静的ファイル系フォールバックに吸収されている＝新しいルート登録が実際には有効化されていないと判断。`netstat`でポートを握っているプロセスを特定し、`Get-Process`でその起動時刻を確認したところ、コード変更よりずっと前から起動し続けているプロセスであることが分かり、「再起動」が実際にはポートを握るプロセスに反映されていなかったことを特定できた。
 
 **How to apply**:
+
 1. 複数プロセス/外部スクリプトから同時に書き込まれうるJSONストア（`GalleryMetadataStore`のような「起動時ロード→都度書き戻し」実装）に、バッチ処理や別プロセスからデータを注入したい場合は、そのストアを経由せず**ファイルシステム上の独立したファイル**（サイドカー等）に逃がすことを検討する。競合の心配なく安全に外部から書き込める。
 2. `cleanup_stale_images()`のようなフォルダ配下メタデータの「前方一致による孤立削除」処理は、**呼び出し元が実際にスキャンした範囲**（非再帰なら直下のみ）を正しく反映した`existing_paths`を渡さないと、スキャンしていない孫階層のメタデータを誤って削除しうる。再帰スキャンに切り替える際は、この既存ロジックとの整合性を必ず確認すること。
 3. バックエンドAPIの新規エンドポイントが「再起動したのに反映されない」ように見える場合は、`curl -i`でレスポンスヘッダ（Content-Type、Transfer-Encoding、405のAllow等）を確認すると、リクエストが自作ハンドラに届いているか・別のフォールバック機構に吸収されているかの切り分けに使える。合わせて`netstat`でポートを握っているPIDを特定し`Get-Process`/`Get-CimInstance Win32_Process`でそのプロセスの起動時刻を見れば、「再起動」がそのプロセスに実際に反映されているかを客観的に確認できる。
@@ -278,6 +321,7 @@ Image Edit タブの Mask ツールに「Edit in Mask Editor One →」ボタン
 **2. 根本原因: `convertUiToApi`の`_getWidgetInputNames`/`_getWidgetInputTypes`が`forceInput: true`を考慮していなかった**: 上記の表示バグを追っている過程で、実際にComfyUIサーバー（`http://127.0.0.1:8189/object_info/CLIPTextEncodeEditPlus`）から取得したobject_infoと突き合わせたところ、真の実行結果不一致の原因を発見した。`text1`/`text2`はComfyUI側で`["STRING", {"forceInput": true}]`（リンク専用・ウィジェット化されない入力）として定義されているが、`comfyui-workflow.js`の`_getWidgetInputNames`/`_getWidgetInputTypes`はこの`forceInput`フラグを一切チェックしておらず、型がSTRING/INT/FLOAT/BOOLEAN等であれば`optional`入力も無条件にウィジェット名列へ含めていた。そのため`text2`（未接続）が誤って「ウィジェット」として扱われ、`widgets_values`の3番目に入っていた本来どのウィジェットにも対応しない余りの空文字列`""`が`text2`の値として吸い込まれ、送信されるAPIワークフローに`text2: ""`が**明示的に**含まれてしまっていた。Python側の`encode()`は`insert = text2 if text2 is not None else text_edit`という判定をしており、`text2=""`は`None`ではないため`insert = ""`が採用され、`mode: "back"`の場合`selected = text1 + ", " + ""`——**`text_edit`の内容が完全に欠落**していた。ComfyUI本体から直接実行した場合は未接続のforceInput入力が送信データに一切含まれず`text2=None`となるため、この欠落は発生しない。これが「同じワークフローなのに画像が異なる」「LoRA強度を変えても結果が変わらない（そもそも肝心のプロンプト本文が消えていたため無関係だった）」の直接の原因。`_getWidgetInputNames`/`_getWidgetInputTypes`双方の必須・オプション入力ループに`if (Array.isArray(spec) && spec[1]?.forceInput) continue;`を追加して除外するよう修正。この修正は`forceInput`付きオプション入力を持つ他のノード全般にも同様に効く汎用修正。
 
 **3. GenerateUI Model タブ — LoRA Stack機能の改善**: 上記の検証と並行して、LoRA周りのUI/UXも3点改善した。
+
 - **Use Stack Groupチェックボックス**: `Lora Loader (LoraManager)`ノードが存在するワークフローを読み込んだ際、従来はStackタブが常にModelsタブの登録済み「Stack」グループを参照しており、ワークフロー自体が保持している実際のLoRA構成とは無関係だった。新設したチェックボックスで、OFF（ワークフロー読み込み時の既定）はLoraManagerノードに実際に設定されているLoRAをそのまま表示・編集し、ON はModelsタブの「Stack」グループを表示・編集するよう切替可能にした。切替時は必ず対象ノードのLoRA一覧をクリアしてから新しいソースを読み込み、OFFへ戻すとワークフロー読み込み時点のLoRA一覧（読み込み時にスナップショットとして保存）へ正確に復元される。
 - **LORA SYNTAX表示が1件しか出ない不具合の修正**: SingleタブのLORA SYNTAXはLoraManagerノードの`loras[0]`（1件目）のみを見る設計（Single＝1件専用のため仕様通り）だが、Stackタブ側もModelsタブ登録グループしか見ておらず、結果的に「ワークフローに実際設定されている複数LoRA」を表示する手段がどこにもなかった。上記のチェックボックスと合わせて、新規読み込み時にLoRAが2件以上あれば自動でStackタブを初期表示するようにし、正しく全件表示されるようにした。
 - **タブ切替でStackのON/OFF状態が意図せず戻る不具合の修正**: 「ワークフロー状態」表示モードでは、Modelタブへ戻るたびの単純な再描画のたびに各LoRAの有効/無効状態（`_stackActive`）をワークフロー本来のデータで毎回強制上書きしていたため、ユーザーがStackパネルのトグルオールチェックボックスをOFFにしても次の再描画で無条件にONへ戻ってしまっていた。ワークフロー実データからの同期を「新規読み込み時」と「Use Stack GroupチェックボックスをOFFに戻した直後」の2タイミングのみに限定し、それ以外の再描画では既にメモリ上にある値を維持するよう修正。ついでに`stackModels.every()`が空配列に対し空虚な真を返すことで、LoRAが0件のときトグルオールチェックボックスが誤ってON表示になる副次的な表示バグも修正した。
@@ -357,15 +401,18 @@ v0.3.88で追加したLabタブのPromptセル拡張機能について、実際�
 v0.3.87で追加したLabタブ（GenerateUI）に対するユーザーからの一連の改善要望をまとめて対応。
 
 **Promptセル編集モーダルの拡張**:
+
 - **Get from GenerateUI**: 現在GenerateUIに読み込まれているワークフローの`comfyUI.currentAnalysis.prompt_nodes`からPositive/Negativeを直接取得
 - **Get from Image**: 画像/ワークフローJSONをドロップ/選択すると、Metadataタブの抽出ロジック（`metadata-tab.js`の`extractAllMetadata()`。新たに`export`して再利用）でプロンプトを抽出
 - **Style適用**: 当初はモーダル内に独自のスタイルドロップダウンを設けたが、ユーザーから「GenerateUIツールバー上部の`#wfm-style-enabled`チェックボックス／`#wfm-style-select`ドロップダウンをそのまま使えないか」と指摘を受け設計変更。モーダル内の選択UIを廃し、Applyボタンが常にツールバー側の現在値を読んで適用する方式にした（チェックボックスOFFまたは未選択ならエラートースト）。ボタンラベルにも選択中のスタイル名を動的表示（例:「Apply: cinematic-diva」）。プロンプトへのマージ処理自体は`generate-tab.js`の`_applyNamedStyle()`と同じ置換ルール（`{prompt}`プレースホルダ置換／ネガティブ追記）を、ワークフローではなく文字列に対して行う`_applyStyleToText()`として実装
 
 **Checkpoint/VAEセルにフィルター機能追加**:
+
 - GenerateUIのModelサブタブ（`comfyui-editor.js`の`renderModelTab`）と同じ「Filter...」テキスト入力で`<select>`の候補を絞り込み
 - 続けて「オーバーレイ✕でクリア可能にしたい、Modelタブの各フィルタリング機能・Raw JSON検索と同様に」という要望を受け、Models/Nodes/Workflow/Gallery各タブの検索ボックスやRaw JSON検索と同じ`setupSearchClearBtn()`（`util.js`）＋`.wfm-search-wrap`/`.wfm-search-clear-btn`（`main.css`）パターンを流用し、入力欄内に✕クリアボタンをオーバーレイ表示するよう変更
 
 **Plan JSONサブタブ追加**:
+
 - Setting/Resultsに続く3つ目のサブタブとして新設。現在のLab状態（列のキーフレーム・Note・Batch数・画像連鎖設定・元画像・結果一覧）を、プランファイル保存時と同じ構造のJSONとして`json-highlight.js`の`syncJsonHighlight()`で構文ハイライト表示する
 - **Refresh**: Settingタブの現在値で再同期（未適用の編集は破棄）
 - **Apply to Setting**: テキストエリアの内容を`JSON.parse`し、Plan Load（`_loadPlanFromFile`/`_loadPlanFromServer`）と共通の`_applyPlanData(filename, data)`を呼んでSettingタブへ反映。不正なJSONの場合は`JSON.parse`の例外メッセージをそのままエラートーストに出し、状態は変更しない
@@ -663,10 +710,12 @@ Gallery SVG対応の直後、「AI TOOLのチャット機能でワークフロ�
 **対象範囲・接続方式は事前にユーザーに確認:** 3箇所すべてに追加するか/SPA AI TOOLタブのみ先行導入するか、接続方式はOpenAI互換モード既定かOllama互換モードも選択肢に含めるかを質問し、「3箇所すべて」「OpenAI互換モード既定」で合意して実装した。
 
 **デフォルトURL解決の共通化:**
+
 - `static/js/util.js`に`AI_BACKEND_DEFAULT_URLS`(ollama/lmstudio/lemonade)と`getAiBackendDefaultUrl(backend)`を新設し、`ai-tab.js`・`prompt-tab.js`・`settings-tab.js`(いずれもESモジュールで`util.js`をimport済み)の計8箇所の三項演算子を置き換え
 - `web/comfyui/node_sets_menu.js`(ComfyUI拡張側、`static/js`とは別スコープのESモジュールでimport不可)は同名のヘルパーをローカルに複製(既存の重複実装パターンを踏襲)
 
 **UI・ヘルプ更新:**
+
 - ラジオボタン`value="lemonade"`を`templates/index.html`(SPA)・`static/js/settings-tab.js`(Promptタブ設定)・`web/comfyui/node_sets_menu.js`(サイドパネル)の3箇所に追加
 - ヘルプ文言3点セット(`index.html`/`i18n.js`のEN・JA・ZH/`app.js`の`helpIdMap`)のうち、`helpIdMap`は既存キーへの追記のみで変更不要。「Ollama or/または/或 LM Studio」を列挙している9キー(`helpPrompt1`, `helpSettings5`, `helpSidepanel16`, `helpAi2`, `helpAi5`, `helpAi6`, `helpTrouble2` の各ロケール)すべてにLemonadeを追記
 - README.mdの現行機能セクション(Changelogではなくpresent-tense説明部分)とRequirementsセクションにLemonade関連の記載を追加。過去バージョンのChangelogエントリ(v0.3.40〜v0.3.74)は当時の実装を正しく記述しているため変更していない
@@ -707,6 +756,7 @@ Gallery SVG対応の直後、「AI TOOLのチャット機能でワークフロ�
 **原因調査:** 実際のワークフローjsonを確認したところ、ノード74(LoraLoader)は`mode: 4`(ComfyUI独自のBypassモード。litegraph標準の`mode: 2`=Never/Muteとは別物)だった。`static/js/comfyui-workflow.js`の`convertUiToApi()`は`if (node.mode === 4) continue;`でBypassノードをAPI出力から単純に除外するだけで、そのノードを経由していた配線(CLIPLoader→LoraLoader.clip→CLIPTextEncode(73).clip、UNETLoader→LoraLoader.model→KSampler(66).model)を繋ぎ直しておらず、73番・66番が存在しないノード74を参照したまま出力されてバリデーションエラーになっていた。ComfyUI本体はBypassノードを「入力と出力を同じ型のスロット同士でパススルー接続してから除去」する仕様のため、この動作の再現が必要と判断。
 
 **実装:**
+
 - `_resolveBypassSource(nodeById, linkMap, nodeId, slot, visited)`(新規ヘルパー)を追加。リンクの参照先がBypassノードの場合、その出力スロットと同じ型の入力スロットを探し(同インデックス優先、なければ型一致する最初の入力)、その入力の配線元を再帰的に辿る(連鎖バイパスにも対応、循環ガード付き)。マッチする入力が無ければ`null`を返しリンク無し扱いにする
 - `convertUiToApi()`内の全リンク解決箇所をこの関数経由に変更。バイパスされていないノードが参照先の場合は即座にそのまま返るため、既存の非バイパス経路への影響はない
 - ついでに`mode: 2`(真のMute)も除外対象に追加(従来は一切スキップされておらず、ミュートしても実行時は普通に動いていた)。ただしMuteはパススルーせず単純除外 — ComfyUI本体でも「必須の下流依存があるノードをMuteすると壊れる」のが仕様通りの挙動のため、あえて救済しない
@@ -734,24 +784,29 @@ v0.3.73でChatペインのT2I画像生成（Tool Calling）を実装した直後
 **対象ファイル:** `static/js/ai-tab.js`, `static/js/comfyui-editor.js`, `static/css/main.css`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`
 
 **TOOLS↔Chat 共有の添付画像:**
+
 - 新しいドロップゾーンを作らず、TOOLSペインの既存ドロップエリア（`wfm-ai-vlm-drop`、VLMタスク用）をChatの添付機構としても共用する設計。モジュールレベルの共有state `_toolsImage = { file, base64, mimeType }` を導入し、`initVlmTab()`のローカル変数`vlmImage`を置き換えた
 - `_syncAttachmentUI()`（新規）: TOOLS側プレビューの表示/非表示とChat側の添付インジケーター（サムネイル+ラベル+✕）を1箇所で同期。`document.getElementById`による都度参照のため、`initVlmTab`/`initChatTab`どちらが先に呼ばれても安全
 - クリアは共通の`_clearToolsImage()`。TOOLSプレビュー上の✕ボタン、Chat添付インジケーターの✕ボタンのどちらからでも同じ状態を更新する
 - 添付は合意事項通り、送信後も自動クリアされず明示的にクリアするまで保持される
 
 **マルチモーダルチャット送信:**
+
 - `chatHistory`のエントリを内部共通形式 `{role, content, images?: [{base64, mimeType}]}` に拡張
 - `callChat()`に`_formatMessagesForBackend(messages, backend)`を追加し、送信直前にバックエンド別のワイヤーフォーマットへ変換（Ollama: `images:[base64...]`、LM Studio: `content`をテキスト+`image_url`のコンテンツブロック配列に変換）。`callVLM()`で既に使われている規約を踏襲
 - `generate_image`ツールの説明文を更新し、画像添付時はT2IでなくI2Iとして動作することをLLMに伝えるようにした（引数スキーマ自体は`prompt`/`negative_prompt`のまま変更なし）
 
 **I2I生成ブリッジ:**
+
 - `comfyui-editor.js`の`applyImageToSlot(file, slotIndex, opts)`に`opts.workflow`/`opts.analysis`対応を追加（`applyImageAndMaskToSlot`と同一パターン）。渡された場合はDOM更新を行わずアップロード後のファイル名のみ返す非破壊的変更で、既存呼び出し元（GenerateUI Imageタブ）への影響なし
 - `generateImageFromChat(prompt, negativePrompt)`を拡張し、`_toolsImage`がセットされていればI2I分岐へ：対象ワークフロー（GenerateUIの読み込み中ワークフロー、またはI2I専用ワークフロー）に`load_image_nodes`が無ければ明確なエラーを投げ、あればslot 0のLoadImageノードへ添付画像を差し替えてから通常のプロンプト設定・生成へ進む
 
 **SETTINGSペイン — Chat I2I Generation:**
+
 - 既存の「Chat Image Generation」（T2I専用ワークフロー）セクションと全く同じ構造で「Chat I2I Generation」セクションを新設。`chatGenI2IDedicatedEnabled`/`chatGenI2IDedicatedFilename`として`wfm_ai_settings`に独立して永続化。ワークフロー一覧の取得（`/api/wfm/workflows`）はT2I側のfetchを流用し2つのselectへ同時反映
 
 **表示調整（ユーザーフィードバックにより追加修正）:**
+
 - Chatバブル内の添付画像エコー（送信したユーザーメッセージに表示される添付プレビュー）が大きすぎたため、`appendChatBubble`に`opts.attachThumb`（新設、max 120px）を追加し、生成結果画像用の`opts.imageUrl`（`.wfm-ai-chat-img`）とスタイルを分離
 - 生成結果画像自体も表示が大きすぎるとのフィードバックを受け、`.wfm-ai-chat-img`の`max-width`を`100%`→`20%`に変更（約80%サイズダウン）
 
@@ -770,6 +825,7 @@ v0.3.73でChatペインのT2I画像生成（Tool Calling）を実装した直後
 **対象ファイル:** `static/js/ai-tab.js`, `static/js/generate-tab.js`, `static/js/settings-tab.js`, `static/js/comfyui-editor.js`, `static/js/comfyui-workflow.js`, `static/css/main.css`, `static/js/i18n.js`, `static/js/app.js`, `templates/index.html`
 
 **Chatペイン画像生成（Tool Calling）:**
+
 - `generate_image`ツール（`prompt`/`negative_prompt`引数）をOllama/LM Studio双方のchat APIに渡し、呼び出すかどうかはLLM自身が判断する設計（合意事項: 画像生成後、結果はLLMに送り返さず会話は一旦区切る／SPA版のみ対応、サイドパネル版は対象外）
 - `callChat()`の戻り値を`string`から`{content, toolCalls}`へ変更。Ollamaの`tool_calls[].function.arguments`はオブジェクト、LM Studio(OpenAI互換)はJSON文字列という差異は`_parseToolArgs()`で吸収
 - 生成処理は既存の`window._wfmGenerateTab.generate(workflowOverride)`（Image Edit「Inpaint」の外部呼び出しと同じ橋渡しパターン）をそのまま再利用。ワークフローはディープクローンしてから`comfyEditor.setPromptText()`で書き込むため、GenerateUIタブの表示状態は一切汚染しない
@@ -777,20 +833,24 @@ v0.3.73でChatペインのT2I画像生成（Tool Calling）を実装した直後
 - Chatペイン下部（Send/Clearボタンの隣）に「画像生成を許可する」チェックボックス（デフォルトON、`wfm_ai_settings`に永続化）。OFF時は`callChat()`に`tools`を渡さずLLMには一切提示しない
 
 **SETTINGSペイン — Chat画像生成の専用ワークフロー:**
+
 - Image Edit「Inpaint」の「Use dedicated workflow」と同一パターンを踏襲。OFF（デフォルト）はGenerateUIの読み込み中ワークフロー、ONは選択した保存済みワークフローを`/api/wfm/workflows/raw`経由でその都度ロード・変換（`comfyWorkflow.detectFormat`/`convertUiToApi`/`analyzeWorkflow`）して使用
 
 **バグ修正: Checkpoint未一致時の無警告差し替え（`comfyui-workflow.js`）:**
+
 - `convertUiToApi()`のCOMBO値フォールバック処理（Impact Packのワイルドカード等、動的な選択肢がインスタンス間でズレて生成エラーになるのを防ぐため既存）が、`ckpt_name`にも無差別に適用されており、保存されたCheckpointパスが現在の環境に存在しない場合、無警告でCombo選択肢の先頭（たまたまアルファベット順で最初のFluxモデル）に差し替えられていた。この製品の「なぜかいつもFluxが表示される」という混乱の直接的な原因だった
 - `getLastCheckpointSubstitutions()`を追加し、`ckpt_name`の差し替えが発生した場合のみ元の値・ノードIDを記録。`loadWorkflowIntoEditor`（`generate-tab.js`）で検知し、通常の「読み込み完了」トーストの代わりに、差し替え前のモデル名を含む警告トースト（`error`スタイル）を表示する
 - GenerateUI Modelタブ（`comfyui-editor.js`の`renderModelTab`）にも、保存値が現在のモデル一覧に存在しない場合に警告付きの選択肢を先頭表示する対応を追加（API形式で保存され`convertUiToApi`を経由しないワークフローに対して有効。UI形式ワークフローは上記の差し替えにより「一致している」ように見えるため、この表示だけでは検知できないケースがある）
 
 **設定タブ — デフォルトCheckpoint:**
+
 - チェックボックスで有効化すると、GenerateUIへのワークフロー読み込み時に全Checkpointローダー系ノード（`CheckpointLoaderSimple`/`CheckpointLoader`/`ImageMetadataPromptLoader`）の`ckpt_name`を指定モデルへ強制上書き。サーバー側`/api/wfm/settings`に永続化（複数ブラウザ間で共有）
 - **実装中に判明した順序依存の不具合:** 上書き処理を`analyzeWorkflow()`実行後に行っていたため、Raw JSON上のデータは正しく上書きされてもModelタブの表示（`analysis.checkpoint_nodes`由来）が古い値のまま残る不具合があった。`analyzeWorkflow()`実行前に上書きする順序に修正
 
 **ヘルプ更新（3点セット）:** `templates/index.html`/`static/js/i18n.js`（EN/JA/ZH）/`static/js/app.js`の`helpIdMap` — `helpAi3`（Chat画像生成機能＋許可トグルの説明を追記）、`helpAi6`（SETTINGSペインの専用ワークフロー設定を追記）、`helpTrouble8`（新規: 「ModelタブのCheckpointが想定と違う」症状の原因と対処法）
 
 **検証**（Kapture、実機ブラウザ + Ollama qwen3.5:9b）:
+
 - Chatペインから「〜の画像を生成して」で`generate_image`が呼ばれ、実際に画像が生成されチャット内に表示されることを確認（初回は無関係のワークフロー設定に起因するVAEチャンネル数不一致エラーが発生したが、ワークフロー側の修正後に正常動作を確認）
 - SETTINGSペインの専用ワークフロー機能: 選択したワークフロー（UI形式、`ws_sdxl_t2i_basic.json`）が正しくロード・変換され、Chat経由の生成に使われることを確認
 - 「画像生成を許可する」チェックボックスの位置変更（ヘッダー→下部の操作行）を反映
@@ -820,25 +880,30 @@ Comic Creator（`comfyui-comic-creator`）のImageタブから、既存のI2I連
 **対象ファイル:** `static/js/comfyui-workflow.js`, `static/js/comfyui-editor.js`, `static/js/image-edit-tab.js`, `static/js/generate-tab.js`, `static/js/i18n.js`, `static/css/main.css`, `templates/index.html`, `static/js/app.js`
 
 **ワークフロー解析（`analyzeWorkflow`）:**
+
 - `load_image_nodes` に `mask_used` フラグを追加。`LoadImage` ノードのMASK出力（output slot 1）が他ノードの入力（`["<id>", 1]` 参照）として使われているかを走査して判定。`MaskEditorNode` 等の中継ノードを経由していても、参照元のLoadImageまで正しく特定できる
 - `inpaint_encode_nodes`（`VAEEncodeForInpaint` の `grow_mask_by`）、`mask_editor_one_nodes`（`MaskEditorOne` ノード）を新規検出
 
 **生成UI Input/Imageタブ — マスクスロット:**
+
 - `mask_used` なLoadImageスロットにのみ「Mask」ドロップゾーンを追加表示
 - Apply時、マスク指定があれば画像+マスクをRGBA合成（マスク白領域→アルファ0）して1枚のPNGとしてアップロード。ComfyUIネイティブの `mask = 1 - alpha` 抽出にそのまま準拠するため追加ノード不要
 - Mask Editor One ノード用の専用スロットも追加（画像・マスクの両方が揃って初めてApply可能）
 
 **Image Editタブ — Inpaintツール（🩹）:**
+
 - プロパティパネルにポジ/ネガプロンプト、Grow Mask By、Denoise、Runボタン、結果画像プレビューを追加
 - Run押下で: 非マスクレイヤー合成画像 + アクティブなマスクレイヤーを書き出し → 生成UIのインペイント対応スロットへRGBA合成アップロード → プロンプト/grow_mask_by/denoiseを反映 → GenerateUIの生成を呼び出し（画面はImage Editタブに留まる）→ 完了後の結果画像をプロパティパネルに表示
 - **バグ修正:** ツールバーの `<button data-tool="inpaint">` を `templates/index.html` に追加し忘れており、`TOOL_DEFS` にエントリを追加しただけではボタンが表示されない不具合があった（ツールバーは静的HTML、`TOOL_DEFS` は `ready` 判定とラベル参照専用）
 
 **Mask Editor One（`comfyui-mask-editor-one`）対応:**
+
 - 実装（`nodes.py`/`server.py`）を調査した結果、この custom node は `LoadImage` を介さず、画像はサーバー側インメモリキャッシュ（`node_id` キー、`bg_image_b64`、`/mask_editor/store_image` でPOST）から、マスクは `layer_data`（JSON文字列ウィジェット）の各レイヤーの**アルファチャンネル**から合成されると判明（`LoadImage` の `1 - alpha` とは逆で、alpha値がそのままmask値になる規約）
 - `comfyEditor.applyImageAndMaskToMaskEditorOneNode()` を新規実装し、この2つの経路（画像キャッシュPOST + layer_data書き込み）を実装
 - Inpaint Runは `mask_used` なLoadImageスロットを優先し、無ければMask Editor Oneノードへ自動フォールバック
 
 **インペイント専用ワークフロー:**
+
 - Inpaintプロパティ上部に「Use dedicated workflow」チェックボックス + 保存済みワークフロー選択ドロップダウンを追加。OFF時は従来通りGenerateUIの読み込み中ワークフローを使用、ON時は選択したワークフローをその場でロード・解析し、**GenerateUIタブの表示状態には一切触れずに**画像/マスク/プロンプト/パラメータを適用して生成
 - `generate-tab.js`: `_coreGenerate`/`handleGenerate` に `workflowOverride` 引数を追加（省略時は従来通り `comfyUI.currentWorkflow` を使用）。オーバーライド時はバッチモードの影響を受けない単発生成に固定し、GenerateUI側のプロンプト同期（`syncToWorkflow`）もスキップ
 - `comfyui-editor.js`: `applyImageAndMaskToSlot` / `applyImageAndMaskToMaskEditorOneNode` / `setPromptText` / `setInpaintParams` に `{workflow, analysis}` オプションを追加し、指定時はそちらへ直接書き込む方式に統一
@@ -860,6 +925,7 @@ Comic Creator（`comfyui-comic-creator`）のImageタブから、既存のI2I連
 **対象ファイル:** `static/js/workflow-tab.js`, `py/routes/ollama_routes.py`, `static/js/i18n.js`
 
 **変更内容:**
+
 - `workflow-tab.js`: 要約ボタンが `readJsonStorage("wfm_prompt_ai_settings", {})` で設定タブ保存済みのbackend/backendUrl/modelを読み込み、`/api/wfm/ollama/chat` へ `url` / `model` を渡すように変更。backendが `ollama` 以外（LM Studio）の場合は明示的にエラートースト
 - `ollama_routes.py`: `handle_chat` がリクエストbodyの `url` も受け付けるように対応（従来は `model` のみ）
 - i18n: `summarizeOllamaOnly` をEN/JA/ZHに追加
@@ -879,6 +945,7 @@ Comic Creator（`comfyui-comic-creator`）のImageタブから、既存のI2I連
 **対象ファイル:** `static/js/image-edit-tab.js`
 
 **変更内容:**
+
 - `_renderMaskLayerOverlay(ctx, maskLayer)` の先頭に `if (this._layerMgr?.activeLayer !== maskLayer) return;` を追加。全ての呼び出し経路（単独マスク／マスクグループ）を1箇所でカバー
 - **副次修正:** レイヤーパネルでSelectツール使用中に通常レイヤーへ切り替えた際に `_updateCompositeView()` が呼ばれていない分岐があり、上記の変更後は「マスク選択→通常レイヤー選択」でオーバーレイが画面に残ったままになる不具合が顕在化するため、当該分岐にも再描画呼び出しを追加
 
@@ -889,12 +956,14 @@ Comic Creator（`comfyui-comic-creator`）のImageタブから、既存のI2I連
 **対象ファイル:** `static/js/comfyui-editor.js`, `static/js/i18n.js`
 
 **変更内容:**
+
 - **戻すボタン（↺）** — Positive/Negative各Applyボタンの左隣に追加。クリックで、選択中ノードIDに対応する**ワークフロー上の現在値**（＝直前にApply/ロードされた値）をテキストエリアへ再読み込みする、Applyの逆操作。ノード選択セレクトに `min-width:0` を追加し、ボタン増加によるレイアウト圧迫に対応
 - **強調weight編集（Ctrl+↑/↓）** — A1111 / ComfyUIネイティブのCLIP Text Encodeと同様の操作感。選択テキスト（無ければカーソル位置の括弧ブロック、次点で単語）を `(text:weight)` 構文に変換し、0.05刻みで増減。weightがちょうど1.0に戻ったら括弧を自動除去。汎用ヘルパー `_attachPromptWeightControl` / `_selectSurroundingParenBlock` / `_selectSurroundingWord` を新規追加し、Positive/Negative両テキストエリアにアタッチ
 - **バグ修正（同セッション内）** — weightがマイナスに達した状態（例: `(watermark:-0.05)`）でさらにCtrl+↓を押すと `((watermark:-0.05):0.95)` のような二重括弧になる不具合を確認。原因は数値抽出の正規表現 `([\d.]+)` が負符号にマッチせず、マッチ全体が失敗して選択テキスト全体を新しい単語として扱っていたため。`(-?[\d.]+)` に修正。下限は設けない仕様（ComfyUIネイティブのCLIP Text Encodeも同様に無制限のため）
 - i18n: `revertPromptTitle` をEN/JA/ZHに追加
 
 **ヘルプ更新（3点セット）:**
+
 - `templates/index.html`: `wfm-help-imageedit-3`（New button説明にLayer 1自動追加を追記）、`wfm-help-imageedit-mask-3`（アクティブなマスクのみオーバーレイ表示である旨を追記）、`wfm-help-gen-4`（戻すボタン・Ctrl+↑/↓ weight編集の説明を追記）
 - `static/js/i18n.js`: `helpImageEdit3` / `helpImageEditMask3` / `helpGen4` をEN/JA/ZHで更新（新規キー追加ではなく既存キーへの追記のため `app.js` の `helpIdMap` は変更不要）
 
@@ -909,6 +978,7 @@ ComfyUI Comic Creator（別カスタムノード、連携先名称は「Comic Cr
 **対象ファイル:** `templates/index.html`, `static/js/gallery-tab.js`, `static/js/i18n.js`
 
 **変更内容:**
+
 - Gallery ツールバーの「Send GenUI Image」ボタン右隣に「Send CC」ボタンを追加（`wfm-gallery-send-cc-btn`）。初期状態は非表示
 - `gallery-tab.js` の `bindEvents()` で、`window.parent !== window`（iframe埋め込み判定）の場合のみボタンを表示
 - クリック時: `state.selectedImage` 未選択なら案内トースト。埋め込み側であれば `window.parent.insertImageFromUrl(url)`（ComfyUI Comic Creator 側の既存グローバル関数、`main.js` が非モジュールスクリプトのため `window` 直下に生えている）を呼び出し、選択中のコマ／オーバーレイへ画像を挿入する。関数が存在しない（ComfyUI Comic Creator以外からの埋め込み等）場合は案内トーストを表示
@@ -926,6 +996,7 @@ ComfyUI Comic Creater の「I2Iへ送る」ボタンから、iframe越しに画�
 **対象ファイル:** `static/js/gallery-tab.js`
 
 **変更内容:**
+
 - `window._wfmReceiveImageForI2I`をモジュールトップレベルに追加。`comfyEditor.applyImageToSlot(file, 0)`を呼び、Generate UI → Input → Imageタブへ自動切替した上で画像をLoadImageスロットにセットする
 - `workflowData`（ワークフローJSON）が渡された場合、画像をセットする前に`loadWorkflowIntoEditor(workflowData, workflowFilename)`（generate-tab.js既存export）でワークフローを差し替える。Comic Creater側の設定タブで「デフォルトI2Iワークフロー」が有効な場合のみ渡される（`user/default/workflows/`配下のファイルをComic Creater側が`GET /api/wfm/workflows/raw?filename=X`で取得して渡す設計、本リポジトリのAPI自体は無改修）
 - 既存の「Send CC」ボタンのクリックハンドラを拡張し、`window.parent._ccI2ITargetMode`（Comic Creater側が送信元をレイアウトタブ／Imageタブのどちらか記録するフラグ）を参照して、`window.parent.insertImageFromUrl(url)`（レイアウトタブ挿入、従来通り）と`window.parent._ccImageTab.loadFromUrl(url, name)`（Imageタブ読込、新規）を分岐
@@ -948,22 +1019,27 @@ ComfyUI(Windows)はLoraのサブフォルダ区切りに`\`を使ってenumリ�
 **対象ファイル:** `static/js/comfyui-editor.js`, `static/js/models-tab.js`, `static/js/generate-tab.js`
 
 **変更内容:**
+
 - `comfyui-editor.js`の`comfyEditor`に共通ヘルパー`resolveLoraName(name)`を追加 — 内部の`/`区切り表記を、`comfyEditor.models.loras`（ComfyUIから取得済みの実表記）と突き合わせて実際の表記に変換
 - Lora Single適用（`_applyLoraToNode`）、Stack Apply、`models-tab.js`のGenUI Modelボタンの3箇所を`resolveLoraName`経由に統一
 - Loraバッチ実行（`generate-tab.js`）は`comfyUI.fetchLoras()`を都度呼び出して同様の変換マップを構築（バッチ実行前チェックと共用）
 
 **Loraバッチ実行前チェック:**
+
 - 通常のLoraLoaderノードを使うワークフローの場合、バッチ開始前に選択済みLoraをComfyUI側の最新一覧と突き合わせ、認識されていないものがあれば`batchLoraMissing`警告トーストを表示（ComfyUIのRefresh/再起動を促す）
 - Lora Managerノード使用時はenum制約がないため対象外
 
 **Loraバッチ実行時のプロンプト自動反映:**
+
 - 各Loraアイテム適用時、Positiveプロンプト（テキストエリア＋ワークフロー内の各positiveノード）にLora構文`<lora:name:strength_model:strength_clip>`とCivitAIトリガーワードを自動追加。常にバッチ開始前の元プロンプトを起点に再構築するため、Lora構文が蓄積されることはない
 - バッチ完了・停止（Stopボタン）・エラーいずれの場合も`finally`でプロンプトを開始前の状態に自動復元
 
 **モデル詳細モーダルに「閉じる」ボタン追加:**
+
 - `models-tab.js`のモデル詳細モーダル（Checkpoint/Lora/Embedding/Hypernetworkなど全サブタブ共通）で、「保存」「GenUI PP/NP」「削除」ボタンの並び右端に「閉じる」ボタンを追加。連続作業時にモーダル右上のXボタンまでマウス移動する手間を削減。既存の`close` i18nキーを再利用
 
 **ヘルプ更新（3点セット）:**
+
 - `templates/index.html`: `wfm-help-gen-19`を新規追加
 - `static/js/i18n.js`: `helpGen19`をEN/JA/ZHで新規追加（Loraバッチのプロンプト自動反映・復元・事前チェックの説明）
 - `static/js/app.js`の`helpIdMap`に`"wfm-help-gen-19": "helpGen19"`を登録
@@ -981,6 +1057,7 @@ ComfyUI(Windows)はLoraのサブフォルダ区切りに`\`を使ってenumリ�
 **対象ファイル:** `static/js/image-edit-tab.js`
 
 **変更内容:**
+
 - Mask Paint モード（`_renderMaskProps`）・Draw ツール（`_renderDrawProps`）双方で、`MASK EDITOR ONE` / `MASK EDITOR ONE (COLOR)` セクションを囲んでいた `${this._abrAvailable ? ... : ""}` の外側条件分岐を削除し、常時レンダリングするように変更
 - セクション見出しの文字色を `this._abrAvailable` に応じて動的に切り替え: 利用可能時 `var(--wfm-success)`（緑）、未インポート時 `var(--wfm-text-secondary)`（既存のデフォルト色）
 - 見出しに `title` 属性でツールチップ（"Mask Editor One: brushes available" / "no brushes imported yet"）を追加
@@ -988,6 +1065,7 @@ ComfyUI(Windows)はLoraのサブフォルダ区切りに`\`を使ってenumリ�
 - ブラシ画像が選択済み（`t.brushImage`）の場合の Spacing / Angle / Sz Jitter / Rot. Jitter 詳細行の表示条件は変更なし（`t.brushImage` の有無のみで判定、`_abrAvailable` とは独立）
 
 **ヘルプ更新（3点セット）:**
+
 - `templates/index.html`: `wfm-help-imageedit-5`（Draw）・`wfm-help-imageedit-mask-4`（Mask Paint）の文言を更新
 - `static/js/i18n.js`: `helpImageEdit5` / `helpImageEditMask4` を EN/JA/ZH 3言語で更新
 - `static/js/app.js` の `helpIdMap` は既存キーのままで対応不要（新規キー追加なし）
@@ -1002,11 +1080,13 @@ GenerateUI タブの Apply ボタンを Alt+Click すると、Apply と Generate
 よく変更する箇所（Positive Prompt・Checkpoint・KSampler）でApplyボタンとGenerateボタンを往復する手間を省く。
 
 **対象ボタン（`comfyui-editor.js`）:**
+
 - Input タブ — Positive Prompt の Apply（`wfm-prompt-pos-apply`）
 - Model タブ — 全モデル Apply（`wfm-model-apply`: Checkpoint / VAE / Diffusion Model / ControlNet / Hypernetwork）
 - Settings タブ — KSampler の Apply（`wfm-settings-sampler-apply`）
 
 **動作の流れ:**
+
 1. Alt+Click → Apply 処理を実行（ワークフローへの書き込み＋Raw JSON同期）
 2. Apply が成功（対象ノードが存在）した場合のみ `wfm:apply-and-generate` カスタムイベントを dispatch
 3. `generate-tab.js` のリスナーがイベントを受け取り `handleGenerate()` を呼び出す
@@ -1017,6 +1097,7 @@ GenerateUI タブの Apply ボタンを Alt+Click すると、Apply と Generate
 各 Apply ボタンに `title="Apply (Alt+Click: Apply & Generate)"` を追加してホバーで操作を確認できるようにした。
 
 **ヘルプ更新:**
+
 - `helpGen18` を EN/JA/ZH の3言語で追加
 - `index.html` に `wfm-help-gen-18` の `<li>` 追加
 - `app.js` の `helpIdMap` に `"wfm-help-gen-18": "helpGen18"` 登録
@@ -1030,17 +1111,19 @@ GenerateUI タブの Apply ボタンを Alt+Click すると、Apply と Generate
 ### フェーズ1: Draw ツール — ABRブラシ対応
 
 #### 概要
+
 WFS の Draw ツール（`DrawTool.js`）に画像ブラシ（PNG スタンプ）描画機能を追加する。
 ブラシデータは Mask Editor One の API エンドポイントを介して取得・管理する。
 
 #### バックエンド（Mask Editor One API 共用）
+
 Mask Editor One がインストールされていれば以下のエンドポイントが利用可能：
 
-| エンドポイント | 用途 |
-|---------------|------|
-| `GET /mask_editor/brushes/list` | フォルダツリー + ブラシ一覧取得 |
-| `GET /mask_editor/brushes/raw?path=…` | ブラシ PNG 画像をサーブ |
-| `POST /mask_editor/brushes/import` | PNG フォルダ一括インポート |
+| エンドポイント                           | 用途                                                    |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `GET /mask_editor/brushes/list`        | フォルダツリー + ブラシ一覧取得                         |
+| `GET /mask_editor/brushes/raw?path=…` | ブラシ PNG 画像をサーブ                                 |
+| `POST /mask_editor/brushes/import`     | PNG フォルダ一括インポート                              |
 | `POST /mask_editor/brushes/upload_abr` | ABR ファイルインポート（パーサーは Mask Editor One 側） |
 
 ブラシの格納先は Mask Editor One のフォルダ（`comfyui-mask-editor-one/brushes/`）を共用。
@@ -1049,22 +1132,26 @@ Mask Editor One がインストールされていれば以下のエンドポイ�
 #### フロントエンド変更
 
 **`DrawTool.js`**
+
 - `brushType: "soft"` | `"image"` プロパティ追加
 - `imageBrush: { canvas, width, height }` — スタンプ用 OffscreenCanvas をキャッシュ
 - `_stamp()` を改修: `"image"` モード時は `ctx.drawImage(stamp)` で描画（Jitter は phase 2 以降）
 - サイズは `brushSize` を高さ基準に、アスペクト比を維持してスケーリング
 
 **Image Edit タブ (`image-edit-tab.js`)**
+
 - Draw ツール Options パネルに「Brush Library」ボタンを追加
 - Mask Editor One 未検出時はボタンをグレーアウト + ツールチップ表示
 
 **ブラシライブラリ UI（新規モーダルまたはサイドパネル）**
+
 - Mask Editor One API 未応答時は「Mask Editor One が必要です」メッセージ
 - 応答時: フォルダツリー + ブラシサムネイルグリッド表示
 - クリックでブラシを選択 → `DrawTool` に適用
 - Import Folder / Import ABR ボタン（Mask Editor One の import エンドポイントを呼ぶ）
 
 #### Mask Editor One 検出ロジック
+
 ```javascript
 // /mask_editor/brushes/list に HEAD または GET を投げて 200 なら存在確認
 async function detectMaskEditorOne() {
@@ -1080,11 +1167,13 @@ async function detectMaskEditorOne() {
 ### フェーズ2: Mask Editor One 連携ボタン
 
 #### 概要
+
 WFS Image Edit タブのツールバーまたは Mask ツールのオプションパネルに
 「Mask Editor で開く」ボタンを追加する。
 現在のキャンバスレイヤーを画像として Mask Editor One に渡し、編集結果を WFS に戻す。
 
 #### 実装ポイント
+
 - WFS のキャンバス合成画像 (`_exportComposite()`) を Blob として取得
 - Mask Editor One の `/mask_editor/store_image` に POST してキャッシュ
 - Mask Editor One のモーダルを JavaScript から起動（`window.maskEditorOpen()` など）
@@ -1092,25 +1181,27 @@ WFS Image Edit タブのツールバーまたは Mask ツールのオプショ�
 - WFS の mask レイヤーとして追加
 
 #### Mask Editor One 未インストール時
+
 - ボタンを非表示（検出ロジックで判定）
 
 ---
 
 ### 変更ファイル予定
 
-| ファイル | 変更内容 |
-|---------|---------|
-| `static/js/image-edit/DrawTool.js` | 画像ブラシ描画対応 |
-| `static/js/image-edit-tab.js` | Brush Library ボタン・Mask Editor 連携ボタン |
-| `static/js/image-edit/BrushLibrary.js` | 新規: ブラシライブラリモーダル UI |
-| `py/routes/` | 不要（Mask Editor One API を直接利用） |
-| `static/css/main.css` | ブラシライブラリ UI スタイル |
-| `static/js/i18n.js` | ブラシ関連 i18n キー追加 |
-| `templates/index.html` | 不要（動的生成） |
+| ファイル                                 | 変更内容                                     |
+| ---------------------------------------- | -------------------------------------------- |
+| `static/js/image-edit/DrawTool.js`     | 画像ブラシ描画対応                           |
+| `static/js/image-edit-tab.js`          | Brush Library ボタン・Mask Editor 連携ボタン |
+| `static/js/image-edit/BrushLibrary.js` | 新規: ブラシライブラリモーダル UI            |
+| `py/routes/`                           | 不要（Mask Editor One API を直接利用）       |
+| `static/css/main.css`                  | ブラシライブラリ UI スタイル                 |
+| `static/js/i18n.js`                    | ブラシ関連 i18n キー追加                     |
+| `templates/index.html`                 | 不要（動的生成）                             |
 
 ---
 
 ### 実装順序
+
 1. `DrawTool.js` に画像ブラシ描画機能を追加（スタンプモード）
 2. Mask Editor One 検出ロジックを実装
 3. `BrushLibrary.js` 新規作成（ライブラリモーダル UI）
@@ -1134,6 +1225,7 @@ Image Edit タブの Mask ツールに Color / Alpha / Text / Vector / Shape の
 5つのマスクサブツールクラスを 1 ファイルにまとめた実装。各クラスは `setCanvas()` / `activate()` / `deactivate()` / `onMouseDown()` / `onMouseMove()` / `onMouseUp()` / `onMouseLeave()` インターフェースを実装し、`image-edit-tab.js` からルーティングされる。
 
 #### MaskColorTool
+
 - クリック位置の色に近いピクセルをマスクとして選択（フラッドセレクト）
 - マスクレイヤーを除いた全レイヤーを合成した `bgCanvas` をピクセルソースとして使用
 - `tolerance`（0–255）: RGB ユークリッド距離による色類似度しきい値
@@ -1141,12 +1233,14 @@ Image Edit タブの Mask ツールに Color / Alpha / Text / Vector / Shape の
 - `mode`: `"add"` → white 書き込み、`"subtract"` → destination-out で消去
 
 #### MaskAlphaTool
+
 - アクティブレイヤーのアルファチャンネルをマスクとして抽出
 - `threshold`（0–255）: Alpha ≥ threshold のピクセルのみ完全マスク化
 - `invert`: 抽出結果を反転（前景除去用）
 - Extract Alpha ボタン（`onMouseDown` ではなく手動実行）で適用
 
 #### MaskTextTool
+
 - キャンバスクリック → overlay パネル表示（テキスト入力・フォント/サイズ/スタイル設定）
 - `_showOverlay(x, y)`: `.ie-mask-text-overlay` 要素をキャンバス座標に配置
 - `_stamp(x, y)`: `ctx.fillText` で white スタンプ（`mode=erase` 時は `destination-out`）
@@ -1155,6 +1249,7 @@ Image Edit タブの Mask ツールに Color / Alpha / Text / Vector / Shape の
 - フォントファミリーは `MASK_TEXT_FONTS` 定数としてエクスポート（14種）
 
 #### MaskVectorTool
+
 - クリックで Catmull-Rom スプライン制御点を追加、プレビューキャンバス（`ie-canvas-overlay`）にリアルタイム描画
 - 最初の点をクリックまたは Enter キーで閉じてポリゴン塗りつぶし確定
 - Backspace / Delete で最後の点を取り消し、Esc でリセット
@@ -1163,6 +1258,7 @@ Image Edit タブの Mask ツールに Color / Alpha / Text / Vector / Shape の
 - Keyboard イベントは `_setupKeyboard()` で登録・クリーンアップ
 
 #### MaskShapeTool
+
 - ドラッグで矩形または楕円のマスクを描画
 - `_drawPreview(x2, y2, shift)`: `ie-canvas-overlay` に青の点線プレビュー
 - Shift 押下で正方形/正円（短辺で揃え）
@@ -1174,31 +1270,38 @@ Image Edit タブの Mask ツールに Color / Alpha / Text / Vector / Shape の
 ### image-edit-tab.js 変更
 
 #### インポート追加
+
 ```javascript
 import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTool, MASK_TEXT_FONTS }
     from "./image-edit/MaskEditorOneTools.js";
 ```
 
 #### コンストラクタ
+
 - `this._maskColorTool / _maskAlphaTool / _maskTextTool / _maskVectorTool / _maskShapeTool = null` を追加
 
 #### _initMaskEditorOneTools()（新規）
+
 - Mask ツール初回選択時に一度だけ実行（`if (this._maskColorTool) return;`）
 - 5ツールを生成し `onChange` / `onBeforeCommit` コールバックを設定
 - VectorTool / ShapeTool には `setPreviewCanvas(overlayCanvas)` を渡す
 
 #### _deactivateMaskSubtool() / _activateMaskSubtool()（新規）
+
 - 現在のサブツールに応じて `deactivate()` / `activate()` を呼び分け
 - `_setActiveTool` での `this._maskTool?.deactivate()` をこのメソッドに置換
 
 #### _switchMaskSubtool(sub)（新規）
+
 - deactivate → `this._maskSubtool = sub` → `_renderToolOptions("mask")` → activate の一連フロー
 
 #### ツールオプションバー
+
 - Paint / SAM3 の2ボタンから Paint / Color / Alpha / Text / Vector / Shape / SAM3 の7ボタンへ拡張
 - 各ボタンのクリックリスナーを `_switchMaskSubtool()` ベースに変更
 
 #### _renderMaskProps(sub)（新規ブランチ追加）
+
 - `color` / `alpha` / `text` / `vector` / `shape` の各サブツール用 UI を生成
 - Color: Mode セレクト・Tolerance スライダー・Feather スライダー
 - Alpha: Threshold スライダー・Invert チェック・Extract Alpha ボタン
@@ -1207,6 +1310,7 @@ import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTo
 - Shape: Mode セレクト・Shape セレクト（Rect / Ellipse）
 
 #### マウスイベントルーティング
+
 - `_onToolMouseDown`: `color` → `colorTool.onMouseDown(x, y)` + `_buildBgCanvas()` 渡し、`alpha` → `alphaTool.extract()`、`text` → `textTool.onMouseDown(x, y)`、`vector` → `vectorTool.onMouseDown(x, y)`、`shape` → `shapeTool.onMouseDown(x, y)`
 - `_onToolMouseMove`: `vector` → `vectorTool.onMouseMove(x, y)`、`shape` → `shapeTool.onMouseMove(x, y, e)`
 - `_onToolMouseUp`: `shape` → `shapeTool.onMouseUp()`（引数なし・内部の `_curX/_curY` を使用）
@@ -1214,6 +1318,7 @@ import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTo
 - `_setupKeyboard`: Vector の `onKeyDown` を追加（Escape / Enter / Backspace）
 
 #### _buildBgCanvas()（新規）
+
 - マスクレイヤーを除いた全可視レイヤーを合成して返す OffscreenCanvas
 - ColorTool の click 時に生成・渡す（クリックごとに再生成して最新状態を反映）
 
@@ -1222,16 +1327,19 @@ import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTo
 ### ヘルプ更新（3ファイル）
 
 #### templates/index.html
+
 - `wfm-help-imageedit-7d`: 6サブツール列挙の説明に更新
 - `wfm-help-imageedit-mask-3`: 7サブツール一覧説明に更新
 - `wfm-help-imageedit-mask-9` 〜 `mask-13`: 新規 `<li>` 5件追加（`mask-8` の直後）
 - Support ページ: ComfyUI Image Feeder・Mask Editor One の GitHub リンクを Ko-fi の下に追加
 
 #### static/js/i18n.js
+
 - 英語・日本語・中国語の3言語すべてで `helpImageEdit7d`・`helpImageEditMask3` 更新
 - `helpImageEditMask9` 〜 `helpImageEditMask13` を3言語で追加
 
 #### static/js/app.js
+
 - `DATA_I18N_MAP` に `"wfm-help-imageedit-mask-9"` 〜 `"wfm-help-imageedit-mask-13"` の5エントリを追加
 
 ---
@@ -1251,9 +1359,11 @@ Mask Editor One の仕様変更に伴う連携修正、プロパティパネル�
 ### Mask Editor One 連携修正（BiRefNet / SAM3）
 
 #### 問題
+
 Mask Editor One の `store_image` API エンドポイントがフィールド名を `image_b64` から `bg_image_b64` に変更（仕様変更）したが、WFS 側が追随していなかったため、BiRefNet・SAM3 推論時に「no image available for this node」エラーが発生。
 
 #### 修正内容
+
 - **`image-edit-tab.js`**: SAM3・BiRefNet の `store_image` 呼び出しで `image_b64` → `bg_image_b64` に修正（2箇所）
 - **`server.py`（インストール済み）**: `store_image` エンドポイントが `bg_image_b64` と旧キー `image_b64` の両方を受け付けるよう後方互換対応を追加
 
@@ -1273,9 +1383,11 @@ entry["bg_image_b64"] = img
 ### トップバーアイコン消滅バグ修正（MutationObserver 追加）
 
 #### 問題
+
 サブグラフノード選択時などにプロパティパネルを開くと、Vue がアクションバーを再レンダリングし、WFS・Snapshot・Node Sets のカスタム SVG アイコンが `<i>` タグにリセットされて消滅する（[ComfyUI-Lora-Manager #996](https://github.com/willmiao/ComfyUI-Lora-Manager/issues/996) と同根）。
 
 #### 修正内容（`top_menu_extension.js`）
+
 - `replaceButtonIcons` を `applyIconToButton` + `pollUntilFound` に分割
   - SVG が既存の場合はスキップ（`btn.querySelector("svg")` チェック）
 - `MutationObserver` を追加して Vue 再レンダリング後も即座に SVG を再適用
@@ -1304,13 +1416,13 @@ Mask Editor One がインストールされている場合のみ有効。未イ�
 
 #### MaskTool.js 変更
 
-| 追加プロパティ | 説明 |
-|---|---|
-| `brushImage` / `brushName` | ABR 画像ブラシ（null = デフォルト円形） |
-| `spacing` (0.05–1.0) | スタンプ間隔（ブラシサイズの倍率） |
-| `angle` (0–359°) | ブラシ固定回転角 |
-| `sizeJitter` / `sizeJitterAmount` | スタンプごとのサイズランダム変動 |
-| `rotationJitter` | スタンプごとの角度ランダム変動 (0–360°) |
+| 追加プロパティ                        | 説明                                      |
+| ------------------------------------- | ----------------------------------------- |
+| `brushImage` / `brushName`        | ABR 画像ブラシ（null = デフォルト円形）   |
+| `spacing` (0.05–1.0)               | スタンプ間隔（ブラシサイズの倍率）        |
+| `angle` (0–359°)                  | ブラシ固定回転角                          |
+| `sizeJitter` / `sizeJitterAmount` | スタンプごとのサイズランダム変動          |
+| `rotationJitter`                    | スタンプごとの角度ランダム変動 (0–360°) |
 
 - `setImageBrush(img, name)` / `clearImageBrush()` メソッド追加
 - **ストロークバッファ**: `_initStrokeBuffer` / `_mergeStroke` — PaintTool.js と同パターンで intra-stroke 蓄積を防止（`lighten` ブレンド）
@@ -1321,6 +1433,7 @@ Mask Editor One がインストールされている場合のみ有効。未イ�
 #### image-edit-tab.js 変更
 
 **初期化**
+
 - `_abrAvailable`、`_abrBrushTree` を追加
 - 起動時に `_checkAbrAvailability()` を非同期実行（`/mask_editor/brushes/list` が空でなければ有効）
 
@@ -1344,6 +1457,7 @@ Rot. Jitter □ On
 - ABR セクションは Mask Editor One インストール済みの場合のみ表示
 
 **ABR ブラシライブラリピッカー** (`_openAbrBrushPicker()`)
+
 - フォルダツリー（左）＋ブラシサムネイルグリッド（右）のモーダル
 - サムネイル生成: BrushLibrary.js と同ロジック（アルファ判定・輝度変換・タイトルトリム）
 - 「Round Brush (default)」ボタンでリセット
@@ -1364,16 +1478,19 @@ Image Edit タブのマスク機能を強化。Mask Editor One インストー�
 ### マスクレイヤー Add/Subtract 合成モード
 
 #### LayerManager.js
+
 - `Layer` クラスに `operation: "add"` プロパティ追加（`maskApply` 用）
 - `toJSON()` / `fromJSON()` で保存・復元対応
 - `LayerManager.toggleOperation(id)` メソッド追加（add ⇔ subtract トグル）
 
 #### image-edit-tab.js — レイヤーパネル
+
 - マスクレイヤー行に **A/S トグルボタン** を追加（緑=Add、赤=Subtract）
 - クリックで `toggleOperation()` を呼び出し、合成ビューと一覧を再描画
 - マスクレイヤー選択時、`operation` に合わせて MaskTool の `mode` を自動同期（subtract → erase）
 
 #### image-edit-tab.js — `_updateCompositeView()` 改修
+
 - 連続する `maskApply: true` マスクレイヤーをグループとして検出
 - グループを back→front 順で合成（Mask Editor One `CanvasCompositor` と同ロジック）
   - `add` → `globalCompositeOperation = "lighten"`
@@ -1402,20 +1519,23 @@ Image Edit タブのマスク機能を強化。Mask Editor One インストー�
 - 起動時に `/mask_editor/sam3/status` を確認して有効/無効を制御
 
 #### SAM3 モードの上部メニュー
-| 要素 | 説明 |
-|------|------|
-| テキスト入力 | セグメント対象のプロンプト（"cat", "person" 等） |
-| Max セレクト | 最大マスク取得数（3/6/9/12） |
-| Segment ボタン | 推論実行 |
+
+| 要素           | 説明                                             |
+| -------------- | ------------------------------------------------ |
+| テキスト入力   | セグメント対象のプロンプト（"cat", "person" 等） |
+| Max セレクト   | 最大マスク取得数（3/6/9/12）                     |
+| Segment ボタン | 推論実行                                         |
 
 #### プロパティペイン（SAM3）
-| 要素 | 説明 |
-|------|------|
-| Mode: Add/Erase | 適用モード切り替え |
+
+| 要素               | 説明                                                      |
+| ------------------ | --------------------------------------------------------- |
+| Mode: Add/Erase    | 適用モード切り替え                                        |
 | サムネイルグリッド | 候補マスクをクリックで選択/解除（青ボーダー + ✓ マーク） |
-| Apply Selected (N) | 選択マスクをまとめて適用 |
+| Apply Selected (N) | 選択マスクをまとめて適用                                  |
 
 #### 実行フロー
+
 1. `store_image` でイメージレイヤーを送信（`node_id: "wfs_sam3"`）
 2. `sam3/segment` で推論 → 複数マスク候補をプロパティペインに表示
 3. サムネイルをクリックして複数選択（新規 Segment 時に選択リセット）
@@ -1440,11 +1560,11 @@ Image Edit タブのマスク機能を強化。Mask Editor One インストー�
 
 #### 操作方法
 
-| 操作 | 動作 |
-|------|------|
-| Ctrl+クリック | 個別選択/解除トグル |
-| Shift+クリック | アンカーから範囲一括選択 |
-| カードビュー・テーブルビュー | 両対応 |
+| 操作                         | 動作                     |
+| ---------------------------- | ------------------------ |
+| Ctrl+クリック                | 個別選択/解除トグル      |
+| Shift+クリック               | アンカーから範囲一括選択 |
+| カードビュー・テーブルビュー | 両対応                   |
 
 #### 一括操作バー（選択時に自動表示）
 
@@ -1469,12 +1589,12 @@ Image Edit タブのマスク機能を強化。Mask Editor One インストー�
 
 各タブのツールバー最右端に「✕ クリア」ボタンを追加。クリックで全フィルターを一括リセット。
 
-| タブ | リセット対象 |
-|------|-------------|
-| ワークフロー | 検索テキスト・グループ・バッジフィルタ（ALL に戻す）・バッチ表示フラグ |
-| ノード | 検索テキスト・カテゴリ・パッケージ・タグ・グループ・お気に入りフラグ |
-| モデル | 検索テキスト・タグ・フォルダ・グループ・ステータス・お気に入り・バッチフラグ |
-| ギャラリー | 検索テキスト・タグ・グループ・お気に入りフラグ（ソート順は維持） |
+| タブ         | リセット対象                                                                 |
+| ------------ | ---------------------------------------------------------------------------- |
+| ワークフロー | 検索テキスト・グループ・バッジフィルタ（ALL に戻す）・バッチ表示フラグ       |
+| ノード       | 検索テキスト・カテゴリ・パッケージ・タグ・グループ・お気に入りフラグ         |
+| モデル       | 検索テキスト・タグ・フォルダ・グループ・ステータス・お気に入り・バッチフラグ |
+| ギャラリー   | 検索テキスト・タグ・グループ・お気に入りフラグ（ソート順は維持）             |
 
 ---
 
@@ -1527,12 +1647,12 @@ Image Edit タブのマスク機能を強化。Mask Editor One インストー�
 
 #### 動作
 
-| 手順 | 内容 |
-|------|------|
-| UI 形式読み込み | `convertUiToApi` が `widgets_values` を `inputs.positive/negative` にマップ |
-| 解析 | `analyzeWorkflow` が `WFS_PromptText` を positive/negative 2 つの `prompt_node` として認識 |
-| 表示 | Prompt タブのセレクトに `ID:X Wfs Prompt [positive]` / `[negative]` が表示される |
-| Apply | `textKey: "positive"/"negative"` でワークフローへ書き戻し |
+| 手順            | 内容                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| UI 形式読み込み | `convertUiToApi` が `widgets_values` を `inputs.positive/negative` にマップ                |
+| 解析            | `analyzeWorkflow` が `WFS_PromptText` を positive/negative 2 つの `prompt_node` として認識 |
+| 表示            | Prompt タブのセレクトに`ID:X Wfs Prompt [positive]` / `[negative]` が表示される              |
+| Apply           | `textKey: "positive"/"negative"` でワークフローへ書き戻し                                      |
 
 ---
 
@@ -1614,12 +1734,15 @@ v0.3.60 で実装した G'MIC-Qt 連携の動作修正・セキュリティ強�
 ### G'MIC バグ修正
 
 #### 引数順序の修正
+
 `gmic_qt.exe` の起動引数を正しい順序 `-o <output> <input>` に修正。以前の順序（`<input> -o <output>`）では G'MIC-Qt Standalone が即時終了してGUIが開かなかった。
 
 #### `CREATE_NEW_CONSOLE` フラグ追加
+
 Windows でバックグラウンドプロセス（ComfyUI）からGUIウィンドウを表示するために必須のフラグ。一度削除したが eagle_comic_creater_web の参考実装を確認して再追加した。
 
 #### 設定パスのプレースホルダー修正
+
 `settings-tab.js` の G'MIC-Qt パス入力フィールドのデフォルト値とプレースホルダーからユーザー固有のパスを削除し、汎用的な `C:\path\to\gmic_qt.exe` に変更。`gmic_routes.py` のフォールバック値も同様に空文字に変更。
 
 ---
@@ -1627,6 +1750,7 @@ Windows でバックグラウンドプロセス（ComfyUI）からGUIウィン�
 ### セキュリティ修正
 
 #### `handle_result` パストラバーサル対策
+
 `POST /api/wfm/gmic/result` の `result_path` は以前リクエストボディから直接 `open()` に渡していた。`Path.resolve().relative_to(gmic_temp)` による検証を追加し、`gmic_temp` ディレクトリ外のパスは 403 を返すように変更。eagle_comic_creater_web の同等実装と同じパターン。
 
 ---
@@ -1637,10 +1761,10 @@ Windows でバックグラウンドプロセス（ComfyUI）からGUIウィン�
 
 追加したヘルプカード（Mask Tool カードの直後）：
 
-| カード | 内容 |
-|---|---|
-| **G'MIC Filter** | Edit with G'MIC ボタンの使い方、OKから「filter output」ウィンドウを閉じるまでのフロー |
-| **G'MIC-Qt Installation** | `gmic.eu/download.html` からのダウンロード手順、解凍先、設定タブへのパス設定方法 |
+| カード                          | 内容                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| **G'MIC Filter**          | Edit with G'MIC ボタンの使い方、OKから「filter output」ウィンドウを閉じるまでのフロー |
+| **G'MIC-Qt Installation** | `gmic.eu/download.html` からのダウンロード手順、解凍先、設定タブへのパス設定方法    |
 
 ---
 
@@ -1682,11 +1806,11 @@ Image Edit タブの「★ Filter」ツール（これまで非アクティブ�
 
 G'MIC-Qt 連携用の API ルートを新規作成。
 
-| エンドポイント | 概要 |
-|---|---|
-| `POST /api/wfm/gmic/open` | base64 画像を受け取り一時 PNG に保存→ `gmic_qt.exe -o <out> <in>` をバックグラウンドスレッドで起動。`job_id` を返す |
-| `GET /api/wfm/gmic/status/{job_id}` | ジョブの進行状況（`pending` / `processing` / `completed` / `failed`）を返す |
-| `POST /api/wfm/gmic/result` | `result_path` を受け取り、処理済み画像を base64 エンコードして返す |
+| エンドポイント                        | 概要                                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/wfm/gmic/open`           | base64 画像を受け取り一時 PNG に保存→`gmic_qt.exe -o <out> <in>` をバックグラウンドスレッドで起動。`job_id` を返す |
+| `GET /api/wfm/gmic/status/{job_id}` | ジョブの進行状況（`pending` / `processing` / `completed` / `failed`）を返す                                     |
+| `POST /api/wfm/gmic/result`         | `result_path` を受け取り、処理済み画像を base64 エンコードして返す                                                    |
 
 - G'MIC-Qt の実行パスは Settings に保存された `gmic_qt_path` を参照。未設定の場合はデフォルトパス `C:\path\to\gmic_qt.exe` にフォールバック。
 - プロセスは `subprocess.Popen` + `CREATE_NEW_CONSOLE` でノンブロッキングに起動し、スレッド内でポーリングして完了を検出。
@@ -1714,12 +1838,12 @@ G'MIC-Qt 連携用の API ルートを新規作成。
   - **進行状況テキスト** — サーバーからのステータスメッセージを表示
   - **「中断」ボタン** — 赤色。クリックでポーリングを停止し UI をリセット
 
-| 新規メソッド | 概要 |
-|---|---|
-| `_gmicOpenGui()` | アクティブレイヤーを PNG (base64) に変換→ `/api/wfm/gmic/open` で起動 |
-| `_gmicWaitForJob(jobId)` | 2 秒間隔でステータスをポーリング（最大 10 分）。完了で「結果を反映」を有効化 |
-| `_gmicApplyResult()` | `result_path` 経由で処理済み画像を取得→ `_saveUndo()` → アクティブレイヤーに上書き描画 |
-| `_gmicAbort()` | `_gmicState.aborted = true` でポーリングを中断し UI をリセット |
+| 新規メソッド               | 概要                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `_gmicOpenGui()`         | アクティブレイヤーを PNG (base64) に変換→`/api/wfm/gmic/open` で起動                      |
+| `_gmicWaitForJob(jobId)` | 2 秒間隔でステータスをポーリング（最大 10 分）。完了で「結果を反映」を有効化                 |
+| `_gmicApplyResult()`     | `result_path` 経由で処理済み画像を取得→ `_saveUndo()` → アクティブレイヤーに上書き描画 |
+| `_gmicAbort()`           | `_gmicState.aborted = true` でポーリングを中断し UI をリセット                             |
 
 #### `static/js/settings-tab.js`
 
@@ -1757,12 +1881,14 @@ Image Edit タブに Mask Tool (🎭) を追加した。マスクレイヤーへ
 ### Mask Tool 新規実装
 
 #### MaskTool.js（新規）
+
 - 白ペイント / destination-out 消去の soft round brush
 - DrawTool と同アーキテクチャ（stamp キャッシュ・`_paintLine` 補間）
 - paint モード: 白ラジアルグラデーション stamp
 - erase モード: 黒 stamp + `destination-out` globalCompositeOperation
 
 #### image-edit-tab.js
+
 - `TOOL_DEFS` の mask エントリを `ready: true` に変更しツールを有効化
 - `_maskSubtool`, `_maskInverted`, `_maskOverlayColor`, `_maskBlur` を状態として保持
 - **ツールオプションバー（mask）**: Paint ボタン、Invert チェックボックス、Overlay カラーピッカー、Blur スライダー
@@ -1772,10 +1898,12 @@ Image Edit タブに Mask Tool (🎭) を追加した。マスクレイヤーへ
 - レイヤーリストでマスクレイヤーをクリックすると自動的に Mask ツールに切り替え
 
 #### templates/index.html
+
 - `ie-props-pane` ペイン追加（レイヤーパネル左隣）
 - レイヤーヘッダーに "M" ボタン追加
 
 #### image-edit-tab.css
+
 - `.ie-props-pane` / `.ie-props-header` / `.ie-props-body` / `.ie-props-row` スタイル追加
 - マスクレイヤー行の ⬚ アイコンを赤で強調
 
@@ -1784,10 +1912,12 @@ Image Edit タブに Mask Tool (🎭) を追加した。マスクレイヤーへ
 ### クリッピングマスク機能
 
 #### LayerManager.js
+
 - `Layer` クラスに `maskApply` プロパティ追加（`toJSON` / `fromJSON` 対応）
 - `LayerManager.toggleMaskApply(id)` メソッド追加
 
 #### image-edit-tab.js
+
 - レイヤーリストのマスクレイヤー行に ✂ ボタン追加（`data-action="mask-apply"`）；有効時は青色
 - `_updateCompositeView`: `maskApply=true` のマスクレイヤー直下（back 側、配列 `i+1`）のレイヤーを tmp canvas でクリッピング合成
 - `_renderMaskedLayer(ctx, canvas, maskLayer, targetLayer, showOverlay)` 新メソッド
@@ -1795,6 +1925,7 @@ Image Edit タブに Mask Tool (🎭) を追加した。マスクレイヤーへ
 - `_compositeForExport()` 新メソッド: クリッピングを適用しつつマスクオーバーレイは除外して保存用合成を行う
 
 #### image-edit-tab.css
+
 - レイヤーパネル幅 190px → 220px（✂ ボタン追加による見切れを解消）
 
 ---
@@ -1804,6 +1935,7 @@ Image Edit タブに Mask Tool (🎭) を追加した。マスクレイヤーへ
 **問題**: DrawTool / MaskTool が `drawCanvas` に描いていたため `_loadActiveLayerToCanvas()` がコンポジット表示を上書きし、描画中に他レイヤーが消えていた。
 
 **修正**:
+
 - DrawTool / MaskTool を `layer.canvas` に直接描画するよう変更
 - `_onToolMouseDown`（draw/mask）: `_loadActiveLayerToCanvas()` を除去し `setCanvas(activeLayer.canvas)` + `_updateCompositeView()` に変更
 - `_onToolMouseMove`（draw/mask）: `_drawing` フラグが立っている間 `_updateCompositeView()` を都度呼び出し、全レイヤーを常時合成表示
@@ -1834,17 +1966,21 @@ GenerateUI の Model タブで、Diffusion Model セクション（UNET）と Te
 ### Diffusion Model — GGUF 対応
 
 #### analyzeWorkflow（`comfyui-workflow.js`）
+
 - `LoaderGGUF` / `LoaderGGUFAdvanced` を `diffusion_model_nodes` に追加
 - ノードオブジェクトに `inputKey: "gguf_name"` を明示記録（`UNETLoader` 系は `"unet_name"`）
 - `_getWidgetMapping` に `LoaderGGUF: ["gguf_name"]`、`LoaderGGUFAdvanced: ["gguf_name", ...]` を追加
 
 #### fetchDiffusionModels（`comfyui-client.js`）
+
 - `_fetchModelList(["UNETLoader", "UnetLoaderGGUF"], "unet_name")` と `_fetchModelList(["LoaderGGUF", "LoaderGGUFAdvanced"], "gguf_name")` を `Promise.all` で並列フェッチし重複除去してマージ
 
 #### renderModelTab / Apply（`comfyui-editor.js`）
+
 - Apply 時にノードの `class_type` が `LoaderGGUF` / `LoaderGGUFAdvanced` であれば `inputKey` を自動的に `"gguf_name"` に切り替え
 
 #### applyToGenUI（`models-tab.js`）
+
 - `unet` タイプの検索キーに `"gguf_name"` を追加（`["unet_name", "gguf_name"]` 順で検索）
 
 ---
@@ -1852,14 +1988,17 @@ GenerateUI の Model タブで、Diffusion Model セクション（UNET）と Te
 ### Text Encoder — CLIPLoader / DualCLIPLoader / GGUF 対応
 
 #### analyzeWorkflow（`comfyui-workflow.js`）
+
 - 認識ノードに `ClipLoaderGGUF`、`DualClipLoaderGGUF` を追加
 - ノードオブジェクトに `clip_type`（= `inputs.type`）、`device`（= `inputs.device`）フィールドを追加
 - `_getWidgetMapping` に `ClipLoaderGGUF: ["clip_name", "type"]`、`DualClipLoaderGGUF: ["clip_name1", "clip_name2", "type"]` を追加
 
 #### fetchTextEncoders（`comfyui-client.js`）
+
 - `DualCLIPLoader` / `DualClipLoaderGGUF`（`clip_name1` キー）と `CLIPLoader` / `ClipLoaderGGUF`（`clip_name` キー）を並列フェッチしてマージ
 
 #### renderModelTab（`comfyui-editor.js`）
+
 - Text Encoder セクションを `sections` 汎用処理から分離し `#wfm-te-section` プレースホルダーに非同期初期化関数 `_initTextEncoderSection` で描画
 - **単体 CLIP**（CLIPLoader / ClipLoaderGGUF）: clip_name 1段 + type ドロップダウン + device（GGUF のみ）
 - **Dual CLIP**（DualCLIPLoader / DualClipLoaderGGUF）: clip_name1 + clip_name2 の 2 段 + type ドロップダウン + device（GGUF のみ）
@@ -1867,9 +2006,11 @@ GenerateUI の Model タブで、Diffusion Model セクション（UNET）と Te
 - フィルター入力は 1 段目（clip_name1）のみ対応
 
 #### applyToGenUI（`models-tab.js`）
+
 - `textencoder` タイプの検索キーに `"clip_name"` を追加（CLIPLoader 系対応）
 
 ### ヘルプ更新（3点セット）
+
 - `templates/index.html` — `wfm-help-gen-5` 初期テキスト更新
 - `static/js/i18n.js` — 英語・日本語・中国語 `helpGen5` を更新（Diffusion Model / Text Encoder の詳細ノード種別を追記）
 
@@ -1888,35 +2029,42 @@ Image Edit タブに **Blur ツール** と **BG Remove ツール** を追加。
 ### Blur ツール（`static/js/image-edit-tab.js`）
 
 #### TOOL_DEFS
+
 - `{ id: "blur", icon: "≈", label: "Blur", ready: true }` — `ready: false` → `true` に変更
 
 #### クラスプロパティ（constructor）
+
 - `_blurRectMode` — アクティブな矩形モード（`"blur"` / `"mosaic"` / `null`）
 - `_blurDragging`, `_blurDragStart`, `_blurDragCur` — 矩形ドラッグ状態
 
 #### ツールオプション UI（`_renderToolOptions("blur")`）
+
 - **Whole Blur** — 強度スライダー（1〜50 px）+ Apply ボタン
 - **Whole Mosaic** — ブロックサイズスライダー（5〜100 px）+ Apply ボタン
 - **Rect Blur** — トグルボタン（青色）でドラッグ矩形モードに入り、マウスアップ時に選択範囲をぼかす
 - **Rect Mosaic** — トグルボタン（橙色）で同様の矩形モザイク；Rect Blur と排他
 
 #### マウスイベント
+
 - `_onToolMouseDown/Move/Up/Leave` に `case "blur"` を追加してドラッグ座標を追跡
 - `_activateCurrentTool` — `_blurRectMode` が有効な場合はキャンバスカーソルを `crosshair` に変更
 
 #### 新規メソッド
-| メソッド | 概要 |
-|---|---|
-| `_applyWholeBlur(intensity)` | `ctx.filter = "blur(Xpx)"` でオフスクリーンキャンバスに描画し `layer.canvas` を更新 |
-| `_applyWholeMosaic(size)` | `_applyMosaicToRegion` でレイヤーキャンバス全体をピクセル化 |
+
+| メソッド                                          | 概要                                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `_applyWholeBlur(intensity)`                    | `ctx.filter = "blur(Xpx)"` でオフスクリーンキャンバスに描画し `layer.canvas` を更新                 |
+| `_applyWholeMosaic(size)`                       | `_applyMosaicToRegion` でレイヤーキャンバス全体をピクセル化                                           |
 | `_canvasToLayerCoords(layer, canvasX, canvasY)` | `applyTransform` の逆変換：中心移動 → 逆回転 → スケール除算 → flip → レイヤーキャンバス座標に変換 |
-| `_drawBlurPreview(start, cur)` | オーバーレイキャンバスにプレビュー矩形を描画（Blur=青、Mosaic=橙） |
-| `_applyRectEffect(start, cur)` | `_canvasToLayerCoords` でレイヤー座標に変換し、ぼかし or `_applyMosaicToRegion` を適用 |
+| `_drawBlurPreview(start, cur)`                  | オーバーレイキャンバスにプレビュー矩形を描画（Blur=青、Mosaic=橙）                                      |
+| `_applyRectEffect(start, cur)`                  | `_canvasToLayerCoords` でレイヤー座標に変換し、ぼかし or `_applyMosaicToRegion` を適用              |
 
 #### モジュールレベル関数
+
 ```js
 function _applyMosaicToRegion(ctx, x, y, w, h, size)
 ```
+
 `ImageData` のピクセルブロックを左上ピクセルの色で塗りつぶすことでモザイクを実現。
 
 ---
@@ -1924,19 +2072,22 @@ function _applyMosaicToRegion(ctx, x, y, w, h, size)
 ### BG Remove ツール（`static/js/image-edit-tab.js`）
 
 #### TOOL_DEFS
+
 - `{ id: "bgremove", icon: "⬚", label: "BG Remove", ready: true }` — `ready: false` → `true` に変更
 
 #### ツールオプション UI（`_renderToolOptions("bgremove")`）
+
 - **Model セレクト** — `lightweight` (@imgly) / `birefnet` (coming soon)
 - **New Layer チェックボックス** — ON: 結果を新規レイヤーとして追加 / OFF: アクティブレイヤーを上書き
 - **Remove BG ボタン** — 処理開始；ステータステキストで進捗を表示
 
 #### 新規メソッド
-| メソッド | 概要 |
-|---|---|
-| `_bgRemoveImgly(imageDataUrl)` | `@imgly/background-removal@1.5.7`（esm.sh CDN）を動的 `import()` で読み込み、Blob URL を返す |
-| `_bgRemoveBiRefNet(imageDataUrl)` | `POST /api/wfm/bg-remove` を呼び出す stub（BiRefNet 実装予定） |
-| `_applyBgRemove()` | アクティブレイヤーを PNG に変換 → モデル呼び出し → `Image` に展開 → New Layer or 上書き適用 → Undo スタックに push |
+
+| メソッド                            | 概要                                                                                                                    |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `_bgRemoveImgly(imageDataUrl)`    | `@imgly/background-removal@1.5.7`（esm.sh CDN）を動的 `import()` で読み込み、Blob URL を返す                        |
+| `_bgRemoveBiRefNet(imageDataUrl)` | `POST /api/wfm/bg-remove` を呼び出す stub（BiRefNet 実装予定）                                                        |
+| `_applyBgRemove()`                | アクティブレイヤーを PNG に変換 → モデル呼び出し →`Image` に展開 → New Layer or 上書き適用 → Undo スタックに push |
 
 ---
 
@@ -1950,14 +2101,17 @@ function _applyMosaicToRegion(ctx, x, y, w, h, size)
 ### ヘルプ更新（`templates/index.html` / `static/js/app.js` / `static/js/i18n.js`）
 
 **追加カード**
+
 - **Blur Tool (≈)** — Whole Blur / Whole Mosaic / Rect Blur / Rect Mosaic の操作説明（6項目）
 - **BG Remove Tool (⬚)** — モデル説明・New Layer 動作・処理フロー（5項目）
 
 **Tools リストに追記**
+
 - `helpImageEdit7b` — Blur ツールの概要
 - `helpImageEdit7c` — BG Remove ツールの概要
 
 **i18n**
+
 - `app.js`: 14 エントリの ID→キーマッピングを追加
 - `i18n.js`: 英語・日本語・中国語に各 14 キーを追加
 
@@ -1995,13 +2149,13 @@ Fooocus形式（`{name, prompt, negative_prompt}`）のスタイルJSONを生成
 
 **追加関数**
 
-| 関数 | 概要 |
-|---|---|
-| `_loadStyles()` | `/api/wfm/styles` を取得しドロップダウンとバッチリストを更新 |
-| `_renderStyleDropdown()` | ツールバーの `#wfm-style-select` をスタイル名で再描画 |
-| `_rebuildStyleList()` | `_buildSimpleGroupList` を使って左ペインのスタイル一覧を描画 |
-| `_applyNamedStyle(workflow, style)` | プロンプトノードにスタイルを適用したワークフローのコピーを返す共通ロジック |
-| `_applyStyleToWorkflow(workflow)` | バッチ上書きがあればそれを優先、なければツールバー設定を参照して `_applyNamedStyle` を呼ぶ |
+| 関数                                  | 概要                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `_loadStyles()`                     | `/api/wfm/styles` を取得しドロップダウンとバッチリストを更新                              |
+| `_renderStyleDropdown()`            | ツールバーの`#wfm-style-select` をスタイル名で再描画                                      |
+| `_rebuildStyleList()`               | `_buildSimpleGroupList` を使って左ペインのスタイル一覧を描画                              |
+| `_applyNamedStyle(workflow, style)` | プロンプトノードにスタイルを適用したワークフローのコピーを返す共通ロジック                  |
+| `_applyStyleToWorkflow(workflow)`   | バッチ上書きがあればそれを優先、なければツールバー設定を参照して`_applyNamedStyle` を呼ぶ |
 
 **適用ロジック（`_applyNamedStyle`）**
 
@@ -2025,6 +2179,7 @@ Fooocus形式（`{name, prompt, negative_prompt}`）のスタイルJSONを生成
 **ツールバー（Styleセレクター）**
 
 Reset Workflow ボタンの右隣に以下を追加：
+
 - `<label id="wfm-style-label">` + `<input type="checkbox" id="wfm-style-enabled">` — Style の有効/無効チェックボックス
 - `<select id="wfm-style-select">` — スタイルドロップダウン（`min-width:120px / max-width:220px`）
 
@@ -2122,28 +2277,33 @@ Windows 環境で ComfyUI が返す Checkpoint/LoRA 名はバックスラッシ�
 Eagle Comic Creator の画像編集タブ形状描画機能を移植。
 
 **対応形状**
+
 - **Rect** — 矩形（Rounded チェックで角丸）
 - **Ellipse** — 楕円
 - **Line** — 直線（Stroke None 非表示 / 常にストローク有効）
 - **FreeLine** — フリーハンド曲線（旧 Curve。Stroke None 非表示 / 常にストローク有効）
 
 **Tool Options バー**
+
 - Shape ドロップダウン、Rounded チェック（Rect/Ellipse のみ表示）
 - Fill: None チェック + カラーピッカー（Line/FreeLine 時は非表示）
 - Stroke: None チェック + カラーピッカー + 幅入力（Line/FreeLine 時は None チェック非表示）
 - Opacity スライダー、↩ Undo ボタン
 
 **動作**
+
 - ドラッグ中: overlayCanvas に青い破線でプレビュー表示（FreeLine はリアルタイム描画）
 - ドラッグ離す: 確定 → 独立した draw レイヤーとして LayerManager に追加 → Undo 1操作で除去可
 - `ShapeTool.drawShape(ctx, shapeObj)` スタティックメソッドでレイヤー canvas に描画
 
 **実装ファイル**
+
 - `static/js/image-edit/ShapeTool.js`（新規）: ShapeTool クラス（プレビュー・確定・静的描画メソッド）
 - `image-edit-tab.js`: import・TOOL_DEFS 追加・`_setActiveTool`/`_activateCurrentTool`/`_renderToolOptions`/マウスハンドラー/`_initCanvases` を更新
 - `templates/index.html`: □ ツールボタン追加
 
 **ヘルプ更新**
+
 - Image Edit Tab Tools セクション: Shape ツールの説明を追加
 - Image Edit Keyboard Shortcuts: `S: Shape tool` を追記（ヘルプ内・グローバル Shortcuts ページ）
 - `image-edit-tab.js` キーボードハンドラーに `s` → `"shape"` を追加（ヘルプ記載と実装を一致）
@@ -2167,21 +2327,25 @@ Eagle Comic Creator の画像編集タブ形状描画機能を移植。
 レイヤー合成ベースの画像編集タブを追加。
 
 **ツール**
+
 - **Select (V)** — クリック選択、ドラッグ移動、コーナーハンドルでリサイズ、上辺ハンドルで回転、Flip H / Flip V / Rotate 角度入力
 - **Draw (B)** — フリーハンドブラシ。色・サイズ・ブレンドモード設定
 - **Text (T)** — クリック位置にテキスト入力オーバーレイを表示。フォント・サイズ・スタイル・カラー・アライン設定。確定後はテキストのバウンディングボックスサイズのレイヤーとして配置
 
 **レイヤー管理**
+
 - レイヤーパネル（右側）: 可視トグル（👁/🚫）、ロックトグル（🔒/🔓）、不透明度スライダー
 - アクティブレイヤーのみ描画 vs 全レイヤー合成 を `_compositeMode` フラグで制御
 - Undo / Redo（Ctrl+Z / Ctrl+Y、上限 30 ステップ）
 
 **画像ロード**
+
 - ドラッグ＆ドロップ、Upload ボタン、Gallery タブ「Image Edit」ボタンで送信
 - レイヤーなし → Layer 1 として配置（自動ロック）、レイヤーあり → fitToCanvas でスケールして追加レイヤーとして追加
 - New ボタン: WxH プロンプトで新規キャンバス作成
 
 **テキストオブジェクト品質改善**
+
 - `measureText()` でバウンディングボックスサイズのオフスクリーン canvas を生成し、レイヤーの `contentW/H` に設定（余白ゼロ）
 - リサイズ後（`transformEnd`）に `_rerenderTextLayer()` を呼び `canvas.width = displayW` で再描画 → 拡大時のぼやけを防止
 - `layer.textProps` にテキストプロパティを保存。ダブルクリックで再編集ダイアログを開き、OK で既存レイヤーを上書き更新
@@ -2327,14 +2491,17 @@ ModelsタブのGenUI ModelボタンでLoRAをGenerate UIタブのLORA Singleに�
 ### 修正内容
 
 **`comfyui-client.js`**
+
 - `_fetchModelList`: V3形式 `inputDef[1]?.options` の取得ケースを追加
 - `fetchEmbeddings`: ComfyUIの `/embeddings` エンドポイントへの直接アクセスをやめ、WFSバックエンドAPI `/api/wfm/models/files?type=embedding` を使うよう変更（SPAのURLによっては `/embeddings` がHTMLを返す問題があったため）
 
 **`py/services/models_service.py`**
+
 - `_MODEL_EXTENSIONS` 定数を追加（`.safetensors`, `.ckpt`, `.pt`, `.pth`, `.bin`, `.gguf`, `.pt2`）
 - `list_model_files(model_type)` メソッドを追加: モデルファイルのみをフィルタリングしてソート済みリストを返す
 
 **`py/routes/models_routes.py`**
+
 - `GET /api/wfm/models/files?type=<type>` エンドポイントを追加
 
 ---
@@ -2368,10 +2535,12 @@ v0.3.49で導入したプロンプト検索の未キャッシュ画像オンデ�
 ### 修正内容
 
 **`gallery_routes.py`**
+
 - `list_images`ルートで`_service.list_images()`を`asyncio.to_thread()`でスレッドプールに投げるよう変更（イベントループブロック解消）
 - 検索なしのフォルダロード時に`_service.start_background_index()`を呼び出してバックグラウンドインデックスを自動起動
 
 **`gallery_service.py`**
+
 - `import threading`を追加
 - `__init__`にバックグラウンドインデックス用キャンセルイベント（`_bg_cancel`）を追加
 - `list_images()`からオンデマンド読み込みを完全に削除（`prompt_cache`が空の場合の読み込み処理を除去）
@@ -2550,12 +2719,12 @@ Python プロキシルート（`/api/wfm/ollama/*`）依存を廃止し、AI TOO
 
 #### 各タブのクリーンアップトリガー
 
-| タブ | トリガー | 対象 |
-|---|---|---|
-| Modelsタブ | タブ切替・モデルタイプ変更時 | 全グループから存在しないモデル名を削除 |
-| Modelsタブ（アプリ内移動） | `move_models` API 呼び出し時 | グループ内パスを即時更新 |
-| Galleryタブ（フォルダUI） | フォルダ表示時（mtime 変化 or 60秒後） | フォルダ内の孤立メタデータエントリを削除 |
-| Galleryタブ（Feederモード） | グループ画像一覧取得時 | グループから孤立パスを削除 |
+| タブ                        | トリガー                               | 対象                                     |
+| --------------------------- | -------------------------------------- | ---------------------------------------- |
+| Modelsタブ                  | タブ切替・モデルタイプ変更時           | 全グループから存在しないモデル名を削除   |
+| Modelsタブ（アプリ内移動）  | `move_models` API 呼び出し時         | グループ内パスを即時更新                 |
+| Galleryタブ（フォルダUI）   | フォルダ表示時（mtime 変化 or 60秒後） | フォルダ内の孤立メタデータエントリを削除 |
+| Galleryタブ（Feederモード） | グループ画像一覧取得時                 | グループから孤立パスを削除               |
 
 ### GalleryタブのShift+クリック範囲選択
 
@@ -2632,14 +2801,17 @@ Python プロキシルート（`/api/wfm/ollama/*`）依存を廃止し、AI TOO
 Feeder サブタブの Gallery mode セクション（h4 見出し・説明文・リスト6項目）が英語のハードコードのままだったのを i18n 対応に変更。
 
 **修正（`templates/index.html`）**
+
 - `<h4 id="wfm-help-feeder-imgloop-title">` と `<p id="wfm-help-feeder-imgloop-desc">` を追加（Image Loop mode 見出し・説明文を i18n 化）
 - `<h4 id="wfm-help-feeder-gal-title">` と `<p id="wfm-help-feeder-gal-desc">` を追加
 - Gallery mode 6項目に `id="wfm-help-feeder-gal-1"` 〜 `id="wfm-help-feeder-gal-6"` を付与
 
 **修正（`static/js/app.js`）**
+
 - `helpIdMap` に `helpFeederImgloopTitle` / `helpFeederImgloopDesc` / `helpFeederGalTitle` / `helpFeederGalDesc` / `helpFeederGal1`〜`helpFeederGal6` を追加
 
 **修正（`static/js/i18n.js`）**
+
 - `helpFeederDesc`: 「2モード切り替え」の説明に EN/JA/ZH で更新
 - `helpFeederImgloopTitle` / `helpFeederImgloopDesc`: Image Loop mode 見出し・説明を EN/JA/ZH で追加
 - `helpFeederGalTitle` / `helpFeederGalDesc` / `helpFeederGal1`〜`helpFeederGal6`: Gallery mode 全項目を EN/JA/ZH で追加
@@ -2648,6 +2820,7 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 ### ヘルプ全体フォントを 1.5 倍に変更
 
 **修正（`static/css/main.css`）**
+
 - `.wfm-help-nav-item`: 12px → 18px
 - `.wfm-help-sidebar` 幅: 170px → 220px（フォント拡大に伴う調整）
 - `.wfm-help-card h3`: 14px → 21px
@@ -2662,12 +2835,15 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 ### ヘルプタブに検索機能を追加
 
 **修正（`templates/index.html`）**
+
 - サイドバーの `.wfm-help-nav` 上部に `<input id="wfm-help-search">` を追加
 
 **修正（`static/js/app.js`）**
+
 - `_onHelpSearch()`: 入力テキストで全ヘルプページの `textContent` を検索。マッチしないナビゲーションボタンは `search-hidden` クラスで非表示。マッチするページが1つでもあれば最初にマッチしたページを自動表示
 
 **修正（`static/css/main.css`）**
+
 - `.wfm-help-search-wrap` / `.wfm-help-search` / `.wfm-help-search:focus` / `.wfm-help-nav-item.search-hidden` のスタイルを追加
 
 ---
@@ -2677,18 +2853,22 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 **背景**: SPAは `window.open(url, "_blank")` でComfyUIとは別タブとして開かれる。同一オリジンの別タブでは `window.opener` 経由でComfyUIウィンドウのJavaScriptに直接アクセスできる。従来の「タイトルドラッグ（Send to Canvas）」はSPAウィンドウ→ComfyUIウィンドウのクロスウィンドウDnDだったが、`dragover` イベント中はブラウザのセキュリティ制限でカスタムMIMEタイプが `DataTransfer.types` に含まれず `e.preventDefault()` が呼ばれないため `drop` イベントがキャンバスに届かなかった（Wタブ内DnDは同一ウィンドウなので `app.handleFile` が機能していた）。
 
 **修正（`web/comfyui/node_sets_menu.js`）**
+
 - `window.wfmReceiveWorkflow(data)` グローバル関数を追加: `loadDataOnCanvas(data)` → `app.handleFile(file)` 経由でワークフローをキャンバスにロード（UI/API形式どちらも対応）
 - WタブのAPI形式アイテムのグレーアウト（`wfm-nlp-item--disabled` クラス・`draggable=false`・title属性）を削除 → 全フォーマットでDnD・ダブルクリック対応
 
 **修正（`static/js/workflow-tab.js`）**
+
 - `sendToCanvas()`: `window.opener.wfmReceiveWorkflow` が存在する場合は直接呼び出す（UI/API形式両対応）。存在しない場合（ブックマーク等から直接開いた場合）はlocalStorageフォールバック（UI形式のみ、API形式はエラートーストで案内）
 - サイドパネル・詳細モーダルのSend to CanvasボタンのAPI形式 `disabled` 属性を削除
 
 **修正（`static/js/gallery-tab.js`）**
+
 - `_updateCopyCanvasBtn()`: API形式による `disabled` 制限を削除（workflow存在チェックのみ）
 - Copy & Send Canvasクリックハンドラ: `window.opener.wfmReceiveWorkflow` 優先に変更（フォールバックはlocalStorage + タイトルドラッグ）
 
 **修正（`static/js/i18n.js`）**
+
 - `apiFormatCanvasNoOpener` キーを追加（EN/JA/ZH）: window.openerなしでAPI形式を送ろうとした場合のエラーガイドメッセージ
 - `helpGallery8` / `helpSidepanel17` を新しい動作（直接送信・フォールバック説明）に合わせて更新（3言語）
 
@@ -2703,15 +2883,18 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 **原因**: `app.loadGraphData()` はUIフォーマット（`{nodes:[...], links:[...]}`）を期待するが、API形式（`{nodeId: {class_type, inputs}}`）が渡されていた。
 
 **修正（`web/comfyui/node_sets_menu.js`）**
+
 - `isApiWorkflowFormat(data)`: API形式かUI形式かを判定するヘルパーを追加
 - `convertApiToUiWorkflow(api)`: API形式→UI形式に変換するヘルパーを追加（ノードはグリッド自動配置、リンクタイプは `"*"`、`last_node_id`/`last_link_id` を正しく設定）
 - `loadWorkflowOnCanvas`: `fetchWorkflowRaw` 後にAPI形式を検出・変換してから `app.loadGraphData()` を呼ぶよう修正
 - `pendingRaw` ドロップハンドラ: Send to Canvas経由のタイトルDnD時にも同様の変換を挿入
 
 **修正（`static/js/workflow-tab.js`）**
+
 - `sendToCanvas()`: `comfyWorkflow.detectFormat` でフォーマット判定し、API形式なら `comfyWorkflow.convertApiToUi()` でUI形式に変換してからlocalStorageに保存
 
 **修正（`static/js/gallery-tab.js`）**
+
 - `comfyWorkflow` を `comfyui-workflow.js` からimport追加
 - 「Copy & Send Canvas」ハンドラ: クリップボードにはオリジナルJSON（API形式のまま）をコピーしつつ、localStorage保存前にAPI→UI変換を適用
 
@@ -2724,6 +2907,7 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 **原因**: `comfyui-client.js` の `queuePrompt()` が ComfyUI の `/prompt` エンドポイントに `extra_data` を渡していなかった。ComfyUIのSaveImageノードは `extra_data.extra_pnginfo.workflow` を受け取ってPNGの `workflow` テキストチャンクに埋め込むが、これが未設定のため埋め込みが行われなかった。
 
 **修正（`static/js/comfyui-client.js`）**
+
 - `queuePrompt(workflow, extraData = null)`: `extraData` 引数を追加。存在する場合に `body.extra_data` として `/prompt` リクエストに含める
 - `generate()`: `queuePrompt` 呼び出し時に `{ extra_pnginfo: { workflow } }` を渡し、SaveImageノードがワークフロー（API形式）をPNGメタデータとして埋め込むよう修正
 
@@ -2734,29 +2918,35 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 ### 修正内容
 
 **XSS — タグ名がエスケープなしで `innerHTML` に挿入される（`static/js/gallery-tab.js`）**
+
 - `createTable` (L425): `tdTags.innerHTML` のタグ名を `escapeHtml` でエスケープ
 - `renderTagsDisplay` (L605): タグ名と `data-tag` 属性を `escapeHtml` でエスケープ
 - 悪意あるタグ名（例: `<img onerror=...>`）を保存→表示したときに JS が実行される問題
 
 **XSS — ファイル名がエスケープなしで `innerHTML` に挿入される（`static/js/gallery-tab.js`）**
+
 - `loadImageDetail` (L566): `alt="${img.filename}"` を `escapeHtml` でエスケープ
 - `openLightbox` (L1175-1176): `alt` 属性とライトボックスフッターの両方をエスケープ
 
 **XSS — エラーメッセージが `innerHTML` に未エスケープ（`static/js/gallery-tab.js`）**
+
 - フォルダツリーエラー (L139, L155) と 画像グリッドエラー (L263) を `escapeHtml` でエスケープ
 - サーバーエラーメッセージにパス名等の特殊文字が含まれる場合の対策
 
 **メタデータ書き込みエンドポイントにパスバリデーション追加（`py/services/gallery_service.py`）**
+
 - `save_image_meta`, `toggle_favorite`, `add_to_group`, `remove_from_group` に `_check_path_allowed()` を追加
 - delete/move など他の書き込みエンドポイントには既にあったが、これら4メソッドのみ漏れていた
 - 修正により `gallery_metadata.json` に許可ルート外のパス文字列が書き込まれるのを防止
 
 **`list_folder_tree` が `_allowed_root` を任意パスで上書きできる問題（`py/routes/gallery_routes.py`）**
+
 - `gallery_routes.py` のモジュールロード時に `_init_allowed_root()` を呼び出し、保存済み `gallery_output_dir`（なければ ComfyUI デフォルト output ディレクトリ）で `_allowed_root` を初期化
 - `_allowed_root` が起動直後に設定済みになるため、`list_folder_tree` の `if self._allowed_root is None` ブランチが発火せず、任意パスによる上書き不可
 - 副次効果として、Gallery タブを一度も開かない状態でも `serve_image` が正常動作（→ Feeder Gallery モードでの 404 バグ修正に直結）
 
 **`escapeHtml` にシングルクォートのエスケープを追加（`static/js/util.js`）**
+
 - `'` → `&#x27;` を追加
 - 現在の使用箇所はすべて二重引用符属性のため即時影響はないが、将来の誤用を防止
 
@@ -2765,6 +2955,7 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 ## 2026-06-20: WFS_GalleryFeeder — ComfyUI キャンバス上コントロール追加
 
 ### 新規ファイル（`web/comfyui/gallery_feeder_extension.js`）
+
 `app.registerExtension` を使い、ComfyUI キャンバス上の `WFS_GalleryFeeder` ノードに直接コントロールを追加。
 
 - **After Gen** コンボ（`loop` / `increment` / `fixed`）: `serialize: false` で prompt には含まれない
@@ -2780,24 +2971,29 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 ### `__Feeder__` グループの予約済み保護
 
 **サーバーサイド（`py/routes/gallery_routes.py`）**
+
 - `_RESERVED_GROUPS = {"__Feeder__"}` 定数を追加
 - `rename_group` / `delete_group` エンドポイントで予約グループへの操作を 403 で拒否
 
 **クライアントサイド（`static/js/gallery-tab.js`）**
+
 - グループ管理ドロップダウンで `__Feeder__` を選択したとき、リネーム・削除ボタンを `disabled` に
 - セレクトオプションに 🔒 プレフィックスを追加して視覚的に区別
 - `change` イベントリスナーで動的に切り替え
 
 ### ギャラリーサムネイル「F」オーバーレイボタン（`static/js/gallery-tab.js`, `static/css/gallery-tab.css`）
+
 - モデルタブの「B」バッチ登録ボタンと同様の位置（カード左上）に「F」ボタンを追加
 - `inFeeder` 初期状態は `img.groups` 配列から判定（`list_images()` が返す `groups` フィールドを使用）
 - クリックで `__Feeder__` グループへの追加 / 除外をトグル（APIコール + in-memory キャッシュ更新）
 - アクティブ時はシアン色 (`#38bdf8`)、ホバー時のみ表示（active 時は常時表示）
 
 **i18n（`static/js/i18n.js`）**
+
 - 英/日/中に `addedToFeeder` / `removedFromFeeder` キーを追加
 
 ### seed バリデーションエラー修正（`py/nodes/gallery_feeder_node.py`）
+
 **症状**: Feeder run 実行時に "Prompt outputs failed validation" エラーが発生
 
 **原因**: `comfyui-client.js` の `applySeedToWorkflow()` がグラフ内の全ノードの seed を `Number.MAX_SAFE_INTEGER`（約 9×10¹⁵）以下のランダム値に上書きする。`WFS_GalleryFeeder` が宣言していた `max: 0x7FFFFFFF`（約 2.1×10⁹）を大幅に超えるため、ComfyUI の `validate_prompt()` が `value_bigger_than_max` でリジェクト。
@@ -2809,9 +3005,11 @@ Feeder サブタブの Gallery mode セクション（h4 見出し・説明文�
 ## 2026-06-20: Gallery Feeder 機能追加（WFS_GalleryFeeder ノード）
 
 ### 概要
+
 Feeder タブにギャラリー連携モードを追加。外部プラグイン（comfyui-image-feeder）に依存せず、本プラグイン単独でギャラリーグループの画像を連続生成ループに利用できるようになった。
 
 ### 新規ノード（`py/nodes/gallery_feeder_node.py`）
+
 - **`WFS_GalleryFeeder`**（Workflow Studio カテゴリ）
   - 入力: `group_name` (STRING), `index` (INT), `sort_mode` (COMBO: filename_asc/filename_desc/random), `seed` (INT)
   - 出力: `IMAGE`
@@ -2821,18 +3019,22 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
   - データファイルの場所は `Path(__file__)` ベースで自動解決（ComfyUI のパス構成に依存しない）
 
 ### ノード登録（`__init__.py`）
+
 - `WFS_GalleryFeeder` を `_NODE_MODULES` に追加（`"Gallery Feeder (WFS)"` として表示）
 - あわせて既存の `WFS_PromptText` のディスプレイ名がハードコードされていたバグを修正（`_NODE_MODULES` にディスプレイ名を持たせる構造に変更）
 
 ### Feeder グループ管理（`py/services/gallery_metadata.py`, `py/services/gallery_service.py`）
+
 - `clear_group(group_name)`: グループ内の全画像を除外（グループ自体は残す）
 - `ensure_group(name)`: グループが存在しない場合のみ作成
 
 ### API エンドポイント（`py/routes/gallery_routes.py`）
+
 - `POST /wfm/gallery/groups/{name}/clear` — グループの全画像を除外（FC ボタン用）
 - `POST /wfm/gallery/groups/ensure` — グループが存在しない場合のみ作成（Feeder タブ初期化時に `__Feeder__` を自動作成）
 
 ### ギャラリータブ FC ボタン（`static/js/gallery-tab.js`, `templates/index.html`）
+
 - `FEEDER_GROUP = "__Feeder__"` 定数を export
 - `ensureFeederGroup()` を export（Feeder タブ初期化時に呼び出す）
 - `clearFeederGroup()`: `/wfm/gallery/groups/__Feeder__/clear` を呼び出してグループをクリア
@@ -2840,6 +3042,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - API 定数に `groupEnsure`, `groupClear`, `groupImages` を追加
 
 ### Feeder タブ Gallery モード（`static/js/feeder-tab.js`, `templates/index.html`）
+
 - 左ペイン上部に **[Image Loop] / [Gallery]** のモード切り替えボタンを追加（`localStorage` に保存）
 - **Image Loop モード**（既存機能）: 変更なし
 - **Gallery モード**（新機能）:
@@ -2850,6 +3053,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
   - タブ初期化時に `ensureFeederGroup()` を呼び出して `__Feeder__` グループを自動作成
 
 ### i18n（`static/js/i18n.js`）
+
 - 英・日・中に3キー追加: `feederGalNoNode`, `feederGalEmptyGroup`, `feederGroupCleared`
 
 ---
@@ -2861,16 +3065,19 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 **症状**：comfy-impact-pack の `ImpactWildcardEncode` / `ImpactWildcardProcessor` ノードを含むワークフローを Generate UI に読み込んだとき、Prompt タブにプロンプトが表示されない（ID は正しく表示されていた）。
 
 **原因1: CLIPTextEncodeEditPlus 経由の BFS ロール伝播漏れ**
+
 - これらのワークフローでは ImpactWildcard ノードの出力が `CLIPTextEncodeEditPlus` の `text2` 入力に接続され、CLIPTextEncodeEditPlus が KSampler の positive に繋がる構成。
 - BFS 伝播で `CLIPTextEncodeEditPlus` の STRING 入力（text1, text2）に positive/negative ロールを伝播するコードが未実装だったため、上流の ImpactWildcard ノードのロールが `unknown` のままになっていた。
 - **修正**: BFS ループに `CLIPTextEncodeEditPlus` の `text1` / `text2` への伝播を追加。
 
 **原因2: CLIPTextEncodeEditPlus が空の text_edit で prompt_nodes の先頭に入り込む**
+
 - CLIPTextEncodeEditPlus 自体も positive ロールとして検出され、`text_edit = ""` でノードIDが小さいため `positiveNodes[0]` になっていた。
 - これによりテキストエリアに空文字が表示され、ImpactWildcard ノードのプロンプトが埋もれていた。
 - **修正**: `text_edit` が空文字列の場合は `prompt_nodes` に追加しないよう条件を追加（`textVal !== ""`）。空の text_edit は「上流ノードからプロンプトが来る場合のデフォルト状態」であり、UI で表示する必要がない。
 
 **原因3: object_info マッピングの不確実性**
+
 - `convertUiToApi()` で impact-pack バージョンによる `object_info` のウィジェット順序差異が発生した場合、`wildcard_text` が正しくマッピングされない可能性があった。
 - **修正1**: ポストプロセスで `widgets[0]` を常に `wildcard_text` として上書き（`!("wildcard_text" in inputs)` ガードを除去）。
 - **修正2**: `_getWidgetMapping()` フォールバックに `ImpactWildcardProcessor: ["wildcard_text"]`、`ImpactWildcardEncode: ["wildcard_text"]` を追加（ComfyUI オフライン時の対応）。
@@ -2880,6 +3087,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ## 2026-06-19: AI TOOL タブ Chat ペイン・ワイルドカード生成追加（v0.3.40）
 
 ### Chat ペイン（`templates/index.html`, `static/css/main.css`, `static/js/ai-tab.js`, `web/comfyui/node_sets_menu.js`）
+
 - AI TOOL タブを 3ペイン → **4ペイン**（Translation | Chat | TOOLS | Settings）に変更
 - Chat ペイン: LLM とのマルチターン会話；会話履歴を毎回送信；Enter で送信、Shift+Enter で改行；Clear ボタンで履歴リセット
 - Ollama: `/api/chat` エンドポイント（`messages` 配列）、LM Studio: `/v1/chat/completions`（同形式）
@@ -2888,6 +3096,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - CSS: `.wfm-ai-chat-*` / `.wfm-nlp-ai-chat-*` でユーザーバブル（右）・アシスタントバブル（左）スタイル追加
 
 ### ワイルドカード生成（`templates/index.html`, `static/css/main.css`, `static/js/ai-tab.js`, `web/comfyui/node_sets_menu.js`）
+
 - TOOLS ペインのドロップダウンに「Create wildcards」オプションを追加
 - タスク切替で UI を動的切り替え：VLM選択時→ドロップゾーン表示、Wildcard選択時→Name・Count入力フォームを表示
 - プロンプト: `Generate ${count} wildcard entries for the category "${name}". Output only plain text in English, one entry per line, no numbers, no markdown, no asterisks, no bold, nothing else.`
@@ -2895,6 +3104,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - SPA（`static/js/ai-tab.js`）とサイドパネル（`web/comfyui/node_sets_menu.js`）両方に実装
 
 ### ヘルプ・i18n（`static/js/i18n.js`, `static/js/app.js`, `templates/index.html`）
+
 - AI TOOL タブヘルプを5項目→6項目に再構成（ai-3: Chat、ai-4: VLM、ai-5: Wildcards、ai-6: 設定）
 - `helpSidepanel16` を EN/JA/ZH 更新（Chat・ワイルドカード機能を追記）
 - `helpAi1`〜`helpAi6` を EN/JA/ZH 全更新
@@ -2905,15 +3115,18 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ## 2026-06-18: Send to Canvas機能追加（ワークフロータブ・ギャラリータブ→LibraryタイトルDnD）
 
 ### ワークフロータブ — Send to Canvas（`static/js/workflow-tab.js`, `static/js/app.js`, `templates/index.html`）
+
 - ツールバーおよび詳細モーダルの **Open in ComfyUI** ボタンを **Send to Canvas** に変更
 - `sendToCanvas(workflowData)`: ワークフローJSONを `localStorage["wfm_pending_workflow"]` に保存してトースト表示（新しいブラウザタブを開かない）
 - `openInComfyUI()` 関数は後方互換のため残置
 
 ### ギャラリータブ — Copy & Send Canvas（`static/js/gallery-tab.js`, `templates/index.html`）
+
 - **Copy Workflow** ボタンを **Copy & Send Canvas** にリネーム
 - クリック時にクリップボードコピーと `localStorage["wfm_pending_workflow"]` への保存を同時実行
 
 ### Workflow Studio Library — タイトルドラッグ（`web/comfyui/node_sets_menu.js`）
+
 - `createPanel()` 内でタイトル要素（`.wfm-nlp-title`）にドラッグロジックを追加
   - `updateTitlePendingState()`: `localStorage` の `wfm_pending_workflow` 有無を検出して `draggable` 属性・CSS クラス・`title` 属性を動的切り替え
   - `panel.mouseenter` / `window.storage` イベントで状態を自動更新（メインアプリ→ComfyUI切り替え後も検出）
@@ -2923,6 +3136,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - CSS: `.wfm-nlp-title-pending { color: #66aaff; cursor: grab }` + `::after` で緑●インジケーター表示
 
 ### i18n・ヘルプ（`static/js/i18n.js`, `static/js/app.js`, `templates/index.html`）
+
 - `sendToCanvas` / `copyAndSendCanvas` / `workflowSentToCanvas` を EN/JA/ZH に追加
 - ヘルプ: `helpWf6`（send to canvas）・`helpGallery8`（Copy & Send Canvas説明）を3言語更新
 - ヘルプ: `helpSidepanel17` 新規追加（タイトルドラッグ機能説明）を3言語で追加、app.jsマッピング・index.html li要素も追加
@@ -2932,6 +3146,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ## 2026-06-15: TaggerシングルGenUI:Pボタン追加＋生成UIのZITワークフロープロンプト解析修正
 
 ### TaggerシングルGenUI:Pボタン（`templates/index.html`, `static/js/tagger-tab.js`, `static/js/i18n.js`）
+
 - Single タブの結果アクション行に **GenUI:P** ボタンを追加（「プロンプトに送信」の左隣）
 - クリックすると生成UIタブの `#wfm-prompt-pos-text`（ポジティブプロンプトtextarea）末尾にタグを追記し、`#wfm-prompt-pos-apply` を自動クリックしてワークフローへ即時反映
 - 生成UIにワークフローが読み込まれていない場合は警告トーストを表示
@@ -2939,6 +3154,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - ヘルプ: `helpTagger6` を5項目に更新（GenUI:P を先頭に追加）
 
 ### 生成UIのZIT/Lumina2ワークフロープロンプト解析修正（`static/js/comfyui-workflow.js`, `py/services/workflow_analyzer.py`）
+
 - `comfyui-workflow.js` の `COND_PASSTHROUGH` から `"ConditioningZeroOut"` を除外
   - ZITワークフローでは KSampler.negative → ConditioningZeroOut → CLIPTextEncode という接続を持つが、ConditioningZeroOut は上流テキストを完全に破棄するため negative ロールを上流に伝播すべきでない
   - 修正前: CLIPTextEncode が positive / negative 両ロール付与 → `getRole()` が "unknown" → Generate UI のプロンプト欄に表示されない
@@ -2951,12 +3167,14 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ## 2026-06-15: Taggerバッチ.txt出力追加＋Galleryタグ保存バグ修正
 
 ### Taggerバッチ.txt出力（`templates/index.html`, `static/js/tagger-tab.js`, `static/js/i18n.js`, `py/routes/tagger_routes.py`, `py/services/tagger_service.py`）
+
 - バッチ出力オプションに **Write .txt** チェックボックスを追加
 - 有効にすると処理した各画像と同一フォルダに `<ファイル名>.txt`（UTF-8）を生成、Interrogator + VLM タグのカンマ区切り文字列を書き込む
 - `batch_start()` シグネチャに `write_txt: bool` パラメータを追加、ルート・フロントエンドも連動更新
 - i18n: `taggerBatchWriteTxt` キーを EN/JA/ZH に追加
 
 ### Galleryタグ保存バグ修正（`static/js/tagger-tab.js`）
+
 - `_saveToGallery()` がタグをカンマ区切り文字列のまま POST していたため、Gallery が `img.tags.forEach is not a function` エラーで更新不能になっていた
 - 修正: 送信前に `tags.split(",").map(s => s.trim()).filter(Boolean)` で配列に変換
 
@@ -2967,6 +3185,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### Taggerタブ新規実装
 
 #### バックエンド（`py/config.py`, `py/services/tagger_service.py`, `py/services/tagger_db_service.py`, `py/routes/tagger_routes.py`, `py/wfm.py`）
+
 - `py/config.py`: `TAGGER_DB_FILE` / `TAGGER_SETTINGS_FILE` / `TAGGER_MODELS_DIR`（`ComfyUI/models/tagger/`）定数追加
 - `TaggerService`: WD Tagger（ONNX）・SwinV2・DeepDanbooru（.h5 / TensorFlow optional）推論、Ollama VLM連携（`/api/chat`）、JPEGへのpiexif EXIF書込・PNGへのPngInfo書込・サイドカー.tags.json書込、スレッドベースバッチ処理（`batch_start` / `batch_stop` / `batch_status`）、設定の永続化
 - `TaggerDbService`: SQLite（`tagger.db`）によるタグ保存・一覧・検索・更新・削除・CSV出力
@@ -2975,6 +3194,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - `requirements.txt` 新規作成: `onnxruntime>=1.16`・`piexif>=1.1.3` を必須、TensorFlow をオプション（コメントアウト）として記載
 
 #### フロントエンド（`templates/index.html`, `static/css/tagger-tab.css`, `static/js/tagger-tab.js`, `static/js/i18n.js`, `static/js/app.js`）
+
 - `templates/index.html`: Taggerタブナビボタン追加、`<section id="wfm-tab-tagger">` を追加（Single / Batch / DBの3サブタブ構成）
 - `static/css/tagger-tab.css` 新規作成: サブタブナビ・シングルレイアウト・プレビューエリア（破線ボーダー＋ドラッグオーバーハイライト）・バッチ進行状況バー・DBテーブルのスタイル
 - `static/js/tagger-tab.js` 新規作成:
@@ -2987,6 +3207,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - `static/js/app.js`: `tabMap` に `tagger` 追加、`initTaggerTab()` インポート＆呼び出し追加
 
 ### ギャラリー詳細パネルUI改善（`templates/index.html`, `static/css/gallery-tab.css`, `static/js/gallery-tab.js`, `static/js/app.js`）
+
 - タブ行（Info / JSON / Groups）とアクションボタン行（Metadata / Load GenUI / Tagger）を分離: タブは `wfm-side-tab-nav`、ボタンは新設の `wfm-gallery-detail-action-row` へ移動
 - `.wfm-gallery-detail-action-row` のCSSを `gallery-tab.css` に追加（`flex`・`flex-wrap`・`padding`）
 - Galleryの詳細パネルに **Tagger** ボタン（`wfm-gallery-open-tagger-btn`、紫）追加: クリックで選択画像を `openImageInTaggerTab()` へ渡してTaggerタブへ遷移・画像ロード
@@ -2994,11 +3215,13 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - `app.js` の `applyI18nToHtml()` でTaggerボタンのテキストを `t("tabTagger")` に設定
 
 ### セキュリティ修正: パストラバーサル対策（`py/services/tagger_service.py`, `py/services/gallery_service.py`）
+
 - `TaggerService._validate_model_name()`: モデル名に `/` `\` `..` `\x00` が含まれる場合はロード拒否（`mdir / model_name` のパストラバーサルを防止）
 - `TaggerService.write_meta_to_file()`: ユーザー指定パスを `resolve()` した上で許可拡張子（`.jpg/.jpeg/.png/.webp/.bmp/.gif`）のみ処理、それ以外はエラー返却
 - `GalleryService._check_path_allowed()`: `_allowed_root is None` のときに tautology（`resolved == path.resolve()`、常にTrue）だった判定を `return False` に修正（`list_folder_tree` 呼び出し前に全パスが通る問題を解消）
 
 ### ヘルプ更新（`templates/index.html`, `static/js/i18n.js`, `static/js/app.js`）
+
 - ヘルプナビに「Tagger Tab」追加
 - Taggerタブのヘルプページ新設（9項目: モデル配置・Single操作・閾値・Ollama・出力先・Batch・DB・インストール手順）EN/JA/ZH
 - Galleryタブヘルプに `helpGallery14`（Taggerボタン説明）を EN/JA/ZH で追加
@@ -3011,12 +3234,14 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### Modelsタブ: 複数選択バーに「全選択」ボタン追加（`static/js/models-tab.js`, `static/js/i18n.js`）
+
 - `selectAll()` 関数を追加: `filterModels()` の結果（フィルター・検索適用後の表示中モデル）を `state.selectedModels` に一括追加して `renderModelGrid()` / `renderBulkActionBar()` を呼び出す
 - `renderBulkActionBar()` のバーHTMLに `wfm-bulk-select-all-btn` を Deselect All ボタンの右隣に追加
 - イベントリスナーを追加（`"wfm-bulk-select-all-btn"` → `selectAll`）
 - i18n: `modelBulkSelectAll` を英語 "Select All" / 日本語 "全選択" / 中国語 "全选" で追加
 
 #### Galleryタブ: 複数選択バーに「全選択」ボタン追加＋全ボタンi18n対応（`templates/index.html`, `static/js/gallery-tab.js`, `static/js/app.js`, `static/js/i18n.js`）
+
 - `wfm-gallery-bulk-select-all` ボタンを Deselect All ボタンの右隣に追加（`templates/index.html`）
 - クリックリスナー: `state.images` の全パスを `state.selectedImages` に追加し `renderImages()` / `updateBulkBar()` を呼び出す
 - バルクバーの全ボタン・セレクトのテキストを空にして `applyI18nToHtml()` 経由で `t()` 設定に変更（ハードコード英語文字列を排除）
@@ -3032,6 +3257,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### コードレビュー修正（v0.3.35の不具合10件）
 
 #### ヘルプi18n配線の修正（`static/js/i18n.js`, `static/js/app.js`, `templates/index.html`）
+
 - **バグ**: `applyI18nToHtml()` が起動時に全言語でヘルプ文を上書きするため、v0.3.35でindex.htmlに追記したヘルプ更新（Saveボタン・ソート・JSONタブ改名）が一切表示されなかった
 - `helpGen2` / `helpModels2` / `helpGallery8` / `helpGallery10` を3言語ともindex.htmlの新文言に同期
 - `helpGallery12` / `helpGallery13` キーを3言語で新規追加（Metadata / Load GenUI ボタン説明）
@@ -3039,6 +3265,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - index.html の「Thumbnail, Card, and Table」誤記を修正（カードビューはv0.3.22で廃止済み）
 
 #### GenerateUI Save の安全化（`static/js/generate-tab.js`）
+
 - **上書き確認**: 保存前に `GET /api/wfm/workflows` で既存ファイルを照会し、同名があれば confirm 表示。保存先が **UI形式**（`analysis.format === "ui"`）の場合はAPI形式上書きでノード配置が失われる旨の専用警告
 - **Raw JSON同期**: Raw JSONテキストエリアに未Applyの編集があればパースして保存対象に反映し、保存後エディタへ同期。不正JSONはエラーで中断（従来は古い内容を黙って保存していた）
 - **HTML注入防止**: ファイル名を `value="${...}"` 属性埋め込みからDOM経由の `input.value` 設定に変更
@@ -3046,6 +3273,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - **二重送信ガード**: `saving` フラグでEnter連打・多重POSTを防止
 
 #### その他
+
 - `sortModels` を decorate-sort-undecorate 方式に変更（`sortKeyOf()` で1モデル1回だけキー計算。比較ごとの `parseModelPath` 再計算を解消）（`static/js/models-tab.js`）
 - ギャラリーの Metadata / Load GenUI ボタンを `.wfm-gallery-detail-tab-btn` から専用の `.wfm-gallery-action-btn` に分離し、CSSの `!important` 16箇所を全廃（`templates/index.html`, `static/css/gallery-tab.css`）
 - Save関連・ギャラリーの新規文字列をi18n化（`saveWorkflowTitle` / `savedAs` / `overwriteConfirm` / `gallerySelectImageFirst` 等を3言語追加）
@@ -3053,10 +3281,12 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### リファクタリング
 
 #### util.js 新設（`static/js/util.js` 新規）
+
 - `escapeHtml()`: 5ファイル（gallery / metadata / models / nodes / workflow）の重複定義を統一。metadata-tab版は `"` エスケープが抜けており属性値でHTML注入の恐れがあった（修正済み）
 - `readJsonStorage(key, fallback)` / `getSettings()`: `JSON.parse(localStorage.getItem(...))` の直書き15箇所（8ファイル）を置換。try/catchの重複も削減
 
 #### トーストi18n化（全タブJS, `static/js/i18n.js`）
+
 - ハードコード英語トースト約115箇所をすべて `t()` 化（残り0件）
 - 共通キー約60個を3言語（EN/JA/ZH）で追加: `errorWithMsg` / `groupCreated` / `presetSavedName` / `batchNoneSelected` / `generationComplete` など
 - 既存キーとの衝突回避: 文字列型の既存 `importError` / `presetSaved` と重複したため、新関数型キーは `importErrorMsg` / `presetSavedName` に命名
@@ -3065,6 +3295,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - 検証: 全 `t()` 呼び出しキーの定義確認・3言語のキー完全一致・重複キーなし・全JS構文チェック通過
 
 ### README刷新（`README.md`, `pyproject.toml`, `docs/`）
+
 - 冒頭説明文を3本柱構成に書き換え: 📁 Management（ワークフロー/モデル/画像/プロンプト管理、AIプロンプト支援・翻訳・タグ生成、ファイルドロップ＆ギャラリー連携メタデータ）/ ⚡ GenerateUI（全タブ連携、モデル・サンプラー等バッチ生成、Image Feeder）/ 📚 Workflow Studio Library（キャンバスドロップ、画像/JSONメタデータ表示＆ドロップ、AIツール）
 - スクリーンショット差し替え・追加: `6_ws_library.png` 差し替え、`9_GenUI_LoraStack.png`（GenUI LoRA Stack）・`10_GenUI_Batch.png`（GenUI Batch）・`11_multiple_select_menu.png`（Models Multi-select Menu）を新規追加し、生成UI系3枚が連続するよう表を再配置
 - `pyproject.toml` の `description` をREADME新説明文と整合する内容に更新
@@ -3076,6 +3307,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### Modelsタブ テーブルビュー: 列ヘッダークリックでソート（`static/js/models-tab.js`, `static/css/main.css`）
+
 - `state` に `sortColumn`（null または列キー）と `sortDir`（`"asc"` / `"desc"`）を追加
 - `sortModels(models)` 関数を追加：ソート列に応じて ★・ファイル名・サブディレクトリ・Type・Base Model・拡張子・Tags・Memo・E/D の各キーで昇降順ソートを実行
 - `filterModels()` の末尾で `sortModels()` を呼び出し、フィルタ後の全ビューに適用
@@ -3085,6 +3317,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - `.wfm-table-th-sortable` CSS を追加（`cursor: pointer`、`-webkit-user-select: none`、`white-space: nowrap`、ホバー時アクセントカラー）
 
 #### ギャラリータブ: Load GenUI ボタン追加（`templates/index.html`, `static/js/gallery-tab.js`, `static/css/gallery-tab.css`）
+
 - 詳細パネルのタブナビに **Load GenUI**（青）ボタン（`wfm-gallery-load-genui-btn`）を Metadata ボタンの右隣に追加
 - `gallery-tab.js` に `loadWorkflowIntoEditor` を `generate-tab.js` からインポート
 - クリック時の動作：画像未選択 → warning トースト / ワークフロー未埋め込み → warning トースト / 非対応フォーマット → `loadWorkflowIntoEditor` 内でトースト表示 / 成功時 → GenerateUI タブへ自動切り替え
@@ -3092,6 +3325,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - `gallery-tab.css` に `.wfm-gallery-action-btn-green`（緑）・`.wfm-gallery-action-btn-primary`（`--wfm-primary` 青）スタイルを追加：`padding`・`border-radius`・`align-self: center`・`margin` を共通指定
 
 #### GenerateUIタブ: Save ボタン追加（`templates/index.html`, `static/js/generate-tab.js`）
+
 - `wfm-gen-subtab-nav` の右端（`margin-left:auto`）に **Save** ボタン（`wfm-gen-save-btn`、`wfm-btn-primary`）を設置
 - `generate-tab.js` のインポートに `openModal`・`closeModal` を追加
 - `saveCurrentWorkflow()` 関数を追加：
@@ -3102,6 +3336,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
   - エラー時はトーストでメッセージ表示
 
 #### ヘルプ更新（`templates/index.html`）
+
 - GenerateUI Tab（`wfm-help-gen-2`）：Save ボタンの説明を追加
 - Gallery Tab（`wfm-help-gallery-8/10`）：「Metadata tab」→「JSON tab」に表記修正；`wfm-help-gallery-12/13` として Metadata（緑）・Load GenUI（青）ボタンの説明を新規追加
 - Models Tab（`wfm-help-models-2`）：テーブルヘッダークリックソートと E/D 列の説明を追記
@@ -3113,22 +3348,26 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### テーブルビュー: Type / Base Model 列追加（`static/js/models-tab.js`, `static/css/main.css`）
+
 - `renderTableView` にて Subdirectory と Extension 列の間に **Type** / **Base Model** 列を追加
 - データは `state.civitaiCache[sha256]` から取得（追加API呼び出しなし）
 - `.wfm-table-th-civtype` / `.wfm-table-td-civtype`（70px）、`.wfm-table-th-basemodel` / `.wfm-table-td-basemodel`（110px）を追加
 - `.wfm-table-th-filename` / `.wfm-table-td-filename` の `max-width` を 160px に制限し、overflow ellipsis 適用
 
 #### モーダル: Delete ボタン追加（`static/js/models-tab.js`）
+
 - 詳細モーダルにモデル削除ボタンを設置
 - `POST /api/wfm/models/delete` を呼び出してモデルファイル本体および全サイドカーファイル（`.preview.png`、`.json`、`.civitai.info`、`.metadata.json`、`.cm-info.json` など）を削除
 - 削除後にローカルステート（`modelsByType`、`modelMetadata`、`disabledModels`、`selectedModels`）を差分更新して `renderModelGrid()` を呼び出す
 
 #### バルクアクションバー: ファイル移動機能追加（`static/js/models-tab.js`, `static/css/main.css`）
+
 - `fetchSubdirs()` 関数追加：`GET /api/wfm/models/subdirs?type=` でルート直下のサブフォルダ一覧を取得し `state.subdirs` にキャッシュ
 - `bulkMoveModels(destSubdir)` 関数追加：`POST /api/wfm/models/move` で選択モデルをサブフォルダへ移動（サイドカーファイルも同時移動）。ローカルステートのキー（`modelsByType`、`modelMetadata`、`disabledModels`）を移動後の相対パスに更新
 - 移動後に `fetchSubdirs()` → `renderDirFilter()` → `renderModelGrid()` → `renderBulkActionBar()` を連続実行
 
 #### バルクアクションバー: UI再構成（`static/js/models-tab.js`, `static/css/main.css`）
+
 - バーを **ヘッダー行**（件数表示・Deselect All・Favorite 操作）＋**3行グリッド**（Group / Badge / File）に再構成
 - **Group 行**：グループ選択ドロップダウン・Add / Remove ボタン・新規グループ名入力・Create & Add
 - **Badge 行**：バッジ選択ドロップダウン・+Badge / −Badge ボタン
@@ -3138,17 +3377,20 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - 各ドロップダウン幅を 110px → 330px に拡大
 
 #### バックエンド: subdirs / move エンドポイント追加（`py/services/models_service.py`, `py/routes/models_routes.py`）
+
 - `ModelsService.get_subdirs(model_type)` — ルート直下のディレクトリ名一覧を返す
 - `ModelsService.move_models(model_type, model_names, dest_subdir)` — モデルと全サイドカーを `shutil.move` で移動。パストラバーサル防止（`..` チェック・セパレーター禁止・絶対パス禁止・`resolve().relative_to()` containment検証）・上書き防止を実装
 - `GET /api/wfm/models/subdirs`、`POST /api/wfm/models/move` ルートを登録。`_VALID_MODEL_TYPES` frozenset でモデルタイプをホワイトリスト検証
 - `_SIDECAR_EXTENSIONS` に `.metadata.json`、`.cm-info.json` を追加（delete / move 両操作に反映）
 
 #### B/S ボタン: 行移動バグ修正（`static/js/models-tab.js`）
+
 - `toggleBatch` / `toggleStack` から `renderModelGrid()` 呼び出しを削除
 - テーブルビュー・カードビュー両方の B / S ボタンハンドラーを `async` に変更し、`await` 後にボタンの `active` クラスのみを差分更新（`classList.toggle`）
 - `state.showBatchOnly` フィルター有効時（バッチから外すと行が消えるべき場合）のみ `renderModelGrid()` を呼び出す
 
 #### ギャラリー → Metadata タブ連携（`static/js/gallery-tab.js`, `static/js/metadata-tab.js`）
+
 - `metadata-tab.js` に `loadFileIntoMetadataTab(file)` をエクスポート：Metadata タブへ切り替えてファイルを読み込む外部 API
 - `gallery-tab.js` に `openImageInMetadataTab(img)` を追加：画像を fetch してバイナリを Metadata タブに渡す
 - ギャラリー画像カード（サムネイル・テーブル両ビュー）で **Alt+クリック** すると Metadata タブで開く
@@ -3156,6 +3398,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - 詳細タブ切り替えロジックを修正（`data-detail-tab` を持つボタンのみ active/display を切り替え、Metadata ボタンを除外）
 
 #### ヘルプ更新（`templates/index.html`）
+
 - Models Tab ヘルプ（`wfm-help-models-2`、`-6`、`-7`、`-11`）を今回の変更に合わせて更新
 
 ---
@@ -3165,25 +3408,30 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### LoRAペイン：ワークフロー読み込み時のLoraManager上書き防止（`static/js/comfyui-editor.js`）
+
 - `renderLoraPane` 末尾にあった「Auto-apply Stack to LoraManager on load」ブロックを削除
 - ワークフロー読み込み時にModelタブのStackグループ内容が `inputs.loras` / `inputs.text` を上書きし、RAW JSONが変わるバグを修正
 - Apply ボタン押下時のみStackがLoraManagerに書き込まれる正しい動作に
 
 #### LoRAペイン：🔄ボタン押下でSingleタブに戻るバグ修正（`static/js/comfyui-editor.js`）
+
 - `renderLoraPane` 呼び出し前に現在のアクティブタブを `_prevActiveTab` に保存
 - `el.innerHTML` 再構築後にタブ状態（activeクラス・display）を復元する処理を追加
 - 🔄ボタン・モデルタブ切り替えによる再レンダリング後もStackタブに留まるよう修正
 
 #### ModelsタブCheckpointへのStackグループ非表示（`static/js/models-tab.js`）
+
 - `loadModelsForCurrentType` のグループロード後、`STACK_MODEL_TYPES`（lora のみ）に含まれないタイプでは `state.modelGroups["Stack"]` をメモリ上から削除
 - Checkpointなどのタイプでグループフィルターおよびサイドパネルのグループ管理にStackが表示されなくなった
 
 #### CLIPTextEncodeEditPlus ウィジェット値マッピング修正（`static/js/comfyui-workflow.js`）
+
 - `convertUiToApi` でUIスロット入力にリンクが接続されている場合（`linkedSlotNames`）、`widgets_values` のインデックスを進めないよう変更
 - 従来は `object_info` の STRING 型オプション入力（`text1` 等）がウィジェット名リストに含まれ、リンクあり判定でインデックスがズレていた
 - `widgets_values: ["girl", "+af", ""]` で `text_edit="girl"` / `mode="+af"` が正しくマッピングされるよう修正
 
 #### Stack Apply時のTrigger Words処理修正（`static/js/comfyui-editor.js`）
+
 - Applyクリックハンドラー内でトリガーワードをレンダリング時のスナップショット変数から取得していたため、チェックボックス変更が反映されないバグを修正
 - `currentAllTriggers` / `currentActiveTriggers` を Apply 時点で `_stackActive` + `metadata` + `civitaiCache` から動的に再計算するよう変更
 - 修正前の不具合：1回目ApplyはLORA SYNTAXのみ（TRIGGER WORDSなし）、2回目で追加される / モデル無効でApply後もTRIGGER WORDSが残る
@@ -3195,22 +3443,26 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### Lora Loader (LoraManager) LoRA検出対応（`web/comfyui/node_sets_menu.js`, `static/js/metadata-tab.js`）
+
 - `_extractLoRAs` / `extractLoRAs` の `add` 関数を `parseFloat` ベースに変更。LoraManager ノードは `strength` / `clipStrength` を文字列 (`"0.20"`) で保存するため `typeof === "number"` では `1.0` にフォールバックしていたバグを修正
 - APIフォーマット（`class_type` ベース）の `else` 節に `Lora Loader (LoraManager)` を追加。`inputs.loras.__value__` からLoRAリストを取得（`Array.isArray(inputs.loras)` をフォールバックとして併用）
 - Iタブ（ライブラリ）・Metadataタブの両方に同様の修正を適用
 
 #### `placeLoraMgrNode` textウィジェット同期（`web/comfyui/node_sets_menu.js`）
+
 - LoraManagerノード配置時に `loras` ウィジェット（配列）だけでなく `text` ウィジェット（LoRA構文）も明示的に更新するよう修正
 - strength = clipStrength の場合 `<lora:name:s>`、異なる場合 `<lora:name:s:c>` の形式で構文を生成
 - `l.strength` フォールバックを追加し、GroupsのloraList形式（`strength` キー直接）にも対応
 
 #### Mタブ Groupsの LoRAグループ → LoraManagerドロップ対応（`web/comfyui/node_sets_menu.js`）
+
 - `renderModelGroups` でLoRAタイプのグループリスト末尾に「All N LoRAs → Lora Loader (LoraManager)」アイテムを追加
 - ドラッグで `application/x-wfm-lora-multi` データ送出 → キャンバスに Lora Loader (LoraManager) ノードを全LoRAセット済みで配置
 - ダブルクリックでも即時配置（`placeLoraMgrNode`）
 - モデルファイル名から stem（拡張子・パス除去）に変換して LoraManager 名前形式に合わせる
 
 #### Pタブ Groupsサブタブ追加（`web/comfyui/node_sets_menu.js`）
+
 - `state` に `promptSubTab2` と `promptGroups` を追加
 - `loadPromptData` で `localStorage["wfm_prompt_preset_groups"]` からグループを読み込み、存在しないIDをクリーンアップ
 - Pタブのrow2に「📁 Groups」サブタブを追加（Wタブ・Nタブと同様の2段構成）
@@ -3218,6 +3470,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - Batchで作成したPromptグループが同じlocalStorageを参照するためそのままライブラリから利用可能
 
 #### ヘルプ更新（`static/js/i18n.js`）
+
 - `helpSidepanel11`（EN/JA/ZH）：PタブGroups追加・MタブLoRAグループ→LoraManagerドロップを追記
 - `helpSidepanel13`（EN/JA/ZH）：Lora Loader (LoraManager) ノードタイプ対応を追記
 - `helpSidepanel15`（EN/JA/ZH）：LoRA検出ノードタイプ一覧・APIフォーマット対応・LoRA構文自動入力を追記
@@ -3229,6 +3482,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### LoRAペイン Single/Stack タブ分割（`static/js/comfyui-editor.js`, `static/css/main.css`）
+
 - `renderLoraPane` を全面書き換え。Single / Stack の2タブ構成に変更
 - **Single タブ**: フィルター・モデルドロップダウン・強度（M/C）・ターゲットノード選択・Apply・P・LORA SYNTAX表示・TRIGGER WORDS表示
   - モデル選択・強度変更時にLORA SYNTAX が自動更新
@@ -3241,11 +3495,13 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - `comfyEditor.disableAllStack()` メソッドを追加（外部からStack全無効化）
 
 #### GenUI Model LoRA対応強化（`static/js/models-tab.js`）
+
 - `Lora Loader (LoraManager)` ノード対応: `lora_name` 検索ではなく `currentAnalysis.lora_nodes` を参照し `is_lora_manager` で書き込み形式を分岐
 - LoRA適用時: Singleタブへ切り替え・Stack全無効化・`wfm-lora-single-syntax`/`wfm-lora-single-triggers` を更新
 - Positive promptへの直接書き込みを廃止（Apply/Pボタンで明示的に反映する設計に統一）
 
 #### ヘルプ更新（`static/js/i18n.js`）
+
 - `helpGen5`: LoRA に「(Single/Stack タブ)」の説明を追加（EN/JA/ZH）
 - `helpModels8`: GenUI Model LoRA 動作の詳細を追記（EN/JA/ZH）
 
@@ -3256,12 +3512,14 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### LoRAスタック TRIGGER WORDS 表示バグ修正（`static/js/comfyui-editor.js`）
+
 - **問題**: スタックで1つのモデルを無効にしてもTRIGGER WORDSに無効モデルのトリガーワードが残っていた
 - **原因1**: 初期表示の `triggerHtml` が `allTriggerWords`（全モデル分）を使っていた → `activeTriggerWords` に修正
 - **原因2**: チェックボックス切り替え・toggle-all・強度調整時に呼ばれる `_refreshLoraPaneDynamic` がLORA SYNTAXのみ更新してTRIGGER WORDSを更新していなかった
 - **修正**: `_refreshLoraPaneDynamic(stackModels, metadata, civitaiCache)` でTRIGGER WORDSも再計算・再描画するよう拡張（アクティブモデルのみ表示）
 
 #### ヘルプ トラブルシューティング追加（`templates/index.html`, `static/js/i18n.js`, `static/js/app.js`）
+
 - LoRAスタック実行時に「No such file or directory」エラーが出る場合のトラブルシューティングを追記
 - 原因: comfyui-lora-managerが該当LoRAを認識していない（既知の問題）
 - 対処: 別のLoRAで試す、またはLora Manager自体のUIでファイルが表示されるか確認
@@ -3273,6 +3531,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### LoRAセクション統合（`static/js/comfyui-editor.js`, `static/css/main.css`）
+
 - 単体LoRAセクションとStackセクションを1つの統合レイアウトに統合（重複を削除）
   - 表示順: Filter → Model select → ID行（ID select / Apply / P） → Strength行（Stack label / ☑ / M / C / Str M adjuster / C adjuster） → Lora syntax → Trigger words → Stack model一覧
 - **Apply ボタン統合**: 単体・スタック共通の1ボタンに
@@ -3290,10 +3549,12 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - **All調整行をグリッドレイアウトに変更**: 個別モデル行と同じ `grid-template-columns` で右揃えに
 
 #### Modelsタブ — モデル選択時のデフォルトタブ変更（`static/js/models-tab.js`）
+
 - サイドパネルのデフォルト表示タブを「Info」から「CivitAI」に変更
 - モデル選択のたびにCivitAI情報が即座に表示される
 
 #### ヘルプタブ — 左サイドバー化（`templates/index.html`, `static/js/app.js`, `static/css/main.css`）
+
 - 1カラムスクロールから「左サイドバー（170px） + 右コンテンツペイン」の2カラムレイアウトに変更
 - サイドバーに14項目のナビゲーションボタンを配置、選択中項目をハイライト（左ボーダー + プライマリカラー）
 - Supportを最下部に固定表示（`border-top` セパレーター付き）
@@ -3301,6 +3562,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 - `initHelpTab()` を `app.js` の `DOMContentLoaded` に追加
 
 #### ヘルプコンテンツ更新（`templates/index.html`）
+
 - **GenerateUI Tab (gen-2)**: Reset Workflowボタンの説明を追加
 - **GenerateUI Tab (gen-4)**: InputタブのPrompt/Imageタブ化・テキストボックス高さ2倍の説明に更新
 - **GenerateUI Tab (gen-5)**: LoRA Stack ApplyによるLoRA Syntax + Trigger Words同期の説明を追加
@@ -3315,6 +3577,7 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### LoRA Stack Ctrl+Apply — トリガーワード追加 + 再適用時の差分更新（`static/js/comfyui-editor.js`）
+
 - Ctrl+Apply 時に LORA SYNTAX に続いてアクティブモデルのトリガーワードをプロンプトへ追加
   - 追加形式：`既存プロンプト, <lora:...>, triggerA, triggerB`
 - `activeTriggerWords`（アクティブのみ）と `allTriggerWords`（UI表示用・全モデル）を分離
@@ -3324,18 +3587,22 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
   - 全スタックモデルのトリガーワードをカンマ分割で除去してから再追加
 
 #### Reset Workflow ボタン（`templates/index.html`, `static/js/generate-tab.js`）
+
 - 上部ツールバーの「Refresh Models」右隣に「Reset Workflow」ボタンを追加
 - 現在読み込まれているファイル（`.json`）を `/api/wfm/workflows/raw` から再取得して再ロード
 - `loadWorkflowIntoEditor` でファイル名を `data-filename` 属性に保存し Reset 時に参照
 - ファイルベースでない場合（Raw JSON貼り付け等）は警告トーストを表示
 
 #### Inputタブ — Prompt/Image タブ化 + テキストボックス高さ2倍
+
 **タブ化**（`templates/index.html`, `static/js/generate-tab.js`, `static/css/main.css`）
+
 - Prompt と Image を上下スタックから「Prompt | Image」の内部タブ構成に変更
 - `.wfm-input-inner-tabnav` / `.wfm-input-inner-tab` / `.wfm-input-inner-panel` を新規追加
 - アクティブタブにはアンダーライン強調スタイルを適用
 
 **テキストボックス高さ2倍**（`static/js/comfyui-editor.js`）
+
 - Positive Prompt: `rows="4"` → `rows="8"`
 - Negative Prompt: `rows="3"` → `rows="6"`
 
@@ -3346,16 +3613,19 @@ Feeder タブにギャラリー連携モードを追加。外部プラグイン�
 ### 変更内容
 
 #### (root)フォルダの自動選択（`static/js/feeder-tab.js`）
+
 - `initFeederTab()` 末尾に `_selectDir("")` を追加
 - タブを開いた初期状態で (root) がハイライトされ、画像一覧が即座に表示される
 
 #### PREVIEWペインをレイアウト最右に移動（`templates/index.html`）
+
 - `wfm-feeder-preview-pane` を `wfm-feeder-library-body`（内側 flex row）から
   `wfm-feeder-layout`（外側 flex row）の直接子に移動
 - IMAGES グリッドが横幅を最大限確保できるようになった
 - レイアウト構造：`Settings (220px) | Library (flex:1) | Preview (160px)`
 
 #### RUN中のプレビュー自動更新（`static/js/feeder-tab.js`）
+
 - `_startRun()` 内の `_syncHandler` で `thumbnail_path` 受信時に `_showPreview()` を呼び出し
 - ノード実行完了のたびに処理中の画像サムネイル・ファイル名・解像度がPREVIEWペインに反映される
 
@@ -3373,30 +3643,36 @@ GenerateUI の Batch タブにサンプラー・スケジューラーのバッ�
 #### Modelsタブ サムネイル変更バグ修正
 
 **原因1: ブラウザキャッシュ**（`py/routes/models_routes.py`）
+
 - `handle_get_preview` の `Cache-Control` を `public, max-age=3600` → `no-cache` に変更
 - モーダルを閉じて再度開いた際、ブラウザが1時間キャッシュした古い画像を返し続けていた
 
 **原因2: 破損ファイルの検出なし**（`py/services/models_service.py`）
+
 - `find_preview_image` でファイルサイズが 100バイト未満のファイルをスキップするよう変更
 - 0バイトや極小の破損プレビューファイルが返されてカードが黒く表示される問題を解消
 
 **原因3: disabledモデルの非対応**（`py/routes/models_routes.py`）
+
 - `handle_change_preview` でモデルファイルを検索する際、`.disabled` 拡張子付きファイルも候補に追加
 - 無効化済みモデルのサムネイル変更が「Model file not found」エラーになっていた
 
 #### GenerateUI Batchタブ Sampler/Scheduler対応
 
 **左ペインのタブ化**（`templates/index.html`, `static/js/generate-tab.js`, `static/css/main.css`）
+
 - 左ペインを Checkpoints / Sampler / Scheduler の3タブ構成に変更
 - Sampler・Scheduler タブには KSampler ノードから取得したリストをチェックボックスで表示
 - 各リストは Checkpoint と同様の `(root)` グループ行（全選択チェックボックス + 折りたたみ）で構成
 - All/None ツールバーボタンも各タブに配置
 
 **BATCH QUEUE 拡張**（`templates/index.html`）
+
 - Sampler 列・Scheduler 列を追加し合計6列（Checkpoint / Lora / Prompt / Workflow / Sampler / Scheduler）
 - `.wfm-batch-right` の最小幅を 320px → 380px に拡張
 
 **バッチ処理ロジック追加**（`static/js/generate-tab.js`）
+
 - `_batchGroupState` に `_samplerSelected`・`_schedulerSelected`（Set）を追加
 - `_buildSimpleGroupList()` 共通関数を新規追加（Sampler・Scheduler リストの (root) グループ描画）
 - `_renderBatchPreview()` に Sampler・Scheduler 列を追加
@@ -3424,28 +3700,32 @@ GenerateUI の Batch タブにサンプラー・スケジューラーのバッ�
 
 #### ワークフロー解析対応（`comfyui-workflow.js`）
 
-| ノード表示名 | クラス名 | 検出区分 |
-|---|---|---|
-| CLIP Text Encode edit+ | `CLIPTextEncodeEditPlus` | prompt_nodes |
-| Model from Metadata | `ImageMetadataCheckpointLoader` | 既存 `CheckpointLoader` 判定で検出済み |
-| Model-Prompt from Metadata | `ImageMetadataPromptLoader` | checkpoint_nodes + prompt_nodes（両方） |
-| LoRA from Metadata | `ImageMetadataLoRALoader` | lora_nodes（3スロット） |
+| ノード表示名               | クラス名                          | 検出区分                                |
+| -------------------------- | --------------------------------- | --------------------------------------- |
+| CLIP Text Encode edit+     | `CLIPTextEncodeEditPlus`        | prompt_nodes                            |
+| Model from Metadata        | `ImageMetadataCheckpointLoader` | 既存`CheckpointLoader` 判定で検出済み |
+| Model-Prompt from Metadata | `ImageMetadataPromptLoader`     | checkpoint_nodes + prompt_nodes（両方） |
+| LoRA from Metadata         | `ImageMetadataLoRALoader`       | lora_nodes（3スロット）                 |
 
 **`CLIPTextEncodeEditPlus`**
+
 - `text1` は `forceInput`（常にリンク接続）のため直接読み取り不可
 - ローカル上書きテキスト `text_edit` を編集ターゲット（`textKey: "text_edit"`）として prompt_nodes に登録
 
 **`ImageMetadataPromptLoader`**
+
 - 単一ノードが checkpoint + positive/negative プロンプトを兼ねる構造
 - `checkpoint_nodes` に `ckpt_name` で登録
 - `positive_text` を role `"positive"`、`negative_text` を role `"negative"` として prompt_nodes に登録
 - ロールはハードコード（sampler → CONDITIONING のスロット番号で両方参照される可能性があるため `getRole()` に依存しない）
 
 **`ImageMetadataLoRALoader`**
+
 - `lora_1`〜`lora_3` を順にチェックし、`"None"` 以外のスロットを lora_nodes に登録
 - 各スロットの `strength_model_N` / `strength_clip_N` も合わせて取得
 
 **`_getWidgetMapping` 静的フォールバック追加**
+
 - `object_info` 取得失敗時の UI→API 変換用マッピングに上記4ノードを追加
 
 #### README 修正（`README.md`）
@@ -3514,24 +3794,29 @@ Models タブでの Stack グループ更新が即座に反映されるように
 #### `Lora Loader (LoraManager)` ノード対応
 
 **ワークフロー解析 (`comfyui-workflow.js`)**
+
 - `analyzeWorkflow()` に `Lora Loader (LoraManager)` 検出ブロックを追加
 - `lora_nodes` に `{ id, type, title, is_lora_manager: true }` として登録
 
 **ヘルパー関数追加 (`comfyui-editor.js`)**
+
 - `_buildLoraManagerSyntax(stackModels)` — `<lora:name:strM:strC>` 形式（スペース区切り）
 - `_applyLoraToNode(nodeId, loraPath, strModel, strClip, isLoraManager)` — ノード種別に応じた書き込み
   - LoraManager: `inputs.loras.__value__` + `inputs.text` を更新
   - 標準 LoraLoader: `inputs.lora_name` / `strength_model` / `strength_clip` を更新
 
 **単体 Apply (`comfyui-editor.js`)**
+
 - Apply ボタンが `is_lora_manager` フラグを確認し、LoraManager 形式で書き込み
 
 **Stack Apply (`comfyui-editor.js`)**
+
 - LoraManager ターゲット: Stack の全モデルを `__value__` 配列に一括適用
   - 無効モデルは `active: false` で配列に保持（データを削除しない）
 - 標準 LoraLoader ターゲット: 従来通り先頭モデルのみ適用
 
 **バッチ生成 (`generate-tab.js`)**
+
 - "lora" バッチケースで `is_lora_manager` を確認
 - LoraManager ノードには `inputs.loras.__value__` + `inputs.text` を書き込み
 - 標準 LoraLoader ノードは従来通り `inputs.lora_name` を書き込み
@@ -3599,9 +3884,11 @@ Lora ペインに単体適用セクションと Stack セクション（構文�
 #### 生成UI Lora ペイン（`comfyui-editor.js`, `main.css`）
 
 **単体セクション（上部）**
+
 - フィルター入力 / モデルセレクト / ノード ID + Apply ボタン / Strength M・C
 
 **Stack セクション（下部）**
+
 - Stack ラベル + ノード ID セレクト + Apply ボタン
   - 通常クリック: 選択ノードに Stack 先頭 Lora を適用
   - **Ctrl+クリック**: Input タブ Positive プロンプト末尾に Lora 構文をカンマ区切りで追加し、ワークフローにも反映
@@ -3617,11 +3904,13 @@ Lora ペインに単体適用セクションと Stack セクション（構文�
 ### バグ修正
 
 **ワークフローバッチ 404 エラー修正（`generate-tab.js`）**
+
 - `_runBatchGenerate()` の workflow ケースで、ワークフローファイル取得 URL が
   `/api/wfm/workflows/{filename}`（存在しないルート）になっていた
 - 正しいエンドポイント `/api/wfm/workflows/raw?filename={filename}` に修正
 
 **ワークフローリネーム二重送信バグ修正（`workflow-tab.js`）**
+
 - モーダルを開くたびに `titleInput.addEventListener("blur", commitRename)` が累積していた
 - 2回目以降のリネーム時に blur が複数発火し、同一ファイルへのリネームリクエストが
   2本送られて 1本目成功後に 2本目が 409 または 404 になっていた
@@ -3639,21 +3928,25 @@ WorkflowタブとModelsタブのカードビューを廃止（サムネイル／
 ラジオ選択型に拡張し、バッチ実行ループも全タイプ対応。
 
 **カードビュー廃止（Workflow・Models タブ）**
+
 - ビュー切り替えボタンから Card（&#9776;）を削除（Thumb・Table の2択）
 - `viewMode` の初期値に `"card"` が保存されている場合は `"thumb"` にフォールバック
 - Nodes タブのカードビューは変更なし
 
 **Batch タイプ切り替え（BATCH QUEUE ヘッダー）**
+
 - 各列ヘッダー右端にチェックボックスを追加（Checkpoint / Lora / Prompt / Workflow）
 - ラジオ動作：1つを選択すると他3つは自動解除（`_activeBatchType` 変数で管理）
 - バッチ有効時に Generate ボタンを押すと対応タイプのバッチ実行
 
 **Batch ステータスパネル（旧 Checkpoint Batch）**
+
 - "Checkpoint Batch" チェックボックス＋ラベルを廃止
 - 「Batch」+ アクティブタイプ名の常時表示に変更（実行中は青色ハイライト）
 - 進捗バー・Pause ボタンはバッチ実行中のみ表示
 
 **バッチ生成 4タイプ対応**
+
 - 汎用ループ `_runBatchLoop(items, applyFn, labelFn)` を実装
 - `_runBatchGenerate()` が `_activeBatchType` に応じてディスパッチ：
   - Checkpoint: `checkpoint_nodes` の `ckpt_name` を差し替え
@@ -3662,6 +3955,7 @@ WorkflowタブとModelsタブのカードビューを廃止（サムネイル／
   - Workflow: 各ファイルをロード → 生成 → 完了後に元ワークフローを復元
 
 **バグ修正**
+
 - Prompt バッチ: `_getSelectedPromptGroupItems()` がすでにプリセットオブジェクト配列を返すにもかかわらず、ID として再解決しようとして `list` が空になるバグを修正
 
 ### 変更内容
@@ -3711,17 +4005,20 @@ WorkflowタブとModelsタブのカードビューを廃止（サムネイル／
 BATCH QUEUE（右ペイン）を4列横並びレイアウトに変更。
 
 **グループチェックペイン（中央）**
+
 - Lora タブ: `/api/wfm/models/groups?type=lora` からグループ取得。ファイル名（末尾）を表示
 - Prompt タブ: `/api/wfm/prompts` でプリセット取得 + `localStorage[wfm_prompt_preset_groups]` でグループ取得。ID を `name` フィールドで解決して表示
 - Workflow タブ: `localStorage[wfm_groups]` からグループ取得。`.json` 除去したファイル名を表示
 - 各タブクリック時に対応するグループを再ロード。Batchサブタブ表示時は全タイプを一括ロード
 
 **BATCH QUEUE（右ペイン）**
+
 - Checkpoint / Lora / Prompt / Workflow の4列横並び表示
 - 各列ヘッダー・件数・アイテムリストを独立表示
 - 右ペイン幅を `flex: 1.2; min-width: 320px` に拡大
 
 **バグ修正**
+
 - ワークフロー カードビュー の B ボタンを左端から右下（★の下）に移動
 - Prompt グループ選択ペインで UUID がそのまま表示されていた問題を修正（`title` → `name` フィールド）
 
@@ -3735,32 +4032,39 @@ BATCH QUEUE（右ペイン）を4列横並びレイアウトに変更。
 #### `static/js/generate-tab.js`
 
 **`_batchGroupState` 拡張**
+
 - Lora: `loraGroups` / `loraSelectedGroups` / `loraPartialSelections`
 - Prompt: `promptGroups` / `promptPresets` / `promptSelectedGroups` / `promptPartialSelections`
 - Workflow: `wfGroups` / `wfSelectedGroups` / `wfPartialSelections`
 
 **新規汎用関数**
+
 - `_getItemsFromGroupState(groupsData, selectedGroups, partialSelections)` — グループ状態からメンバーSet取得
 - `_getGroupSelCountFrom(name, ...)` — 汎用選択数カウント
 - `_renderAnyGroupList(listEl, groupsData, ...)` — Checkpoint と同じグループリストUIを任意タイプで再利用
 
 **新規選択取得関数**
+
 - `_getSelectedLoraGroupItems()` / `_getSelectedPromptGroupItems()` / `_getSelectedWfGroupItems()`
 
 **新規ロード/レンダー関数**
+
 - `_loadBatchLoraGroups()` / `_renderBatchLoraGroupList()`
 - `_loadPromptGroupsForBatch()` / `_renderBatchPromptGroupList()`
 - `_loadWorkflowGroupsForBatch()` / `_renderBatchWfGroupList()`
 
 **`_renderBatchPreview()` リファクタリング**
+
 - `_renderQueueColumn(countId, listId, items, displayFn, singular, plural)` を抽出
 - 4タイプ（Checkpoint/Lora/Prompt/Workflow）を各列に独立レンダリング
 
 **`initBatchTab()` 更新**
+
 - 内部タブクリック時に対応する load 関数を呼び出し
 - Batch サブタブ表示時に全タイプを一括ロード
 
 **バグ修正**
+
 - Prompt グループ表示: `presetsMap.get(id)?.title` → `presetsMap.get(id)?.name`（APIフィールド名修正）
 
 #### `static/js/workflow-tab.js`
@@ -3784,10 +4088,12 @@ Prompt タブと Workflow タブに Batch グループへの登録・解除 UI �
 モデルタブと同じ操作感で統一されており、B ボタンで登録/解除、B フィルターで絞り込み、BC ボタンで一括解除が可能。
 
 **Prompt タブ**
+
 - 各プリセットアイテムの★ボタン左隣に B ボタンを追加（黄色=登録済み）
 - 検索ボックス右端に BC ボタンを追加（`wfm-pm-search` 行を flex 化）
 
 **Workflow タブ**
+
 - サムネイルビュー：`wfm-card-thumb` 左上に B ボタン（絶対配置）
 - カードビュー：カード左下に B ボタン（絶対配置）
 - テーブルビュー：右端に B 列追加
@@ -3799,44 +4105,55 @@ Prompt タブと Workflow タブに Batch グループへの登録・解除 UI �
 #### `static/js/prompt-tab.js`
 
 **新規関数**
+
 - `isInBatchPreset(id)` — `pmGroups["Batch"]` に id が含まれるか判定
 - `toggleBatchPreset(id)` — バッチへの登録/解除トグル → `saveGroups()` で LocalStorage 保存
 - `clearBatchPresets()` — `pmGroups["Batch"] = []` で一括解除
 
 **`createPmItem()`**
+
 - `inBatch` 変数を追加し `.pm-batch-btn` クラスに `batch-active` を付与
 - ★ボタンの左に `<button class="wfm-pm-action-btn pm-batch-btn">B</button>` を追加
 - `.pm-batch-btn` クリックで `toggleBatchPreset()` を呼び出し
 
 **`initPromptTab()`**
+
 - `wfm-pm-batch-clear-btn` クリック → `clearBatchPresets()` 呼び出し
 
 #### `static/js/workflow-tab.js`
 
 **新規 state フィールド**
+
 - `state.showBatchOnly: false`
 
 **新規関数**
+
 - `isInBatch(filename)` / `toggleBatch(filename)` / `clearBatch()` — groups.data["Batch"] を操作
 
 **`filterWorkflows()`**
+
 - `state.showBatchOnly` が true のとき Batch グループメンバーのみに絞り込む処理を追加
 
 **`renderModelFilters()`**
+
 - ★フィルターボタンの右に B フィルタリングボタン（`.wfm-wf-batch-filter-btn`）を追加
 - クリックで `state.showBatchOnly` トグル
 
 **`renderGrid()` — thumbビュー**
+
 - `wfm-card-thumb` 内に `<button class="wfm-batch-btn">B</button>` を追加（左上絶対配置）
 
 **`renderGrid()` — cardビュー**
+
 - favBtnの前に `<button class="wfm-batch-btn">B</button>` を追加（左下絶対配置）
 
 **`renderTableView()`**
+
 - thead 右端に空の th を追加（width:30px）
 - 各行右端に `<td class="wfm-table-td-batch">B ボタン</td>` を追加
 
 **`initWorkflowTab()`**
+
 - `wfm-wf-batch-clear-btn` クリック → `clearBatch()` 呼び出し
 
 #### `templates/index.html`
@@ -3885,33 +4202,40 @@ Models タブ（Checkpoint / Lora）の Batch グループへの登録・解除 
 #### `static/js/models-tab.js`
 
 **新規 state フィールド**
+
 - `state.showBatchOnly: false` — Bフィルターの有効状態
 
 **新規ヘルパー関数**
+
 - `isInBatch(modelName)` — `state.modelGroups["Batch"]` に含まれるか判定
 - `toggleBatch(modelName)` — バッチへの登録/解除トグル → `saveModelGroups()` でサーバー保存
 - `clearBatchGroup()` — `state.modelGroups["Batch"] = []` で一括解除、Bフィルターも解除
 
 **フィルター処理**
+
 - `state.showBatchOnly` が true のとき `modelGroups["Batch"]` メンバーのみに絞り込む処理を追加（`showFavoritesOnly` の直後）
 
 **renderThumbView**
+
 - `batchClass` 変数を追加（active で黄色クラス付与）
 - プレビュー画像エリア左上に `<button class="wfm-batch-btn">B</button>` を追加
 - `.wfm-batch-btn` クリックで `toggleBatch()` を呼び出し
 - selectMode のクリックガードに `.wfm-batch-btn` を追加
 
 **renderCardView**
+
 - 同様に `batchClass` を追加し ★ボタンの左に `<button class="wfm-batch-btn">B</button>` を追加
 - イベントハンドラ・selectMode ガードを同様に追加
 
 **renderTableView**
+
 - 各行に `<td class="wfm-table-td-batch">B ボタン</td>` を右端に追加
 - thead に `<th style="width:30px;">B</th>` を追加
 - `.wfm-batch-btn` クリックイベントを各行にバインド
 - selectMode のクリックガードに `.wfm-batch-btn` を追加
 
 **イベントハンドラ**
+
 - `wfm-models-batch-filter-btn` クリック → `state.showBatchOnly` トグル・`renderModelGrid()` 呼び出し
 - `wfm-models-batch-clear-btn` クリック → `clearBatchGroup()` 呼び出し
 
@@ -3935,38 +4259,46 @@ Models タブのグループフィルタードロップダウンが現在選択�
 #### `static/js/models-tab.js`
 
 **Batch 予約グループの自動作成（Checkpoint / Lora）**
+
 - `RESERVED_GROUPS = ["Batch"]` / `BATCH_MODEL_TYPES = ["checkpoint", "lora"]` 定数を追加
 - `loadModelsForCurrentType()` のキャッシュヒット時・フル読み込み時の両パスで、対象タイプに "Batch" グループが存在しなければ API 経由で自動作成
 
 **削除・リネームのブロック**
+
 - グループ削除ボタン・リネームボタンのイベントハンドラで `RESERVED_GROUPS` チェックを追加
 - 予約グループを操作しようとした場合 `modelsGroupReserved` トーストを表示して処理を中断
 
 **グループフィルター種別絞り込み**
+
 - `renderGroupFilter()` を改修: 全タイプ横断表示から `state.activeModelType` のグループのみ表示するよう変更
 - `[タイプラベル] グループ名` 形式を廃止し、グループ名のみを表示
 
 #### `static/js/prompt-tab.js`
 
 **Batch 予約グループの自動確保**
+
 - `PROMPT_RESERVED_GROUPS = ["Batch"]` 定数を追加
 - `loadAllPresets()` のクリーニング処理で予約グループを空でも削除しないよう修正
 - クリーニング後に予約グループが存在しなければ `pmGroups["Batch"] = []` で確保し `saveGroups()` へ反映
 
 **削除ブロック**
+
 - グループ削除ボタンのイベントハンドラで `PROMPT_RESERVED_GROUPS` チェックを追加
 
 **Save 後の Preset 選択リセット**
+
 - Preset 保存（新規作成・更新どちらも）成功後に `pmSelectedId = null` / `presetSelect.value = ""` で `--New Preset--` へ戻す
 - 旧: 新規作成後は保存した Preset が選択されたまま → 誤って上書きするリスクがあった
 
 #### `static/js/workflow-tab.js`
 
 **Batch 予約グループの自動作成**
+
 - `WF_RESERVED_GROUPS = ["Batch"]` 定数を追加
 - `groups.load()` に予約グループ確保ロジックを追加（存在しなければ LocalStorage へ即時保存）
 
 **削除・リネームのブロック**
+
 - `groups.deleteGroup()` / `groups.renameGroup()` に `WF_RESERVED_GROUPS` チェックを追加（`false` 返却で中断）
 - 削除・リネームボタンのイベントハンドラにもフロントエンド側チェックを追加してトースト表示
 
@@ -3991,17 +4323,20 @@ CivitAI 連携に 3 つの改善を追加。モデルリンクを開くサイト
 #### `py/services/civitai_service.py`
 
 **`_extract_info()` — `modelUrl` フォールバックを修正**
+
 - 旧: `modelId` が null のとき `https://civitai.com/models?modelVersionId={id}`（モデル一覧ページに飛ぶ壊れた URL）
 - 新: `https://civitai.com/model-versions/{versionId}` にフォールバック（モデルページへリダイレクト）
 
 #### `static/js/models-tab.js`
 
 **`renderCivitaiInfo()` — Info / Sample サブタブを追加**
+
 - CivitAI パネルを「情報」「サンプル (N)」の 2 サブタブに分割
 - Info タブ: モデル名リンク・Type/Base Model/Hash 詳細行・タグ・トリガーワード・説明・更新ボタン
 - Sample タブ: 全サンプル画像（件数をタブ名に表示）。画像は別タブで開く
 
 **`renderCivitaiInfo()` — URL 修正（クライアントサイド）**
+
 - `info.modelId` がある場合: `https://{host}/models/{modelId}?modelVersionId={versionId}`
 - `info.modelId` が null: `https://{host}/model-versions/{versionId}` にフォールバック
 - `{host}` は `localStorage.getItem("wfm_civitai_host")` から取得（デフォルト `civitai.com`）
@@ -4009,6 +4344,7 @@ CivitAI 連携に 3 つの改善を追加。モデルリンクを開くサイト
 #### `static/js/settings-tab.js`
 
 **CivitAI セクションにホスト選択を追加**
+
 - CivitAI API Key アコーディオンの先頭に `wfm-select` ドロップダウンを追加
 - 選択肢: `civitai.com（SFW のみ）` / `civitai.red（制限なし）`
 - 変更で即座に `POST /api/wfm/settings` へ保存 + `localStorage.setItem("wfm_civitai_host", host)` を実行
@@ -4017,12 +4353,14 @@ CivitAI 連携に 3 つの改善を追加。モデルリンクを開くサイト
 #### `static/js/i18n.js`
 
 **新規文字列（EN / JA / ZH）**
+
 - `civitaiTabInfo` / `civitaiTabSample` / `civitaiNoImages`: サブタブ名・空メッセージ
 - `civitaiHostSetting` / `civitaiHostHint` / `civitaiHostCom` / `civitaiHostRed` / `civitaiHostSaved`: ホスト設定
 - `helpGen12` / `helpGen13` / `helpGen14`: Batch タブの 3 ペイン詳細
 - `helpSettings11` / `helpSettings12` / `helpSettings13`: Text Size・RAW JSON Colors・CivitAI ホスト
 
 **既存文字列を更新（JA / ZH）**
+
 - `helpGen3`: 「4タブ → 5タブ（Batch 追加）」
 - `helpGen11`: Batch トグルの説明に更新、Filter/Pause/Resume/Stop の英語混じりを解消
 
@@ -4050,10 +4388,12 @@ Models タブのサイドパネル CivitAI タブを強化。Type・Base Model�
 #### `py/services/civitai_service.py`
 
 **`_extract_info()` — `fileHashes` フィールドを追加**
+
 - プライマリファイルの `hashes` オブジェクト（BLAKE3 / SHA256 / AutoV2 等）を `fileHashes` として保存
 - 新規取得・更新後はサイドパネルで各ハッシュ値を表示できる
 
 **`_extract_info()` — `modelId` フォールバックを追加**
+
 - バッチ POST API（`POST /model-versions/by-hash`）はレスポンスの `model` オブジェクト内に `id` を含まない場合がある
 - `model.get("id") or data.get("modelId")` でトップレベルの `modelId` をフォールバックとして使用
 - これにより `modelUrl` が `https://civitai.com/models?modelVersionId=XXXX`（モデル一覧ページ）になる問題を修正
@@ -4062,11 +4402,11 @@ Models タブのサイドパネル CivitAI タブを強化。Type・Base Model�
 
 **`renderCivitaiInfo()` — 詳細行を追加**
 
-| 追加要素 | 内容 |
-|---|---|
-| Type | `info.type` を大文字バッジで表示（"CHECKPOINT"、"LORA" 等）|
-| Base Model | `info.baseModel` をラベル付き行で表示（旧サブタイトルから分離）|
-| Hash | BLAKE3 優先・SHA256 フォールバック。先頭 16 文字を表示、クリックでフルハッシュをクリップボードコピー |
+| 追加要素   | 内容                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
+| Type       | `info.type` を大文字バッジで表示（"CHECKPOINT"、"LORA" 等）                                        |
+| Base Model | `info.baseModel` をラベル付き行で表示（旧サブタイトルから分離）                                    |
+| Hash       | BLAKE3 優先・SHA256 フォールバック。先頭 16 文字を表示、クリックでフルハッシュをクリップボードコピー |
 
 - ローカルメタデータの `sha256`（既存キャッシュでも利用可能）を SHA256 として自動補完
 - 既存キャッシュで `modelUrl` が壊れている場合も `info.modelId` + `info.versionId` から URL を再構築（更新不要）
@@ -4074,11 +4414,13 @@ Models タブのサイドパネル CivitAI タブを強化。Type・Base Model�
 - モデル名サブタイトル行から `baseModel` を除去（Detail 行に移動）
 
 **`renderSideCivitai()` — 3 状態 UI に変更**
+
 - `sha256` なし → 「CivitAIから取得」ボタン（未確認）
 - `sha256` あり・キャッシュなし → 「確認済みですが、CivitAIに見つかりませんでした。」＋「再確認する」ボタン
 - キャッシュあり → CivitAI 情報を表示
 
 **CivitAI タブ切り替え時の再描画**
+
 - サイドパネルのタブ切り替えハンドラで CivitAI タブをクリックした際に `renderSideCivitai` を呼び出すよう追加
 - バッチ取得後に状態が更新されていても、タブをクリックすれば必ず最新内容が表示される
 
@@ -4102,6 +4444,7 @@ CivitAI API との連携を全面的に改善。バッチ取得を `POST /model-
 #### `py/services/civitai_service.py` — 全面改修
 
 **バッチ高速化 (POST 一括取得)**
+
 - `_batch_fetch_post(sha256_hashes)` を新設 — `POST /model-versions/by-hash` で最大 100 件を 1 リクエストで取得
   - レスポンスの `files[].hashes.SHA256` でリクエストのハッシュと照合してキャッシュに保存
   - 100 件超は `_BATCH_CHUNK_SIZE = 100` 単位でチャンク処理
@@ -4111,29 +4454,33 @@ CivitAI API との連携を全面的に改善。バッチ取得を `POST /model-
   - 以前の 1 件ずつ GET + 0.5 秒ウェイト方式を廃止 → 100 モデルで約 50 秒→数秒に短縮
 
 **429/5xx 指数バックオフリトライ**
+
 - `fetch_by_hash()` および `_batch_fetch_post()` 両方に実装
 - 対象コード: `{429, 500, 502, 503, 504}`。1s → 2s → 4s、最大 3 回
 - 404 はリトライせず即 `None` を返す（従来通り）
 
 **APIキー対応**
+
 - `_get_api_key()` を新設 — 環境変数 `CIVITAI_API_KEY` を優先し、なければ `settings.json` の `civitai_api_key` にフォールバック
 - `_build_headers()` を新設 — APIキーがあれば `Authorization: Bearer ...` ヘッダーを付与
 
 **ハッシュの大文字/小文字統一**
+
 - キャッシュキー: 小文字 `sha256_lower`
 - API 送信 (GET URL パス・POST ボディ): `sha256.upper()`
 - `get_cached()` も `.lower()` を適用してキー不一致を防止
 
 **`_extract_info()` 拡張**
-| 追加フィールド | 内容 |
-|---|---|
-| `nsfwLevel` | 数値 NSFW レベル（0〜6）|
-| `air` | AIR 識別子 (`urn:air:sdxl:lora:civitai:xxx@yyy`) |
-| `stats` | `downloadCount` / `thumbsUpCount` / `thumbsDownCount` |
-| `updatedAt` | バージョン最終更新日時 |
-| `publishedAt` | バージョン公開日時 |
-| `imageDetails` | 画像の `url`・`width`・`height`・`nsfwLevel` を含む配列 |
-| `fileMeta` | プライマリファイルの `fp`・`size`・`format` |
+
+| 追加フィールド   | 内容                                                           |
+| ---------------- | -------------------------------------------------------------- |
+| `nsfwLevel`    | 数値 NSFW レベル（0〜6）                                       |
+| `air`          | AIR 識別子 (`urn:air:sdxl:lora:civitai:xxx@yyy`)             |
+| `stats`        | `downloadCount` / `thumbsUpCount` / `thumbsDownCount`    |
+| `updatedAt`    | バージョン最終更新日時                                         |
+| `publishedAt`  | バージョン公開日時                                             |
+| `imageDetails` | 画像の`url`・`width`・`height`・`nsfwLevel` を含む配列 |
+| `fileMeta`     | プライマリファイルの`fp`・`size`・`format`               |
 
 - `images` URLリストは後方互換のため維持
 
@@ -4227,6 +4574,7 @@ Models タブの複数選択バルクアクションバーにお気に入り・�
 #### `static/js/i18n.js`
 
 EN / JA / ZH 全言語に以下を追加:
+
 - `modelBulkDeselectAll` — Deselect All / 選択解除 / 取消全选
 - `modelBulkFavAdd` / `modelBulkFavRemove` — ★ Favorite / ☆ Unfavorite
 - `modelBulkFavDone` / `modelBulkUnfavDone` — 完了トースト
@@ -4237,6 +4585,7 @@ EN / JA / ZH 全言語に以下を追加:
 #### `static/css/main.css`
 
 `.wfm-batch-*` スタイル一式を追加（Feeder タブの直前）:
+
 - `.wfm-batch-layout` — flex 3 ペインレイアウト
 - `.wfm-batch-pane` / `.wfm-batch-left` / `.wfm-batch-center` / `.wfm-batch-right` — ペイン幅・ボーダー
 - `.wfm-batch-pane-header` / `.wfm-batch-toolbar` / `.wfm-batch-list` — 左ペイン構造
@@ -4679,18 +5028,16 @@ SPA および Workflow Studio Library サイドパネルの両方に AI タブ�
 
 - `<style id="wfm-ta-font-size-style">` を `<head>` に注入
 - 対象セレクタ（対象を 8 箇所に一括適用）:
-
-  | 対象 | ID |
-  |---|---|
-  | Generate UI — Positive Prompt | `#wfm-prompt-pos-text` |
-  | Generate UI — Negative Prompt | `#wfm-prompt-neg-text` |
-  | Prompt タブ — AI Assistant チャット | `#wfm-ollama-input` |
-  | Prompt タブ — Preset Positive | `#wfm-preset-pos` |
-  | Prompt タブ — Preset Negative | `#wfm-preset-neg` |
-  | Prompt タブ — Wildcard プロンプト | `#wfm-wc-prompt` |
+  | 対象                                     | ID                         |
+  | ---------------------------------------- | -------------------------- |
+  | Generate UI — Positive Prompt           | `#wfm-prompt-pos-text`   |
+  | Generate UI — Negative Prompt           | `#wfm-prompt-neg-text`   |
+  | Prompt タブ — AI Assistant チャット     | `#wfm-ollama-input`      |
+  | Prompt タブ — Preset Positive           | `#wfm-preset-pos`        |
+  | Prompt タブ — Preset Negative           | `#wfm-preset-neg`        |
+  | Prompt タブ — Wildcard プロンプト       | `#wfm-wc-prompt`         |
   | Prompt タブ — Wildcard ファイルエディタ | `#wfm-wc-editor-content` |
-  | Metadata タブ — PROMPT 全文プレビュー | `#wfm-meta-prompt-full` |
-
+  | Metadata タブ — PROMPT 全文プレビュー   | `#wfm-meta-prompt-full`  |
 - 範囲: 10〜28px（clamp）、デフォルト 13px
 
 **Settings タブ HTML「Text Size」セクション追加**
@@ -4712,9 +5059,9 @@ SPA および Workflow Studio Library サイドパネルの両方に AI タブ�
 
 ### 検証済みファイル
 
-| ファイル | Metadata タブでの検出内容 |
-|---|---|
-| `n-hidream_i1_full.png` | Diffusion Model: `hidream-i1-full-Q5_0.gguf`（UnetLoaderGGUF）、Text Encoder: 4 件（QuadrupleCLIPLoader）、VAE: 1 件 |
+| ファイル                  | Metadata タブでの検出内容                                                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `n-hidream_i1_full.png` | Diffusion Model:`hidream-i1-full-Q5_0.gguf`（UnetLoaderGGUF）、Text Encoder: 4 件（QuadrupleCLIPLoader）、VAE: 1 件 |
 
 ---
 
@@ -4791,9 +5138,9 @@ SPA および Workflow Studio Library サイドパネルの両方に AI タブ�
 
 ### 対応確認済みワークフロー
 
-| ファイル | 検出内容 |
-|---|---|
-| `non-hidream_i1_full.png` | Diffusion Model: `hidream-i1-full-Q5_0.gguf`（UnetLoaderGGUF）、Text Encoder: 4 件（QuadrupleCLIPLoader）、VAE: 1 件 |
+| ファイル                    | 検出内容                                                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `non-hidream_i1_full.png` | Diffusion Model:`hidream-i1-full-Q5_0.gguf`（UnetLoaderGGUF）、Text Encoder: 4 件（QuadrupleCLIPLoader）、VAE: 1 件 |
 
 ---
 
@@ -4849,12 +5196,12 @@ Qwen-Image-Edit 2511、WAN2.2 14B Animate）の Metadata タブ表示に対応�
 
 ### 問題と原因
 
-| ファイル | 問題 |
-|---|---|
-| image_flux2_fp8.json | `SamplerCustomAdvanced` に positive/negative 入力ポートがなく、リンク解決でプロンプトが空になる |
-| image_ernie_image.json | `PrimitiveStringMultiline` がサブグラフ内にあり、ステップ4（トップのみ対象）で見つからない |
+| ファイル                        | 問題                                                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| image_flux2_fp8.json            | `SamplerCustomAdvanced` に positive/negative 入力ポートがなく、リンク解決でプロンプトが空になる                                                  |
+| image_ernie_image.json          | `PrimitiveStringMultiline` がサブグラフ内にあり、ステップ4（トップのみ対象）で見つからない                                                       |
 | image_qwen_image_edit_2511.json | `TextEncodeQwenImageEditPlus` → `FluxKontextMultiReferenceLatentMethod` → KSampler という中間ノード経由で textMap にプロンプトが登録されない |
-| video_wan2_2_14B_animate.json | トップレベルの CLIPTextEncode とサブグラフ内の KSampler がクロスレベル接続され、単一レベル解析では取得できない |
+| video_wan2_2_14B_animate.json   | トップレベルの CLIPTextEncode とサブグラフ内の KSampler がクロスレベル接続され、単一レベル解析では取得できない                                     |
 
 ### 変更内容
 
@@ -4893,13 +5240,13 @@ Qwen-Image-Edit 2511、WAN2.2 14B Animate）の Metadata タブ表示に対応�
 
 ### 対応済みワークフロー（data/data9）
 
-| ファイル | 適用ステップ | プロンプト結果 |
-|---|---|---|
-| image_flux2_fp8.json | step5（サブグラフ + SamplerCustomAdvanced fallback） | texts（バッジなし） |
-| image_flux2_klein_image_edit_4b_distilled.json | step5（サブグラフ CLIPTextEncode + KSampler） | texts（バッジなし） |
-| image_ernie_image.json | step4（PrimitiveStringMultiline in subgraph） | texts（バッジなし） |
-| image_qwen_image_edit_2511.json | step5（TextEncodeQwenImageEditPlus fallback） | texts（バッジなし） |
-| video_wan2_2_14B_animate.json | step7（全ノード fallback） | texts（バッジなし） |
+| ファイル                                       | 適用ステップ                                         | プロンプト結果      |
+| ---------------------------------------------- | ---------------------------------------------------- | ------------------- |
+| image_flux2_fp8.json                           | step5（サブグラフ + SamplerCustomAdvanced fallback） | texts（バッジなし） |
+| image_flux2_klein_image_edit_4b_distilled.json | step5（サブグラフ CLIPTextEncode + KSampler）        | texts（バッジなし） |
+| image_ernie_image.json                         | step4（PrimitiveStringMultiline in subgraph）        | texts（バッジなし） |
+| image_qwen_image_edit_2511.json                | step5（TextEncodeQwenImageEditPlus fallback）        | texts（バッジなし） |
+| video_wan2_2_14B_animate.json                  | step7（全ノード fallback）                           | texts（バッジなし） |
 
 ---
 
@@ -4927,21 +5274,21 @@ ComfyUI 公式テンプレート（Flux.2 Dev/Klein、Qwen-Image-Edit、Z-Image�
   サブグラフ内のノードも走査対象に
 - **`extractPromptsLiteGraph`** を 7 段階フォールバック構成に再設計
   1. ImageMetadataPromptLoader → 2. WFS_PromptText → 3. トップレベルCLIPTextEncode+KSampler →
-  4. PrimitiveStringMultiline → **5. サブグラフCLIPTextEncode+KSampler（新規）** →
-  6. PromptStyler → 7. 全CLIPTextEncodeテキスト
+  2. PrimitiveStringMultiline → **5. サブグラフCLIPTextEncode+KSampler（新規）** →
+  3. PromptStyler → 7. 全CLIPTextEncodeテキスト
 - **`fromWorkflow`** に MarkdownNote フォールバック補完を追加
 
 ### 対応済みワークフロー（data/data8）
 
-| ファイル | モデル抽出 | プロンプト抽出 |
-|---|---|---|
-| image_flux2_fp8.json | UNETLoader + CLIPLoader + VAELoader + LoraLoader (subgraph) | CLIPTextEncode (subgraph) |
-| image_flux2_klein_text_to_image.json | UNETLoader + CLIPLoader + VAELoader (subgraph) | PrimitiveStringMultiline |
-| image_qwen_image_edit.json | UNETLoader + CLIPLoader + VAELoader + LoraLoader (subgraph) | なし（画像入力のみ） |
-| image_qwen_image_edit_2511.json | 同上 | なし |
-| image_qwen_image_layered.json | UNETLoader + CLIPLoader + VAELoader (subgraph) | PrimitiveStringMultiline |
-| image_z_image.json | UNETLoader + CLIPLoader + VAELoader (subgraph) | CLIPTextEncode (subgraph) |
-| image_z_image_turbo.json | 同上 | CLIPTextEncode (subgraph) |
+| ファイル                             | モデル抽出                                                  | プロンプト抽出            |
+| ------------------------------------ | ----------------------------------------------------------- | ------------------------- |
+| image_flux2_fp8.json                 | UNETLoader + CLIPLoader + VAELoader + LoraLoader (subgraph) | CLIPTextEncode (subgraph) |
+| image_flux2_klein_text_to_image.json | UNETLoader + CLIPLoader + VAELoader (subgraph)              | PrimitiveStringMultiline  |
+| image_qwen_image_edit.json           | UNETLoader + CLIPLoader + VAELoader + LoraLoader (subgraph) | なし（画像入力のみ）      |
+| image_qwen_image_edit_2511.json      | 同上                                                        | なし                      |
+| image_qwen_image_layered.json        | UNETLoader + CLIPLoader + VAELoader (subgraph)              | PrimitiveStringMultiline  |
+| image_z_image.json                   | UNETLoader + CLIPLoader + VAELoader (subgraph)              | CLIPTextEncode (subgraph) |
+| image_z_image_turbo.json             | 同上                                                        | CLIPTextEncode (subgraph) |
 
 #### `static/js/i18n.js` + `templates/index.html`
 
@@ -5101,6 +5448,7 @@ EN / JA / ZH の3言語に以下を追加:
 #### `static/css/main.css`
 
 Feeder 専用スタイルを末尾に追加:
+
 - `.wfm-feeder-layout` — flex 横並び全体レイアウト
 - `.wfm-feeder-settings` — 左ペイン（幅 220px、縦スクロール）
 - `.wfm-feeder-pane-header` / `.wfm-feeder-field-row` / `.wfm-feeder-label` / `.wfm-feeder-input` — フォームレイアウト
@@ -5354,6 +5702,7 @@ Feeder 専用スタイルを末尾に追加:
 #### `templates/index.html` — UI要素追加・修正
 
 **Checkpoint Batch パネル追加:**
+
 - 右パネル（Seed行の下・結果表示の上）に `wfm-ckpt-batch-panel` を追加
 - チェックボックス ON/OFF でバッチ設定欄を展開/折りたたみ
 - Include Folders テキスト入力 — カンマ区切りでサブフォルダ名を指定。空欄でcheckpointフォルダ内の全モデルを対象
@@ -5362,17 +5711,20 @@ Feeder 専用スタイルを末尾に追加:
 - バッチ進捗エリア — 現在のモデル名、インデックス/総数、アンバー色プログレスバー (`wfm-ckpt-batch-bar`)
 
 **Seed レイアウト修正:**
+
 - 横並び1行（`flex-direction: row`）→ 縦2行（`flex-direction: column`）に変更
 - 1行目: `Seed:` ラベル + 数値入力（`flex:1` で横幅いっぱい）
 - 2行目: モード選択セレクト（`width:100%`）
 
 **ヘルプタブ:**
+
 - GenerateUI タブ説明に gen-11（Checkpoint Batch の説明）を追加
 - gen-8（Seed control）に2段レイアウト化の補足を追加
 
 #### `static/js/generate-tab.js` — バッチロジック追加・生成処理リファクタリング
 
 **新規追加:**
+
 - `_ckptBatch` — `{ aborted: false }` バッチ中断フラグ
 - `_parseFolderList(str)` — カンマ区切り文字列をトリム・小文字化して配列に変換
 - `_getModelFolder(modelPath)` — パスの最初の `/` より前を抽出してフォルダ名を取得。`\\` を `/` に正規化、ルート直下は `""` を返す
@@ -5383,6 +5735,7 @@ Feeder 専用スタイルを末尾に追加:
 - `_runBatchGenerate()` — チェックポイントリストをループし `_coreGenerate` を順番に呼び出す。各反復でワークフロー内の全checkpointノードの `ckpt_name` を書き換える。エラーは件数カウントして継続。完了後に結果サマリをトースト表示
 
 **変更:**
+
 - `handleGenerate()` — バッチが有効な場合は `_runBatchGenerate()` を、無効の場合は `_coreGenerate(false)` を呼び出すよう分岐。ボタン管理（disabled / Stop 表示）を共通 try/finally で処理
 - interrupt ボタンのハンドラ — `_ckptBatch.aborted = true` を設定してから `comfyUI.interrupt()` を呼び出し、単発生成とバッチの両方を停止できるように
 - Refresh Models ボタンのハンドラ — モデルリスト再取得後に `_updateBatchInfo()` を呼び出してバッチ件数を更新
@@ -5426,23 +5779,28 @@ Feeder 専用スタイルを末尾に追加:
 #### `static/js/gallery-tab.js` — フロントエンド拡張
 
 **API定数追加:**
+
 - `folderCreate`, `folderDelete`, `imagesDelete`, `imagesMove`
 
 **state追加:**
+
 - `folderTree` — ツリー全体データを保持（移動先フォルダ一覧の生成に使用）
 
 **フォルダツリー展開状態の保持:**
+
 - `_getExpandedPaths()` — 再構築前に展開済みフォルダのパスを `Set` で収集
 - `_restoreTreeState(expandedPaths, selectedPath)` — 再構築後に展開状態・選択ハイライトを復元。階層の浅い順に展開することで子ノードのDOM存在を保証
 - `renderTreeNode` — 各アイテムに `data-path` 属性を付与（復元の識別子）
 - `loadFolderTree` — 初回ロード判定（`isFirstLoad`）を追加。2回目以降は `_restoreTreeState` を呼び出して展開状態を維持
 
 **フォルダ操作:**
+
 - `createFolder()` — `prompt()` でフォルダ名入力後、API呼び出し・ツリー再読み込み
 - `deleteFolder()` — 確認ダイアログ後、再帰削除・currentFolder リセット・ツリー再読み込み
 - フォルダラベルクリック時に Delete Folder ボタンの `disabled` 状態を更新（ルート選択時は削除不可）
 
 **ファイル削除・移動:**
+
 - `performDeleteImages(paths)` — 削除後に `state.images` / `state.selectedImages` を即時更新。詳細パネルの選択中画像が削除された場合はパネルをリセット
 - `performMoveImages(paths, dest)` — 移動後に同様に state を即時更新
 - `flattenFolderTree(node)` — ツリーデータをフラットリストに変換（移動先選択に使用）
@@ -5672,6 +6030,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-04-06: v0.2.6 UI改善・バッジ保存修正・フォルダフィルター追加
 
 ### 概要
+
 - ワークフロー/モデル/ノードタブのサイドパネルを常時表示固定に変更
 - グリッドをページネーションからスクロール全件表示に変更
 - ワークフロータブのバッジが再起動後に消える問題を修正
@@ -5685,25 +6044,30 @@ Feeder 専用スタイルを末尾に追加:
 #### `py/services/workflow_service.py` — バッジ保存修正
 
 **`save_metadata` のキーリストに `badges` を追加:**
+
 - 変更前: `("tags", "memo", "summary", "modelTypesOverride", "favorite")`
 - 変更後: `("tags", "memo", "summary", "modelTypesOverride", "favorite", "badges")`
 
 **`list_workflows` のレスポンスに `badges` フィールドを追加:**
+
 - `metadata` dict に `"badges": meta.get("badges", [])` を追加
 - これにより再起動後もバッジが保持される
 
 #### `static/js/workflow-tab.js` — バッジフィルター・サイドパネル・スクロール
 
 **バッジフィルターをパレット定義バッジで表示:**
+
 - `renderModelFilters()`: `getAllBadges()`（ワークフローに付いているバッジのみ）→ `getBadgePalette()`（パレット全バッジ）に変更
 - フィルターボタンにバッジカラーを適用
 
 **サイドパネル常時表示化:**
+
 - `showSidePanel()`: `panel.style.display = "flex"` を削除
 - `closeSidePanel()`: `panel.style.display = "none"` を削除、タイトルをクリアするのみ
 - ×ボタンのイベントリスナー削除
 
 **ページネーション廃止・スクロール全件表示:**
+
 - `WF_PER_PAGE` 定数削除
 - `updateWfPagination()` 関数削除
 - `renderGrid()`: ページスライス処理を削除、全件描画に変更
@@ -5711,14 +6075,17 @@ Feeder 専用スタイルを末尾に追加:
 #### `static/js/models-tab.js` — サイドパネル・スクロール・フォルダフィルター・カードビュー
 
 **サイドパネル常時表示化:**
+
 - `showSidePanel()`: `panel.style.display = "flex"` を削除
 - `closeSidePanel()`: `panel.style.display = "none"` を削除
 
 **ページネーション廃止・スクロール全件表示:**
+
 - `MODELS_PER_PAGE` 定数削除、`updatePagination()` 関数削除
 - `renderThumbView()` / `renderCardView()` / `renderTableView()`: `totalPages` 引数削除、全件描画に変更
 
 **フォルダフィルター追加:**
+
 - `state.dirFilter: ""` 追加
 - `filterModels()` に `dirFilter` による絞り込みを追加
 - `renderDirFilter()` 関数追加（現在のモデルタイプのサブディレクトリ一覧を `<select>` に反映）
@@ -5726,15 +6093,18 @@ Feeder 専用スタイルを末尾に追加:
 - `wfm-models-dir-filter` change イベントリスナー追加
 
 **モデルカードビューからバッジ削除:**
+
 - `renderCardView()`: `dir` バッジ・`ext` バッジを削除。ユーザーバッジ・タグのみ表示
 
 #### `static/js/nodes-tab.js` — サイドパネル・スクロール
 
 **サイドパネル常時表示化:**
+
 - `showNodeSidePanel()`: `panel.style.display = "flex"` を削除
 - `closeNodeSidePanel()`: `panel.style.display = "none"` を削除
 
 **ページネーション廃止・スクロール全件表示:**
+
 - `NODES_PER_PAGE` / `renderPagination()` / `clearPagination()` / `scrollGridToTop()` 削除
 - `renderNodeGrid()`: 全件描画に変更
 
@@ -5747,16 +6117,19 @@ Feeder 専用スタイルを末尾に追加:
 #### `static/css/main.css` — グリッド・カードサイズ・サイドパネル
 
 **グリッド・カードサイズ変更:**
+
 - グリッド列幅: `161px` → `178px`
 - カード幅: `161px` → `178px`
 - サムネイル: `161×162px` → `178×200px`
 - `grid-auto-rows: max-content` / `align-items: start` / `justify-items: start` 追加（行高さ圧縮防止）
 
 **カードビュー:**
+
 - グリッド列幅: `minmax(180px, 1fr)` → `repeat(auto-fill, 220px)` 固定幅に変更（横伸び防止）
 - カード: `flex-direction: row` / `min-height: 56px` / `width: 220px` 固定
 
 **サイドパネル:**
+
 - `.wfm-side-panel-close` スタイル削除
 - `.wfm-side-panel-empty` クラス追加（選択前の空状態表示用）
 
@@ -5769,6 +6142,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-04-04: v0.2.5 追加修正
 
 ### 概要
+
 - サイドパネルModels→By TypeでTextEncoderが表示されない問題を修正
 - サイドパネルのWorkflowsタブでも `.index.json` を非表示に
 - 未使用の `buildDropdown` 関数を削除
@@ -5778,13 +6152,16 @@ Feeder 専用スタイルを末尾に追加:
 #### `web/comfyui/node_sets_menu.js`
 
 **TextEncoder取得ロジック修正:**
+
 - 変更前: `/api/wfm/models?type=textencoder`（存在しないエンドポイント）
 - 変更後: `DualCLIPLoader` → `CLIPLoader` の順に `/object_info/{cls}` を試して `clip_name1` を取得（`comfyui-client.js` の `fetchTextEncoders()` と同じロジック）
 
 **`.index.json` 非表示:**
+
 - `loadWfData()`: `state.wfList = workflows.filter(w => w.filename !== ".index.json")` でサイドパネルのWorkflowsタブからも除外
 
 **未使用関数削除:**
+
 - `buildDropdown()` 関数を削除（Category/Packageドロップダウンは個別実装に置き換え済みだったため不要）
 
 ---
@@ -5792,6 +6169,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-04-03: v0.2.5 サイドパネル Category/Package サブタブ・テーマ設定・Workflow修正
 
 ### 概要
+
 - サイドパネル（Workflow Studio Library）のNodesタブに📂 Category / 🧩 Packageサブタブを追加
 - サイドパネルのヘッダーに⚙テーマ設定ボタンを追加（背景・文字・ボーダー色カスタマイズ）
 - ワークフロータブで `.index.json` を非表示に
@@ -5801,19 +6179,23 @@ Feeder 専用スタイルを末尾に追加:
 #### `web/comfyui/node_sets_menu.js` — Nodesサブタブ追加・テーマ設定
 
 **Nodesタブのrow2サブタブ構成変更:**
+
 - 変更前: row2 = `☰ Sets`
 - 変更後: row2 = `☰ Sets` / `📂 Category` / `🧩 Package`
 
 **state追加:**
+
 - `activeNodeCategory: ""` — Categoryサブタブで選択中のカテゴリ値
 - `activeNodePackage: ""` — Packageサブタブで選択中のパッケージ値
 - `objectInfo: {}` — `/object_info` APIから取得した全ノード情報（パッケージ判定に使用）
 
 **`loadData()` 変更:**
+
 - `fetchObjectInfo()` を追加して `/object_info` を並行取得
 - `state.objectInfo` に保存
 
 **新規関数:**
+
 - `fetchObjectInfo()` — `GET /object_info` で全ノード情報を取得
 - `extractPackageName(pythonModule)` — `python_module` からパッケージ名を抽出
 - `getNodeCategory(nodeType)` — `state.objectInfo` 優先でカテゴリを取得（LiteGraphフォールバック）
@@ -5824,10 +6206,12 @@ Feeder 専用スタイルを末尾に追加:
 - `renderNodesByPackageList(container)` — 選択パッケージ＋検索テキストでフィルタしてカード表示
 
 **ドロップダウンのDOM挿入方式:**
+
 - `.wfm-nlp-filter-row` クラスのdivを `.wfm-nlp-content` の直前に `insertBefore` で挿入
 - `renderContent()` 冒頭で `panelEl.querySelectorAll(".wfm-nlp-filter-row").forEach(e => e.remove())` により他タブ移動時に削除
 
 **テーマ設定:**
+
 - `THEME_KEY = "wfm_nlp_theme"` — localStorage保存キー
 - `THEME_VARS` — 設定可能な5変数: `--comfy-menu-bg`（背景）、`--comfy-input-bg`（サブヘッダーBG）、`--input-text`（文字色）、`--border-color`（ボーダー）、`--descrip-text`（補助テキスト色）
 - `loadTheme()` — localStorageから読み込み
@@ -5851,6 +6235,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-29: v0.2.4 GenerateUIタブ レイアウト再設計
 
 ### 概要
+
 - GenerateUIのサブタブを5タブ（Prompt/Image/Model/Settings/RawJSON）→ 3タブ（Input/Model/Settings）に整理
 - 各タブ内にRaw JSONエディタを右列として常時表示。どのタブでもJSON変更をリアルタイム確認・直接編集・Apply可能
 - Raw JSONタブを廃止（独立タブとしての Raw JSON は不要）
@@ -5886,6 +6271,7 @@ Feeder 専用スタイルを末尾に追加:
 - `#wfm-gen-rawjson-widget` / `.wfm-gen-rawjson-header` / `.wfm-gen-rawjson-editor`: Raw JSONウィジェットスタイル
 
 ### 技術的な判断
+
 - **Raw JSONをDOMで移動**: タブごとにtextareaのIDは1つである必要があるため、DOMノードをappendChildで移動する方式を採用。イベントリスナーはノードに付いたまま引き継がれる
 - **Raw JSON列幅540px**: テキストエディタとして十分な視認性を確保しつつ、パラメータ列にも十分な幅を残す設定
 
@@ -5894,6 +6280,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-29: v0.2.3 バッジ統一・GenUI Model・サイドパネルModels拡充
 
 ### 概要
+
 - ワークフローとモデルのバッジ体系を統一（共有パレット `wfm_models_badge_palette`、自動解析廃止）
 - ModelsタブにGenUI Modelボタン追加（詳細モーダル・サイドパネル両対応）
 - ComfyUIサイドパネルのModelsタブにFavorites/Groups/By Typeサブタブを追加
@@ -5935,6 +6322,7 @@ Feeder 専用スタイルを末尾に追加:
       textencoder: { key: "textEncoders",    inputKey: "clip_name1" },
   };
   ```
+
   hypernetwork / embedding は対象外
 - **`applyToGenUI(modelName, modelType)`** 追加:
   - `comfyUI.currentWorkflow` からターゲット `inputKey` を持つノードを検索
@@ -5989,6 +6377,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-28: v0.2.2 Modelsタブ・CivitAI連携
 
 ### 概要
+
 - ComfyUIにインストールされたモデル（Checkpoint、LoRA、VAE、ControlNet、UNET、TextEncoder）を一覧・管理する「Models」タブを新規追加
 - CivitAI API連携（SHA256ハッシュによるモデル情報取得、一括取得）
 - モデルグループ管理、プレビュー画像表示・変更、メタデータ永続化
@@ -5997,12 +6386,14 @@ Feeder 専用スタイルを末尾に追加:
 ### 新規ファイル
 
 #### `py/services/models_service.py` — モデルメタデータサービス
+
 - `_get_model_dirs()`: ComfyUIの`folder_paths.get_folder_paths()`でモデルディレクトリを解決
 - `ModelsService`: メタデータのCRUD（お気に入り、タグ、メモ、SHA256）
 - `find_preview_image()`: `{stem}.preview.png`等のプレビュー画像を自動検出
 - `get_model_groups()` / `save_model_groups()`: グループの永続化（`model_metadata.json`の`_groups`キー）
 
 #### `py/services/civitai_service.py` — CivitAI API連携
+
 - `calculate_sha256()`: モデルファイルのSHA256ハッシュ計算
 - `fetch_by_hash()`: CivitAI APIからモデル情報取得（キャッシュ付き）
 - `batch_fetch()`: 複数モデルの一括取得（プログレスコールバック対応）
@@ -6010,6 +6401,7 @@ Feeder 専用スタイルを末尾に追加:
 - キャッシュ: `civitai_cache.json`に保存
 
 #### `py/routes/models_routes.py` — モデル管理APIルート
+
 - `GET/POST /api/wfm/models/metadata` — メタデータCRUD
 - `GET /api/wfm/models/preview` — プレビュー画像配信
 - `GET/POST /api/wfm/models/groups` — グループ管理
@@ -6020,6 +6412,7 @@ Feeder 専用スタイルを末尾に追加:
 - `GET /api/wfm/models/filepath` — モデルファイルのフルパス取得
 
 #### `static/js/models-tab.js` — フロントエンドモジュール
+
 - state管理: `modelsByType`, `modelMetadata`, `modelGroups`, `civitaiCache`, `activeModelType`
 - サブタブ切り替え（6タイプ）、サムネイル/カード/テーブル表示
 - サイドパネル: Info（ファイルパス表示、タグ、メモ）、Group管理、CivitAI情報表示
@@ -6030,40 +6423,49 @@ Feeder 専用スタイルを末尾に追加:
 ### 変更ファイル
 
 #### `py/config.py`
+
 - `MODEL_METADATA_FILE = DATA_DIR / "model_metadata.json"` 追加
 
 #### `py/wfm.py`
+
 - `models_routes`のインポートとルート登録追加
 
 #### `templates/index.html`
+
 - Modelsタブボタン・セクション追加（サブタブナビ、ツールバー、グリッド、サイドパネル）
 - ヘルプタブにModels Tabセクション追加
 
 #### `static/js/app.js`
+
 - `models-tab.js`のimportと`initModelsTab()`呼び出し追加
 - i18nマッピングにModelsタブ・ヘルプ用キー追加
 
 #### `static/js/nodes-tab.js`
+
 - カードビュー: パッケージバッジ削除、カード左端にパッケージ色のボーダー追加
 - カードビュー: 入出力カウント表示を削除
 - ページネーションをツールバーに移動
 
 #### `static/js/workflow-tab.js`
+
 - ページネーションをツールバーに移動
 - 1ページ24件表示
 
 #### `static/css/main.css`
+
 - `.wfm-grid`: `grid-template-columns: repeat(auto-fill, 161px)`、カード161×162px固定
 - `.wfm-node-card`: 左ボーダー3pxスタイル追加
 - `.wfm-pagination-inline`: ツールバー内ページネーション
 - サブタブナビ（`.wfm-models-type-nav`）、テーブル列幅調整
 
 #### `static/js/i18n.js` — 翻訳追加（EN/JA/ZH）
+
 - Modelsタブ関連: ~50キー（モデルタイプ、フィルタ、サイドパネル、CivitAI、グループ等）
 - ヘルプModelsセクション: `helpModels1`〜`helpModels7`
 - ファイルパス関連: `modelsFilePath`, `modelsCopyPath`, `modelsCopiedPath`
 
 ### 技術的な判断
+
 - **プレビュー画像判定**: HEADリクエストではなく`img.onload/onerror`パターンを採用（404コンソールスパム回避）
 - **CivitAI一括取得**: ブロッキングリクエストではなくSSE（Server-Sent Events）でリアルタイムプログレス表示
 - **aiohttp HEAD自動登録**: `add_get`が自動でHEADも登録するため、明示的なHEADルート追加は不要（重複RuntimeError回避）
@@ -6073,6 +6475,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-27: テーマカスタマイズ機能・設定タブ改善
 
 ### 概要
+
 - テーマのカラーカスタマイズ、背景パターン、フォント選択機能を追加
 - 設定タブの各セクションをアコーディオン式折りたたみに変更
 - ヘルプタブのSettings Tab説明を更新
@@ -6080,6 +6483,7 @@ Feeder 専用スタイルを末尾に追加:
 ### 変更内容
 
 #### `static/js/settings-tab.js` — テーマカスタマイズ機能追加
+
 - **カラーオーバーライド:** 6つのCSS変数（背景、サブ背景、サーフェス、テキスト、プライマリ、アクセント）をカラーピッカーでリアルタイム調整、localStorageに保存
 - **背景パターン:** 7種類（なし、横/縦/斜めストライプ、ポルカドット、チェック、SVGファイル）を選択可能
   - パターンオプション: 色、不透明度、サイズ、間隔（gap）スライダー
@@ -6092,22 +6496,27 @@ Feeder 専用スタイルを末尾に追加:
 - **SVGリカラー強化:** `<style>`ブロックをSVGに注入し、fill属性がない要素にも色を適用
 
 #### `static/css/main.css` — UIスタイル追加
+
 - **設定アコーディオン:** `<details>`/`<summary>`要素用のスタイル（`.wfm-settings-section`, `.wfm-settings-summary`）— 三角矢印回転アニメーション付き
 - **テーマカスタマイザー:** カラーピッカーグリッド、パターン選択グリッド（プレビューSVG付き）、パターンオプション行、フォント選択グリッド
 - **パターンプレビュー改善:** SVGプレビューのコントラストを大幅強化（60x60サイズ、太い線、高opacity、青系前景色）
 
 #### `static/js/i18n.js` — 翻訳追加（EN/JA/ZH）
+
 - テーマカスタマイズ関連: カラー調整、背景パターン、パターンオプション（色、不透明度、サイズ、間隔）、フォント
 - フォント名: 16種のフォントラベル
 - ヘルプSettings項目: helpSettings7, helpSettings8追加
 
 #### `static/js/app.js` — i18nマッピング追加
+
 - `helpSettings7`, `helpSettings8` のHTML id→i18nキーマッピングを追加
 
 #### `templates/index.html` — ヘルプタブ更新
+
 - Settings Tabセクション: テーマカスタマイズ機能の説明を追加（項目2）、Eagle連携を項目7に、アコーディオン折りたたみを項目8に追加
 
 ### 技術的な判断
+
 - **SVGカラー変更:** 属性置換だけでは不十分なSVG（CSSクラスやデフォルト黒を使用）に対応するため、`<style>`ブロック注入方式を採用
 - **SVG間隔（gap）:** viewBoxを拡張するラッパーSVGでタイル間に余白を作成
 - **フォント読込:** Google Fonts CDNから動的にlinkタグを挿入、一度読み込んだフォントはSetで管理し重複読込を防止
@@ -6116,18 +6525,21 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-26: トップバーボタンアイコン修正・Appモードバッジ調査
 
 ### 概要
+
 - トップバーの3つのボタン（Workflow Studio / Snapshot / Library）のアイコンが表示されない問題を修正
 - ComfyUI Appモード（linearMode）のワークフローJSON構造を調査、バッジ表示対応は保留
 
 ### 変更内容
 
 #### `web/comfyui/top_menu_extension.js` — アイコン置換ロジック修正
+
 - **問題:** `setup()` 内の `replaceButtonIcon()` が `requestAnimationFrame` でボタンを見つけてSVGを注入するが、ComfyUIのVueフレームワークが再レンダリングして元の `<i class="icon-[mdi--...]">` に戻してしまう。リトライ条件が `wfmButtons.length === 0`（ボタン未検出時のみ）のため、一度見つかった後は再注入されなかった
 - **修正:** `MutationObserver` でボタンの親コンテナ（`.actionbar-container`）を監視し、DOMが変更されるたびにSVGアイコンを再注入するように変更
 - `applyButtonIcon()`: ボタンに既にSVGがあればスキップ（無限ループ防止）、なければSVG注入
 - `waitAndObserve()`: ボタンがDOMに現れるまで `requestAnimationFrame` で待機し、見つかったらアイコン置換＋`MutationObserver`監視開始
 
 ### Appモードバッジ表示について（保留）
+
 - ComfyUI Appモード（BETA機能）のワークフローJSON構造を調査
 - `extra.linearMode: true` と `extra.linearData` （inputs/outputs配列）でappモード情報が格納される
 - appモード削除後も `linearData`/`linearMode` キーは残り中身が空配列になるだけ、拡張子 `.app.json` も維持される
@@ -6136,6 +6548,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-25: v0.2.0 プロンプトプリセット機能・Workflow Studio Library
 
 ### 概要
+
 - プロンプトプリセット機能を追加：サイドパネルからドラッグ＆ドロップでWFS_PromptTextカスタムノードを作成
 - Workflow Studio SPAのPromptタブを3カラムレイアウトに刷新（AIアシスタント｜プリセット編集｜プリセットマネージャー）
 - プリセットのバックエンドAPI化（localStorage→サーバーサイド保存）
@@ -6144,19 +6557,23 @@ Feeder 専用スタイルを末尾に追加:
 ### 変更内容
 
 #### `py/nodes/prompt_text.py` — WFS_PromptTextカスタムノード（新規）
+
 - **WFS_PromptText**: ポジティブ/ネガティブの2つのSTRING入力とSTRING出力を持つカスタムノード
 - `INPUT_TYPES`: `positive`（multiline）, `negative`（multiline）
 - `RETURN_TYPES`: `("STRING", "STRING")`, `RETURN_NAMES`: `("positive", "negative")`
 - `CATEGORY`: `"Workflow Studio"`
 
 #### `py/nodes/__init__.py` — パッケージ初期化（新規）
+
 - 空ファイル（Pythonパッケージ認識用）
 
 #### `__init__.py` — カスタムノード登録
+
 - `_NODE_MODULES` に `WFS_PromptText` を追加（分離読み込みパターン）
 - `NODE_DISPLAY_NAME_MAPPINGS` に `"Prompt Text (WFS)"` を追加
 
 #### `py/services/prompts_service.py` — プリセットCRUDサービス（新規）
+
 - `list_prompts()`: 全プリセット一覧取得
 - `create_prompt(data)`: 新規作成（name, text, negText, category, tags, favorite）
 - `update_prompt(id, updates)`: 更新（name, text, negText, category, tags, favorite）
@@ -6165,18 +6582,22 @@ Feeder 専用スタイルを末尾に追加:
 - データ永続化: `data/prompts.json`
 
 #### `py/routes/prompts_routes.py` — プリセットAPIエンドポイント（新規）
+
 - `GET /api/wfm/prompts` — 一覧取得
 - `POST /api/wfm/prompts` — 新規作成
 - `POST /api/wfm/prompts/update` — 更新
 - `POST /api/wfm/prompts/delete` — 削除
 
 #### `py/config.py` — 設定追加
+
 - `PROMPTS_FILE = DATA_DIR / "prompts.json"` を追加
 
 #### `py/wfm.py` — ルート登録
+
 - `prompts_routes` のインポートと `prompts_routes.setup_routes(app)` を追加
 
 #### `web/comfyui/node_sets_menu.js` — サイドパネルにPromptsタブ追加
+
 - **トップタブ:** Workflows / Nodes / **Prompts** の3タブ構成
 - **Promptsサブタブ:** All / ★ Favorites / 📁 Categories
 - **State追加:** `promptSubTab`, `promptList`, `promptFavorites`, `promptCategories`, `promptLoaded`
@@ -6188,6 +6609,7 @@ Feeder 専用スタイルを末尾に追加:
 - **CSS追加:** `.wfm-nlp-copy-btns`, `.wfm-nlp-copy-pos`（緑ホバー）, `.wfm-nlp-copy-neg`（赤ホバー）
 
 #### `templates/index.html` — Promptタブ3カラムレイアウト
+
 - 2カラム（AI Assistant | Presets）→ 3カラム（AI Assistant | Presets | Preset Manager）に変更
 - **Presetsパネル:** Deleteボタン削除、Apply→「GenUI Set」、Category入力欄追加、下部にグループ管理行（Select group + Add to Group + + Group + Del Group）
 - **Preset Managerパネル:** All / ★ / Groupsタブ、検索、スクロール可能なリスト
@@ -6195,6 +6617,7 @@ Feeder 専用スタイルを末尾に追加:
 - サイドパネルタイトルを「Workflow Studio Library」に更新
 
 #### `static/css/main.css` — スタイル追加（約150行）
+
 - `.wfm-prompt-split-3col` — 3カラムFlexboxレイアウト
 - `.wfm-prompt-split-col` — 各カラムのスタイル
 - `.wfm-preset-manager` — プリセットマネージャーパネル
@@ -6204,6 +6627,7 @@ Feeder 専用スタイルを末尾に追加:
 - `.wfm-pm-group-header` — グループヘッダー
 
 #### `static/js/prompt-tab.js` — 全面リライト
+
 - **API化:** `fetchPresets()`, `apiCreatePreset()`, `apiUpdatePreset()`, `apiDeletePreset()`
 - **localStorage移行:** `migrateLocalStoragePresets()` — 一回限りの自動移行
 - **プリセット管理:** `renderPresetSelect()`, `renderGroupSelect()`, `selectPresetInEditor(preset)`
@@ -6213,16 +6637,19 @@ Feeder 専用スタイルを末尾に追加:
 - **Save:** API経由でnegTextフィールドを含むプリセットの作成/更新
 
 #### `static/js/i18n.js` — 翻訳更新
+
 - `applyPreset` → `"GenUI Set"`（英/日/中 全3言語）
 - `deletePreset` キー削除（全3言語）
 - ヘルプ: `helpPrompt5`〜`helpPrompt7`, `helpSidepanel8`〜`helpSidepanel10` 追加（全3言語）
 - サイドパネルタイトル: `helpSidepanelTitle` → `"Workflow Studio Library"` に更新（全3言語）
 
 #### `static/js/app.js` — i18nマッピング更新
+
 - `helpIdMap` に `helpPrompt5`〜`7`, `helpSidepanel8`〜`10` を追加
 - `deletePreset` 適用コード削除
 
 #### `README.md` — v0.2.0更新
+
 - バージョンバッジ: `0.1.9` → `0.2.0`
 - Prompt Tab: 3カラムレイアウト、Preset Manager、グループ管理、GenUI Set
 - Workflow Studio Library: Promptsタブ、ドラッグ＆ドロップ、P/Nコピー
@@ -6233,6 +6660,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-24: v0.1.9 サイドパネルUI改善・保存ダイアログ・バグ修正
 
 ### 概要
+
 - サイドパネルのサブタブを2段構成に変更、全ワークフロー/全ノード表示タブを追加
 - キャンバススナップショット保存時にファイル名編集ダイアログを表示
 - API/App形式バッジをワークフロー一覧に表示
@@ -6241,6 +6669,7 @@ Feeder 専用スタイルを末尾に追加:
 ### 変更内容
 
 #### `web/comfyui/node_sets_menu.js` — サイドパネルサブタブ2段化
+
 - **Workflows サブタブ:**
   - 1段目: Workflows（全WF一覧）/ ★ Favorites / 📁 Groups
   - 2段目: ◦ Model Type
@@ -6260,6 +6689,7 @@ Feeder 専用スタイルを末尾に追加:
   - `.wfm-nlp-fmt-badge`, `.wfm-nlp-fmt-api`, `.wfm-nlp-fmt-app` — 形式バッジスタイル
 
 #### `web/comfyui/top_menu_extension.js` — 保存ダイアログ追加
+
 - **`showSaveDialog(defaultName)`** — モーダルダイアログでファイル名を編集可能に
   - タイムスタンプ形式のデフォルト名がプレースホルダーとして全選択状態で表示
   - Enter/Saveボタンで確定、Escape/Cancel/オーバーレイクリックでキャンセル
@@ -6267,6 +6697,7 @@ Feeder 専用スタイルを末尾に追加:
 - **`saveCanvasToWorkflowStudio()`** — 自動保存からダイアログ経由の保存に変更
 
 #### `py/services/workflow_analyzer.py` — ワークフロー形式検出
+
 - `analyze_workflow()` の返却値に `format` フィールドを追加
   - `"app"`: `definitions`（サブグラフ）キー存在 or `extra.linearMode === true`、フォールバックで `.app.json` ファイル名
   - `"ui"`: `nodes` 配列 + `links` 存在（App特徴なし）
@@ -6274,9 +6705,11 @@ Feeder 専用スタイルを末尾に追加:
   - `"unknown"`: 判定不能
 
 #### `static/js/comfyui-workflow.js` — フロントエンド形式検出も構造ベースに変更
+
 - `detectFormat()` をファイル名依存から `definitions` / `extra.linearMode` による構造判定に変更
 
 #### `static/js/workflow-tab.js` — グループクリーンアップ
+
 - `loadWorkflows()` でワークフロー取得後にグループの不要エントリを自動削除
 
 ---
@@ -6284,6 +6717,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-24: v0.1.8 WF & Node Library サイドパネル拡張
 
 ### 概要
+
 - ComfyUI キャンバス右側の「Node Library」サイドパネルを「WF & Node Library」に拡張
 - ワークフローをサイドパネルからキャンバスにドラッグ＆ドロップで読み込み可能に
 - ヘルプタブに Nodes Tab / WF & Node Library の機能一覧を追加
@@ -6291,6 +6725,7 @@ Feeder 専用スタイルを末尾に追加:
 ### 変更内容
 
 #### `web/comfyui/node_sets_menu.js` — サイドパネル全面改修
+
 - **パネル名変更:** "Node Library" → "WF & Node Library"
 - **2階層タブ構造:** トップレベル（Workflows / Nodes）+ サブタブ
   - Workflows サブタブ: Favorites（お気に入り）、Model Type（モデル種別）、Groups（グループ）
@@ -6320,9 +6755,11 @@ Feeder 専用スタイルを末尾に追加:
 - **tooltip 更新:** `NODE_SETS_TOOLTIP` → `"WF & Node Library – Browse & drag workflows/nodes onto canvas"`
 
 #### `web/comfyui/top_menu_extension.js` — 変更なし
+
 - `NODE_SETS_TOOLTIP` を import しているため、tooltip 変更が自動反映
 
 #### ヘルプタブ更新
+
 - **`templates/index.html`:**
   - Nodes Tab カード追加（6項目: ノードブラウザ、表示モード、お気に入り/タグ、グループ、サイドパネル、ノードセット）
   - WF & Node Library カード追加（7項目: ボタン起動、WFタブ、Nodesタブ、WFドラッグ、ノードドラッグ、ダブルクリック、検索）
@@ -6335,6 +6772,7 @@ Feeder 専用スタイルを末尾に追加:
   - `helpIdMap` に Nodes（6エントリ）+ Sidepanel（8エントリ）のマッピング追加
 
 #### README.md 更新
+
 - バージョンバッジ: `0.1.7` → `0.1.8`
 - Screenshots セクション: Nodes Tab + WF & Node Library の行を追加（3行→4行、4枚→6枚）
 - ComfyUI Integration 画像をツールバー3ボタンにフォーカスした画像に差し替え
@@ -6343,11 +6781,13 @@ Feeder 専用スタイルを末尾に追加:
 - Project Structure: `node_sets_menu.js` の説明を更新
 
 #### スクリーンショット追加
+
 - `docs/screenshot_nodes.png` — Nodes タブ（カードビュー + サイドパネル）
 - `docs/screenshot_wf_node_library.png` — ComfyUI 上の WF & Node Library サイドパネル
 - `docs/screenshot_comfyui_topbar.png` — ツールバー3ボタンにフォーカスした画像に差し替え
 
 ### バックエンド変更
+
 - なし（既存の `/api/wfm/workflows` と `/api/wfm/workflows/raw` を流用）
 
 ---
@@ -6355,18 +6795,21 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-23: v0.1.7 Nodes タブ追加
 
 ### 概要
+
 - ComfyUI にインストールされた全ノードをブラウジング・整理・管理する「Nodes」タブを追加
 - ノードセット機能：複数ノード＋接続情報をセットとして保存し、再利用可能に
 
 ### 変更内容
 
 #### 新規ファイル
+
 - **`py/services/nodes_service.py`** — ノードメタデータ（お気に入り、タグ、グループ）とノードセットの CRUD サービス
 - **`py/routes/nodes_routes.py`** — 9つの API エンドポイント（metadata, groups, node-sets の GET/POST/update/delete/export）
 - **`static/js/nodes-tab.js`** — Nodes タブのメインロジック（Node Browser + Node Sets サブビュー）
 - **`web/comfyui/node_sets_menu.js`** — ComfyUI キャンバス内サイドパネル（Favorites/Sets/Groups タブ、ドラッグ&ドロップ配置）
 
 #### 既存ファイル修正
+
 - **`py/wfm.py`** — `nodes_routes.setup_routes(app)` 追加
 - **`py/config.py`** — `NODE_METADATA_FILE`, `NODE_SETS_FILE` 定数追加
 - **`static/js/app.js`** — Nodes タブ登録、`initNodesTab()` 呼び出し
@@ -6379,6 +6822,7 @@ Feeder 専用スタイルを末尾に追加:
 ### 機能詳細
 
 #### Node Browser（Sub-view 1）
+
 - ComfyUI `/object_info` API から全ノード取得（遅延読み込み）
 - Card / Table の2ビュー切り替え
 - フィルタ: カテゴリ、パッケージ、タグ、グループ、お気に入り
@@ -6388,6 +6832,7 @@ Feeder 専用スタイルを末尾に追加:
 - 1ページ50ノード表示（ページネーション）
 
 #### Node Sets（Sub-view 2）
+
 - ComfyUI キャンバスで選択したノード＋接続をセットとして保存
 - 右クリックコンテキストメニュー "Save as Node Set" から保存
 - セット一覧表示（名前、説明、ノード数、タグ）
@@ -6395,10 +6840,12 @@ Feeder 専用スタイルを末尾に追加:
 - ComfyUI 互換 JSON としてクリップボードにコピー
 
 #### ComfyUI トップバー統合
+
 - 3ボタン: Workflow Studio / Snapshot / Node Library
 - Node Library ボタンでサイドパネル開閉
 
 ### バグ修正
+
 - `node_sets_menu.js` で `const saveSelectedAsNodeSet` が二重定義されていた ESM SyntaxError を修正（Vite preload wrapper により完全にサイレントだった）
 - デバッグ用 `console.log` 削除
 
@@ -6407,16 +6854,19 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-23: v0.1.6 パストラバーサル脆弱性修正
 
 ### 概要
+
 - ComfyUI-Manager PR #2706 のレビューで指摘されたセキュリティ脆弱性を修正
 - `workflow_service.py` で任意のファイルパスへのアクセスが可能だった問題を解消
 
 ### 背景
+
 - ltdrdata（ComfyUI-Manager メンテナー）から `import_files` メソッド内のパス構築が安全でないとの指摘
 - `original_name` に `../../etc/passwd` のようなパストラバーサル文字列を送ることで、`workflows_dir` 外のファイルを読み書きできる状態だった
 
 ### 変更内容
 
 #### `py/services/workflow_service.py`
+
 - **`_validate_filename()` 強化** — `"."`, `".."`, null バイト (`\x00`) のチェックを追加
 - **`_safe_path()` メソッド新規追加** — ファイル名バリデーション + `resolve()` でパスを正規化し、`workflows_dir` 配下にあることを検証。違反時は `ValueError` を送出
 - **全公開メソッドに `_safe_path()` 適用:**
@@ -6432,6 +6882,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-22: v0.1.5 テーマシステム追加
 
 ### 概要
+
 - 13種類のビルトインテーマを設定タブから切り替え可能に
 - テーマごとにカラー・フォント・角丸・影・特殊効果を変更
 - 選択テーマはlocalStorageに保存、ページ読み込み時にフラッシュなく復元
@@ -6439,6 +6890,7 @@ Feeder 専用スタイルを末尾に追加:
 ### 変更内容
 
 #### テーマ定義（CSS）
+
 - `static/css/main.css` — 12テーマの`[data-theme="xxx"]`変数定義を末尾に追加
   - Pop & Vibrant / Light Minimalist / Cyberpunk / Glassmorphism / Neumorphism / Retro 8-bit / Pastel Dream / Brutalism / Earthy / Material UI / Monotone + Accent / Corporate Trust
 - テーマ固有の特殊効果CSS:
@@ -6449,6 +6901,7 @@ Feeder 専用スタイルを末尾に追加:
 - `.wfm-theme-grid` / `.wfm-theme-card` / `.wfm-theme-swatch` — テーマ選択UIスタイル
 
 #### テーマ選択UI（JavaScript）
+
 - `static/js/settings-tab.js`:
   - `THEMES` 配列: テーマID・i18nキー・プレビュー用4色スウォッチを定義
   - `applyTheme(themeId)` — `<html>`の`data-theme`属性を設定/解除
@@ -6460,15 +6913,18 @@ Feeder 専用スタイルを末尾に追加:
   - `DOMContentLoaded`の前にテーマ復元を実行（テーマフラッシュ防止）
 
 #### 多言語対応
+
 - `static/js/i18n.js` — 3言語（EN/JA/ZH）に `themeLabel` + 13テーマ名の翻訳キー追加
 
 #### その他
+
 - `templates/index.html` — ヘルプページのGitHubリンクURL修正
 - `README.md` — v0.1.5更新、テーマ機能記載、git clone URL修正
 
 ### スクリーンショット
-| Workflow Tab (Pastel Dream) | Settings Tab (Theme) |
-|:---:|:---:|
+
+|        Workflow Tab (Pastel Dream)        |           Settings Tab (Theme)           |
+| :---------------------------------------: | :---------------------------------------: |
 | ![Workflow](docs/screenshot_workflow.png) | ![Settings](docs/screenshot_settings.png) |
 
 ---
@@ -6476,6 +6932,7 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-22: v0.1.4 App形式対応・プリセットコピー・分析バグ修正
 
 ### 概要
+
 - ComfyUI App形式（`.app.json`）ワークフローの識別・表示対応
 - プリセットタブにポジティブ/ネガティブプロンプトのクリップボードコピーボタン追加
 - ワークフロー分析のクラッシュバグ修正
@@ -6483,6 +6940,7 @@ Feeder 専用スタイルを末尾に追加:
 ### 変更内容
 
 #### App形式ワークフロー対応
+
 - **背景:** ComfyUIの最新アップデートでAppモード（ノードを簡略化したWebアプリ風UI）が追加され、`.app.json`拡張子で保存される
 - **対応:**
   - `static/js/comfyui-workflow.js` — `detectFormat()`にファイル名ベースのApp形式判定を追加
@@ -6492,6 +6950,7 @@ Feeder 専用スタイルを末尾に追加:
   - `static/js/i18n.js` — `appFormat` / `appFormatNotSupported` 翻訳キー追加（EN/JA/ZH）
 
 #### プリセット クリップボードコピーボタン
+
 - **課題:** プリセットのプロンプトをComfyUI本体で使う際に手動コピーが必要だった
 - **対応:**
   - `templates/index.html` — プリセット保存ボタン行に「PP コピー」「NP コピー」ボタンを追加（flex:2/2/1比率）
@@ -6500,6 +6959,7 @@ Feeder 専用スタイルを末尾に追加:
   - `static/js/i18n.js` — `copyPositivePrompt` / `copyNegativePrompt` / `copiedToClipboard` / `noTextToCopy` 翻訳キー追加
 
 #### ワークフロー分析バグ修正
+
 - **問題:** UI形式ワークフローの`widgets_values[0]`が整数（例: EmptyLatentImageの`768`）の場合、`.lower()`で`AttributeError`が発生し、例外キャッチにより全分析結果がゼロになる
 - **修正:** `py/services/workflow_analyzer.py` — `_model_name_from_ui_node()`に`isinstance(val, str)`型チェックを追加
 
@@ -6508,24 +6968,29 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-21: v0.1.3 ヘルプ＆サポートタブ追加
 
 ### 概要
+
 - ヘルプ＆サポートタブを新規追加（機能一覧 + サポートリンク）
 
 ### 変更内容
 
 #### ヘルプ＆サポートタブ
+
 - **課題:** プラグインの機能概要を確認する場所がなく、サポートへの導線もなかった
 - **対応:** 新しいメインタブ「Help」を追加し、機能一覧とサポートセクションを設置
 
 ##### 機能一覧セクション
+
 - 各タブ（Workflow / GenerateUI / Prompt / Settings）の主要機能をカード形式で表示
 - Tipsセクション（ドラッグ＆ドロップ、お気に入り、デフォルトワークフロー）
 
 ##### サポートセクション
+
 - GitHubリンク（バグ報告・機能リクエスト・コントリビュート）
 - Ko-fiリンク（開発支援）
 - SVGアイコン付きのリンクカード
 
 #### 変更ファイル
+
 - `templates/index.html` — Helpタブボタン追加、ヘルプ＆サポートセクションのHTML構造
 - `static/js/i18n.js` — 3言語（EN/JA/ZH）のヘルプ関連翻訳キー30項目追加
 - `static/js/app.js` — タブマップにhelp追加、`applyI18nToHtml()`にヘルプタブのi18n適用ロジック追加
@@ -6536,12 +7001,14 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-19: v0.1.2 リリース
 
 ### 概要
+
 - キャンバススナップショット機能追加（ComfyUIトップバーにカメラボタン）
 - ワークフローサイドパネル・モーダルにサムネイルプレビュー追加
 
 ### 変更内容
 
 #### Canvas Snapshot（キャンバススナップショット）
+
 - **課題:** ワークフローのキャンバス画像を保存するにはComfyUIのエクスポート機能を使い手動でファイル管理する必要があった
 - **対応:** ComfyUIトップバーにカメラボタンを追加し、ワンクリックでキャンバスをPNGキャプチャ→ワークフローデータフォルダに自動保存
 - `web/comfyui/top_menu_extension.js`:
@@ -6555,6 +7022,7 @@ Feeder 専用スタイルを末尾に追加:
 - 参考実装: [pythongosssss/ComfyUI-Custom-Scripts](https://github.com/pythongosssss/ComfyUI-Custom-Scripts) の workflowImage.js
 
 #### サムネイルプレビュー
+
 - `templates/index.html` — サイドパネルにThumbnailタブ追加（デフォルトアクティブ）
 - `static/js/workflow-tab.js`:
   - `sidePanelThumbUpdate()` — 選択ワークフローのサムネイル・メタ情報表示
@@ -6563,11 +7031,13 @@ Feeder 専用スタイルを末尾に追加:
 - `static/css/main.css` — `.wfm-side-thumb-*` / `.wfm-modal-thumb-*` スタイル追加
 
 ### スクリーンショット
-| Workflow Tab | ComfyUI Top Bar |
-|:---:|:---:|
+
+|               Workflow Tab               |                ComfyUI Top Bar                |
+| :---------------------------------------: | :-------------------------------------------: |
 | ![Workflow](docs/screenshot_workflow.png) | ![TopBar](docs/screenshot_comfyui_topbar.png) |
 
 ### リリース
+
 - GitHub Release v0.1.2: https://github.com/ketle-man/ComfyUI-Workflow-Studio/releases/tag/v0.1.2
 
 ---
@@ -6575,16 +7045,19 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-19: v0.1.1 リリース
 
 ### 概要
+
 - ファビコン追加
 - プロンプトタブをサブタブ切り替え方式から左右2分割レイアウトに変更
 
 ### 変更内容
 
 #### ファビコン追加
+
 - `static/favicon.svg` — 起動ボタンと同じ W + S Wave デザインの SVG ファビコンを新規作成
 - `templates/index.html` — `<link rel="icon">` タグ追加
 
 #### プロンプトタブ 2分割レイアウト
+
 - **課題:** Assistant / Presets のサブタブ切り替え方式では画面幅が広い場合に視点移動が大きく使いづらい
 - **対応:** サブタブナビゲーションを廃止し、左パネル（AIアシスタント）・右パネル（プリセット）の同時表示レイアウトに変更
 - `templates/index.html` — サブタブ構造を `.wfm-prompt-split` 左右分割構造に変更
@@ -6593,6 +7066,7 @@ Feeder 専用スタイルを末尾に追加:
 - `static/js/app.js` — 翻訳対象をサブタブボタンからパネルヘッダーに変更
 
 ### スクリーンショット
+
 ![Prompt Tab](docs/screenshot_prompt.png)
 
 ---
@@ -6600,14 +7074,17 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-18: プロジェクトリネーム & アイコン適用
 
 ### 概要
+
 - `ComfyUI-Workflow-Manager` → `ComfyUI-Workflow-Studio` にリネーム
 - 起動ボタンのアイコンを W + S Wave デザインに差し替え
 
 ### 背景
+
 - 既存の `ComfyUI-WorkflowManager` (yichengup) と名前が衝突するため、GitHub公開・ComfyUI Manager登録に向けてリネーム
 - アイコンは9種類のWSモノグラムバリエーションから「W + S Wave」(W文字 + S字カーブ) を選定
 
 ### 変更内容
+
 - ディレクトリ名: `ComfyUI-Workflow-Manager/` → `ComfyUI-Workflow-Studio/`
 - 全ファイルの "Workflow Manager" → "Workflow Studio" 置換
 - `top_menu_extension.js`:
@@ -6620,9 +7097,11 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-18: デフォルトビュー設定追加
 
 ### 概要
+
 ワークフロータブの歯車アイコン設定パネルに「デフォルトビュー」設定を追加
 
 ### 変更ファイル
+
 - `static/js/workflow-tab.js` - ラジオボタンUI追加、localStorage連携
 - `static/js/i18n.js` - defaultView/viewThumbnail/viewCard/viewTable キー追加
 - `static/css/main.css` - `.wfm-settings-radio-group` スタイル追加
@@ -6632,9 +7111,11 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-18: MarkdownNote表示専用ノード除外
 
 ### 概要
+
 `MarkdownNote`等の表示専用ノード（入出力接続なし、object_info未登録）がAPI変換に含まれエラーになる問題を修正
 
 ### 変更ファイル
+
 - `static/js/comfyui-workflow.js` - `_isDisplayOnlyNode()` ヘルパー追加、`convertUiToApi`でスキップ
 
 ---
@@ -6642,14 +7123,17 @@ Feeder 専用スタイルを末尾に追加:
 ## 2026-03-18: サブグラフワークフロー対応 & 変換精度修正
 
 ### 概要
+
 ComfyUIサブグラフ（LongCat Image等）を含むワークフローの生成時エラーを修正
 
 ### 問題
+
 1. サブグラフノードのUUID型typeがComfyUIバックエンドで認識されない
 2. リンク済み入力のwidgets_values消費漏れでbatch_sizeが1024になる
 3. `"COMBO"` 文字列型がウィジェット型として認識されない
 
 ### 修正内容 (`static/js/comfyui-workflow.js`)
+
 - `_flattenSubgraphs(workflow)` 関数追加: サブグラフを `parentId:internalId` 形式に展開
 - リンク済み入力でも `wIdx` をインクリメントするよう修正
 - `_getWidgetInputNames` / `_getWidgetInputTypes` に `"COMBO"` 文字列型を追加
@@ -6659,9 +7143,11 @@ ComfyUIサブグラフ（LongCat Image等）を含むワークフローの生成
 ## 2026-03-18: Raw JSON同期修正
 
 ### 概要
+
 GenerateUIの各タブでApply操作後、Raw JSONテキストエリアが更新されない問題を修正
 
 ### 変更ファイル
+
 - `static/js/comfyui-editor.js` - `_syncRawJson()` ヘルパー追加、全Apply箇所から呼び出し
 
 ---
@@ -6687,9 +7173,11 @@ ComfyUI-Workflow-Studio/
 ## 2026-03-18: JSONシンタックスハイライト
 
 ### 概要
+
 ワークフロータブ・生成UIタブのJSON表示にシンタックスハイライトを追加
 
 ### 色分け (eagle_comic_creater_webと同じOne Atomテーマ風)
+
 - 黄 `#e5c07b` — name, scheduler
 - ピンク `#c678dd` — title
 - 緑 `#98c379` — width, height
@@ -6698,6 +7186,7 @@ ComfyUI-Workflow-Studio/
 - ベース `#abb2bf` — その他
 
 ### 変更ファイル
+
 - `static/js/json-highlight.js` — 新規: `highlightJSON`, `syncJsonHighlight`, `syncScroll`
 - `static/js/workflow-tab.js` — サイドパネルJSON表示に `highlightJSON` 適用
 - `templates/index.html` — Raw JSONを `<pre>` + `<textarea>` レイヤー構造に変更
@@ -6710,9 +7199,11 @@ ComfyUI-Workflow-Studio/
 ## 2026-03-18: プロンプトタブ 中国語↔英語翻訳追加
 
 ### 概要
+
 プロンプトタブの翻訳機能に ZH→EN / EN→ZH を追加
 
 ### 変更ファイル
+
 - `templates/index.html` — `ZH→EN` / `EN→ZH` ボタン追加
 - `static/js/prompt-tab.js` — `sendTranslate` に `zh2en` / `en2zh` プロンプト追加、イベントリスナー追加
 
@@ -6721,9 +7212,11 @@ ComfyUI-Workflow-Studio/
 ## 2026-03-18: v0.1.0 リリース
 
 ### 概要
+
 GitHub公開・ComfyUI Manager登録・初回リリース
 
 ### 実施内容
+
 - GitHub リポジトリ作成: https://github.com/ketle-man/ComfyUI-Workflow-Studio
 - README.md 作成（スクリーンショット4枚付き）
 - ComfyUI Manager 登録PR: https://github.com/Comfy-Org/ComfyUI-Manager/pull/2706
@@ -6734,11 +7227,13 @@ GitHub公開・ComfyUI Manager登録・初回リリース
 ## 2026-04-13: Gallery タブ追加 & 全タブ Group UI 統一
 
 ### 概要
+
 - ギャラリータブ（Phase 1）実装：6800枚超の画像ブラウザ
 - Workflow / Nodes / Gallery の Group UI を Models タブ基準に統一
 - Settings タブを2カラムレイアウトに変更（テーマを右固定）
 
 ### Gallery タブ機能
+
 - **3カラム表示** — サムネイル / テーブル切り替え、Fav列を左端に
 - **サーバーサイドフィルタ** — グループ・お気に入り・タグによる server-side filtering
 - **マルチセレクト** — Ctrl+クリックで複数選択、Bulk Bar でまとめて操作
@@ -6747,16 +7242,19 @@ GitHub公開・ComfyUI Manager登録・初回リリース
 - **出力フォルダ設定** — Settings タブからギャラリー参照フォルダを変更可能
 
 ### Group UI 統一
+
 - **Workflow タブ** — `renderSideGroup()` を新設し Models 4 セクションパターンに変更（Current Groups / Add to Group / Create New Group / Manage Groups）。冗長なヘッダーブロック削除
 - **Nodes タブ** — `renderSideGroups()` を全面書き換え。`×` ボタン・"Add" ボタン・"Rename (✎)" 追加
 - **Gallery タブ** — `renderDetailGroup()` を新設、同パターン適用
 
 ### Settings 2カラムレイアウト
+
 - テーマパネルを右側（`float:right; width:50%`）に固定
 - 左側に UI言語〜保存ボタンを連続配置（ギャップなし）
 - `position:sticky; top:0` でテーマパネルをスクロールに追従
 
 ### 変更ファイル
+
 - `py/services/gallery_metadata.py` — `rename_group()`, `get_group_member_set()` 追加
 - `py/services/gallery_service.py` — `_FolderCache`, `_scan_folder()`, `group_filter` 対応
 - `py/routes/gallery_routes.py` — `PUT /wfm/gallery/groups/{name}` 追加
@@ -6767,4 +7265,3 @@ GitHub公開・ComfyUI Manager登録・初回リリース
 - `static/css/gallery-tab.css` — multi-selected・bulk-bar・セクションタイトルスタイル
 - `static/css/main.css` — Settings レイアウト CSS（float:right ベース 50:50）
 - `templates/index.html` — Gallery "Group"→"Groups"、各タブ static HTML → JS動的生成、Gallery ヘルプカード追加
-

@@ -378,7 +378,7 @@ export function applyModelTabActiveColor(color) {
         el.id = MODEL_ACTIVE_COLOR_STYLE_ID;
         document.head.appendChild(el);
     }
-    el.textContent = `.wfm-form-group label.wfm-model-label-active,\n.wfm-settings-summary.wfm-model-label-active,\n#wfm-gen-lora-col-title.wfm-model-label-active { color: ${val}; }`;
+    el.textContent = `.wfm-form-group label.wfm-model-label-active,\n.wfm-settings-summary.wfm-model-label-active,\n#wfm-gen-lora-col-title.wfm-model-label-active,\n.wfm-lab-model-view-btn.wfm-model-label-active { color: ${val}; }`;
 }
 
 export function applyTheme(themeId) {

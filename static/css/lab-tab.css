@@ -163,8 +163,10 @@
 .wfm-lab-col-header {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 4px;
+    row-gap: 4px;
     padding: 6px 8px;
     font-size: 11px;
     font-weight: 600;
@@ -174,6 +176,39 @@
 }
 
 .wfm-lab-col-btns { display: flex; gap: 2px; }
+
+.wfm-lab-col-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Model column header: C/L/V toggle that switches which single field its cells
+   summarize (see _modelViewMode in lab-tab.js) — not part of the Plan data. */
+.wfm-lab-model-view-toggle { display: flex; gap: 2px; }
+
+.wfm-lab-model-view-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    background: var(--wfm-bg-tertiary);
+    border: 1px solid var(--wfm-border);
+    border-radius: var(--wfm-radius-sm);
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.wfm-lab-model-view-btn:hover { color: var(--wfm-text-primary); border-color: var(--wfm-primary); }
+
+.wfm-lab-model-view-btn.active {
+    color: #fff;
+    background: var(--wfm-primary);
+    border-color: var(--wfm-primary);
+}
 
 .wfm-lab-col-cells {
     flex: 1;
