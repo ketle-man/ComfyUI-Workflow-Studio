@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.4.5** — 調査: トップバー保存ワークフローのRMBG不具合報告（原因なし） + バグ修正: LabタブModel列の無意味な空キーフレーム表示を解消
 - **v0.4.4** — 機能追加: Lab/GenerateUI ModelタブへLoRAバイパス機能 + AI TOOL Chatの画像生成パラメータ拡張
 - **v0.4.3** — バグ修正: 共有モーダルのお気に入り☆/リネームがLabモーダルへ残留 + Lab Model列の＋／－をCheckpoint/LoRA/VAEで完全独立化
 - **v0.4.2** — 機能追加: Lab「Model」列統合（Checkpoint / LoRA Single / VAE）+ フィールド単位継承 + C/L/V表示切替

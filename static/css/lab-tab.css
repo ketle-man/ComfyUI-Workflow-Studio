@@ -288,6 +288,16 @@
     color: var(--wfm-text-secondary);
 }
 
+/* Shown instead of a keyframe list when the loaded workflow has no node this Model
+   sub-column (checkpoint/lora/vae) could override — see _hasNodeForColumn in lab-tab.js. */
+.wfm-lab-cell-empty {
+    padding: 6px 8px;
+    font-size: 11px;
+    font-style: italic;
+    color: var(--wfm-text-secondary);
+    cursor: default;
+}
+
 .wfm-lab-cell-prompt-line {
     display: block;
     overflow: hidden;

@@ -377,6 +377,7 @@ function _initColumnButtons() {
     document.querySelectorAll(".wfm-lab-col-add").forEach((btn) => {
         btn.addEventListener("click", () => {
             const col = _resolveColumnKey(btn.dataset.col);
+            if (!_hasNodeForColumn(col)) return; // no matching node to apply an override to
             const kfs = _lab.columns[col];
             const lastIter = kfs[kfs.length - 1].atIteration;
             if (lastIter >= _lab.batchCount) {
@@ -434,9 +435,33 @@ function _renderColumnForKey(col) {
     else _renderColumn(col);
 }
 
+// True when the loaded workflow actually has a node the given Model column (checkpoint/
+// lora/vae) could apply an override to. VAE is special-cased: even with no standalone
+// VAELoader node, a checkpoint node means _buildWorkflowForIteration can still inject one
+// to override the checkpoint's baked-in VAE — so VAE only counts as "absent" when there's
+// no checkpoint either. Non-model columns (prompt/ksampler) always have somewhere to
+// apply, so they're not gated by this.
+function _hasNodeForColumn(col) {
+    const analysis = comfyUI.currentAnalysis;
+    if (col === "checkpoint") return (analysis?.checkpoint_nodes?.length || 0) > 0;
+    if (col === "lora") return (analysis?.lora_nodes?.length || 0) > 0;
+    if (col === "vae") {
+        return (analysis?.vae_nodes?.length || 0) > 0 || (analysis?.checkpoint_nodes?.length || 0) > 0;
+    }
+    return true;
+}
+
 function _renderColumn(col, containerId = `wfm-lab-col-cells-${col}`) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    // No matching node in the loaded workflow for this Model sub-column: showing a
+    // baseline "Setting 1" keyframe here would be a no-op at Run time (_buildWorkflowForIteration
+    // silently skips writes when the target node id doesn't exist), so skip rendering it
+    // entirely rather than presenting an override control that can never do anything.
+    if (!_hasNodeForColumn(col)) {
+        container.innerHTML = `<div class="wfm-lab-cell-empty">${t("labNoNodeForColumn")}</div>`;
+        return;
+    }
     const keyframes = _lab.columns[col];
     container.innerHTML = keyframes.map((kf, idx) => _cellHtml(col, kf, idx)).join("");
     container.querySelectorAll(".wfm-lab-cell").forEach((el) => {
@@ -451,13 +476,9 @@ function _renderColumn(col, containerId = `wfm-lab-col-cells-${col}`) {
 // with whatever's loaded (initial render, keyframe edits, toggle clicks, plan load/
 // apply, and refreshLabLiveDefaults() when switching into the Lab subtab).
 function _updateModelViewHighlight() {
-    const analysis = comfyUI.currentAnalysis;
-    const hasCheckpoint = (analysis?.checkpoint_nodes?.length || 0) > 0;
-    const hasLora = (analysis?.lora_nodes?.length || 0) > 0;
-    const hasVae = (analysis?.vae_nodes?.length || 0) > 0;
-    document.querySelector('.wfm-lab-model-view-btn[data-view="checkpoint"]')?.classList.toggle("wfm-model-label-active", hasCheckpoint);
-    document.querySelector('.wfm-lab-model-view-btn[data-view="lora"]')?.classList.toggle("wfm-model-label-active", hasLora);
-    document.querySelector('.wfm-lab-model-view-btn[data-view="vae"]')?.classList.toggle("wfm-model-label-active", hasVae);
+    document.querySelector('.wfm-lab-model-view-btn[data-view="checkpoint"]')?.classList.toggle("wfm-model-label-active", _hasNodeForColumn("checkpoint"));
+    document.querySelector('.wfm-lab-model-view-btn[data-view="lora"]')?.classList.toggle("wfm-model-label-active", _hasNodeForColumn("lora"));
+    document.querySelector('.wfm-lab-model-view-btn[data-view="vae"]')?.classList.toggle("wfm-model-label-active", _hasNodeForColumn("vae"));
 }
 
 function _cellHtml(col, kf, idx) {

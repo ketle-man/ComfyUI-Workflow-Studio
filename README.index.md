@@ -42,8 +42,8 @@ One-click capture, Auto-save as thumbnail, Embedded workflow metadata, Auto-impo
 ### Feeder subtab (v0.3.5 / v0.3.42)
 ImageFeeder node control, Image library, Selection management, Presets, Continuous Run loop, Index sync, Seed, WFS_GalleryFeeder node, Node & group selector, Image grid, After Gen modes, Run / Stop controls
 
-### Lab subtab (v0.3.87 – v0.4.4)
-Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column — Checkpoint / LoRA Single / VAE, Wildcards, Prompt cell extras, Keyframe #1 live-reflect, Bypass checkbox, LoRA node bypass & prompt injection, T2I workflow support, Use generated image for next, Workflow recall, Plan files, Plan Load, Plan JSON tab, Save index image to Output on Run, Index images are self-contained plan files, Eagle integration
+### Lab subtab (v0.3.87 – v0.4.5)
+Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column — Checkpoint / LoRA Single / VAE, Empty state when no matching node exists, Wildcards, Prompt cell extras, Keyframe #1 live-reflect, Bypass checkbox, LoRA node bypass & prompt injection, T2I workflow support, Use generated image for next, Workflow recall, Plan files, Plan Load, Plan JSON tab, Save index image to Output on Run, Index images are self-contained plan files, Eagle integration
 
 ### Prompt Tab
 3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager

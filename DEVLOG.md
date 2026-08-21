@@ -4,6 +4,34 @@
 
 ---
 
+## v0.4.5
+
+### 調査: トップバー保存ワークフローのRMBG不具合報告（原因なし） + バグ修正: LabタブModel列の無意味な空キーフレーム表示を解消
+
+ユーザーから「トップバーで保存した2つのワークフロー（I2I_rmbg.json/I2I_rmbg_2.json）を生成UIタブで読み込んで生成するとRemove Background（RMBG）ノードが機能せず透過画像が作成されない。ComfyUIのExport(API)で保存した3つ目のファイルは正しく動く」との報告を受けて調査した一連のセッション。
+
+**1. ワークフロー解析の調査**: RMBGノードは`background_color`という「ウィジェットを持たない特殊な入力（COLORCODE型、`model`より前の位置）」を持つ特徴的な構造で、UI形式→API形式変換時に`widgets_values`の対応がずれる可能性を最初に疑った。`comfyui-workflow.js`の`convertUiToApi()`を段階的に検証:
+  - `/object_info/RMBG`を実機から取得し、`_getWidgetInputNames()`が`forceInput`相当（widgetキーを持たない入力）を正しく除外し、`background_color`がウィジェット名リストから漏れることを確認。
+  - ユーザー提供の`I2I_rmbg_2.json`をブラウザ内(Playwright MCP)で実際に`convertUiToApi()`にかけ、変換結果を確認 — `model`/`sensitivity`/`background`など全フィールドが正しくマッピングされていた。
+  - その変換結果を実際に`/prompt`へキューイングして実行、さらにGenerateUIタブの本物のGenerateボタンをクリックする経路でも実行 — いずれも出力PNGはRGBA・アルファチャンネル0〜255の**正しい透過画像**だった。
+  - 結論: 現在デプロイされているv0.4.3のワークフロー解析ロジックに該当バグは再現せず、コード変更は行わなかった。報告時点でより古いバージョンを使っていた可能性が高いと判断し、ユーザーに調査結果と再検証手順を報告した。
+
+**2. Labタブ: モデルの無いワークフローで無意味なキーフレームが作成される問題**: 調査の副産物として、RMBGのみ（Checkpoint/LoRA/VAEいずれのノードも無い）ワークフローをLabタブで開くと、Model列に「1: （ワークフローの設定のまま）」という空のキーフレーム行が常に表示されてしまうことを実機で発見。ユーザーから「不要なため作成しない形にしたい」との要望を受けて修正。`_buildWorkflowForIteration()`は対象ノードIDが存在しない場合、書き込みを黙ってスキップするだけ（`write()`の`wf[nodeId]`ガード）なので、この行はRun時に何の効果も持たない死んだコントロールだった。`_hasNodeForColumn(col)`を新設し、`_renderColumn()`と`_initColumnButtons()`の＋ボタンで判定 — 対応ノードが無い列は「このワークフローに該当ノードがありません」というプレースホルダーを表示し、キーフレーム追加もブロックする。VAEだけは特殊扱いで、専用VAELoaderが無くてもCheckpointノードが存在すれば内蔵VAEの上書き注入が意味を持つため（既存の`_buildWorkflowForIteration`のVAELoader自動注入ロジック）、Checkpoint存在時はVAE列も通常表示のままにした。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習に従い、`i18n.js`に新規メッセージキー`labNoNodeForColumn`を日本語/英語/中国語すべてに追加（このケースは既存キーワードで賄えないUI状態のため新設。ヘルプページ本文の更新は対象外の細部挙動のため省略）。README.mdのLab subtabセクションに「Empty state when no matching node exists (v0.4.5)」の項目を追記し、見出しのバージョン範囲を`v0.3.87 – v0.4.5`に更新した。
+
+**検証**: Playwright MCP経由で実機ブラウザ操作: (1) RMBGのみのモデル無しワークフローを読み込みLabタブへ切り替え、Model列（Checkpoint/LoRA/VAEいずれのビューでも）が空プレースホルダーになることを確認、(2) Checkpoint+VAELoaderを含む通常のワークフローでは従来通りライブ値付きキーフレームが表示され回帰が無いことを確認、(3) 同じworkflow内でLoRAノードだけが無いケースではLoRAビューのみ正しく空プレースホルダーになることを確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイル（`lab-tab.js`/`i18n.js`/`lab-tab.css`）を両フォルダへ同期しdiffで完全一致を確認した。
+
+**How to apply**:
+
+1. 「機能しない」という不具合報告を受けた際は、コードを読んで理屈上正しそうに見えても、実機（今回はPlaywright MCP経由の実ブラウザ+実ComfyUI）で変換結果と生成画像の中身（アルファチャンネルの実値など）まで直接検証してから結論を出す。理屈の検証だけでは「今のバージョンでは再現しない」という事実に辿り着けなかった。
+2. 「機能しない」の調査中に見つかった別の実害あるバグ（今回のLabタブの死んだキーフレーム行）は、本題の調査がクローズしても見逃さず、その場でユーザーに報告し必要なら合わせて修正する。
+3. UIに「設定できるが実行時には何の効果も持たない」コントロールを残すと、ユーザーは正常に設定できていると誤認する。対象データが存在しないなら、コントロール自体を出さない（無効化ではなく非表示）のが最も誤解を生まない。
+
+関連: [[project_v042_lab_model_column]], [[project_dev_deploy_sync]]
+
+---
+
 ## v0.4.4
 
 ### 機能追加: Lab/GenerateUI ModelタブへLoRAバイパス機能 + AI TOOL Chatの画像生成パラメータ拡張
