@@ -6,6 +6,7 @@ import { comfyUI } from "./comfyui-client.js";
 import { syncJsonHighlight } from "./json-highlight.js";
 import { t } from "./i18n.js";
 import { escapeHtml, setupSearchClearBtn } from "./util.js";
+import { showToast } from "./app.js";
 
 // ── Latent Image preset state ─────────────────────────────
 const _LATENT_PRESET_KEY = "wfm_latent_presets";
@@ -156,6 +157,16 @@ function _refreshPresetSelect(customPresets) {
 let _stackStrengths = {};
 // { modelFullPath: boolean } — true = active (default)
 let _stackActive = {};
+// ── LoRA node-bypass state (GenerateUI Model tab header toggle) ───────────
+// Force the LoRA node's strength to 0 without touching the actual ComfyUI node's mode —
+// currentWorkflow is already-converted API format (see comfyui-workflow.js
+// convertUiToApi), where mode has no effect at execution time, so a real Bypass(mode:4)
+// can't be reproduced here; zeroing strength is the behavioral equivalent.
+// { nodeId: boolean } — true = currently bypassed
+let _loraNodeBypass = {};
+// { nodeId: { loraName, strModel, strClip } | { loras, text } } — pre-bypass values to
+// restore when toggled back off. Shape depends on isLoraManager at bypass-time.
+let _loraBypassSnapshot = {};
 // { id: string|null, selStart: number, selEnd: number }
 let _lastPromptFocus = { id: null, selStart: 0, selEnd: 0 };
 
@@ -742,6 +753,63 @@ export const comfyEditor = {
         _initTextEncoderSection(analysis, this.models.textEncoders || [], el).catch(() => {});
     },
 
+    // Toggles the GenerateUI Model tab's LoRA column-header bypass button: forces the
+    // current target LoRA node's strength to 0 (both tabs' strength fields, whichever
+    // is currently in currentWorkflow), or restores whatever was there before. Targets
+    // the same node Single/Stack Apply default to (first LoraManager, else first LoRA
+    // node) so one button covers both tabs without needing its own node picker.
+    toggleLoraNodeBypass(analysis) {
+        const loraNodes = analysis?.lora_nodes || [];
+        let nodeId = (loraNodes.find((n) => n.is_lora_manager) || loraNodes[0])?.id;
+        let isLoraManager = !!loraNodes.find((n) => String(n.id) === String(nodeId))?.is_lora_manager;
+        if (nodeId == null) {
+            nodeId = Object.keys(comfyUI.currentWorkflow || {}).find((id) => comfyUI.currentWorkflow[id]?.inputs && "lora_name" in comfyUI.currentWorkflow[id].inputs);
+            isLoraManager = false;
+        }
+        const wfNode = nodeId != null ? comfyUI.currentWorkflow?.[nodeId] : null;
+        if (!wfNode) {
+            showToast(t("modelsGenUINoNode", "LoRA"), "warning");
+            return;
+        }
+
+        if (_loraNodeBypass[nodeId]) {
+            // Restore whatever was set before bypassing
+            const snap = _loraBypassSnapshot[nodeId];
+            if (snap) {
+                if (isLoraManager) {
+                    wfNode.inputs.loras = { __value__: JSON.parse(JSON.stringify(snap.loras || [])) };
+                    wfNode.inputs.text = snap.text ?? "";
+                } else {
+                    wfNode.inputs.lora_name = snap.lora_name;
+                    wfNode.inputs.strength_model = snap.strength_model;
+                    wfNode.inputs.strength_clip = snap.strength_clip;
+                }
+            }
+            delete _loraNodeBypass[nodeId];
+            delete _loraBypassSnapshot[nodeId];
+        } else {
+            // Snapshot current values, then zero the strength (LoraManager: every
+            // entry in its loras list, keeping the list itself intact so un-bypassing
+            // restores the exact same Stack — not just a single-LoRA fallback).
+            if (isLoraManager) {
+                const loras = Array.isArray(wfNode.inputs.loras?.__value__) ? wfNode.inputs.loras.__value__ : [];
+                _loraBypassSnapshot[nodeId] = { loras: JSON.parse(JSON.stringify(loras)), text: wfNode.inputs.text ?? "" };
+                wfNode.inputs.loras = { __value__: loras.map((l) => ({ ...l, strength: 0, clipStrength: 0 })) };
+                wfNode.inputs.text = "";
+            } else {
+                _loraBypassSnapshot[nodeId] = {
+                    lora_name: wfNode.inputs.lora_name,
+                    strength_model: wfNode.inputs.strength_model,
+                    strength_clip: wfNode.inputs.strength_clip,
+                };
+                wfNode.inputs.strength_model = 0;
+                wfNode.inputs.strength_clip = 0;
+            }
+            _loraNodeBypass[nodeId] = true;
+        }
+        _syncRawJson();
+    },
+
     async renderLoraPane(analysis, containerId, opts = {}) {
         const el = document.getElementById(containerId);
         if (!el) return;
@@ -751,6 +819,15 @@ export const comfyEditor = {
         const loras = this.models.loras || [];
         const defaultStackTarget = (loraNodes.find((n) => n.is_lora_manager) || loraNodes[0])?.id;
         const hasLoraManager = loraNodes.some((n) => n.is_lora_manager);
+
+        // Sync the column-header bypass button (lives outside this container's
+        // innerHTML, in the static wfm-gen-lora-col-header) to whatever the target
+        // node's current bypass state is.
+        const bypassBtn = document.getElementById("wfm-lora-bypass-toggle");
+        if (bypassBtn) {
+            bypassBtn.classList.toggle("active", defaultStackTarget != null && !!_loraNodeBypass[defaultStackTarget]);
+            bypassBtn.disabled = loraNodes.length === 0;
+        }
         // Use Stack Group チェックボックスの現在状態を先読み(Stack表示の取得元判定に使う)。
         // resetStackMode(新規読み込み)時は常にOFF扱い。
         const stackModeChecked = hasLoraManager && !opts.resetStackMode && (el.querySelector("#wfm-lora-stack-mode-toggle")?.checked ?? false);
@@ -759,6 +836,10 @@ export const comfyEditor = {
         // Stackグループ使用チェックボックスをOFFへリセットする(既存のGenUI状態への影響を避けるため
         // タブ切替やStack再読込などの単なる再描画では行わない)。
         if (opts.resetStackMode) {
+            // New workflow loaded — bypass state/snapshots belonged to the previous
+            // workflow's node IDs, so they can't be meaningfully carried forward.
+            _loraNodeBypass = {};
+            _loraBypassSnapshot = {};
             comfyUI.loraManagerSnapshots = {};
             for (const n of loraNodes) {
                 if (!n.is_lora_manager) continue;
@@ -1084,6 +1165,11 @@ export const comfyEditor = {
             const strModel = parseFloat(document.getElementById("wfm-lora-str-model")?.value) || 1.0;
             const strClip = parseFloat(document.getElementById("wfm-lora-str-clip")?.value) || 1.0;
             _applyLoraToNode(nodeId, select.value, strModel, strClip, node?.is_lora_manager);
+            // An explicit Apply overwrites whatever bypass had zeroed — clear it so the
+            // header button (and a later un-bypass) don't stomp this new value.
+            delete _loraNodeBypass[nodeId];
+            delete _loraBypassSnapshot[nodeId];
+            document.getElementById("wfm-lora-bypass-toggle")?.classList.remove("active");
             _syncRawJson();
 
             // Sync to Positive prompt
@@ -1216,6 +1302,11 @@ export const comfyEditor = {
                     comfyUI.currentWorkflow[nodeId].inputs.strength_clip = _stackStrengths[first]?.c ?? 1.0;
                 }
             }
+            // An explicit Apply overwrites whatever bypass had zeroed — clear it so the
+            // header button (and a later un-bypass) don't stomp this new value.
+            delete _loraNodeBypass[nodeId];
+            delete _loraBypassSnapshot[nodeId];
+            document.getElementById("wfm-lora-bypass-toggle")?.classList.remove("active");
             _syncRawJson();
 
             // Sync Stack LORA SYNTAX + TRIGGER WORDS to Positive prompt
@@ -1988,6 +2079,75 @@ export const comfyEditor = {
         }
 
         if (!workflow) _syncRawJson();
+    },
+
+    // Resolves a user/LLM-supplied aspect ratio (e.g. "3:2" or the full COMBO label
+    // "3:2 (Photo)") against a ResolutionSelector-type node's actual options via
+    // /object_info — the workflow analysis only knows the node's CURRENT value, not its
+    // full option list, so a bare "3:2" needs matching against whatever labeled string
+    // that node's aspect_ratio COMBO actually accepts. Falls back to the raw input if
+    // the node type can't be queried or nothing matches, so ComfyUI's own validation
+    // surfaces a clear error instead of this silently doing nothing.
+    async resolveAspectRatioOption(nodeType, requested) {
+        if (!requested) return null;
+        const ratioMatch = String(requested).match(/(\d+)\s*:\s*(\d+)/);
+        const wantedRatio = ratioMatch ? `${ratioMatch[1]}:${ratioMatch[2]}` : String(requested).trim();
+        try {
+            const info = await comfyUI.fetchObjectInfo(nodeType);
+            const options = info?.[nodeType]?.input?.required?.aspect_ratio?.[1]?.options || [];
+            if (options.includes(requested)) return requested;
+            return options.find((o) => o.startsWith(wantedRatio)) || requested;
+        } catch {
+            return requested;
+        }
+    },
+
+    // AI TOOL Chat's generate_image tool call — writes whichever of KSampler
+    // (steps/cfg/sampler_name/scheduler/denoise/seed), Latent Image (width/height/
+    // batch_size), and Resolution Selector (resolvedAspectRatio) fields the LLM
+    // supplied onto the given workflow/analysis (or comfyUI.currentWorkflow/
+    // currentAnalysis by default). Mirrors lab-tab.js's _buildWorkflowForIteration
+    // KSampler branch — same per-field node-id indirection (stepsNodeId/cfgNodeId/...
+    // falling back to sampler.id) for Advanced-Sampling workflows (Flux.1/2, SD3.5,
+    // Chroma...) that spread these across several nodes.
+    // seed is returned rather than written directly — the caller passes it through to
+    // comfyUI.generate()'s seedMode/seedValue instead, same as every other seed source.
+    // resolvedAspectRatio must already be one of the node's actual option strings (see
+    // resolveAspectRatioOption above) — passed in rather than resolved here because
+    // that lookup is async and this stays a plain synchronous writer.
+    setGenerationParams({ steps, cfg, sampler_name, scheduler, denoise, seed, width, height, batch_size, resolvedAspectRatio, workflow, analysis } = {}) {
+        const wf = workflow || comfyUI.currentWorkflow;
+        const an = analysis || comfyUI.currentAnalysis;
+        if (!wf || !an) return { seed: null };
+
+        const sampler = an.sampler_nodes?.[0];
+        if (sampler) {
+            if (steps != null) { const id = sampler.stepsNodeId ?? sampler.id; if (wf[id]) wf[id].inputs.steps = steps; }
+            if (cfg != null) { const id = sampler.cfgNodeId ?? sampler.id; if (wf[id]) wf[id].inputs.cfg = cfg; }
+            if (sampler_name) { const id = sampler.samplerNodeId ?? sampler.id; if (wf[id]) wf[id].inputs.sampler_name = sampler_name; }
+            if (scheduler && sampler.schedulerNodeId != null && wf[sampler.schedulerNodeId]) {
+                wf[sampler.schedulerNodeId].inputs.scheduler = scheduler;
+            }
+            if (denoise != null && sampler.denoiseNodeId != null && wf[sampler.denoiseNodeId]) {
+                wf[sampler.denoiseNodeId].inputs.denoise = denoise;
+            }
+        }
+
+        // Resolution Selector takes priority over direct width/height — writing width/
+        // height straight onto the EmptyLatentImage would just clobber whatever the
+        // selector computed, silently ignoring the requested aspect ratio.
+        const resSelector = an.resolution_selector_nodes?.[0];
+        const latent = an.latent_nodes?.[0];
+        if (resolvedAspectRatio && resSelector && wf[resSelector.id]) {
+            wf[resSelector.id].inputs.aspect_ratio = resolvedAspectRatio;
+        } else if (latent && wf[latent.id]) {
+            if (width != null) wf[latent.id].inputs.width = width;
+            if (height != null) wf[latent.id].inputs.height = height;
+        }
+        if (latent && wf[latent.id] && batch_size != null) wf[latent.id].inputs.batch_size = batch_size;
+
+        if (!workflow) _syncRawJson();
+        return { seed: seed ?? null };
     },
 
     syncToWorkflow() {

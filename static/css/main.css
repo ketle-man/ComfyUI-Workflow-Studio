@@ -653,8 +653,8 @@ body {
     align-items: center;
 }
 
+.wfm-lora-bypass-btn,
 .wfm-lora-refresh-btn {
-    margin-left: auto;
     font-size: 13px;
     line-height: 1;
     padding: 2px 5px;
@@ -662,7 +662,20 @@ body {
     text-transform: none;
     letter-spacing: 0;
 }
+.wfm-lora-bypass-btn {
+    margin-left: auto;
+}
+.wfm-lora-bypass-btn:hover,
 .wfm-lora-refresh-btn:hover { opacity: 1; }
+
+/* Bypass is active for the current LoRA target node: strength forced to 0 (see
+   comfyui-editor.js renderLoraPane / _loraNodeBypass). */
+.wfm-lora-bypass-btn.active {
+    opacity: 1;
+    background: var(--wfm-danger);
+    border-color: var(--wfm-danger);
+    color: #fff;
+}
 
 .wfm-gen-lora-col-body {
     flex: 1;

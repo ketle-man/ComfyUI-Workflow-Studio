@@ -209,3 +209,14 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+### README.md / DEVLOG.md の索引ファイル
+
+`README.md`/`DEVLOG.md`はサイズが大きすぎてローカルOllamaでの意味抽出が不安定になる（大きな塊を渡すとJSONではなく散文の要約を返す、または処理がタイムアウトする）ため、`.graphifyignore`でgraphifyの抽出対象から除外している。代わりに縮小版の`README.index.md`/`DEVLOG.index.md`を抽出対象にしている。
+
+- 生成スクリプト: `python tools/generate_doc_index.py [readme|devlog|all]`
+- 自動化: `README.md`/`DEVLOG.md`を編集すると以下の2つのフックが自動でindexを再生成する
+  - Claude Code PostToolUseフック（`.claude/hooks/on_doc_edit.py`）— Edit/Write直後に即時実行
+  - git pre-commitフック（`.git/hooks/pre-commit`）— コミット時にstagedファイルを検知して再生成し、同じコミットに含める（他エディタでの編集にも対応）
+- 索引ファイルを手動で編集しない（次の生成で上書きされる）
+- 索引ファイル再生成後は`graphify update .`を実行してグラフに反映する

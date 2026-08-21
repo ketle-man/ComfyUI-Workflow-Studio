@@ -548,12 +548,22 @@ const IMAGE_GEN_TOOLS = [{
     type: "function",
     function: {
         name: "generate_image",
-        description: "Generate an image using the currently loaded ComfyUI workflow. If an image is currently attached to the conversation, this performs image-to-image generation using that image as the base; otherwise it performs text-to-image. Call this when the user asks to create, draw, paint, edit, or transform an image.",
+        description: "Generate an image using the currently loaded ComfyUI workflow. If an image is currently attached to the conversation, this performs image-to-image generation using that image as the base; otherwise it performs text-to-image. Call this when the user asks to create, draw, paint, edit, or transform an image. All parameters besides prompt are optional — omit any the user didn't specify and the workflow's own current setting is kept.",
         parameters: {
             type: "object",
             properties: {
                 prompt: { type: "string", description: "Positive prompt describing the desired image." },
                 negative_prompt: { type: "string", description: "What to avoid in the image. Optional." },
+                steps: { type: "integer", description: "Sampling steps. Optional." },
+                cfg: { type: "number", description: "Classifier-free guidance scale. Optional." },
+                sampler_name: { type: "string", description: "ComfyUI sampler name (e.g. euler, dpmpp_2m, ddim). Optional." },
+                scheduler: { type: "string", description: "ComfyUI scheduler name (e.g. normal, karras, simple). Optional." },
+                denoise: { type: "number", description: "Denoise strength 0-1 (mainly relevant for image-to-image). Optional." },
+                seed: { type: "integer", description: "Fixed seed. Omit for a random seed each time. Optional." },
+                width: { type: "integer", description: "Output image width in pixels. Ignored if the workflow has a Resolution Selector node — use aspect_ratio instead for those. Optional." },
+                height: { type: "integer", description: "Output image height in pixels. Ignored if the workflow has a Resolution Selector node — use aspect_ratio instead for those. Optional." },
+                aspect_ratio: { type: "string", enum: ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], description: "Aspect ratio preset. Only applied if the workflow has a Resolution Selector node (feeding width/height from a ratio + megapixel target); ignored otherwise. Optional." },
+                batch_size: { type: "integer", description: "Number of images to generate in this single call. Optional." },
             },
             required: ["prompt"],
         },
@@ -635,7 +645,7 @@ async function _loadDedicatedChatGenWorkflow(filename) {
     return { workflow, analysis: comfyWorkflow.analyzeWorkflow(workflow) };
 }
 
-async function generateImageFromChat(prompt, negativePrompt) {
+async function generateImageFromChat(prompt, negativePrompt, params = {}) {
     if (!window._wfmGenerateTab?.generate) throw new Error(t("aiChatGenerateNotReady"));
 
     const settings = loadAiSettings();
@@ -660,12 +670,24 @@ async function generateImageFromChat(prompt, negativePrompt) {
     comfyEditor.setPromptText("positive", prompt || "", { workflow, analysis });
     if (negativePrompt) comfyEditor.setPromptText("negative", negativePrompt, { workflow, analysis });
 
-    const result = await window._wfmGenerateTab.generate(workflow);
+    const { steps, cfg, sampler_name, scheduler, denoise, seed, width, height, batch_size, aspect_ratio } = params;
+    let resolvedAspectRatio = null;
+    const resSelector = analysis.resolution_selector_nodes?.[0];
+    if (aspect_ratio && resSelector) {
+        resolvedAspectRatio = await comfyEditor.resolveAspectRatioOption(resSelector.type, aspect_ratio);
+    }
+    comfyEditor.setGenerationParams({
+        steps, cfg, sampler_name, scheduler, denoise, seed, width, height, batch_size,
+        resolvedAspectRatio, workflow, analysis,
+    });
+
+    const result = await window._wfmGenerateTab.generate(workflow, seed != null ? { seedValue: seed } : {});
     const images = result?.images || [];
     if (images.length === 0) throw new Error(t("aiChatNoImageProduced"));
 
-    const img = images[0];
-    return `/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${encodeURIComponent(img.type || "output")}`;
+    return images.map((img) =>
+        `/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${encodeURIComponent(img.type || "output")}`
+    );
 }
 
 // アシスタント応答からSVGコードを抽出する（```svg フェンス or 生の <svg>...</svg>）
@@ -966,6 +988,14 @@ function appendChatBubble(messagesEl, role, content, opts = {}) {
         img.className = "wfm-ai-chat-img";
         div.appendChild(img);
     }
+    if (opts.imageUrls?.length) {
+        opts.imageUrls.forEach((url) => {
+            const img = document.createElement("img");
+            img.src = url;
+            img.className = "wfm-ai-chat-img";
+            div.appendChild(img);
+        });
+    }
     if (opts.attachThumb) {
         const img = document.createElement("img");
         img.src = opts.attachThumb;
@@ -1055,8 +1085,8 @@ function initChatTab() {
                 statusEl.textContent = t("aiStatusGeneratingImage");
                 const args = _parseToolArgs(toolCall);
                 try {
-                    const imageUrl = await generateImageFromChat(args.prompt, args.negative_prompt);
-                    appendChatBubble(messagesEl, "assistant", "", { imageUrl });
+                    const imageUrls = await generateImageFromChat(args.prompt, args.negative_prompt, args);
+                    appendChatBubble(messagesEl, "assistant", "", { imageUrls });
                 } catch (genErr) {
                     appendChatBubble(messagesEl, "assistant", `${t("aiToastImageGenFailed")}${genErr.message}`);
                     showToast(t("aiToastImageGenFailed") + genErr.message, "error");

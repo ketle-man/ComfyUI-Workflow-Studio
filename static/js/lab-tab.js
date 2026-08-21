@@ -29,7 +29,7 @@ const LAB_PLAN_PREFIX = "ws_labplan_";
 const LAB_PLAN_PNG_KEY = "wfm_lab_plan";
 
 function _defaultValueFor(col) {
-    if (col === "lora") return { name: "", strengthModel: 1.0, strengthClip: 1.0 };
+    if (col === "lora") return { name: "", strengthModel: 1.0, strengthClip: 1.0, nodeBypass: false, applyToPrompt: false };
     if (col === "prompt") return { positive: "", negative: "", styleApplied: false, styleName: "" };
     if (col === "ksampler") return { steps: null, cfg: null, sampler_name: "", scheduler: "", denoise: null, seed: null };
     return ""; // checkpoint, vae
@@ -42,6 +42,8 @@ function _normalizeLoraValue(v) {
         name: v?.name || "",
         strengthModel: v?.strengthModel ?? 1.0,
         strengthClip: v?.strengthClip ?? 1.0,
+        nodeBypass: !!v?.nodeBypass,
+        applyToPrompt: !!v?.applyToPrompt,
     };
 }
 
@@ -461,6 +463,7 @@ function _updateModelViewHighlight() {
 function _cellHtml(col, kf, idx) {
     const revertClass = kf.revertToBase ? " wfm-lab-cell-revert" : "";
     const bypassClass = kf.bypassed ? " wfm-lab-cell-bypassed" : "";
+    const nodeBypassClass = (col === "lora" && kf.value?.nodeBypass) ? " wfm-lab-cell-node-bypassed" : "";
     if (idx === 0) {
         // Bypassed takes priority over the live-reflect display — an explicit "skip this
         // row" toggle shouldn't be masked by Setting 1's usual "show the workflow's
@@ -468,13 +471,13 @@ function _cellHtml(col, kf, idx) {
         const live = !kf.bypassed && _isLiveDisplay(col, idx);
         const liveClass = live ? " wfm-lab-cell-live" : "";
         const label = live ? _cellLabel(col, { value: _liveValueFor(col), revertToBase: false, bypassed: false }) : _cellLabel(col, kf);
-        return `<div class="wfm-lab-cell${revertClass}${bypassClass}${liveClass}" data-idx="${idx}">
+        return `<div class="wfm-lab-cell${revertClass}${bypassClass}${nodeBypassClass}${liveClass}" data-idx="${idx}">
             <span class="wfm-lab-cell-index">${kf.atIteration}:</span>
             <span class="wfm-lab-cell-value">${label}</span>
         </div>`;
     }
     // Iteration #2 and beyond: value on its own line, applied-at iteration below it
-    return `<div class="wfm-lab-cell${revertClass}${bypassClass}" data-idx="${idx}">
+    return `<div class="wfm-lab-cell${revertClass}${bypassClass}${nodeBypassClass}" data-idx="${idx}">
         <div class="wfm-lab-cell-value">${_cellLabel(col, kf)}</div>
         <div class="wfm-lab-cell-applied">${t("labAppliedAt", kf.atIteration)}</div>
     </div>`;
@@ -489,7 +492,9 @@ function _cellLabel(col, kf) {
     if (col === "lora") {
         const v = kf.value;
         if (!v?.name) return t("labUseWorkflowDefault");
-        return escapeHtml(`${v.name} (${v.strengthModel}/${v.strengthClip})`);
+        if (v.nodeBypass) return escapeHtml(`${v.name} ${t("labLoraNodeBypassed")}`);
+        const promptTag = v.applyToPrompt ? ` ${t("labLoraPromptAppliedTag")}` : "";
+        return escapeHtml(`${v.name} (${v.strengthModel}/${v.strengthClip})${promptTag}`);
     }
     if (col === "prompt") {
         const p = kf.value?.positive || "";
@@ -615,9 +620,17 @@ function _openCellModal(col, idx) {
                 </select>
                 <div class="wfm-lora-strength-single" style="margin-top:6px;">
                     <span>M</span>
-                    <input type="number" class="wfm-input" id="wfm-lab-modal-lora-strmodel" value="${v.strengthModel}" step="0.05" min="0" max="2">
+                    <input type="number" class="wfm-input" id="wfm-lab-modal-lora-strmodel" value="${v.strengthModel}" step="0.05" min="0" max="2" ${v.nodeBypass ? "disabled" : ""}>
                     <span>C</span>
-                    <input type="number" class="wfm-input" id="wfm-lab-modal-lora-strclip" value="${v.strengthClip}" step="0.05" min="0" max="2">
+                    <input type="number" class="wfm-input" id="wfm-lab-modal-lora-strclip" value="${v.strengthClip}" step="0.05" min="0" max="2" ${v.nodeBypass ? "disabled" : ""}>
+                </div>
+                <div class="wfm-lab-modal-checkbox" style="margin-top:6px;">
+                    <input type="checkbox" id="wfm-lab-modal-lora-nodebypass" ${v.nodeBypass ? "checked" : ""}>
+                    <label for="wfm-lab-modal-lora-nodebypass">${t("labLoraNodeBypassCheckboxLabel")}</label>
+                </div>
+                <div class="wfm-lab-modal-checkbox">
+                    <input type="checkbox" id="wfm-lab-modal-lora-prompttoggle" ${v.applyToPrompt ? "checked" : ""} ${v.nodeBypass ? "disabled" : ""}>
+                    <label for="wfm-lab-modal-lora-prompttoggle">${t("labLoraApplyToPromptCheckboxLabel")}</label>
                 </div>
             </div>`;
     } else if (col === "prompt") {
@@ -722,6 +735,14 @@ function _openCellModal(col, idx) {
     const bypassCb = document.getElementById("wfm-lab-modal-bypass");
     const fieldsWrap = document.getElementById("wfm-lab-modal-fields");
     const revertRowEl = revertCb?.closest(".wfm-lab-modal-checkbox");
+    // LoRA-only: the node-bypass checkbox (force strength to 0 at apply-time — see
+    // _applyLabLoraToWorkflow) disables just the strength fields, independent of the
+    // row-level bypass/revert above (which disable everything in fieldsWrap instead).
+    const loraNodeBypassCb = document.getElementById("wfm-lab-modal-lora-nodebypass");
+    const loraStrModelEl = document.getElementById("wfm-lab-modal-lora-strmodel");
+    const loraStrClipEl = document.getElementById("wfm-lab-modal-lora-strclip");
+    // Bypassing the LoRA node makes "apply its syntax/triggers to the prompt" moot too.
+    const loraPromptCb = document.getElementById("wfm-lab-modal-lora-prompttoggle");
     const syncDisabled = () => {
         const bypassed = !!bypassCb?.checked;
         const fieldsDisabled = bypassed || !!revertCb?.checked;
@@ -729,9 +750,15 @@ function _openCellModal(col, idx) {
         fieldsWrap?.querySelectorAll("input,select,textarea").forEach((el) => { el.disabled = fieldsDisabled; });
         if (revertCb) revertCb.disabled = bypassed;
         if (revertRowEl) revertRowEl.style.opacity = bypassed ? "0.4" : "1";
+        if (!fieldsDisabled && loraNodeBypassCb?.checked) {
+            if (loraStrModelEl) loraStrModelEl.disabled = true;
+            if (loraStrClipEl) loraStrClipEl.disabled = true;
+            if (loraPromptCb) loraPromptCb.disabled = true;
+        }
     };
     revertCb?.addEventListener("change", syncDisabled);
     bypassCb?.addEventListener("change", syncDisabled);
+    loraNodeBypassCb?.addEventListener("change", syncDisabled);
     syncDisabled();
 
     document.getElementById("wfm-lab-modal-delete")?.addEventListener("click", () => {
@@ -754,10 +781,13 @@ function _openCellModal(col, idx) {
             if (col === "checkpoint" || col === "vae") {
                 value = document.getElementById("wfm-lab-modal-value")?.value || "";
             } else if (col === "lora") {
+                const loraNodeBypassed = !!document.getElementById("wfm-lab-modal-lora-nodebypass")?.checked;
                 value = {
                     name: document.getElementById("wfm-lab-modal-lora-select")?.value || "",
                     strengthModel: parseFloat(document.getElementById("wfm-lab-modal-lora-strmodel")?.value) || 1.0,
                     strengthClip: parseFloat(document.getElementById("wfm-lab-modal-lora-strclip")?.value) || 1.0,
+                    nodeBypass: loraNodeBypassed,
+                    applyToPrompt: !loraNodeBypassed && !!document.getElementById("wfm-lab-modal-lora-prompttoggle")?.checked,
                 };
             } else if (col === "prompt") {
                 value = {
@@ -980,10 +1010,10 @@ function _resolveKeyframe(col, iteration) {
     return _isEmptyValue(col, applicable.value) ? null : applicable.value;
 }
 
-function _buildWorkflowForIteration(iteration, chainImageRef) {
+function _buildWorkflowForIteration(iteration, chainImageRef, prevLoraInjection) {
     const wf = JSON.parse(JSON.stringify(comfyUI.currentWorkflow || {}));
     const analysis = comfyUI.currentAnalysis;
-    if (!analysis) return { workflow: wf, seed: null };
+    if (!analysis) return { workflow: wf, seed: null, loraInjection: null };
 
     const write = (nodeId, key, val) => {
         if (nodeId != null && wf[nodeId]) wf[nodeId].inputs[key] = val;
@@ -1016,11 +1046,27 @@ function _buildWorkflowForIteration(iteration, chainImageRef) {
     }
 
     const prompt = _resolveKeyframe("prompt", iteration);
+    const posNode = analysis.prompt_nodes?.find((n) => n.role === "positive");
+    const negNode = analysis.prompt_nodes?.find((n) => n.role === "negative");
     if (prompt) {
-        const posNode = analysis.prompt_nodes?.find((n) => n.role === "positive");
-        const negNode = analysis.prompt_nodes?.find((n) => n.role === "negative");
         if (posNode && prompt.positive) write(posNode.id, posNode.textKey || "text", prompt.positive);
         if (negNode && prompt.negative) write(negNode.id, negNode.textKey || "text", prompt.negative);
+    }
+
+    // LoRA syntax/trigger-word injection into the Positive prompt (opt-in per keyframe
+    // via lora.applyToPrompt). Always strip whatever the previous iteration injected
+    // first, whether or not this iteration re-injects — so switching to a different
+    // LoRA (or a keyframe with the option off) starts from a clean prompt instead of
+    // accumulating every LoRA the batch has used so far. See _stripLoraPromptInjection.
+    let loraInjection = null;
+    if (posNode && wf[posNode.id]) {
+        const textKey = posNode.textKey || "text";
+        let posText = _stripLoraPromptInjection(wf[posNode.id].inputs[textKey] || "", prevLoraInjection);
+        if (lora?.name && lora.applyToPrompt && !lora.nodeBypass) {
+            loraInjection = _buildLoraPromptInjection(lora);
+            posText = posText ? `${posText}, ${loraInjection}` : loraInjection;
+        }
+        write(posNode.id, textKey, posText);
     }
 
     let seed = null;
@@ -1040,13 +1086,65 @@ function _buildWorkflowForIteration(iteration, chainImageRef) {
         write(analysis.load_image_nodes[0].id, "image", imageRef);
     }
 
-    return { workflow: wf, seed };
+    return { workflow: wf, seed, loraInjection };
 }
 
 // True once a "no LoRA node in this workflow" warning has already been shown during the
 // current Run — reset at the start of _runLabBatch so the toast fires at most once per
 // run instead of once per iteration.
 let _labLoraWarned = false;
+
+// metadata.json (sha256 lookup) + CivitAI cache (sha256 -> trainedWords), fetched once
+// per Run (see _runLabBatch) and used only to resolve trigger words for the Positive-
+// prompt LoRA injection below — same two endpoints comfyui-editor.js's renderLoraPane
+// uses for the GenerateUI Model tab's own LORA SYNTAX/TRIGGER WORDS display.
+let _labModelMetadata = {};
+let _labCivitaiCache = {};
+
+async function _fetchLabLoraMetadataCache() {
+    try {
+        const [metaRes, civRes] = await Promise.all([
+            fetch("/api/wfm/models/metadata"),
+            fetch("/api/wfm/models/civitai/cache"),
+        ]);
+        _labModelMetadata = metaRes.ok ? await metaRes.json() : {};
+        _labCivitaiCache = civRes.ok ? await civRes.json() : {};
+    } catch {
+        _labModelMetadata = {};
+        _labCivitaiCache = {};
+    }
+}
+
+function _labTriggerWordsFor(loraName) {
+    const sha = (_labModelMetadata[loraName] || {}).sha256;
+    const civInfo = sha && _labCivitaiCache[sha];
+    return civInfo?.trainedWords || [];
+}
+
+// Builds the exact "<lora:stem:m:c>[, trigger, words...]" string appended to the
+// Positive prompt for this LoRA keyframe — the same format comfyui-editor.js's Single
+// Apply writes. Returned as-is so _buildWorkflowForIteration can hand it back unchanged
+// to the next iteration for removal (see _stripLoraPromptInjection).
+function _buildLoraPromptInjection(lora) {
+    const stem = lora.name.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
+    const strModel = lora.strengthModel ?? 1.0;
+    const strClip = lora.strengthClip ?? 1.0;
+    const syntax = `<lora:${stem}:${strModel}:${strClip}>`;
+    const triggers = _labTriggerWordsFor(lora.name);
+    return triggers.length > 0 ? `${syntax}, ${triggers.join(", ")}` : syntax;
+}
+
+// Removes an exact previously-injected string (as returned by _buildLoraPromptInjection)
+// from a prompt, plus the comma that joined it to whatever came before — so switching
+// keyframes/LoRAs mid-batch never accumulates every LoRA the batch has used so far.
+// A plain string search (no regex) is safe here since `injection` is always something
+// _buildLoraPromptInjection generated, never arbitrary user text.
+function _stripLoraPromptInjection(text, injection) {
+    if (!injection || !text) return text || "";
+    let out = text.split(`, ${injection}`).join("");
+    out = out.split(injection).join("");
+    return out.replace(/,\s*,/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").trim();
+}
 
 // Applies a Lab-configured LoRA (Single only — no Stack support here) to the given
 // per-iteration workflow clone. Mirrors models-tab.js's applyToGenUI LoRA branch: prefer
@@ -1071,14 +1169,20 @@ function _applyLabLoraToWorkflow(wf, analysis, lora) {
         return;
     }
 
-    const strModel = lora.strengthModel ?? 1.0;
-    const strClip = lora.strengthClip ?? 1.0;
+    // nodeBypass: user-requested "bypass the LoRA node" toggle (Lab keyframe-level,
+    // independent of the row's own bypassed flag above). There's no real node to set
+    // mode:4 on here — currentWorkflow is already-converted API format (see
+    // comfyui-workflow.js convertUiToApi) where mode has no effect — so this forces
+    // strength to 0 instead, which is behaviorally equivalent to bypassing the node.
+    const bypass = !!lora.nodeBypass;
+    const strModel = bypass ? 0 : (lora.strengthModel ?? 1.0);
+    const strClip = bypass ? 0 : (lora.strengthClip ?? 1.0);
     if (isLoraManager) {
         const stem = lora.name.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
         wf[nodeId].inputs.loras = {
-            __value__: [{ name: stem, strength: strModel, active: true, expanded: false, clipStrength: strClip, locked: false }],
+            __value__: [{ name: stem, strength: strModel, active: !bypass, expanded: false, clipStrength: strClip, locked: false }],
         };
-        wf[nodeId].inputs.text = `<lora:${stem}:${strModel}:${strClip}>`;
+        wf[nodeId].inputs.text = bypass ? "" : `<lora:${stem}:${strModel}:${strClip}>`;
     } else {
         wf[nodeId].inputs.lora_name = comfyEditor.resolveLoraName(lora.name);
         wf[nodeId].inputs.strength_model = strModel;
@@ -1131,12 +1235,14 @@ async function _runLabBatch() {
     _lab.results.images = [];
     _renderResultsGrid();
     _setRunUiState(true);
+    await _fetchLabLoraMetadataCache();
 
     const progressBar = document.getElementById("wfm-lab-progress-bar");
     const progressText = document.getElementById("wfm-lab-progress-text");
     const eagleAutoSave = getEagleSettings().autoSave;
 
     let completed = 0, failed = 0;
+    let prevLoraInjection = null;
     try {
         for (let i = 1; i <= _lab.batchCount; i++) {
             if (_aborted) break;
@@ -1145,7 +1251,8 @@ async function _runLabBatch() {
 
             if (progressText) progressText.textContent = `[${i}/${_lab.batchCount}] ...`;
             const chainRef = (!_lab.t2iMode && _lab.chainImage && i > 1) ? _lastGeneratedImageRef : null;
-            const { workflow, seed } = _buildWorkflowForIteration(i, chainRef);
+            const { workflow, seed, loraInjection } = _buildWorkflowForIteration(i, chainRef, prevLoraInjection);
+            prevLoraInjection = loraInjection;
             const workflowExpanded = await _expandWildcardsInWorkflow(workflow);
 
             try {

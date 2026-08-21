@@ -1,3 +1,10 @@
 # Private/unpublished planning notes — never committed to git, must not leak
 # into the published graphify-out/ knowledge graph either.
 QWEN_CHAT_INTEGRATION_PLAN.md
+
+# Too large for reliable local-Ollama semantic extraction (large chunks make the
+# model summarize in prose instead of emitting JSON, and time out on slower
+# models/hardware). README.index.md / DEVLOG.index.md are condensed stand-ins
+# that graphify extracts instead — regenerate them after editing the originals.
+README.md
+DEVLOG.md

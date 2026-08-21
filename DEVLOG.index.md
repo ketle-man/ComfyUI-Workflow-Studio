@@ -1,0 +1,162 @@
+# DEVLOG Index — ComfyUI-Workflow-Studio
+
+Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
+
+- **v0.4.4** — 機能追加: Lab/GenerateUI ModelタブへLoRAバイパス機能 + AI TOOL Chatの画像生成パラメータ拡張
+- **v0.4.3** — バグ修正: 共有モーダルのお気に入り☆/リネームがLabモーダルへ残留 + Lab Model列の＋／－をCheckpoint/LoRA/VAEで完全独立化
+- **v0.4.2** — 機能追加: Lab「Model」列統合（Checkpoint / LoRA Single / VAE）+ フィールド単位継承 + C/L/V表示切替
+- **v0.4.1** — UX改善: Mask Editor One連携ボタンを「選択中ノード優先」方式に再設計
+- **v0.4.0** — リファクタリング: image-edit-tab.js / models-tab.js の低凝集度モジュール分割
+- **v0.3.99** — 機能追加: AI TOOLタブ + サイドパネルAタブにUnslothバックエンド追加（APIキーは.env管理、SSRF脆弱性修正、reasoning_content対応）
+- **v0.3.98** — 機能追加・バグ修正: AI TOOL翻訳の信頼性向上 + GenerateUI Modelタブ再構成（ハイライト色・折りたたみ・並び替え）+ Thinking mode/Max tokens設定
+- **v0.3.97** — 機能追加・バグ修正: KREA-2ワークフロー対応 + Labタブ拡張（Clear/Get from Previous/Bypass/ライブ反映）+ Input Imageプレースホルダ機能
+- **v0.3.96** — バグ修正: カタログ作成バッチが特定件数で無言停止する問題の修正 + Style Catalog/Promptタブ機能拡張
+- **v0.3.95** — 機能追加: Style/Prompt→ImagePrompt改名 + Style_Catalogギャラリー新設 + GenerateUI「カタログ作成」機能
+- **v0.3.94** — 機能追加: Gallery タブのサブタブ化 + Style/Prompt ギャラリー新設（視覚的プロンプトビルダー）
+- **v0.3.93** — バグ修正・機能改善: Labタブ VAEキーフレーム不発バグの修正＋Style適用UI刷新＋Plan JSONスクロール同期修正＋キーフレーム個別削除＋Batch数超過警告＋ワイルドカード対応＋Save index image デフォルトON
+- **v0.3.92** — バグ修正: CLIPTextEncodeEditPlus使用ワークフローがGenerateUI経由だと直接実行と異なる画像になる問題（根本原因はconvertUiToApiのForceInput 未考慮バグ）＋LoRA Stack機能の改善一式
+- **v0.3.91** — 機能拡張: Labインデックス画像にPlanメタデータをPNG埋め込み＋README構成整理（Changelogセクション廃止）
+- **v0.3.90** — 機能拡張: Labタブの進化（ワークフロー呼び出し・T2I対応・Run時インデックス画像Output保存＋Eagle連携・プラン接頭辞）＋Galleryタブのルート表示簡略化
+- **v0.3.89** — バグ修正: v0.3.88で追加したLab機能への実動作確認フィードバック3件を反映
+- **v0.3.88** — 機能拡張: Labタブ Promptセルにスタイル適用・画像/GenerateUIからのプロンプト取得、Checkpoint/VAEフィルター、Plan JSONサブタブを追加
+- **v0.3.87** — 追加機能: GenerateUIタブに実験的な「Lab」サブタブを追加（I2Iバッチ生成・キーフレーム方式）
+- **v0.3.86** — バグ修正: 画像を一括生成（I2I）等の連続実行で "GalleryMetadataStore: save error: dictionary changed size during iteration" が発生
+- **v0.3.85** — 機能拡張: Generate UI連携ブリッジ（T2I）にデフォルトワークフロー・Negativeプロンプト対応を追加
+- **v0.3.84** — バグ修正: ernie_t2i.jsonをGenerateUIタブで実行すると "Prompt outputs failed validation" エラー
+- **v0.3.83** — 追加機能: Ernie Image（ernie-image / ernie-image-turbo）ワークフロー対応 + プロンプトがリンク経由のノードから供給されるパターンの修正
+- **v0.3.82** — バグ修正: MetadataタブとサイドパネルIタブでLongCat/Boogu/HiDream E1/FireRed等のプロンプトが表示されない不具合
+- **v0.3.81** — 追加機能: GenerateUIタブでFlux.2 Klein / LongCat / Boogu / HiDream E1 / FireRedのImage Editワークフローに対応
+- **v0.3.80** — 追加機能: Comic Creator「半自動マンガ作成」向けブリッジ（LLMプロンプト下書き・バッチ画像生成）
+- **v0.3.79** — 追加機能: サイドパネル（Workflow Studio Library）IタブのMage-Flow等サブグラフワークフロー対応
+- **v0.3.78** — 追加機能: Eagle自動保存のSVG対応
+- **v0.3.76** — 追加機能: Comic Creator向けI2I実行ブリッジ`_wfmReceiveI2IRunRequest`
+- **v0.3.77** — 追加機能: GalleryタブでSVGファイルの表示・管理に対応
+- **v0.3.75** — Lemonadeバックエンド追加(3つ目のAIバックエンド)
+- **v0.3.74** — AI TOOL Chatペインの画像添付対応 + I2I連携
+- **v0.3.73** — AI TOOL Chatペインからの対話式画像生成（Tool Calling）＋ Checkpoint関連の安全策
+- **v0.3.72** — Comic Creator連携用の外部Inpaintエントリポイントを追加
+- **v0.3.71** — Inpaint機能の追加（GenerateUI Imageタブ + Image Edit「Inpaint」タブ）
+- **v0.3.70** — Workflow AI要約: Ollama 404エラー修正
+- **v0.3.69** — Gallery → ComfyUI Comic Creator 連携（Send CC ボタン）
+- **v0.3.68** — MASK EDITOR ONE セクション常時表示化
+- **v0.3.67** — Alt+Click Apply & Generate
+- **計画: Image Edit 拡張 — ABRブラシ連携 + Mask Editor One 統合** — フェーズ1: Draw ツール — ABRブラシ対応
+- **2026-06-29: v0.3.66 — Mask ツール 5サブツール追加（Color / Alpha / Text / Vector / Shape）・Support リンク追加** — 概要
+- **2026-06-29: v0.3.65 — Mask Editor One 連携修正・トップバーアイコン修正・Mask ABRブラシ対応** — 概要
+- **2026-06-28: v0.3.64 — Image Edit マスク Add/Subtract・BiRefNet BG Remove・SAM3 セグメンテーション・ブラシカーソルバグ修正** — 概要
+- **2026-06-28: v0.3.63 — ノードタブ複数選択・全タブフィルタークリア・検索Xボタン** — 概要
+- **2026-06-27: WFS_PromptText の GenerateUI 対応・ドロップ時 title 固定** — 概要
+- **2026-06-27: v0.3.62 — Send GenUI Image ボタン追加・tagger_settings.json バグ修正・README 更新** — 概要
+- **2026-06-27: データ管理バグ修正 — tagger_settings.json をエクスポート対象に追加** — 概要
+- **2026-06-27: v0.3.61 — G'MIC バグ修正・セキュリティ・Draw/Mask ブラシ操作性改善** — 概要
+- **2026-06-27: v0.3.60 — Image Edit Filter Tool (G'MIC-Qt 連携) 実装** — 概要
+- **2026-06-27: v0.3.59 — Image Edit Mask Tool 実装・Draw/Mask 描画バグ修正・クリッピング保存対応** — 概要
+- **2026-06-27: v0.3.58 — GenerateUI Model タブ GGUF対応拡張（Diffusion Model / Text Encoder）** — 概要
+- **2026-06-26: v0.3.57 — Image Edit Blur Tool / BG Remove Tool 追加** — 概要
+- **2026-06-26: v0.3.56 — Style機能追加（GenerateUI ツールバー & Batchタブ）** — 概要
+- **2026-06-25: v0.3.55 — グループ機能バグ修正（全タブ）** — 根本原因（データ消失）: パス区切り文字の不一致
+- **2026-06-25: v0.3.54 — Image Edit Shape ツール追加・Models タブ overlay バグ修正** — Image Edit Tab — Shape ツール（□ / S キー）
+- **2026-06-25: v0.3.53 — Image Edit Tab 実装・レイヤーロック・ギャラリー保存** — Image Edit Tab（新規タブ）
+- **2026-06-25: GenUI設定タブ LATENT IMAGE にプリセット機能を追加** — 変更内容
+- **2026-06-24: GenUI ModelでLoRA適用後、Modelサブタブ再表示時に値がリセットされるバグ修正** — 問題
+- **2026-06-24: v0.3.51 — Embedding GenUI PP/NP対応 + GenerateUIプロンプトタブEmbeddingセレクタ追加** — 変更内容
+- **2026-06-24: v0.3.51 — GenerateUIタブ Hypernetwork対応 + ModelsタブGenUI Modelボタン追加** — 変更内容
+- **2026-06-24: v0.3.51 — Hypernetwork/Embeddingモデル未表示バグ修正** — 原因
+- **2026-06-24: v0.3.51 — ModelsタブサイドパネルにGenUI Modelボタン追加** — 変更内容
+- **2026-06-22: v0.3.50 — ギャラリータブ プロンプト検索負荷改善（バックグラウンドインデックス）** — 問題
+- **2026-06-22: v0.3.49 — 生成UIタブ A1111風ワイルドカード展開・ギャラリータブ バグ修正2件** — 生成UIタブ — A1111風SPAサイドワイルドカード展開
+- **2026-06-22: v0.3.48 — ギャラリータブ 画像ダウンロード・一括エクスポート機能追加** — 詳細パネルの画像プレビューにダウンロード機能を追加
+- **2026-06-22: v0.3.47 — モデルタブ ファイル移動後グループ状態修正** — モデル移動後のグループ状態不整合を修正
+- **2026-06-21: v0.3.46 — プロンプトタブ AI Assistant LM Studio対応・設定タブ AI Assistant設定に変更** — 設定タブ「AI Assistant設定（プロンプトタブ）」
+- **2026-06-21: v0.3.45 — グループ孤立エントリ自動クリーンアップ・Galleryタブ Shift+クリック範囲選択** — グループ孤立エントリ自動クリーンアップ
+- **2026-06-21: v0.3.44 — Galleryタブ高速化・比較モード・バルク強化・バルクバーUI整理** — フェーズ2-A: サーバーサイドサムネイル生成
+- **2026-06-21: ヘルプタブ改善 — Gallery mode 多言語対応・フォント拡大・検索機能追加** — Gallery mode の多言語対応
+- **2026-06-21: Send to Canvas — window.opener経由のキャンバス直接ロード対応**
+- **2026-06-20: API形式ワークフローのキャンバス読み込み修正・画像メタデータ埋め込み修正** — API形式ワークフローをキャンバスへドラッグすると空になる問題を修正
+- **2026-06-20: セキュリティ修正（XSS・パスバリデーション）** — 修正内容
+- **2026-06-20: WFS_GalleryFeeder — ComfyUI キャンバス上コントロール追加** — 新規ファイル（`web/comfyui/gallery_feeder_extension.js`）
+- **2026-06-20: __Feeder__ グループ保護 + サムネイル F ボタン + seed バグ修正** — `__Feeder__` グループの予約済み保護
+- **2026-06-20: Gallery Feeder 機能追加（WFS_GalleryFeeder ノード）** — 概要
+- **2026-06-19: Generate UI — ImpactWildcardEncode/Processor プロンプト検出バグ修正（v0.3.41）** — 修正内容（`static/js/comfyui-workflow.js`）
+- **2026-06-19: AI TOOL タブ Chat ペイン・ワイルドカード生成追加（v0.3.40）** — Chat ペイン（`templates/index.html`, `static/css/main.css`, `static/js/ai-tab.js`, `web/comfyui/node_sets_menu.js`）
+- **2026-06-18: Send to Canvas機能追加（ワークフロータブ・ギャラリータブ→LibraryタイトルDnD）** — ワークフロータブ — Send to Canvas（`static/js/workflow-tab.js`, `static/js/app.js`, `templates/index.html`）
+- **2026-06-15: TaggerシングルGenUI:Pボタン追加＋生成UIのZITワークフロープロンプト解析修正** — TaggerシングルGenUI:Pボタン（`templates/index.html`, `static/js/tagger-tab.js`, `static/js/i18n.js`）
+- **2026-06-15: Taggerバッチ.txt出力追加＋Galleryタグ保存バグ修正** — Taggerバッチ.txt出力（`templates/index.html`, `static/js/tagger-tab.js`, `static/js/i18n.js`, `py/routes/tagger_routes.py`, `py/services/tagger_service.py`）
+- **2026-06-15: Taggerタブ新規実装＋ギャラリー詳細パネルUI改善＋パストラバーサル修正** — Taggerタブ新規実装
+- **2026-06-15: 全選択ボタン追加＋ギャラリーバルクバーi18n対応** — 変更内容
+- **2026-06-10: v0.3.36 — コードレビュー修正＋リファクタリング＋README刷新** — コードレビュー修正（v0.3.35の不具合10件）
+- **2026-06-10: v0.3.35 — テーブルソート・Load GenUI・ワークフロー保存** — 変更内容
+- **2026-06-09: v0.3.34 — Modelsタブ テーブルビュー強化・バルク操作改善** — 変更内容
+- **2026-06-09: v0.3.33 — LoRAペイン・ワークフロー解析バグ修正** — 変更内容
+- **2026-06-08: v0.3.32 — Lora Loader (LoraManager) LoRA検出対応・ライブラリ機能拡張** — 変更内容
+- **2026-06-08: v0.3.31 — LoRAペイン Single/Stack タブ分割・GenUI Model LoRA対応強化** — 変更内容
+- **2026-06-08: v0.3.30 — LoRAスタック トリガーワードバグ修正・ヘルプ更新** — 変更内容
+- **2026-06-08: v0.3.29 — LoRAセクション統合・ヘルプタブサイドバー・UI細部改善** — 変更内容
+- **2026-06-08: 生成UIタブ 複数改善 — LoRA Stackトリガーワード連携・Reset Workflowボタン・Inputタブタブ化** — 変更内容
+- **2026-06-08: Feederタブ UI改善 — (root)自動選択・PREVIEWペイン右移動・RUN中プレビュー反映** — 変更内容
+- **2026-06-07: v0.3.28 — Batchタブ Sampler/Scheduler対応 + Modelsサムネイルバグ修正** — 概要
+- **2026-06-07: v0.3.27 — model-and-prompt-from-metadata カスタムノード対応 + README修正** — 概要
+- **2026-06-07: v0.3.26 — Stack LORA SYNTAX 表示修正 + 全体強度調整 UI** — 概要
+- **2026-06-07: v0.3.25 — Lora Loader (LoraManager) 対応 + Stack 有効無効切り替え** — 概要
+- **2026-06-06: v0.3.24 — Lora Stack 登録機能 + 生成UI Model タブ 3ペイン化** — 概要
+- **2026-06-05: v0.3.23 — バグ修正2件** — バグ修正
+- **2026-06-05: v0.3.22 — カードビュー廃止 + Batch タイプ切り替え UI + 4タイプバッチ生成** — 概要
+- **2026-06-05: (未リリース) — 生成UIタブ Batch 4タイプ対応（Lora/Prompt/Workflow グループ選択 + BATCH QUEUE 4列化）** — 概要
+- **2026-06-05: (未リリース) — Prompt・Workflow Batchグループ登録UI** — 概要
+- **2026-06-04: (未リリース) — モデルBatchグループ登録UI（サムネイル/カード/テーブル・フィルター・一括解除）** — 概要
+- **2026-06-04: (未リリース) — Batch予約グループ・Presets Save後リセット・グループフィルター種別絞り込み** — 概要
+- **2026-05-31: v0.3.21 — CivitAI ホスト設定・Sample サブタブ・URL 修正・ヘルプ i18n 整備** — 概要
+- **2026-05-31: v0.3.20 — CivitAI 詳細パネル強化（Type / Hash 表示・URL 修正・画像別タブ）** — 概要
+- **2026-05-31: v0.3.19 — CivitAI 連携強化（バッチ高速化・リトライ・APIキー・フィールド拡充）** — 概要
+- **2026-05-31: v0.3.18 — Batch タブ追加・Models 複数選択強化** — 概要
+- **2026-05-31: v0.3.17 patch — SSLコンテキスト セキュリティ強化** — 概要
+- **2026-05-30: v0.3.17 — SSL証明書エラー修正・Lora Manager対応** — 概要
+- **2026-05-20: v0.3.16 — CivitAIプレビューフォールバック表示** — 概要
+- **2026-05-20: v0.3.15 — サンプルワークフロー同梱・CivitAI自動プレビュー・Create Tagsオプション** — 概要
+- **2026-05-20: AI TOOL タブ 英語化（SPA・Libraryパネル）** — 概要
+- **2026-05-19: v0.3.14 — AI TOOL タブ 3ペイン化・RAW JSON 文字色カスタマイズ** — 概要
+- **2026-05-19: v0.3.13 — AI タブ（A）追加** — 概要
+- **2026-05-18: v0.3.12 リリース — README スクリーンショット刷新 / workflow_analyzer 拡張** — 概要
+- **2026-05-17: RAW JSON パネルに検索機能を追加** — 概要
+- **2026-05-17: v0.3.11 Metadata タブ対応ノードタイプ拡張 / Settings テキストサイズ UI 追加** — 概要
+- **2026-05-17: v0.3.10 Information タブ キャンバスドラッグ対応 / ノードタイプ拡張 / バグ修正** — 概要
+- **2026-05-16: v0.3.9 サイドパネル I タブ追加 / トップバーアイコン修正** — 概要
+- **2026-05-16: v0.3.8 Metadata タブ: data9 対応 / プロンプト判別不能テキスト** — 概要
+- **2026-05-15: v0.3.7 Metadata タブ: Flux2 / Qwen / Z-Image 対応** — 概要
+- **2026-05-15: v0.3.6 Metadata タブ追加** — 概要
+- **2026-05-09: v0.3.5 GenerateUI — Feeder サブタブ・ワークフロー解析精度向上** — 概要
+- **2026-04-29: v0.3.4 GenerateUI — Checkpoint Batch 刷新・Settings 横並びレイアウト・ヘルプ i18n 修正** — 概要
+- **2026-04-28: v0.3.3 Promptタブ — ワイルドカード支援パネル・Impact Packシンボリックリンク連携・サブディレクトリ対応・GenerateUI修正** — 概要
+- **2026-04-28: v0.3.2 生成UIタブ — Checkpoint Batch・Seed UIレイアウト修正** — 概要
+- **2026-04-27: v0.3.1 ギャラリー拡張（フォルダ/ファイル操作・ワークフロー保存）** — 概要
+- **2026-04-18: v0.3.0 モデルグループ表示改善（全タイプ横断・サイドパネル修正）** — 概要
+- **2026-04-18: v0.2.9 モデル有効/無効・複数選択・一括削除** — 概要
+- **2026-04-14: v0.2.8 データ保存先変更・エクスポート/インポート機能追加** — 概要
+- **2026-04-06: v0.2.6 UI改善・バッジ保存修正・フォルダフィルター追加** — 概要
+- **2026-04-04: v0.2.5 追加修正** — 概要
+- **2026-04-03: v0.2.5 サイドパネル Category/Package サブタブ・テーマ設定・Workflow修正** — 概要
+- **2026-03-29: v0.2.4 GenerateUIタブ レイアウト再設計** — 概要
+- **2026-03-29: v0.2.3 バッジ統一・GenUI Model・サイドパネルModels拡充** — 概要
+- **2026-03-28: v0.2.2 Modelsタブ・CivitAI連携** — 概要
+- **2026-03-27: テーマカスタマイズ機能・設定タブ改善** — 概要
+- **2026-03-26: トップバーボタンアイコン修正・Appモードバッジ調査** — 概要
+- **2026-03-25: v0.2.0 プロンプトプリセット機能・Workflow Studio Library** — 概要
+- **2026-03-24: v0.1.9 サイドパネルUI改善・保存ダイアログ・バグ修正** — 概要
+- **2026-03-24: v0.1.8 WF & Node Library サイドパネル拡張** — 概要
+- **2026-03-23: v0.1.7 Nodes タブ追加** — 概要
+- **2026-03-23: v0.1.6 パストラバーサル脆弱性修正** — 概要
+- **2026-03-22: v0.1.5 テーマシステム追加** — 概要
+- **2026-03-22: v0.1.4 App形式対応・プリセットコピー・分析バグ修正** — 概要
+- **2026-03-21: v0.1.3 ヘルプ＆サポートタブ追加** — 概要
+- **2026-03-19: v0.1.2 リリース** — 概要
+- **2026-03-19: v0.1.1 リリース** — 概要
+- **2026-03-18: プロジェクトリネーム & アイコン適用** — 概要
+- **2026-03-18: デフォルトビュー設定追加** — 概要
+- **2026-03-18: MarkdownNote表示専用ノード除外** — 概要
+- **2026-03-18: サブグラフワークフロー対応 & 変換精度修正** — 概要
+- **2026-03-18: Raw JSON同期修正** — 概要
+- **プロジェクト構成 (現在)**
+- **2026-03-18: JSONシンタックスハイライト** — 概要
+- **2026-03-18: プロンプトタブ 中国語↔英語翻訳追加** — 概要
+- **2026-03-18: v0.1.0 リリース** — 概要
+- **2026-04-13: Gallery タブ追加 & 全タブ Group UI 統一** — 概要

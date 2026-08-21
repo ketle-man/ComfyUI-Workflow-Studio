@@ -886,6 +886,7 @@ export const comfyWorkflow = {
             prompt_nodes: [],
             sampler_nodes: [],
             latent_nodes: [],
+            resolution_selector_nodes: [],
             lora_nodes: [],
             vae_nodes: [],
             save_nodes: [],
@@ -1346,6 +1347,20 @@ export const comfyWorkflow = {
                     width: typeof inputs.width === "number" ? inputs.width : undefined,
                     height: typeof inputs.height === "number" ? inputs.height : undefined,
                     batch_size: inputs.batch_size,
+                });
+            }
+
+            // ResolutionSelector (ComfyUI core, comfy_extras.nodes_resolution): typically
+            // feeds an EmptyLatentImage's width/height rather than being a latent node
+            // itself. aspect_ratio is a fixed-choice COMBO (e.g. "3:2 (Photo)") — its exact
+            // option strings aren't known here, only the node's current value, so callers
+            // that want to set a new one (AI TOOL Chat's generate_image) must resolve
+            // against /object_info at call time (see comfyui-editor.js resolveAspectRatioOption).
+            if (ct === "ResolutionSelector") {
+                result.resolution_selector_nodes.push({
+                    id, type: ct, title,
+                    aspect_ratio: inputs.aspect_ratio,
+                    megapixels: inputs.megapixels,
                 });
             }
 

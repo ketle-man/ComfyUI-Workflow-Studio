@@ -1443,14 +1443,17 @@ export async function _expandWildcardsInWorkflow(workflow) {
 // Generation (core — throws on error)
 // ============================================
 
-async function _coreGenerate(silent = false, workflowOverride = null) {
+async function _coreGenerate(silent = false, workflowOverride = null, genOptions = {}) {
     const progressBar = document.getElementById("wfm-gen-progress-bar");
     const progressText = document.getElementById("wfm-gen-progress-text");
     const resultImg = document.getElementById("wfm-gen-result-img");
     const resultThumbs = document.getElementById("wfm-gen-result-thumbs");
 
-    const seedMode = document.getElementById("wfm-gen-seed-mode")?.value || "random";
-    const seedValue = parseInt(document.getElementById("wfm-gen-seed-value")?.value) || -1;
+    // genOptions.seedValue lets a caller (e.g. AI TOOL Chat's generate_image tool)
+    // force a specific seed on an override workflow without touching the GenerateUI
+    // seed fields — those still drive normal (non-override) generation as before.
+    const seedMode = genOptions.seedValue != null ? "fixed" : (document.getElementById("wfm-gen-seed-mode")?.value || "random");
+    const seedValue = genOptions.seedValue ?? (parseInt(document.getElementById("wfm-gen-seed-value")?.value) || -1);
 
     if (progressBar) progressBar.style.width = "0%";
     if (progressText) progressText.textContent = "Starting...";
@@ -1972,9 +1975,11 @@ async function _runBatchGenerate() {
 // ============================================
 
 // workflowOverride: 明示的に渡された場合、comfyUI.currentWorkflow の代わりにこのワークフローで
-// 生成する（GenerateUIの表示状態には触れない。Image Edit「Inpaint」の専用ワークフロー実行から利用）。
+// 生成する（GenerateUIの表示状態には触れない。Image Edit「Inpaint」の専用ワークフロー実行や
+// AI TOOL Chatのgenerate_imageツールから利用）。
+// genOptions: 現状 seedValue のみ（指定時は_coreGenerateがseedMode "fixed"扱いにする）。
 // ボタンのclickハンドラから呼ばれる場合は第一引数がMouseEventになるため、その場合は無視する。
-async function handleGenerate(workflowOverride = null) {
+async function handleGenerate(workflowOverride = null, genOptions = {}) {
     if (workflowOverride instanceof Event) workflowOverride = null;
 
     if (!workflowOverride && !comfyUI.currentWorkflow) {
@@ -2003,7 +2008,7 @@ async function handleGenerate(workflowOverride = null) {
             await _runBatchGenerate();
         } else {
             try {
-                return await _coreGenerate(false, workflowOverride);
+                return await _coreGenerate(false, workflowOverride, genOptions);
             } catch (err) {
                 const progressText = document.getElementById("wfm-gen-progress-text");
                 if (progressText) progressText.textContent = "Error";
@@ -2154,6 +2159,14 @@ export async function initGenerateTab() {
         if (comfyUI.currentAnalysis) {
             comfyEditor.renderLoraPane(comfyUI.currentAnalysis, "wfm-gen-lora-fields");
         }
+    });
+
+    // Bypass button in LoRA column header — forces the target LoRA node's strength to
+    // 0 (or restores it), independent of the Single/Stack tabs' own Apply buttons.
+    document.getElementById("wfm-lora-bypass-toggle")?.addEventListener("click", () => {
+        if (!comfyUI.currentAnalysis) return;
+        comfyEditor.toggleLoraNodeBypass(comfyUI.currentAnalysis);
+        comfyEditor.renderLoraPane(comfyUI.currentAnalysis, "wfm-gen-lora-fields");
     });
 
     // Input inner tab (Prompt / Image)

@@ -270,6 +270,16 @@
     color: var(--wfm-warning);
 }
 
+/* LoRA node-bypass (strength forced to 0 at apply-time) — red to distinguish from the
+   amber row-level bypassed above; the row itself still applies, only the LoRA doesn't. */
+.wfm-lab-cell.wfm-lab-cell-node-bypassed {
+    border-color: var(--wfm-danger);
+}
+
+.wfm-lab-cell.wfm-lab-cell-node-bypassed .wfm-lab-cell-value {
+    color: var(--wfm-danger);
+}
+
 .wfm-lab-cell-applied {
     margin-top: 3px;
     padding-top: 3px;

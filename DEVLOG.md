@@ -4,6 +4,39 @@
 
 ---
 
+## v0.4.4
+
+### 機能追加: Lab/GenerateUI ModelタブへLoRAバイパス機能 + AI TOOL Chatの画像生成パラメータ拡張
+
+ユーザーから「生成UIタブのLab機能のLora、ModelタブのLoraのLoraノード自体をバイパスする機能を追加したい。Lab機能ではキーフレームごとに切り替え対応可能としたい」との要望を受けて着手。同じセッション内で続けて「Lab機能のLoraにLora syntax、Trigger wordsの適用を可能にしたい」「AI TOOLタブのCHATの画像生成でチャットによる設定項目を増やしたい」という要望にも順次対応した一連のセッション。
+
+**1. LoRAノードのバイパス機能**: 実装方針の分岐点（ComfyUI本来のBypass(mode:4)相当の配線迂回か、strength=0にする簡易実装か）をAskUserQuestionでユーザーに確認し、簡易実装（strength=0）を選択。理由は、Lab/GenerateUIが扱う`workflow`は既に`comfyui-workflow.js`の`convertUiToApi()`でAPI形式に変換済みで`mode`の概念自体が失われており、`mode:4`を書き込んでも実行エンジンには一切効果がないため——本物のBypass相当の配線再接続を自前実装するのは過剰投資と判断した。
+- **GenerateUI Model タブ**: LoRA列ヘッダーの「Refresh Stack group」ボタン左に⛔トグルボタンを追加（`comfyui-editor.js`の`toggleLoraNodeBypass()`/`_loraNodeBypass`/`_loraBypassSnapshot`）。対象ノードのstrength値をゼロ化し、退避したスナップショットから復元をトグルする。Lora Managerノードの場合はLoRAリスト自体（複数エントリ）は差し替えず維持したまま各エントリのstrength/clipStrengthだけを0にする。Single/Stack Applyボタンを押すとバイパス状態は自動クリアされ、あとから無言で再適用されることはない。
+- **Lab機能**: 既存の行単位「bypassed」（キーフレーム自体を無視するスキップ機能）とは独立した、LoRA列専用の`nodeBypass`フィールドをキーフレームの値に追加。編集モーダルに「LoRAノードをバイパス（強度を0にする）」チェックボックスを新設。`_applyLabLoraToWorkflow()`で`nodeBypass`時はstrength/active/textを0/false/空に強制する。
+
+**2. Lab: LoRA syntax / Trigger words のポジティブプロンプト適用**: LoRA値に`applyToPrompt`フィールドを追加。ONにすると`<lora:stem:strengthModel:strengthClip>`とCivitAIキャッシュのtrainedWordsをポジティブプロンプトへカンマ区切りで追加する（`comfyui-editor.js`のSingle Applyと同じフォーマット）。「次のキーフレームでLora変更時はクリアされた上で新たなloraで追加」という要件は、`_buildWorkflowForIteration()`に`prevLoraInjection`引数を追加し、**前回のイテレーションが正確に注入した文字列だけ**を次回ビルド時に文字列一致で取り除いてから新規注入を追加する設計で実現した——正規表現による汎用パターン除去ではなく、自分が直前に足した分だけを覚えて消す方式なので、ユーザーが手で書いた他のプロンプト内容を誤って消す心配がない。metadata/civitaiCacheはRun開始時に一度だけフェッチしてキャッシュする。
+
+**3. AI TOOL Chat: generate_imageツールのパラメータ拡張**: AskUserQuestionで追加したい項目をユーザーに確認し、KSampler系（steps/cfg/sampler_name/scheduler/denoise/seed）・画像サイズ（width/height）・生成枚数（batch_size）を選択。`comfyui-editor.js`に`setGenerationParams()`を新設し、Lab機能の`_buildWorkflowForIteration`と同じ`sampler_nodes`のstepsNodeId/cfgNodeId等のノードID間接参照パターンを再利用することで、Advanced Samplingワークフロー（Flux.1/2、SD3.5等でKSamplerが複数ノードに分割される構成）にも対応した。seedは`window._wfmGenerateTab.generate()`（実体は`handleGenerate`）へのオプション引数として渡すよう、`generate-tab.js`の`handleGenerate`/`_coreGenerate`にgenOptions引数を追加（既存の呼び出し元との後方互換は維持）。batch_size>1時は複数画像がチャットバブルに表示されるよう`appendChatBubble`に`imageUrls`（複数URL）対応を追加した。実機のOllama（ornith-1.5:9b）でツール呼び出しから画像生成までEnd-to-Endで検証し、指定した各パラメータが正しく反映されることを確認した。
+
+**4. Resolution Selectorノード対応**: ユーザーから実際のワークフロー画像（aspect_ratio COMBO・megapixels・multipleウィジェットを持つ「Resolution Selector」ノード）を見せられ、「3:2などで指定可能か」と問われて調査。`/object_info/ResolutionSelector`で確認したところComfyUI本体組み込みノード（`comfy_extras.nodes_resolution`）で、aspect_ratioは`"3:2 (Photo)"`のような固定ラベル付きCOMBO値と判明した。当初のwidth/height直接指定実装ではこの手のノードに非対応だったため、追加で以下を実装:
+  - `comfyui-workflow.js`の`analyzeWorkflow()`に`resolution_selector_nodes`カテゴリを新設。
+  - `comfyui-editor.js`に`resolveAspectRatioOption(nodeType, requested)`を新設。LLMが渡す短い`"3:2"`形式を、`/object_info`から取得した実際のCOMBO選択肢と前方一致でマッチさせ`"3:2 (Photo)"`のような完全な文字列に解決する（未知の比率はそのままフォールバックし、ComfyUI側の検証エラーに委ねる）。
+  - `setGenerationParams()`にResolution Selector優先ロジックを追加：aspect_ratio指定時はEmptyLatentImageへのwidth/height直接書き込みをスキップし、ResolutionSelectorノードのaspect_ratioだけを書き換える——EmptyLatentImageのwidth/heightがResolutionSelectorの出力へのリンクになっている場合、直接数値を書き込むとそのリンクを上書きしてしまい、意図した比率指定が無視されてしまうため。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、`helpLab16`/`helpLab17`（Lab LoRAバイパス・プロンプト適用）、`helpGen29`（GenerateUI Model LoRAバイパスボタン）を新規追加し、`helpAi3`（AI TOOL Chatの説明）を拡張パラメータの説明を含めて更新した。README.mdのGenerateUI Tab／Lab subtab／AI TOOL Tabの各セクションも同内容で更新した。
+
+**検証**: 全JSファイルを`node --check`で構文確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイルのみ両フォルダへ同期しハッシュ一致を確認。Kapture MCP経由で実機ブラウザ操作: (1) GenerateUI ModelタブのLoRAバイパストグルでLora Managerノードのloras配列のstrength/clipStrengthが0⇔元の値へ正しく切り替わることを確認、(2) LabタブのLoRAキーフレームモーダルで両チェックボックスが表示・保存され、セル表示にラベルが反映されることを確認、(3) 実際にLabをRunし`/history`APIから最終ワークフローの`CLIPTextEncodeEditPlus.text_edit`を直接確認してLoRA構文+トリガーワードが正しく追加されていることを確認、(4) Ollama（ornith-1.5:9b）へChatで生成パラメータ付きの依頼を送りgenerate_imageのtool_callsが正しい引数を返し、実際に指定通りのwidth/height/seed/batch_sizeで2枚の画像が生成されることをネットワークログと生成結果の両方で確認、(5) `resolveAspectRatioOption`/`setGenerationParams`をモックworkflow/analysisで単体テストし、ResolutionSelectorノードのaspect_ratioが正しく書き換わりEmptyLatentImageのリンクは維持されることを確認。ヘルプページも実機で3箇所とも日本語表示が正しく反映されていることを確認した。
+
+**How to apply**:
+
+1. 「ノードをバイパスする」という要望を受けたら、まずそのワークフローが実行時にどのフォーマット（UI形式 mode:4対応／API形式 mode概念なし）で保持・実行されているかを確認する。今回のケースのように既にAPI形式へ変換済みの場合、本物のBypass(mode:4)相当の配線再接続を自前実装するのは過剰投資になりやすく、「効果が等価な簡易実装（strength=0）」で要件を満たせないか先にユーザーに確認するとよい。
+2. LLMのfunction calling引数にCOMBO値（enum文字列）を渡させる場合、ワークフロー解析結果には「ノードの現在値」しか含まれず「取りうる全選択肢」は含まれないことが多い。`/object_info`をその場でフェッチして選択肢を取得し、LLMの短い入力（"3:2"）を実際の完全な文字列（"3:2 (Photo)"）へ解決するワンクッションを挟むと、ノードごとに異なるラベル文言に振り回されずに済む。
+3. 「切り替えたらクリアしてから新しいものを追加する」という要求は、正規表現による汎用パターン除去よりも「前回自分が何を注入したかを正確に覚えておいて、その文字列だけを取り除く」設計の方が、ユーザーが手で書いた他のテキストを誤って消すリスクが低く安全。
+
+関連: [[project_v042_lab_model_column]], [[project_dev_deploy_sync]]
+
+---
+
 ## v0.4.3
 
 ### バグ修正: 共有モーダルのお気に入り☆/リネームがLabモーダルへ残留 + Lab Model列の＋／－をCheckpoint/LoRA/VAEで完全独立化
