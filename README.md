@@ -89,7 +89,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 <summary><h3>GenerateUI Tab (v0.3.5)</h3></summary>
 
 - **6-tab layout** — Input / Model / Settings / Feeder / Batch / **Lab** tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
-- **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API
+- **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API; hidden while the Batch or Lab subtab is active (v0.4.6), since those work on workflow copies / their own Plan files rather than the currently loaded workflow
 - **Input tab** — Prompt and Image inner tabs (drag-and-drop upload); Prompt tab shows Positive Prompt and Negative Prompt textareas, plus an **Embeddings selector** at the bottom (Filter + Select + Weight input + Paste button); Paste inserts `(embedding:Name:weight)` at the cursor position of the last focused textarea (defaults to Positive when neither is focused); Raw JSON (540px) in the right column
   - **Revert button** (v0.3.70) — a ↺ button next to each Apply button reverts the textarea to the node's currently applied value (the reverse of Apply)
   - **Emphasis weight editing** (v0.3.70) — select text (or just place the cursor on a word/parenthesis block) and press Ctrl+↑/↓ to adjust `(text:weight)` by ±0.05, A1111/native-ComfyUI style; parentheses are removed automatically when the weight returns to 1.0
@@ -192,21 +192,15 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
   - **New styles go to a dedicated file** — created via **+ New**, a style is appended to its own `custom.json` inside the style folder, so the bundled style packs are never modified directly
   - **+ Add to this file** — while editing an existing style, this button clears the form for a brand-new entry that gets appended to that *same* file instead of the default `custom.json` — the way to add a style into one of the bundled packs
   - Saving, renaming, or deleting a style immediately refreshes GenerateUI's Style dropdown, the Batch tab's checklist, and the Style Catalog's name list — no reload needed
-
-</details>
-
-<details>
-<summary><h3>Metadata Tab (v0.3.8)</h3></summary>
-
-- **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
-- **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
-- **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/2511/Layered, Z-Image Base/Turbo, Ernie Image, WAN2.2, Mage-Flow, LongCat, Boogu, HiDream E1, FireRed, Krea-2 Turbo); node types covered: UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, QuadrupleCLIPLoader (e.g. HiDream 4-CLIP)
-- **LoRA extraction** — lists all LoRA models with `strength_model / strength_clip` values
-- **Prompt extraction** — lists prompts with POS / NEG badges when positive/negative can be determined; when distinction is not possible (e.g. `SamplerCustomAdvanced`, intermediate nodes, cross-level connections), prompts are shown without a badge as plain **Text**; click any entry to view the full text below
-  - **CLIP Text Encode edit+ support** (v0.3.92) — `CLIPTextEncodeEditPlus` nodes are resolved using the same RAW / EDIT / front / back combination rule as the node itself, correctly merging the linked `text1` (e.g. a Lora Manager's trigger words) with the editable `text_edit` field instead of showing only one side
-- **Prompt actions** — Copy to clipboard, **GenUI:P/N** (set GenerateUI positive/negative prompt), **Prompt:P/N** (set Prompt tab preset positive/negative)
-- **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 / Mage-Flow / LongCat / Boogu / HiDream E1 / FireRed / Krea-2 Turbo subgraph workflows), SD WebUI, SD Forge, Fooocus
-- **Format note** — supported formats and covered model types are always shown in the left column
+- **Form / Table toggle** (v0.4.6) — two top-level tabs at the top of Prompt Tab: **Form** is the one-item-at-a-time editor described above; **Table** shows the same Presets / Wildcards / Style data all at once as editable spreadsheets, useful once there are more than a handful of items to manage
+- **Table view — Presets / Presets Group / Wildcards / Style** (v0.4.6) — four sub-tabs, each an editable table built from the exact same data as the Form tab above (changes on either side stay in sync)
+  - **Row selection & bulk delete** — every table shares a left-most auto-numbered **#** column; click a number to select that row (multiple at once), then use the toolbar's **Delete** button to remove every selected row in one confirm, or **Deselect** to clear the selection — replacing per-row delete buttons, which were too easy to misclick
+  - **Double-click to edit in a modal** — double-clicking a row's number opens a larger prompt-editing modal instead of the small in-table textarea; Presets/Style show Positive/Negative toggle buttons above one shared textarea (switching preserves unsaved text on the other side), Wildcards shows just the file content; Save writes back and closes the modal, Close discards changes
+  - **+ New row** — the toolbar's **+ New ...** button adds a blank editable row with small ✓ (Add) / ✕ (Cancel) icons in place of its number
+  - **Presets table** — **★** (favorite) and **B** (Batch group) columns work as toggle switches, same as the Form tab's Preset Manager; the toolbar's **BC** button clears the whole Batch group at once; **PP Copy** / **NP Copy** copy the single selected row's positive/negative prompt to the clipboard; a **group select + Add to Group** control bulk-adds every selected preset to a chosen group in one click — searching/selecting from the table itself (rather than a long per-group preset picker) keeps group assignment usable once there are many presets
+  - **Presets Group table** — create, rename, and delete groups, with each group's members shown as removable badges; the reserved **Batch** group is not listed here — it's managed entirely through the Presets table's B column and BC button instead
+  - **Wildcards table** — same files as the Form tab's Wildcard file manager above; editing the File path or the Ext dropdown renames the file (saves the content under the new name, then removes the old file)
+  - **Style table** — same styles as the Form tab's Style manager above, editable inline the same way as Presets
 
 </details>
 
@@ -238,7 +232,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 <details>
 <summary><h3>Gallery Tab (v0.3.44)</h3></summary>
 
-- **Output / Style-Prompt sub-tabs** (v0.3.94) — the Gallery tab has two sub-tabs at the top: **Output** (the image browser described below) and **Style/Prompt** (a separate visual prompt-building library — see its own section below)
+- **Output / ImagePrompt / Style_Catalog / Metadata sub-tabs** (v0.3.94, v0.3.95, v0.4.6) — four sub-tabs at the top of the Gallery tab: **Output** (the image browser described below), **ImagePrompt** and **Style_Catalog** (separate visual libraries — see their own sections below), and **Metadata** (embeds the full Metadata tab — see its own section below)
 - **Image browser** — browse ComfyUI output images (Thumbnail / Table views) with server-side scanning optimized for 6,000+ image libraries
 - **Folder tree root label** (v0.3.90) — the root entry in the folder tree is labeled simply **[root]**, no longer suffixed with the scanned folder's own directory name (which could be a misleading, environment-specific name — e.g. StabilityMatrix installs where the output folder is a symlink named `Text2Img` — even though the folder holds every kind of generated output, not just text-to-image results)
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
@@ -288,6 +282,22 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Select as Style button** — matches the selected image's filename (without extension) against a registered Style name and switches the GenerateUI tab's Style dropdown to it; a visual shortcut into the existing named-Style system, not a one-off apply of the embedded prompt — if the Style was renamed or deleted since the catalog image was created, a "no matching style" toast is shown instead
 - **Load in GenerateUI / Open in Metadata Tab buttons** (v0.3.96) — read the workflow embedded in the catalog image itself (a byte-identical copy of the original output image, so it carries the same PNG metadata) and either load it straight into the GenerateUI editor or open the image in the Metadata tab — no need to hunt down the original file in the Output folder, and works even on catalog images created before this feature existed
 - **Double-click to enlarge** (v0.3.96) — double-click a thumbnail in the center grid, or the selected-image preview in the right panel, for the same full-size lightbox view as the Output Gallery
+
+</details>
+
+<details>
+<summary><h3>Metadata Gallery subtab (v0.3.8, moved from a top-level tab in v0.4.6)</h3></summary>
+
+- **Now inside Gallery** (v0.4.6) — this used to be its own top-level tab; it's now the fourth Gallery sub-tab, to the right of Style_Catalog — everything below works exactly the same as before
+- **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
+- **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
+- **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/2511/Layered, Z-Image Base/Turbo, Ernie Image, WAN2.2, Mage-Flow, LongCat, Boogu, HiDream E1, FireRed, Krea-2 Turbo); node types covered: UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, QuadrupleCLIPLoader (e.g. HiDream 4-CLIP)
+- **LoRA extraction** — lists all LoRA models with `strength_model / strength_clip` values
+- **Prompt extraction** — lists prompts with POS / NEG badges when positive/negative can be determined; when distinction is not possible (e.g. `SamplerCustomAdvanced`, intermediate nodes, cross-level connections), prompts are shown without a badge as plain **Text**; click any entry to view the full text below
+  - **CLIP Text Encode edit+ support** (v0.3.92) — `CLIPTextEncodeEditPlus` nodes are resolved using the same RAW / EDIT / front / back combination rule as the node itself, correctly merging the linked `text1` (e.g. a Lora Manager's trigger words) with the editable `text_edit` field instead of showing only one side
+- **Prompt actions** — Copy to clipboard, **GenUI:P/N** (set GenerateUI positive/negative prompt), **Prompt:P/N** (set Prompt tab preset positive/negative)
+- **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 / Mage-Flow / LongCat / Boogu / HiDream E1 / FireRed / Krea-2 Turbo subgraph workflows), SD WebUI, SD Forge, Fooocus
+- **Format note** — supported formats and covered model types are always shown in the left column
 
 </details>
 

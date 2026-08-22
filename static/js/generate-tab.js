@@ -2151,6 +2151,10 @@ export async function initGenerateTab() {
             // Lab has its own Run/Results panel — hide the shared Generate/Seed/Batch column
             const rightCol = document.querySelector(".wfm-gen-right");
             if (rightCol) rightCol.style.display = (target === "lab") ? "none" : "";
+            // Save button writes the currently loaded workflow as-is — not meaningful while
+            // browsing Batch/Lab (which operate on workflow copies / their own Plan files)
+            const saveBtn = document.getElementById("wfm-gen-save-btn");
+            if (saveBtn) saveBtn.style.display = (target === "batch" || target === "lab") ? "none" : "";
         });
     });
 

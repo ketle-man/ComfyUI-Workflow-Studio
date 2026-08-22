@@ -112,7 +112,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", metadata: "tabMetadata", gallery: "tabGallery", "image-edit": "tabImageEdit", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", "image-edit": "tabImageEdit", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -250,6 +250,8 @@ function applyI18nToHtml() {
     if (galleryImagePromptSubtab) galleryImagePromptSubtab.textContent = t("galleryTabImagePrompt");
     const galleryStyleCatalogSubtab = document.getElementById("wfm-gallery-subtab-styleCatalog");
     if (galleryStyleCatalogSubtab) galleryStyleCatalogSubtab.textContent = t("galleryTabStyleCatalog");
+    const galleryMetadataSubtab = document.getElementById("wfm-gallery-subtab-metadata");
+    if (galleryMetadataSubtab) galleryMetadataSubtab.textContent = t("galleryTabMetadata");
 
     // ImagePrompt ギャラリーパネル
     const imagePromptSearch = document.getElementById("wfm-imageprompt-search");
@@ -477,6 +479,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-26": "helpGen26", "wfm-help-gen-27": "helpGen27",
         "wfm-help-gen-28": "helpGen28",
         "wfm-help-gen-29": "helpGen29",
+        "wfm-help-gen-30": "helpGen30",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",
@@ -522,6 +525,14 @@ function applyI18nToHtml() {
         "wfm-help-prompt-10": "helpPrompt10", "wfm-help-prompt-11": "helpPrompt11",
         "wfm-help-prompt-12": "helpPrompt12", "wfm-help-prompt-13": "helpPrompt13",
         "wfm-help-prompt-14": "helpPrompt14",
+        "wfm-help-prompt-card-toplevel-title": "helpPromptCardToplevel",
+        "wfm-help-prompt-15": "helpPrompt15",
+        "wfm-help-prompt-card-table-title": "helpPromptCardTable",
+        "wfm-help-prompt-16": "helpPrompt16", "wfm-help-prompt-17": "helpPrompt17",
+        "wfm-help-prompt-18": "helpPrompt18", "wfm-help-prompt-19": "helpPrompt19",
+        "wfm-help-prompt-20": "helpPrompt20", "wfm-help-prompt-21": "helpPrompt21",
+        "wfm-help-prompt-22": "helpPrompt22", "wfm-help-prompt-23": "helpPrompt23",
+        "wfm-help-prompt-24": "helpPrompt24",
         "wfm-help-settings-1": "helpSettings1", "wfm-help-settings-2": "helpSettings2",
         "wfm-help-settings-3": "helpSettings3", "wfm-help-settings-4": "helpSettings4",
         "wfm-help-settings-5": "helpSettings5", "wfm-help-settings-6": "helpSettings6",
@@ -553,6 +564,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-20": "helpGallery20", "wfm-help-gallery-21": "helpGallery21",
         "wfm-help-gallery-22": "helpGallery22", "wfm-help-gallery-23": "helpGallery23",
         "wfm-help-gallery-24": "helpGallery24", "wfm-help-gallery-25": "helpGallery25",
+        "wfm-help-gallery-26": "helpGallery26",
         "wfm-help-gallery-card-styleprompt-title": "helpGalleryCardStyleprompt",
         "wfm-help-gallery-card-stylecatalog-title": "helpGalleryCardStylecatalog",
         "wfm-help-tagger-title": "helpTaggerTitle",
@@ -791,6 +803,7 @@ import { initWorkflowTab } from "./workflow-tab.js";
 import { initNodesTab } from "./nodes-tab.js";
 import { initGenerateTab } from "./generate-tab.js";
 import { initPromptTab } from "./prompt-tab.js";
+import { initPromptTableTab } from "./prompt-table.js";
 import { initSettingsTab, applyTheme, getSavedTheme, applyTextareaFontSize, applyJsonColors, applyModelTabActiveColor } from "./settings-tab.js";
 import { initModelsTab } from "./models-tab.js";
 import { initGalleryTab } from "./gallery-tab.js";
@@ -825,6 +838,9 @@ function initHelpTab() {
     document.querySelectorAll(".wfm-help-jump-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
             document.querySelector(`.wfm-tab[data-tab="${btn.dataset.jumpTab}"]`)?.click();
+            if (btn.dataset.jumpSubtab) {
+                document.querySelector(`.wfm-gallery-subtab-btn[data-gallery-subtab="${btn.dataset.jumpSubtab}"]`)?.click();
+            }
         });
     });
 }
@@ -840,6 +856,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initModelsTab();
     initGenerateTab();
     initPromptTab();
+    initPromptTableTab();
     initMetadataTab();
     initGalleryTab();
     initAiTab();

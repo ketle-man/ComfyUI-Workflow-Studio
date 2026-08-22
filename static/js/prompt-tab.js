@@ -21,22 +21,22 @@ let promptPresets = [];
 let pmActiveTab = "all";       // "all" | "favorites" | "groups"
 let pmSearchText = "";
 let pmSelectedId = null;       // currently selected preset id
-let pmGroups = {};             // { groupName: [presetId, ...] }
+export let pmGroups = {};      // { groupName: [presetId, ...] }
 const PM_GROUPS_KEY = "wfm_prompt_preset_groups";
-const PROMPT_RESERVED_GROUPS = ["Batch"];
+export const PROMPT_RESERVED_GROUPS = ["Batch"];
 
 // ============================================
 // Preset API helpers
 // ============================================
 
-async function fetchPresets() {
+export async function fetchPresets() {
     try {
         const res = await fetch("/api/wfm/prompts");
         return res.ok ? await res.json() : [];
     } catch { return []; }
 }
 
-async function apiCreatePreset(data) {
+export async function apiCreatePreset(data) {
     try {
         const res = await fetch("/api/wfm/prompts", {
             method: "POST",
@@ -48,7 +48,7 @@ async function apiCreatePreset(data) {
     } catch { return null; }
 }
 
-async function apiUpdatePreset(id, updates) {
+export async function apiUpdatePreset(id, updates) {
     try {
         const res = await fetch("/api/wfm/prompts/update", {
             method: "POST",
@@ -60,7 +60,7 @@ async function apiUpdatePreset(id, updates) {
     } catch { return null; }
 }
 
-async function apiDeletePreset(id) {
+export async function apiDeletePreset(id) {
     try {
         await fetch("/api/wfm/prompts/delete", {
             method: "POST",
@@ -108,7 +108,7 @@ async function migrateLocalStoragePresets() {
 // Preset data management
 // ============================================
 
-async function loadAllPresets() {
+export async function loadAllPresets() {
     await migrateLocalStoragePresets();
     promptPresets = await fetchPresets();
 
@@ -132,7 +132,7 @@ async function loadAllPresets() {
     renderPresetManager();
 }
 
-function saveGroups() {
+export function saveGroups() {
     localStorage.setItem(PM_GROUPS_KEY, JSON.stringify(pmGroups));
     renderGroupSelect();
 }
@@ -189,11 +189,11 @@ function selectPresetInEditor(preset) {
 // Preset Manager rendering
 // ============================================
 
-function esc(s) {
+export function esc(s) {
     return s ? String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "";
 }
 
-function renderPresetManager() {
+export function renderPresetManager() {
     const container = document.getElementById("wfm-pm-list");
     if (!container) return;
     container.innerHTML = "";
@@ -214,11 +214,11 @@ function matchesSearch(p) {
            (p.tags || []).some(t => t.toLowerCase().includes(s));
 }
 
-function isInBatchPreset(id) {
+export function isInBatchPreset(id) {
     return (pmGroups["Batch"] || []).includes(id);
 }
 
-function toggleBatchPreset(id) {
+export function toggleBatchPreset(id) {
     const batch = pmGroups["Batch"] || [];
     const idx = batch.indexOf(id);
     if (idx >= 0) { batch.splice(idx, 1); } else { batch.push(id); }
@@ -226,7 +226,7 @@ function toggleBatchPreset(id) {
     saveGroups();
 }
 
-function clearBatchPresets() {
+export function clearBatchPresets() {
     pmGroups["Batch"] = [];
     saveGroups();
     renderPresetManager();
@@ -681,14 +681,14 @@ function applyToGenerateUI(text) {
 // Wildcard API helpers
 // ============================================
 
-async function wcFetchFiles() {
+export async function wcFetchFiles() {
     try {
         const res = await fetch("/api/wfm/wildcards");
         return res.ok ? await res.json() : [];
     } catch { return []; }
 }
 
-async function wcFetchContent(filename) {
+export async function wcFetchContent(filename) {
     try {
         const res = await fetch(`/api/wfm/wildcards/content?filename=${encodeURIComponent(filename)}`);
         const data = await res.json();
@@ -696,7 +696,7 @@ async function wcFetchContent(filename) {
     } catch { return null; }
 }
 
-async function wcSaveFile(filename, content) {
+export async function wcSaveFile(filename, content) {
     try {
         const res = await fetch("/api/wfm/wildcards/save", {
             method: "POST",
@@ -708,7 +708,7 @@ async function wcSaveFile(filename, content) {
     } catch { return null; }
 }
 
-async function wcDeleteFile(filename) {
+export async function wcDeleteFile(filename) {
     try {
         await fetch("/api/wfm/wildcards/delete", {
             method: "POST",
@@ -853,7 +853,7 @@ function wcCloseEditor() {
     if (editor) editor.style.display = "none";
 }
 
-async function wcRefreshFiles() {
+export async function wcRefreshFiles() {
     wcFiles = await wcFetchFiles();
     wcRenderFileList();
     wcUpdateFilePicker();
@@ -916,14 +916,14 @@ let styleSearchText = "";
 let styleEditingOriginalName = null; // null = 新規作成
 let styleEditingFile = null;         // 編集中/追加先スタイルの定義元ファイル名（style/配下、null = デフォルトのcustom.json）
 
-async function styleFetchList() {
+export async function styleFetchList() {
     try {
         const res = await fetch("/api/wfm/styles");
         return res.ok ? await res.json() : [];
     } catch { return []; }
 }
 
-async function styleApiCreate(name, prompt, negativePrompt, targetFile) {
+export async function styleApiCreate(name, prompt, negativePrompt, targetFile) {
     try {
         const body = { name, prompt, negative_prompt: negativePrompt };
         if (targetFile) body.file = targetFile;
@@ -939,7 +939,7 @@ async function styleApiCreate(name, prompt, negativePrompt, targetFile) {
     }
 }
 
-async function styleApiUpdate(originalName, name, prompt, negativePrompt) {
+export async function styleApiUpdate(originalName, name, prompt, negativePrompt) {
     try {
         const res = await fetch(`/api/wfm/styles/${encodeURIComponent(originalName)}`, {
             method: "PUT",
@@ -953,7 +953,7 @@ async function styleApiUpdate(originalName, name, prompt, negativePrompt) {
     }
 }
 
-async function styleApiDelete(name) {
+export async function styleApiDelete(name) {
     try {
         const res = await fetch(`/api/wfm/styles/${encodeURIComponent(name)}`, { method: "DELETE" });
         const data = await res.json().catch(() => ({}));
@@ -1037,7 +1037,7 @@ function styleCloseEditor() {
     if (editor) editor.style.display = "none";
 }
 
-async function styleRefreshList() {
+export async function styleRefreshList() {
     styleListData = await styleFetchList();
     styleRenderList();
 }

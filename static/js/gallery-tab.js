@@ -1636,7 +1636,7 @@ function onGalleryTabActivated() {
     loadGroups();
 }
 
-// ── サブタブ切替 (Output / ImagePrompt / Style_Catalog) ────────────────────────
+// ── サブタブ切替 (Output / ImagePrompt / Style_Catalog / Metadata) ────────────
 
 function _initGallerySubtabToggle() {
     document.querySelectorAll(".wfm-gallery-subtab-btn").forEach((btn) => {
@@ -1647,6 +1647,7 @@ function _initGallerySubtabToggle() {
             document.getElementById("wfm-gallery-panel-output")?.classList.toggle("active", target === "output");
             document.getElementById("wfm-gallery-panel-imageprompt")?.classList.toggle("active", target === "imageprompt");
             document.getElementById("wfm-gallery-panel-styleCatalog")?.classList.toggle("active", target === "styleCatalog");
+            document.getElementById("wfm-gallery-panel-metadata")?.classList.toggle("active", target === "metadata");
             if (target === "imageprompt") activateImagePromptTab();
             if (target === "styleCatalog") activateStyleCatalogTab();
         });

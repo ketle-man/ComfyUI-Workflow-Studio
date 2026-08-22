@@ -46,22 +46,22 @@ ImageFeeder node control, Image library, Selection management, Presets, Continuo
 Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column — Checkpoint / LoRA Single / VAE, Empty state when no matching node exists, Wildcards, Prompt cell extras, Keyframe #1 live-reflect, Bypass checkbox, LoRA node bypass & prompt injection, T2I workflow support, Use generated image for next, Workflow recall, Plan files, Plan Load, Plan JSON tab, Save index image to Output on Run, Index images are self-contained plan files, Eagle integration
 
 ### Prompt Tab
-3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager
-
-### Metadata Tab (v0.3.8)
-3-column layout, File drop, Model extraction, LoRA extraction, Prompt extraction, Prompt actions, Format support, Format note
+3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager, Form / Table toggle, Table view — Presets / Presets Group / Wildcards / Style
 
 ### Settings Tab
 2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, Ollama connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
 
 ### Gallery Tab (v0.3.44)
-Output / Style-Prompt sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Workflow viewer, Load GenUI button, Image Edit button, Send GenUI Image button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, Performance
+Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Workflow viewer, Load GenUI button, Image Edit button, Send GenUI Image button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, Performance
 
 ### ImagePrompt Gallery subtab (v0.3.94, renamed from Style/Prompt in v0.3.95)
 Visual prompt library, 3-column layout, Prompt builder (right pane), Plain-text prompt storage, ponyxlWildcardsVault format support, Seed data importer
 
 ### Style_Catalog Gallery subtab (v0.3.95)
 Visual Style picker, 3-column layout, Positive/Negative panel, Select as Style button, Load in GenerateUI / Open in Metadata Tab buttons, Double-click to enlarge
+
+### Metadata Gallery subtab (v0.3.8, moved from a top-level tab in v0.4.6)
+Now inside Gallery, 3-column layout, File drop, Model extraction, LoRA extraction, Prompt extraction, Prompt actions, Format support, Format note
 
 ### Nodes Tab (v0.1.7)
 Node Browser, Search & Filter, Package badges, Node detail panel, Node Sets, Right-click context menu, Multi-select, Search clear (✕), Clear all filters (✕ Clear)

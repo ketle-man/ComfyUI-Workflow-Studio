@@ -23,7 +23,6 @@
             <button class="wfm-tab" data-tab="models">Models</button>
             <button class="wfm-tab" data-tab="generate">GenerateUI</button>
             <button class="wfm-tab" data-tab="prompt">Prompt</button>
-            <button class="wfm-tab" data-tab="metadata">Metadata</button>
             <button class="wfm-tab" data-tab="gallery">Gallery</button>
             <button class="wfm-tab" data-tab="image-edit">Image Edit</button>
             <button class="wfm-tab" data-tab="tagger">Tagger</button>
@@ -928,6 +927,13 @@
 
         <!-- Prompt Tab -->
         <section id="wfm-tab-prompt" class="wfm-tab-content">
+            <div class="wfm-prompt-toplevel-nav">
+                <button id="wfm-prompt-toplevel-form" class="wfm-prompt-toplevel-tab active" data-prompt-toplevel="form">Form</button>
+                <button id="wfm-prompt-toplevel-table" class="wfm-prompt-toplevel-tab" data-prompt-toplevel="table">Table</button>
+            </div>
+
+            <!-- Form パネル -->
+            <div id="wfm-prompt-panel-form" class="wfm-prompt-panel active">
             <div class="wfm-prompt-split wfm-prompt-split-3col">
                 <!-- Col 1: AI Assistant -->
                 <div class="wfm-prompt-split-col">
@@ -1153,76 +1159,141 @@
                     <!-- /Style タブ -->
                 </div>
             </div>
-        </section>
+            </div>
+            <!-- /Form パネル -->
 
-        <!-- Metadata Tab -->
-        <section id="wfm-tab-metadata" class="wfm-tab-content">
-            <div class="wfm-metadata-layout">
-                <!-- Col1: Drop zone + preview -->
-                <div class="wfm-metadata-col1">
-                    <div class="wfm-metadata-drop-zone" id="wfm-meta-drop">
-                        <div class="wfm-meta-drop-label" id="wfm-meta-drop-label">
-                            <div class="wfm-meta-drop-main">Drop image / JSON</div>
-                            <div class="wfm-meta-drop-sub">PNG · WebP · JSON</div>
-                        </div>
-                        <img id="wfm-meta-preview-img" class="wfm-meta-preview-img" style="display:none;" alt="preview">
-                    </div>
-                    <div class="wfm-meta-file-info" id="wfm-meta-file-info"></div>
-                    <div class="wfm-meta-format-note" id="wfm-meta-format-note">
-                        <div class="wfm-meta-format-note-title" id="wfm-meta-format-note-title">Supported formats</div>
-                        <ul class="wfm-meta-format-list">
-                            <li id="wfm-meta-fmt-comfyui">ComfyUI — PNG / WebP / JSON</li>
-                            <li id="wfm-meta-fmt-sdwebui">SD WebUI / SD Forge — PNG (parameters)</li>
-                            <li id="wfm-meta-fmt-fooocus">Fooocus — PNG (fooocus_scheme)</li>
-                        </ul>
-                        <div class="wfm-meta-format-todo" id="wfm-meta-format-todo">Flux.2 / Qwen-Image / Z-Image subgraph workflows supported</div>
-                    </div>
-                    <input type="file" id="wfm-meta-file-input" accept="image/png,image/webp,.json,application/json" style="display:none;">
+            <!-- Table パネル -->
+            <div id="wfm-prompt-panel-table" class="wfm-prompt-panel">
+                <div class="wfm-prompt-table-subnav">
+                    <button class="wfm-prompt-table-subtab active" data-ptable-subtab="presets">Presets</button>
+                    <button class="wfm-prompt-table-subtab" data-ptable-subtab="presetsGroup">Presets Group</button>
+                    <button class="wfm-prompt-table-subtab" data-ptable-subtab="wildcards">Wildcards</button>
+                    <button class="wfm-prompt-table-subtab" data-ptable-subtab="style">Style</button>
                 </div>
 
-                <!-- Col2: Model info -->
-                <div class="wfm-metadata-col2">
-                    <div class="wfm-meta-section" id="wfm-meta-ckpt-section">
-                        <div class="wfm-meta-section-title">Checkpoint</div>
-                        <div class="wfm-meta-list" id="wfm-meta-ckpt-list"></div>
+                <!-- Presets テーブル -->
+                <div id="wfm-ptable-presets" class="wfm-prompt-table-pane active">
+                    <div class="wfm-prompt-table-toolbar">
+                        <div class="wfm-search-wrap" style="flex:1;max-width:280px;">
+                            <input type="text" id="wfm-ptable-presets-search" class="wfm-search-input" placeholder="Search presets...">
+                            <button class="wfm-search-clear-btn" id="wfm-ptable-presets-search-clear-btn" title="Clear search">✕</button>
+                        </div>
+                        <span id="wfm-ptable-presets-count" class="wfm-nodes-count"></span>
+                        <span style="flex:1;"></span>
+                        <button id="wfm-ptable-presets-copy-pos-btn" class="wfm-btn wfm-btn-sm" title="Copy selected preset's positive prompt">PP Copy</button>
+                        <button id="wfm-ptable-presets-copy-neg-btn" class="wfm-btn wfm-btn-sm" title="Copy selected preset's negative prompt">NP Copy</button>
+                        <select id="wfm-ptable-presets-group-select" class="wfm-select" style="font-size:12px;padding:3px 6px;width:160px;flex:0 0 auto;">
+                            <option value="">Select group...</option>
+                        </select>
+                        <button id="wfm-ptable-presets-add-to-group-btn" class="wfm-btn wfm-btn-sm">Add to Group</button>
+                        <button id="wfm-ptable-presets-batch-clear-btn" class="wfm-btn wfm-btn-sm" title="Clear all batch presets">BC</button>
+                        <button id="wfm-ptable-presets-deselect-btn" class="wfm-btn wfm-btn-sm" disabled title="Clear row selection">Deselect</button>
+                        <button id="wfm-ptable-presets-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" disabled>Delete</button>
+                        <button id="wfm-ptable-presets-add-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New Preset</button>
                     </div>
-                    <div class="wfm-meta-section" id="wfm-meta-vae-section">
-                        <div class="wfm-meta-section-title">VAE</div>
-                        <div class="wfm-meta-list" id="wfm-meta-vae-list"></div>
-                    </div>
-                    <div class="wfm-meta-section" id="wfm-meta-diff-section">
-                        <div class="wfm-meta-section-title">Diffusion Model</div>
-                        <div class="wfm-meta-list" id="wfm-meta-diff-list"></div>
-                    </div>
-                    <div class="wfm-meta-section" id="wfm-meta-te-section">
-                        <div class="wfm-meta-section-title">Text Encoder</div>
-                        <div class="wfm-meta-list" id="wfm-meta-te-list"></div>
+                    <div class="wfm-prompt-table-scroll">
+                        <table class="wfm-table wfm-prompt-edit-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:56px;">#</th>
+                                    <th style="width:28px;"></th>
+                                    <th style="width:160px;">Name</th>
+                                    <th style="width:110px;">Category</th>
+                                    <th>Positive</th>
+                                    <th>Negative</th>
+                                    <th style="width:28px;">B</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wfm-ptable-presets-tbody"></tbody>
+                        </table>
                     </div>
                 </div>
 
-                <!-- Col3: LoRA + Prompt -->
-                <div class="wfm-metadata-col3">
-                    <div class="wfm-meta-section" id="wfm-meta-lora-section">
-                        <div class="wfm-meta-section-title">LoRA</div>
-                        <div class="wfm-meta-list" id="wfm-meta-lora-list"></div>
-                    </div>
-                    <div class="wfm-meta-section wfm-meta-prompt-section" id="wfm-meta-prompt-section">
-                        <div class="wfm-meta-section-title">Prompt</div>
-                        <div class="wfm-meta-list" id="wfm-meta-prompt-list"></div>
-                        <div class="wfm-meta-prompt-full-wrap">
-                            <div class="wfm-meta-prompt-full-label" id="wfm-meta-prompt-full-label"></div>
-                            <textarea class="wfm-meta-prompt-full" id="wfm-meta-prompt-full" readonly placeholder="Select a prompt above to view full text..."></textarea>
-                            <div class="wfm-meta-prompt-actions">
-                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-copy-btn">Copy</button>
-                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-genui-pos-btn">GenUI:P</button>
-                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-genui-neg-btn">GenUI:N</button>
-                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-pos-btn">Prompt:P</button>
-                                <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-neg-btn">Prompt:N</button>
-                            </div>
+                <!-- Presets Group テーブル -->
+                <div id="wfm-ptable-presetsGroup" class="wfm-prompt-table-pane">
+                    <div class="wfm-prompt-table-toolbar">
+                        <div class="wfm-search-wrap" style="flex:1;max-width:280px;">
+                            <input type="text" id="wfm-ptable-presetsgroup-search" class="wfm-search-input" placeholder="Search groups...">
+                            <button class="wfm-search-clear-btn" id="wfm-ptable-presetsgroup-search-clear-btn" title="Clear search">✕</button>
                         </div>
+                        <span id="wfm-ptable-presetsgroup-count" class="wfm-nodes-count"></span>
+                        <span style="flex:1;"></span>
+                        <button id="wfm-ptable-presetsgroup-deselect-btn" class="wfm-btn wfm-btn-sm" disabled title="Clear row selection">Deselect</button>
+                        <button id="wfm-ptable-presetsgroup-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" disabled>Delete</button>
+                        <button id="wfm-ptable-presetsgroup-add-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New Group</button>
+                    </div>
+                    <div class="wfm-prompt-table-scroll">
+                        <table class="wfm-table wfm-prompt-edit-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:56px;">#</th>
+                                    <th style="width:160px;">Group Name</th>
+                                    <th>Presets</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wfm-ptable-presetsgroup-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Wildcards テーブル -->
+                <div id="wfm-ptable-wildcards" class="wfm-prompt-table-pane">
+                    <div class="wfm-prompt-table-toolbar">
+                        <div class="wfm-search-wrap" style="flex:1;max-width:280px;">
+                            <input type="text" id="wfm-ptable-wildcards-search" class="wfm-search-input" placeholder="Search wildcard files...">
+                            <button class="wfm-search-clear-btn" id="wfm-ptable-wildcards-search-clear-btn" title="Clear search">✕</button>
+                        </div>
+                        <span id="wfm-ptable-wildcards-count" class="wfm-nodes-count"></span>
+                        <span style="flex:1;"></span>
+                        <button id="wfm-ptable-wildcards-deselect-btn" class="wfm-btn wfm-btn-sm" disabled title="Clear row selection">Deselect</button>
+                        <button id="wfm-ptable-wildcards-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" disabled>Delete</button>
+                        <button id="wfm-ptable-wildcards-add-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New File</button>
+                    </div>
+                    <div class="wfm-prompt-table-scroll">
+                        <table class="wfm-table wfm-prompt-edit-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:56px;">#</th>
+                                    <th style="width:220px;">File (folder/name)</th>
+                                    <th style="width:70px;">Ext</th>
+                                    <th>Content (one item per line, or YAML)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wfm-ptable-wildcards-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Style テーブル -->
+                <div id="wfm-ptable-style" class="wfm-prompt-table-pane">
+                    <div class="wfm-prompt-table-toolbar">
+                        <div class="wfm-search-wrap" style="flex:1;max-width:280px;">
+                            <input type="text" id="wfm-ptable-style-search" class="wfm-search-input" placeholder="Search styles...">
+                            <button class="wfm-search-clear-btn" id="wfm-ptable-style-search-clear-btn" title="Clear search">✕</button>
+                        </div>
+                        <span id="wfm-ptable-style-count" class="wfm-nodes-count"></span>
+                        <span style="flex:1;"></span>
+                        <button id="wfm-ptable-style-deselect-btn" class="wfm-btn wfm-btn-sm" disabled title="Clear row selection">Deselect</button>
+                        <button id="wfm-ptable-style-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" disabled>Delete</button>
+                        <button id="wfm-ptable-style-add-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New Style</button>
+                    </div>
+                    <div class="wfm-prompt-table-scroll">
+                        <table class="wfm-table wfm-prompt-edit-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:56px;">#</th>
+                                    <th style="width:160px;">Name</th>
+                                    <th style="width:110px;">File</th>
+                                    <th>Positive</th>
+                                    <th>Negative</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wfm-ptable-style-tbody"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
+            <!-- /Table パネル -->
         </section>
 
         <!-- Settings Tab -->
@@ -1332,6 +1403,7 @@
                                 <li id="wfm-help-gen-28">Model tab — Highlight color: the label of each model type (Checkpoint, VAE, Diffusion Model, Text Encoder, ControlNet, Hypernetwork) and the LoRA column header turn a distinct color (default bright green) when the loaded workflow actually contains that type of node; this stays visible even while ControlNet/Hypernetwork are collapsed, so you can tell at a glance whether they're in use without expanding them; the color is customizable in the Settings tab</li>
                                 <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
                                 <li id="wfm-help-gen-7">Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow; if the loaded workflow has Bypass or Mute nodes, a note listing them appears above the search bar (Bypass nodes are excluded with their wires reconnected around them; Mute nodes are excluded with no reconnection, matching ComfyUI itself)</li>
+                                <li id="wfm-help-gen-30">The <b>Save</b> button (right end of the subtab bar) is hidden while the <b>Batch</b> or <b>Lab</b> subtab is active, since those work on workflow copies / their own Plan files rather than the currently loaded workflow; it reappears on Input/Model/Settings/Feeder</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1474,6 +1546,12 @@
                             <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="prompt">Open tab &rarr;</button>
                         </div>
                         <div class="wfm-help-card">
+                            <h3 id="wfm-help-prompt-card-toplevel-title">Form / Table</h3>
+                            <ul>
+                                <li id="wfm-help-prompt-15">Two top-level tabs: <b>Form</b> is the original one-item-at-a-time editor described below (AI Assistant / Presets / Wildcard / Style panes); <b>Table</b> shows the same underlying data all at once as editable spreadsheets — useful once there are more than a handful of presets, wildcard files, or styles to manage</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
                             <h3 id="wfm-help-prompt-card-ai-title">AI Assistant &amp; Translation</h3>
                             <ul>
                                 <li id="wfm-help-prompt-1">AI assistant (Ollama): model selection, chat for prompt consultation, image attachment (vision models)</li>
@@ -1507,18 +1585,33 @@
                                 <li id="wfm-help-prompt-14">Each entry in the list shows its source file as a small badge next to the name (e.g. <code>sdxl_styles_diva.json</code>); while editing an existing style, that filename also appears above the Positive prompt field, and a <b>+ Add to this file</b> button appears next to Save — click it to clear the form for a brand-new style that gets appended to that same file instead of the default <code>custom.json</code></li>
                             </ul>
                         </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-prompt-card-table-title">Table View</h3>
+                            <ul>
+                                <li id="wfm-help-prompt-16">The Table tab has four sub-tabs of its own: <b>Presets</b>, <b>Presets Group</b>, <b>Wildcards</b>, and <b>Style</b> — each an editable table built from the exact same data as the Form tab, so changes on either side stay in sync</li>
+                                <li id="wfm-help-prompt-17">Every table shares a left-most auto-numbered <b>#</b> column: click a number to select that row (highlighted red) — multiple rows can be selected at once; the toolbar's <b>Delete</b> button removes every selected row in one confirm, and <b>Deselect</b> clears the selection. This replaced per-row delete buttons, which were too easy to misclick</li>
+                                <li id="wfm-help-prompt-18"><b>Double-click</b> a row's number to open a larger prompt-editing modal instead of the small in-table textarea. Presets and Style show <b>Positive</b>/<b>Negative</b> toggle buttons above one shared textarea (switching preserves whatever you typed on the other side); Wildcards shows just the file's content. <b>Save</b> writes the change back and closes the modal; <b>Close</b> discards it</li>
+                                <li id="wfm-help-prompt-19">The toolbar's <b>+ New ...</b> button adds a blank row at the top with small &#10003; (Add) / &#10005; (Cancel) icons in place of its number; fill in the fields and click &#10003; to create it, or &#10005; to discard the row without saving</li>
+                                <li id="wfm-help-prompt-20">Presets table — the <b>&#9733;</b> (favorite) and <b>B</b> (Batch group) columns work like toggle switches: click to turn them gold/yellow, click again to clear; the toolbar's <b>BC</b> button clears every preset out of the Batch group at once, same as the Form tab's Preset Manager</li>
+                                <li id="wfm-help-prompt-21">Presets table toolbar — <b>PP Copy</b> / <b>NP Copy</b> copy the single selected row's positive/negative prompt to the clipboard; the <b>group select + Add to Group</b> adds every currently selected preset to the chosen group in one click. Doing the group assignment from here (search/select presets, then pick from a short group list) replaced the old per-group preset picker, which became unusable once there were many presets</li>
+                                <li id="wfm-help-prompt-22">Presets Group table — create, rename, and delete groups; each group's members are shown as removable badges (&#10005;). The reserved <b>Batch</b> group is not listed here — it's managed entirely through the Presets table's B column and BC button instead</li>
+                                <li id="wfm-help-prompt-23">Wildcards table — same files as the Form tab's Wildcard file manager; editing the <b>File</b> path or the <b>Ext</b> dropdown renames the file (saves the content under the new name, then removes the old file)</li>
+                                <li id="wfm-help-prompt-24">Style table — same styles as the Form tab's Style manager, editable inline the same way as Presets</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-metadata">
                         <div class="wfm-help-article-header">
                             <h2 id="wfm-help-metadata-title">Metadata Tab</h2>
-                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="metadata">Open tab &rarr;</button>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="gallery" data-jump-subtab="metadata">Open tab &rarr;</button>
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-metadata-card-overview-title">Overview</h3>
                             <p id="wfm-help-metadata-desc">Drop a ComfyUI-generated PNG/WebP or workflow JSON to instantly extract and view the embedded model and prompt information.</p>
                             <ul>
                                 <li id="wfm-help-metadata-1">Left column: drop zone (image preview for PNG/WebP) and file info; click or drop to load</li>
+                                <li id="wfm-help-metadata-6">This is now a sub-tab inside the <b>Gallery</b> tab (to the right of Style_Catalog), rather than its own top-level tab — everything else about it works exactly the same</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1624,6 +1717,7 @@
                                 <li id="wfm-help-gallery-2">3-column layout: folder tree (left) | image grid (center) | detail panel (right)</li>
                                 <li id="wfm-help-gallery-3">Thumbnail and Table view modes; double-click any image to open fullscreen lightbox</li>
                                 <li id="wfm-help-gallery-4">Toolbar filters: favorites (★), text search (filename / tag / prompt), tag filter, group filter, sort by date/name</li>
+                                <li id="wfm-help-gallery-26">Four sub-tabs at the top of the Gallery tab: <b>Output</b> (this browser), <b>ImagePrompt</b>, <b>Style_Catalog</b>, and <b>Metadata</b> — the last one embeds the full Metadata Tab (see its own help page) so you can drop an image there to inspect its embedded model/prompt data without leaving Gallery</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -2082,6 +2176,7 @@
                 <button id="wfm-gallery-subtab-output" class="wfm-gallery-subtab-btn active" data-gallery-subtab="output">Output</button>
                 <button id="wfm-gallery-subtab-imageprompt" class="wfm-gallery-subtab-btn" data-gallery-subtab="imageprompt">ImagePrompt</button>
                 <button id="wfm-gallery-subtab-styleCatalog" class="wfm-gallery-subtab-btn" data-gallery-subtab="styleCatalog">Style_Catalog</button>
+                <button id="wfm-gallery-subtab-metadata" class="wfm-gallery-subtab-btn" data-gallery-subtab="metadata">Metadata</button>
             </div>
 
             <!-- Output ギャラリーパネル -->
@@ -2375,6 +2470,77 @@
                 </div>
             </div>
             <!-- /Style_Catalog ギャラリーパネル -->
+
+            <!-- Metadata ギャラリーパネル -->
+            <div id="wfm-gallery-panel-metadata" class="wfm-gallery-panel">
+                <div class="wfm-metadata-layout">
+                    <!-- Col1: Drop zone + preview -->
+                    <div class="wfm-metadata-col1">
+                        <div class="wfm-metadata-drop-zone" id="wfm-meta-drop">
+                            <div class="wfm-meta-drop-label" id="wfm-meta-drop-label">
+                                <div class="wfm-meta-drop-main">Drop image / JSON</div>
+                                <div class="wfm-meta-drop-sub">PNG · WebP · JSON</div>
+                            </div>
+                            <img id="wfm-meta-preview-img" class="wfm-meta-preview-img" style="display:none;" alt="preview">
+                        </div>
+                        <div class="wfm-meta-file-info" id="wfm-meta-file-info"></div>
+                        <div class="wfm-meta-format-note" id="wfm-meta-format-note">
+                            <div class="wfm-meta-format-note-title" id="wfm-meta-format-note-title">Supported formats</div>
+                            <ul class="wfm-meta-format-list">
+                                <li id="wfm-meta-fmt-comfyui">ComfyUI — PNG / WebP / JSON</li>
+                                <li id="wfm-meta-fmt-sdwebui">SD WebUI / SD Forge — PNG (parameters)</li>
+                                <li id="wfm-meta-fmt-fooocus">Fooocus — PNG (fooocus_scheme)</li>
+                            </ul>
+                            <div class="wfm-meta-format-todo" id="wfm-meta-format-todo">Flux.2 / Qwen-Image / Z-Image subgraph workflows supported</div>
+                        </div>
+                        <input type="file" id="wfm-meta-file-input" accept="image/png,image/webp,.json,application/json" style="display:none;">
+                    </div>
+
+                    <!-- Col2: Model info -->
+                    <div class="wfm-metadata-col2">
+                        <div class="wfm-meta-section" id="wfm-meta-ckpt-section">
+                            <div class="wfm-meta-section-title">Checkpoint</div>
+                            <div class="wfm-meta-list" id="wfm-meta-ckpt-list"></div>
+                        </div>
+                        <div class="wfm-meta-section" id="wfm-meta-vae-section">
+                            <div class="wfm-meta-section-title">VAE</div>
+                            <div class="wfm-meta-list" id="wfm-meta-vae-list"></div>
+                        </div>
+                        <div class="wfm-meta-section" id="wfm-meta-diff-section">
+                            <div class="wfm-meta-section-title">Diffusion Model</div>
+                            <div class="wfm-meta-list" id="wfm-meta-diff-list"></div>
+                        </div>
+                        <div class="wfm-meta-section" id="wfm-meta-te-section">
+                            <div class="wfm-meta-section-title">Text Encoder</div>
+                            <div class="wfm-meta-list" id="wfm-meta-te-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Col3: LoRA + Prompt -->
+                    <div class="wfm-metadata-col3">
+                        <div class="wfm-meta-section" id="wfm-meta-lora-section">
+                            <div class="wfm-meta-section-title">LoRA</div>
+                            <div class="wfm-meta-list" id="wfm-meta-lora-list"></div>
+                        </div>
+                        <div class="wfm-meta-section wfm-meta-prompt-section" id="wfm-meta-prompt-section">
+                            <div class="wfm-meta-section-title">Prompt</div>
+                            <div class="wfm-meta-list" id="wfm-meta-prompt-list"></div>
+                            <div class="wfm-meta-prompt-full-wrap">
+                                <div class="wfm-meta-prompt-full-label" id="wfm-meta-prompt-full-label"></div>
+                                <textarea class="wfm-meta-prompt-full" id="wfm-meta-prompt-full" readonly placeholder="Select a prompt above to view full text..."></textarea>
+                                <div class="wfm-meta-prompt-actions">
+                                    <button class="wfm-btn wfm-btn-sm" id="wfm-meta-copy-btn">Copy</button>
+                                    <button class="wfm-btn wfm-btn-sm" id="wfm-meta-genui-pos-btn">GenUI:P</button>
+                                    <button class="wfm-btn wfm-btn-sm" id="wfm-meta-genui-neg-btn">GenUI:N</button>
+                                    <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-pos-btn">Prompt:P</button>
+                                    <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-neg-btn">Prompt:N</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- /Metadata ギャラリーパネル -->
         </section>
 
         <!-- Image Edit Tab -->

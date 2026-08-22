@@ -723,7 +723,8 @@ function renderSection(sectionEl, listEl, items, buildFn) {
 let _externalHandleFile = null;
 
 export async function loadFileIntoMetadataTab(file) {
-    document.querySelector('.wfm-tab[data-tab="metadata"]')?.click();
+    document.querySelector('.wfm-tab[data-tab="gallery"]')?.click();
+    document.querySelector('.wfm-gallery-subtab-btn[data-gallery-subtab="metadata"]')?.click();
     await new Promise(r => setTimeout(r, 0));
     if (_externalHandleFile) await _externalHandleFile(file);
 }
@@ -790,6 +791,7 @@ export function initMetadataTab() {
         "wfm-help-metadata-3": "helpMetadata3",
         "wfm-help-metadata-4": "helpMetadata4",
         "wfm-help-metadata-5": "helpMetadata5",
+        "wfm-help-metadata-6": "helpMetadata6",
     };
     for (const [id, key] of Object.entries(helpIds)) {
         const el = document.getElementById(id);

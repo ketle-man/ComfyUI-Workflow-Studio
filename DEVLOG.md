@@ -1,6 +1,38 @@
-異性
-
 # DEVLOG - ComfyUI-Workflow-Studio
+
+---
+
+## v0.4.6
+
+### 機能追加: MetadataタブをGalleryタブへ統合 + Promptタブに一覧編集可能なTable表示を新設
+
+ユーザーからの複数の要望を1セッションで順に実装した一連の作業。
+
+**1. MetadataタブをGalleryタブのサブタブへ移動**: 「Metadataタブをギャラリータブ内に移動したい。Style_Catalogタブ右隣としたい」との要望。トップナビの独立タブを廃止し、Galleryタブのサブタブ列（Output/ImagePrompt/Style_Catalog）の右端に追加。外部から画像をMetadata表示させる`loadFileIntoMetadataTab()`（`metadata-tab.js`）や、Helpタブの「Open tab →」ジャンプボタンなど、旧トップレベルタブへの参照箇所（Gallery側の「Open in Metadata Tab」ボタン、Style_Catalog側の同名ボタン）はすべて「Galleryタブへ切替→Metadataサブタブへ切替」の2段階クリックへ置き換えた。
+
+**2. GenerateUIタブ: Save ボタンをBatch/Labサブタブで非表示化**: 「ワークフローのSaveボタンをBatch、Labサブタブ選択時、非表示にしたい」との要望。両サブタブは現在ロード中のワークフロー本体ではなく、ワークフローの複製やLab独自のPlanファイルを操作するため、Saveボタンが誤解を招く（クリックしても実際に触っているワークフローとは別物が保存される）ことへの対処。サブタブ切替ハンドラ（`generate-tab.js`）にワンライナーの表示切替を追加。
+
+**3. Promptタブに「Table」表示を新設**: 「現在のプロンプトタブをタブ化してテーブルタブを追加したい（既存はフォームタブとする）。テーブルタブではプロンプトのプリセット、ワイルドカード、スタイルがそれぞれ表形式で一覧表示、編集可能としたい」との要望を起点に、複数回のフィードバックを経て以下の形に発展した:
+  - 既存の3カラムレイアウト（AI Assistant / Presets・Preset Manager / Wildcard・Style）をまるごと「Form」パネルとしてラップし、新設の「Table」パネルと上部のトップレベルタブで切り替える構成にした。
+  - Tableパネル内にPresets・Wildcards・Styleの3つの編集可能テーブルを新設（`prompt-table.js`新規ファイル）。既存の`prompt-tab.js`が保持するAPIヘルパー（`fetchPresets`/`apiUpdatePreset`/`wcSaveFile`/`styleApiUpdate`等）とリフレッシュ関数を`export`して再利用し、Table側での編集は即座にForm側にも反映されるようにした。
+  - **「Presets右隣にPresets Groupを追加したい」**: グループ管理専用の4つ目のサブタブを新設。グループの作成・リネーム・削除・メンバー一覧（バッジ表示・×で削除）に対応。
+  - **「共通で左端に番号（自動）列を追加したい。個別の削除ボタンは誤操作が予想されるため上部にボタンを設置し番号列で該当番号選択、削除という手順にしたい」**: 4テーブル共通で自動採番の`#`列を新設し、番号クリックで行選択（複数可・赤ハイライト）→ツールバーの「Delete」ボタンで一括削除、という手順に統一。個別の行削除ボタンは全廃した。新規行追加時は番号セルの代わりに小さな✓（Add）／✕（Cancel）アイコンを表示する設計にした。
+  - **「バッチグループの登録方法を変更したい」**: PresetsテーブルにForm側と同じ仕組みの「B」列（クリックでグレー⇔黄色にトグルしBatchグループへ登録/解除）と、Batchグループを一括クリアする「BC」ボタンをツールバー上部に追加。Presets Groupテーブルからは予約グループ「Batch」を非表示にし、Batch管理をPresetsテーブル側のB列/BCボタンへ一本化した。
+  - **「PresetsのコピーボタンとグループドロップダウンをテーブルのPresetsタブに配置したい。これによりPresets GroupタブのAdd Presetsをなくしたい（プリセットが多くなった際に選択が困難なため）」**: Presets Groupテーブルの「Add Preset」列（プリセットが多いと使いづらい長大なドロップダウン）を廃止。代わりにPresetsテーブルのツールバーに「PP Copy」「NP Copy」（選択中1件のPositive/Negativeをクリップボードへコピー）と、グループ選択＋「Add to Group」（選択中の複数プリセットを一括で選んだグループへ追加）を新設した。プリセット側を検索・選択してから短いグループ一覧から選ぶ流れにしたことで、プリセット数が多くても操作しやすい設計になった。
+  - **「選択クリアボタンも追加したい」**: 4テーブル共通で「Deselect」ボタンをツールバーへ追加し、選択状態を一括解除できるようにした。
+  - **「プリセット、ワイルドカード、スタイルで番号をWクリックでモーダルでプロンプトの表示、編集したい」**: `#`列のダブルクリックで、既存の共有モーダル基盤（`app.js`の`openModal`/`closeModal`）を再利用したプロンプト編集モーダルを開くようにした。Presets/Styleは正負プロンプト切り替えボタン＋共有の大型テキストエリア（切り替えても両方の編集内容を保持）、Wildcardsはファイル内容のみのテキストエリアで、Save/Closeボタンを備える。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、GenerateUI Tab（Saveボタン非表示の説明）・Prompt Tab（新規カード「Form / Table」「Table View」10項目）・Gallery Tab（Metadataサブタブの説明）・Metadata Tab（Galleryタブ内へ移動した旨の注記、`metadata-tab.js`側の独自i18n適用ロジックへ追加）を更新。README.mdはGenerateUI TabのSaveボタン説明を拡張、Prompt Tabセクションに新規ブロックを追加、「Metadata Tab」セクションをGalleryタブの4番目のサブタブとして「Metadata Gallery subtab」に改称の上、Style_Catalog Gallery subtabの直後へ移設した。
+
+**検証**: 全JSファイルを`node --check`で構文確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイルを都度両フォルダへ同期。Playwright MCP経由で実機ブラウザ操作を機能追加ごとに実施: (1) Gallery→Metadataサブタブの表示とHelpジャンプボタンの遷移、(2) Batch/LabサブタブでのSaveボタン非表示、(3) Presets/Wildcards/Styleテーブルの実データ表示・インライン編集の永続化・行追加・削除、(4) 番号列での選択トグルとDelete/Deselectボタンの有効化、(5) Presets GroupタブでのグループCRUD・メンバー追加削除・予約グループBatchの削除保護、(6) B列/BCボタンでのBatchグループ登録・一括クリア（既存の"pony"データが誤って変更されないことも確認）、(7) PP/NP CopyとAdd to Groupの単一選択/複数選択それぞれの動作、(8) ダブルクリックモーダルの表示・Positive/Negative切り替え時のテキスト保持・保存→サーバー反映→モーダル自動クローズ、(9) ヘルプ全項目の日本語UIでの表示、を一通り確認。テスト用に作成したデータはすべて削除・復元済み。
+
+**How to apply**:
+
+1. 1つの機能要望（テーブル表示の追加）が実装後の実運用フィードバックを経て、削除方式・グループ登録方式・選択解除・詳細表示方式と段階的に発展していくケースでは、各段階で「既存の確立済みパターン（今回は#列クリック選択→ツールバー操作、共有モーダル基盤）を後続の要望にも一貫して適用できないか」を優先的に検討すると、機能ごとにUIパターンがバラつかず学習コストが低いまま拡張できる。
+2. 一覧が長大になりうるデータ（プリセット）をドロップダウンで選ばせるUIは、件数が増えると事実上使えなくなる。件数が少ないことが保証されている別の軸（今回はグループ）を主語にした選択UIへ倒すと、データ量に強い設計になる。
+3. 複数テーブルにまたがる共通パターン（番号列・選択トグル・ダブルクリックモーダル）は、テーブルごとに実装をコピーするのではなく共通ヘルパー関数（`buildNumCell`/`openPositiveNegativeModal`/`openSingleTextModal`）に切り出しておくと、後続の類似要望（今回で言えば選択クリアボタン・ダブルクリックモーダル）を全テーブルへ一度に反映しやすい。
+
+関連: [[project_dev_deploy_sync]], [[project_v0336_conventions]]
 
 ---
 

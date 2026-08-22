@@ -2387,6 +2387,248 @@ body {
     overflow: hidden;
 }
 
+/* Prompt タブ: Form / Table 切り替え */
+.wfm-prompt-toplevel-nav {
+    display: flex;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+.wfm-prompt-toplevel-tab {
+    padding: 6px 16px;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s;
+}
+.wfm-prompt-toplevel-tab:hover { color: var(--wfm-text-primary); }
+.wfm-prompt-toplevel-tab.active { color: var(--wfm-primary); border-bottom-color: var(--wfm-primary); }
+
+.wfm-prompt-panel {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+.wfm-prompt-panel.active { display: flex; }
+
+/* Table パネル内サブタブ (Presets / Wildcards / Style) */
+.wfm-prompt-table-subnav {
+    display: flex;
+    background: var(--wfm-surface);
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+}
+.wfm-prompt-table-subtab {
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--wfm-text-secondary);
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.wfm-prompt-table-subtab:hover { color: var(--wfm-text); }
+.wfm-prompt-table-subtab.active { color: var(--wfm-text); border-bottom-color: var(--wfm-primary); }
+
+.wfm-prompt-table-pane {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+.wfm-prompt-table-pane.active { display: flex; }
+
+.wfm-prompt-table-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding: 8px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--wfm-border);
+}
+
+.wfm-prompt-table-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* 編集可能テーブル (Presets / Wildcards / Style 共通) */
+.wfm-prompt-edit-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.wfm-prompt-edit-table th,
+.wfm-prompt-edit-table td {
+    border-bottom: 1px solid var(--wfm-border);
+    padding: 4px 6px;
+    vertical-align: top;
+}
+.wfm-prompt-edit-table th {
+    position: sticky;
+    top: 0;
+    background: var(--wfm-surface);
+    text-align: left;
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    z-index: 1;
+}
+.wfm-prompt-edit-table tbody tr:hover td {
+    background: var(--wfm-surface);
+}
+.wfm-prompt-edit-input,
+.wfm-prompt-edit-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--wfm-text);
+    font-size: 12px;
+    padding: 3px 5px;
+    font-family: inherit;
+}
+.wfm-prompt-edit-textarea {
+    min-height: 40px;
+    resize: vertical;
+}
+.wfm-prompt-edit-input:hover,
+.wfm-prompt-edit-textarea:hover {
+    border-color: var(--wfm-border);
+}
+.wfm-prompt-edit-input:focus,
+.wfm-prompt-edit-textarea:focus {
+    outline: none;
+    border-color: var(--wfm-primary);
+    background: var(--wfm-bg);
+}
+@keyframes wfm-prompt-cell-flash {
+    0% { background: rgba(74, 158, 255, 0.3); }
+    100% { background: transparent; }
+}
+.wfm-prompt-edit-cell-saved {
+    animation: wfm-prompt-cell-flash 0.7s ease;
+}
+.wfm-prompt-edit-fav-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--wfm-text-secondary);
+    padding: 2px;
+    line-height: 1;
+}
+.wfm-prompt-edit-fav-btn.active { color: #ffd700; }
+.wfm-prompt-edit-batch-btn.active { color: #f0c040; }
+.wfm-prompt-edit-row-new td { background: rgba(74, 158, 255, 0.06); }
+.wfm-prompt-edit-file-badge {
+    font-size: 10px;
+    color: var(--wfm-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+.wfm-prompt-edit-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--wfm-text-secondary);
+    font-size: 12px;
+}
+
+/* ダブルクリックで開くプロンプト編集モーダル (Presets / Wildcards / Style 共通) */
+.wfm-prompt-modal-toggle {
+    display: flex;
+    gap: 6px;
+}
+.wfm-prompt-modal-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 320px;
+    resize: vertical;
+    margin-top: 8px;
+}
+.wfm-prompt-modal-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+/* #(自動採番)列: クリックで行選択 → 上部の Delete ボタンで一括削除 */
+.wfm-prompt-edit-num-cell {
+    text-align: center;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    color: var(--wfm-text-secondary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.wfm-prompt-edit-num-cell:hover {
+    color: var(--wfm-text);
+    background: var(--wfm-surface-2, var(--wfm-surface));
+}
+.wfm-prompt-edit-table tbody tr.wfm-prompt-edit-row-selected td {
+    background: rgba(255, 69, 58, 0.14);
+}
+.wfm-prompt-edit-table tbody tr.wfm-prompt-edit-row-selected .wfm-prompt-edit-num-cell {
+    color: var(--wfm-danger);
+    font-weight: bold;
+}
+.wfm-prompt-edit-num-cell-new {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+}
+.wfm-prompt-edit-inline-add-btn,
+.wfm-prompt-edit-inline-cancel-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 3px;
+    line-height: 1;
+    border-radius: 3px;
+}
+.wfm-prompt-edit-inline-add-btn { color: var(--wfm-primary); }
+.wfm-prompt-edit-inline-add-btn:hover { background: var(--wfm-primary); color: #fff; }
+.wfm-prompt-edit-inline-cancel-btn { color: var(--wfm-text-secondary); }
+.wfm-prompt-edit-inline-cancel-btn:hover { color: var(--wfm-danger); }
+
+/* Presets Group テーブル: プリセットバッジ */
+.wfm-prompt-edit-preset-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--wfm-surface);
+    border: 1px solid var(--wfm-border);
+    border-radius: 10px;
+    padding: 2px 4px 2px 8px;
+    font-size: 11px;
+    margin: 2px 3px 2px 0;
+}
+.wfm-prompt-edit-badge-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--wfm-text-secondary);
+    font-size: 10px;
+    padding: 1px 3px;
+    line-height: 1;
+}
+.wfm-prompt-edit-badge-remove:hover { color: var(--wfm-danger); }
+
 /* Ollama Assistant */
 .wfm-ollama-assistant {
     display: flex;
@@ -5031,15 +5273,12 @@ body {
    Metadata Tab
    ============================================ */
 
-#wfm-tab-metadata {
-    overflow: hidden;
-}
-
 .wfm-metadata-layout {
     display: grid;
     grid-template-columns: 220px 1fr 1fr;
     gap: 0;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
