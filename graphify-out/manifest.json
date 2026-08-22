@@ -1,15 +1,15 @@
 {
   "CLAUDE.md": {
     "mtime": 1787279658.5963283,
-    "seen": 1787294443.2937593,
+    "seen": 1787380810.3754587,
     "ast_hash": "b2c014309df240903aa90a26914c8c19",
-    "semantic_hash": ""
+    "semantic_hash": "b2c014309df240903aa90a26914c8c19"
   },
   ".claude/settings.json": {
     "mtime": 1787279595.344592,
-    "seen": 1787294443.293593,
+    "seen": 1787380810.2925637,
     "ast_hash": "cd2c4308b55c5d1aa1b647cdec814b79",
-    "semantic_hash": ""
+    "semantic_hash": "cd2c4308b55c5d1aa1b647cdec814b79"
   },
   "__init__.py": {
     "mtime": 1781939762.254596,
@@ -246,22 +246,22 @@
     "semantic_hash": "cb1c96536f67edb380d1010b6165d74d"
   },
   "pyproject.toml": {
-    "mtime": 1787294270.2709916,
-    "seen": 1787294443.2936609,
-    "ast_hash": "7871844f1b603a90fe9eacbb2d03c575",
-    "semantic_hash": ""
+    "mtime": 1787378263.2900941,
+    "seen": 1787380810.3265483,
+    "ast_hash": "f514fae02a3b48726f5073e932cfa1b3",
+    "semantic_hash": "f514fae02a3b48726f5073e932cfa1b3"
   },
   "static/js/ai-tab.js": {
     "mtime": 1787293482.4888227,
-    "seen": 1787294443.2936625,
+    "seen": 1787380810.3265514,
     "ast_hash": "960b474155386a36000e6961b0b2e0c3",
-    "semantic_hash": ""
+    "semantic_hash": "960b474155386a36000e6961b0b2e0c3"
   },
   "static/js/app.js": {
-    "mtime": 1787294018.0160882,
-    "seen": 1787294443.2936637,
-    "ast_hash": "af1096aac930e70b9b5a7f587e91a727",
-    "semantic_hash": ""
+    "mtime": 1787377516.2436306,
+    "seen": 1787380810.3265538,
+    "ast_hash": "7df994a3e8f6c34d27a1ccd88b207a5c",
+    "semantic_hash": "7df994a3e8f6c34d27a1ccd88b207a5c"
   },
   "static/js/comfyui-client.js": {
     "mtime": 1786676208.2330563,
@@ -271,15 +271,15 @@
   },
   "static/js/comfyui-editor.js": {
     "mtime": 1787293462.7015421,
-    "seen": 1787294443.2936668,
+    "seen": 1787380810.3274822,
     "ast_hash": "fe27626a41d18f02bdea2b89aaaf740b",
-    "semantic_hash": ""
+    "semantic_hash": "fe27626a41d18f02bdea2b89aaaf740b"
   },
   "static/js/comfyui-workflow.js": {
     "mtime": 1787293410.2500806,
-    "seen": 1787294443.293668,
+    "seen": 1787380810.3274848,
     "ast_hash": "255cfe0c2172639ed698a5e9397d7144",
-    "semantic_hash": ""
+    "semantic_hash": "255cfe0c2172639ed698a5e9397d7144"
   },
   "static/js/feeder-tab.js": {
     "mtime": 1781939989.0796032,
@@ -288,22 +288,22 @@
     "semantic_hash": "dcd5977c5fe691b87e2379cd0e018a12"
   },
   "static/js/gallery-tab.js": {
-    "mtime": 1786638406.9234293,
-    "seen": 1787279199.0011997,
-    "ast_hash": "a5469191f6f41638aa43decce8ee252c",
-    "semantic_hash": "a5469191f6f41638aa43decce8ee252c"
+    "mtime": 1787368748.1550386,
+    "seen": 1787380810.328425,
+    "ast_hash": "0144bbe48e21eccc498714404e29e29e",
+    "semantic_hash": "0144bbe48e21eccc498714404e29e29e"
   },
   "static/js/generate-tab.js": {
-    "mtime": 1787292823.5900185,
-    "seen": 1787294443.293672,
-    "ast_hash": "ed5c9706c040c650fe144145b2134d9c",
-    "semantic_hash": ""
+    "mtime": 1787369336.5249329,
+    "seen": 1787380810.3284276,
+    "ast_hash": "14b3ced4743af977596001606be49000",
+    "semantic_hash": "14b3ced4743af977596001606be49000"
   },
   "static/js/i18n.js": {
-    "mtime": 1787294008.191079,
-    "seen": 1787294443.2936735,
-    "ast_hash": "3ea3452664a1edd52b37ea6e5d553ab2",
-    "semantic_hash": ""
+    "mtime": 1787377822.448605,
+    "seen": 1787380810.32843,
+    "ast_hash": "d925b681cc485326659fbc24f5a87dda",
+    "semantic_hash": "d925b681cc485326659fbc24f5a87dda"
   },
   "static/js/image-edit-tab.js": {
     "mtime": 1787199901.562169,
@@ -408,16 +408,16 @@
     "semantic_hash": "e83e7a7a507d160b9cd503235a79135c"
   },
   "static/js/lab-tab.js": {
-    "mtime": 1787292198.3701355,
-    "seen": 1787294443.2937,
-    "ast_hash": "1a2e398e2f2a47fa392f53820f61fc09",
-    "semantic_hash": ""
+    "mtime": 1787310963.3056493,
+    "seen": 1787380810.343902,
+    "ast_hash": "11a5776c4163e2a97ef490e85de7db63",
+    "semantic_hash": "11a5776c4163e2a97ef490e85de7db63"
   },
   "static/js/metadata-tab.js": {
-    "mtime": 1786929497.4063816,
-    "seen": 1787279199.0012183,
-    "ast_hash": "989f56e4b0eff94923fc73c75a6ce756",
-    "semantic_hash": "989f56e4b0eff94923fc73c75a6ce756"
+    "mtime": 1787377525.9536967,
+    "seen": 1787380810.3439052,
+    "ast_hash": "5ac004dd3708aa4dc8890256232fd99e",
+    "semantic_hash": "5ac004dd3708aa4dc8890256232fd99e"
   },
   "static/js/models-tab.js": {
     "mtime": 1787145102.2314196,
@@ -474,10 +474,10 @@
     "semantic_hash": "3467d4682a8c20a2b209b5db224ce6e2"
   },
   "static/js/prompt-tab.js": {
-    "mtime": 1786681377.2302153,
-    "seen": 1787279199.001227,
-    "ast_hash": "9c66fbb4c615e61c3b3ef1220ab20253",
-    "semantic_hash": "9c66fbb4c615e61c3b3ef1220ab20253"
+    "mtime": 1787373450.5713615,
+    "seen": 1787380810.352496,
+    "ast_hash": "6d2e3cd1bbf2e99a5298cfb502a18d9e",
+    "semantic_hash": "6d2e3cd1bbf2e99a5298cfb502a18d9e"
   },
   "static/js/settings-tab.js": {
     "mtime": 1787227602.6323576,
@@ -835,26 +835,32 @@
   },
   ".claude/hooks/on_doc_edit.py": {
     "mtime": 1787279578.9362085,
-    "seen": 1787294443.2935865,
+    "seen": 1787380810.2925577,
     "ast_hash": "1a39a0e2ffaac441e8decccad0e1c42c",
-    "semantic_hash": ""
+    "semantic_hash": "1a39a0e2ffaac441e8decccad0e1c42c"
   },
   "tools/generate_doc_index.py": {
     "mtime": 1787279532.9148839,
-    "seen": 1787294443.2937262,
+    "seen": 1787380810.3572273,
     "ast_hash": "d0cdaf32b36fdef641a9396fd4ec403f",
-    "semantic_hash": ""
+    "semantic_hash": "d0cdaf32b36fdef641a9396fd4ec403f"
   },
   ".github/workflows/publish.yml": {
     "mtime": 1778460176.5699222,
-    "seen": 1787294443.293758,
+    "seen": 1787380810.3754551,
     "ast_hash": "a83dab23e8d09fdc8626689e96dfeb0e",
-    "semantic_hash": ""
+    "semantic_hash": "a83dab23e8d09fdc8626689e96dfeb0e"
   },
   "templates/index.html": {
-    "mtime": 1787293942.802314,
-    "seen": 1787294443.2937646,
-    "ast_hash": "51b06e6f1a2e1e32cf8e65503bb26626",
-    "semantic_hash": ""
+    "mtime": 1787377487.6004047,
+    "seen": 1787380810.3754609,
+    "ast_hash": "639c4691eb3439d1707cd972bbed1402",
+    "semantic_hash": "639c4691eb3439d1707cd972bbed1402"
+  },
+  "static/js/prompt-table.js": {
+    "mtime": 1787376568.1601257,
+    "seen": 1787380810.3524997,
+    "ast_hash": "ca7fa878074a6fd12d5a478109c929d9",
+    "semantic_hash": "ca7fa878074a6fd12d5a478109c929d9"
   }
 }
