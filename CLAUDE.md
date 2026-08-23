@@ -200,6 +200,8 @@ os.environ["HF_HOME"] = "D:\\hf_cache"
 
 `pyproject.toml` のバージョン変更が GitHub Actions のトリガー（`paths: pyproject.toml`）になっており、ComfyUI Registry への自動公開もここで行われる。バージョン更新を忘れると Registry に反映されない。
 
+<!-- graphify運用は一時停止中（2026-08-23〜、ユーザー指示により凍結）。再開時はこのコメントブロックを解除すること。graphify-out/ 自体は削除しておらずそのまま残っている。
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
@@ -220,3 +222,6 @@ Rules:
   - git pre-commitフック（`.git/hooks/pre-commit`）— コミット時にstagedファイルを検知して再生成し、同じコミットに含める（他エディタでの編集にも対応）
 - 索引ファイルを手動で編集しない（次の生成で上書きされる）
 - 索引ファイル再生成後は`graphify update .`を実行してグラフに反映する
+
+-->
+

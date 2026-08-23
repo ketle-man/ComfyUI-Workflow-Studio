@@ -2376,6 +2376,35 @@ const createDraggableItem = (label, type, data, subtitle) => {
 // Toggle & exports
 // ============================================
 
+// Opens the Library panel on the Workflows (W) tab, filtered down to a single
+// workflow by filename. Used as the "Send to Canvas" fallback when window.opener
+// isn't available (or the workflow is API-format, which the title-drag mechanism
+// can't handle at all) — the user gets the actual workflow card, thumbnail
+// included, to drag onto the canvas themselves instead of a bare title element.
+export const showWorkflowInLibrary = async (filename) => {
+    const panel = createPanel();
+    state.visible = true;
+    panel.style.display = "flex";
+
+    state.topTab = "workflows";
+    panel.querySelectorAll(".wfm-nlp-top-tab").forEach(b => b.classList.toggle("active", b.dataset.toptab === "workflows"));
+    state.wfSubTab = "wf-all";
+    state.wfSubTab2 = null;
+
+    if (!state.wfLoaded) await loadWfData();
+
+    state.searchText = (filename || "").toLowerCase().trim();
+    const searchInput = panel.querySelector(".wfm-nlp-search-input");
+    if (searchInput) {
+        searchInput.value = filename || "";
+        searchInput.placeholder = "Search workflows...";
+    }
+
+    rebuildSubTabs();
+    renderContent();
+    installCanvasDropHandler();
+};
+
 export const togglePanel = async () => {
     const panel = createPanel();
     state.visible = !state.visible;

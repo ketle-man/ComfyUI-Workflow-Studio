@@ -46,7 +46,7 @@ function saveBadgePalette(palette) {
 // Open in ComfyUI / Send to Canvas
 // ============================================
 
-function sendToCanvas(workflowData) {
+function sendToCanvas(workflowData, filename) {
     try {
         // window.opener経由でComfyUIキャンバスに直接ロード（推奨）
         if (window.opener && typeof window.opener.wfmReceiveWorkflow === "function") {
@@ -54,14 +54,13 @@ function sendToCanvas(workflowData) {
             showToast(t("workflowSentToCanvasDirect"), "success");
             return;
         }
-        // フォールバック: localStorage + タイトルドラッグ（UI形式のみ）
-        const fmt = comfyWorkflow.detectFormat(workflowData);
-        if (fmt === "api") {
-            showToast(t("apiFormatCanvasNoOpener"), "error");
-            return;
-        }
-        localStorage.setItem("wfm_pending_workflow", JSON.stringify(workflowData));
-        showToast(t("workflowSentToCanvas"), "success");
+        // フォールバック: Workflow Studio LibraryのWorkflows(W)タブを当該ワークフローで
+        // 絞り込み表示する。以前はUI形式限定で「タイトルをドラッグ」させていたが、
+        // サムネイルが見えず分かりにくい上、API形式のワークフローはそもそも非対応だった。
+        // 絞り込み表示なら実物のワークフローカード（サムネイル付き）が出るので、
+        // フォーマットを問わずユーザー自身がそこからドラッグできる。
+        localStorage.setItem("wfm_library_filter_request", filename || "");
+        showToast(t("workflowFilteredInLibrary"), "success");
     } catch (err) {
         showToast(t("errorWithMsg", err.message), "error");
     }
@@ -1112,7 +1111,7 @@ function openDetailModal(wf) {
     document.getElementById("wfm-detail-open-comfyui")?.addEventListener("click", async () => {
         try {
             const wfData = await getRawWorkflow(wf.filename);
-            sendToCanvas(wfData);
+            sendToCanvas(wfData, wf.filename);
         } catch (err) {
             showToast(t("loadError") + ": " + err.message, "error");
         }
@@ -1404,7 +1403,7 @@ export function initWorkflowTab() {
         if (!state.selectedWf) return;
         try {
             const wfData = await getRawWorkflow(state.selectedWf.filename);
-            sendToCanvas(wfData);
+            sendToCanvas(wfData, state.selectedWf.filename);
         } catch (err) {
             showToast(t("loadError") + ": " + err.message, "error");
         }

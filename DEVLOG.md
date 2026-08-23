@@ -2,6 +2,37 @@
 
 ---
 
+## v0.4.7
+
+### 機能追加: Prompt Tab内部リファクタ + Gallery Promptタブ新設 + Send to Canvas改善 + Presetsソート
+
+ユーザーからの複数の要望を1セッションで順に実装した一連の作業。
+
+**1. graphifyでの掘り下げを起点にprompt-tab.jsを分割**: graphifyの知識グラフでコードベースを掘り下げた結果、`prompt-tab.js`（1545行）がPreset管理・AI Chat・Wildcard管理・Style管理の4つの独立したクラスタで構成されていることが判明。`prompt-presets.js`/`prompt-ai-chat.js`/`prompt-wildcards.js`/`prompt-styles.js`の4ファイルに分割し、`prompt-tab.js`自体は各モジュールを結線するだけの薄いオーケストレーターにした。`prompt-table.js`/`app.js`は無変更（`prompt-tab.js`からのre-export経由で既存のimportをそのまま維持）。
+
+**2. テーブルタブのWildcard入力支援ツールバー、実は配置ミス**: 「テーブルタブのワイルドカードのファイルがtxtの場合、モーダルにフォームの入力支援ボタンを表示したい」との要望を受け実装したが、直後にユーザーから「ワイルドカード構文はワイルドカードのモーダルに追加するのは誤りでプロンプトに追加するのが正しい気がします」との指摘。Form側の既存設計（構文ボタンはWildcard Composerにのみ存在し、ファイル中身のエディタには無い — ファイルの中身は単なる候補リストという前提）に照らして誤りだったと確認し、Presetsのプロンプト編集モーダルへ移設した。ワイルドカードツールバーは`prompt-wildcards.js`の`createWildcardToolbar()`として再利用可能な形に切り出し、Form側の静的ツールバーとテーブル側の動的モーダルの両方から使えるようにした。Styleモーダルには適用しない（Form側でもWildcard ComposerとStyleの連携導線は存在しないため）。
+
+**3. Style×Wildcard展開順序のバグ修正**: 「スタイルにワイルドカード構文を使用しても使用時プロンプトに挿入されるので動作しますか？」との確認依頼から調査を開始。`generate-tab.js`の`_coreGenerate`内でワイルドカード展開（`_expandWildcardsInWorkflow`）がStyle適用（`_applyStyleToWorkflow`）より*先*に実行されていたため、Style文字列内に書いた`__file__`参照が展開されないまま生テキストのままComfyUIへ送信される不具合を発見。実行順序をStyle適用→ワイルドカード展開に入れ替えて修正。実際にComfyUIで生成を実行し、`comfyUI.generate`を一時的にモンキーパッチして送信直前のペイロードを確認、Style由来の`__flower__`が`"flower, gardenia scent"`のように正しく展開されることを実証した。
+
+**4. yamlワイルドカードを使うサンプルワークフロー**: 「yamlファイルのワイルドカードを使用するワークフローを作成してもらうことはできますか」との依頼。調査の結果、このプラグイン自体のワイルドカード展開（SPA側の`_expandWildcardsInWorkflow`）は`.txt`拡張子固定でyaml非対応であり、yaml形式は`ImpactWildcardEncode`/`ImpactWildcardProcessor`ノード（Impact Pack、サーバー側処理）でのみ解決できることが判明。プラグインのwildcardディレクトリはjunction経由でImpact Packの`wildcards/`フォルダへ直結しているため、通常のWildcard File Manager経由で保存したyamlファイルがそのままImpactWildcardEncodeから参照可能。サンプルyamlワイルドカードファイル（`ws_sample_season_lighting.yaml`）とImpactWildcardEncodeノードを使うサンプルワークフロー（`ws_yaml_wildcard_sample.json`）を作成し、実際にComfyUIで生成→出力PNGのメタデータで`populated_text`が階層キー参照から正しく展開されていることを確認した。
+
+**5. Galleryタブ詳細パネルに「Prompt」タブ新設**: 「メタデータでも確認できるが頻度を考えるとマウス操作が多いため、プロンプトだけはこちらでも表示としたい。ボタンは右端でデフォルトで選択状態としたい」との要望。当初は単純な全文連結表示で実装したが、「メタデータタブの表示の様に複数プロンプトがあるケースも考慮したい」とのフィードバックを受け、Metadataタブの`extractPrompts`/`buildPromptItem`をexportし、完全に同じPOS/NEGバッジ付きリスト→クリックで全文表示のUIに作り直した。
+  - さらに実機確認の中で、同一画像でもMetadataタブとGalleryタブでpositive数が食い違うケース（`Krea2_turbo_00133_.png`、Metadataでは2件のPositiveが見える）を発見。原因は埋め込みデータの優先順位の違い — Metadataタブは`prompt`（API形式、サブグラフ展開済みでフラット）を優先するのに対し、Gallery側サーバーAPIは`workflow`（UI形式、ノード位置等を保持）を優先していた。トップレベルとサブグラフに独立した2系統のサンプリングを持つワークフローでは、UI形式のトップレベルnodes配列に一方の系統しか含まれず、`extractPromptsLiteGraph`の早期returnロジックがその系統しか拾えないため。既存のLoad GenUI/JSON表示/Copy & Send Canvas等には一切影響しないよう、`gallery_service.py`に優先順位を選べる`_extract_embedded_workflow`ヘルパーを追加し、新規`extract_prompt_workflow_from_metadata`（API形式優先）を`/wfm/gallery/image/workflow`のレスポンスへ`prompt_workflow`として追加、Galleryの Promptタブの抽出だけこちらを使うようにした。Python側の変更を反映するため、ユーザー自身の手でComfyUIを再起動していただいた。
+
+**6. Send to Canvasのフォールバック方式を刷新**: 「このワークフローを生成UIタブに読み込むと...またキャンバスへ送るでAPI形式のためタイトルをキャンバスへドラッグのメッセージが表示されますがこの動作を変更したい...UI形式のサムネイルがないパターンのワークフローも同様にしたい」との要望。`window.opener`経由の直接ロードに失敗した場合の従来のフォールバック（`localStorage`+パネルタイトルのドラッグ、API形式のワークフローはそもそも非対応でエラーのみ）を、Workflow Studio LibraryのW（Workflows）タブを該当ワークフローで絞り込み表示する方式に統一した。`node_sets_menu.js`に`showWorkflowInLibrary()`をexportし、`top_menu_extension.js`が新規localStorageキー`wfm_library_filter_request`への`storage`イベントを監視して呼び出す（同一オリジンの別タブでのみ発火する仕様を利用）。フォーマット（UI形式・API形式）を問わず同じ導線になり、サムネイル付きの実物のワークフローカードからユーザー自身がドラッグできるようになった。Galleryタブの「Copy & Send Canvas」（画像埋め込みのその場限りのワークフローが対象で、そもそもLibrary一覧＝保存済みファイルには存在しない）は今回のスコープ外として変更していない。
+
+**7. Presetsテーブルに★/Bソート機能**: 「プロンプトタブのテーブル（プリセット）で上部メニューに★とBボタンによるソート機能を追加したい」との要望。ツールバーに★（favorite）/B（Batch選択済み）のトグルボタンを追加し、該当する行を先頭にソートする機能を実装。両方同時にONにでき、★を主キー・Bを副キーとした複合ソートに対応、該当しない項目同士は安定ソートで元の相対順序を維持する。ソート有効時に行内の★/Bボタンで状態を変更すると即座に再ソートされる。
+
+**8. graphifyの運用を一時停止**: ユーザー指示によりCLAUDE.md内の「graphify」セクション全体をコメントアウトし、明示的な指示があるまでコード変更後の`graphify update`は実行しないことにした（`graphify-out/`自体は削除せず保持、再開時にコメントを解除するだけで元に戻せる）。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、Prompt Tab（Table Viewカードに★/Bソートボタンの新規項目）を更新。README.mdはGenerateUI Tab（Style×Wildcard展開順序修正）、Prompt Tab（Presetsモーダルのワイルドカードツールバー、★/Bソート）、Gallery Tab（新規Promptタブ）、Workflow Studio Library（Send to CanvasのWタブフィルタ方式）を更新。
+
+**検証**: 全JS/Pythonファイルを`node --check`/`ast.parse()`で構文確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイルを都度両フォルダへ同期。Playwright MCP経由で実機ブラウザ操作を機能追加・修正ごとに実施: (1) prompt-tab.js分割後のPreset/AI Chat/Wildcard/Styleパネル全機能の回帰確認、(2) Wildcardツールバー移設前後でのモーダル表示・非表示の確認、(3) Style×Wildcard展開の実生成確認、(4) yamlサンプルワークフローの実生成とメタデータ確認、(5) Gallery Promptタブの複数プロンプト表示とprompt_workflow切替の確認、(6) Send to Canvasの別タブ間storage連携の実機確認、(7) Presetsテーブルの★/Bソート・複合ソート・安定ソートの確認。テスト用に作成したデータ（一時Style、yamlワイルドカードファイル等）はテストワークフロー用途のものを除き削除・復元済み。
+
+**How to apply**: 開発時は `graphify query "<question>"` を使わず通常の Grep/Read/Explore で調査する（graphify運用停止中、明示的な再開指示があるまで）。ワイルドカード構文（`{|}`, `__|__`, `<lora>`等）は「プロンプトを書く場所」に対する入力支援であり、「ファイルの中身を編集する場所」には付けない、という区別を今後の入力支援UI追加でも踏襲する。ワークフローの実行順序に依存するバグ（Style適用とワイルドカード展開の順序等）は、実際にComfyUIへ送信される直前のペイロードをモンキーパッチや`/history`のPNGメタデータで確認するのが最も確実な検証方法。
+
+---
+
 ## v0.4.6
 
 ### 機能追加: MetadataタブをGalleryタブへ統合 + Promptタブに一覧編集可能なTable表示を新設

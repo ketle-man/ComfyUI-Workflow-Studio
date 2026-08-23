@@ -93,6 +93,7 @@ const LANGUAGES = {
         copyAndSendCanvas: "Copy & Send Canvas",
         workflowSentToCanvas: "Workflow ready — drag 'Workflow Studio Library' title to canvas",
         workflowSentToCanvasDirect: "Workflow sent to canvas",
+        workflowFilteredInLibrary: "Filtered in Workflow Studio Library (W tab) — drag the card onto the canvas",
         comfyUILoadTimeout: "ComfyUI load timeout",
         popupBlocked: "Popup blocked. Please allow popups for this site.",
         setAsDefault: "Set as Default",
@@ -552,6 +553,7 @@ const LANGUAGES = {
         modelsSideGroup: "Group",
         modelsSideCivitai: "CivitAI",
         gallerySideMetadata: "Metadata",
+        gallerySidePrompt: "Prompt",
 
         // -- Gallery --
         galleryAllTags: "All Tags",
@@ -875,6 +877,7 @@ const LANGUAGES = {
         helpPrompt22: "Presets Group table — create, rename, and delete groups; each group's members are shown as removable badges (✕). The reserved Batch group is not listed here — it's managed entirely through the Presets table's B column and BC button instead",
         helpPrompt23: "Wildcards table — same files as the Form tab's Wildcard file manager; editing the File path or the Ext dropdown renames the file (saves the content under the new name, then removes the old file)",
         helpPrompt24: "Style table — same styles as the Form tab's Style manager, editable inline the same way as Presets",
+        helpPrompt25: "Presets table toolbar — the ★ and B sort buttons (next to the search box) bring favorited / batch-selected presets to the top of the list; both can be enabled together (★ takes priority, B breaks ties), and everything else keeps its original relative order",
         helpSettings1: "UI language and summary language",
         helpSettings2: "Theme selection (13 presets) with customization: color overrides, background patterns (stripes, polka dot, checkerboard, SVG tiling), and font selection (16 Google Fonts including Japanese display fonts)",
         helpSettings3: "Workflow data folder path",
@@ -1376,6 +1379,7 @@ const LANGUAGES = {
         copyAndSendCanvas: "コピー＆キャンバスへ送る",
         workflowSentToCanvas: "ワークフロー準備完了 — タイトルをキャンバスへドラッグ",
         workflowSentToCanvasDirect: "ワークフローをキャンバスへ送信しました",
+        workflowFilteredInLibrary: "Workflow Studio Library（Wタブ）で絞り込みました — カードをキャンバスへドラッグしてください",
         comfyUILoadTimeout: "ComfyUIの読み込みがタイムアウトしました",
         popupBlocked: "ポップアップがブロックされました。このサイトのポップアップを許可してください。",
         setAsDefault: "デフォルトに設定",
@@ -1835,6 +1839,7 @@ const LANGUAGES = {
         modelsSideGroup: "グループ",
         modelsSideCivitai: "CivitAI",
         gallerySideMetadata: "メタデータ",
+        gallerySidePrompt: "プロンプト",
 
         // -- Gallery --
         galleryAllTags: "すべてのタグ",
@@ -2158,6 +2163,7 @@ const LANGUAGES = {
         helpPrompt22: "Presets Groupテーブル — グループの作成・リネーム・削除。各グループのメンバーは削除可能なバッジ（✕）として表示されます。予約グループのBatchはここには表示されません — PresetsテーブルのB列とBCボタンで専用管理されます",
         helpPrompt23: "Wildcardsテーブル — Formタブのワイルドカードファイルマネージャーと同じファイル一覧です。File列のパスやExtドロップダウンを編集するとファイル名が変更されます（新しい名前で内容を保存してから、古いファイルを削除します）",
         helpPrompt24: "Styleテーブル — Formタブのスタイル管理と同じスタイル一覧で、Presetsと同様にインライン編集できます",
+        helpPrompt25: "Presetsテーブルのツールバー — 検索ボックス横の★とBソートボタンで、お気に入り／Batch登録済みのプリセットを一覧の先頭に並べ替えます。両方同時にONにでき、その場合は★が優先、Bが次点の基準になり、それ以外は元の相対順序を維持します",
         helpSettings1: "UI言語と要約言語の設定",
         helpSettings2: "テーマ選択（13種プリセット）＋カスタマイズ：カラー調整、背景パターン（ストライプ、ポルカドット、チェック、SVGタイリング）、フォント選択（日本語デザインフォント含む16種のGoogle Fonts）",
         helpSettings3: "ワークフローデータフォルダのパス変更・リセット",
@@ -2657,6 +2663,7 @@ const LANGUAGES = {
         copyAndSendCanvas: "复制并发送到画布",
         workflowSentToCanvas: "工作流已就绪 — 将标题拖拽到画布",
         workflowSentToCanvasDirect: "工作流已发送到画布",
+        workflowFilteredInLibrary: "已在Workflow Studio Library（W标签）中筛选 — 请将卡片拖拽到画布",
         comfyUILoadTimeout: "ComfyUI加载超时",
         popupBlocked: "弹窗被阻止。请允许此站点的弹窗。",
         setAsDefault: "设为默认",
@@ -3116,6 +3123,7 @@ const LANGUAGES = {
         modelsSideGroup: "分组",
         modelsSideCivitai: "CivitAI",
         gallerySideMetadata: "元数据",
+        gallerySidePrompt: "提示词",
 
         // -- Gallery --
         galleryAllTags: "所有标签",
@@ -3439,6 +3447,7 @@ const LANGUAGES = {
         helpPrompt22: "Presets Group表格 — 创建、重命名、删除分组；每个分组的成员以可删除的徽章（✕）形式显示。保留分组Batch不会显示在这里 — 它完全通过Presets表格的B列和BC按钮进行管理",
         helpPrompt23: "Wildcards表格 — 与Form标签的通配符文件管理器使用相同的文件列表；编辑File列的路径或Ext下拉框会重命名文件（先以新名称保存内容，再删除旧文件）",
         helpPrompt24: "Style表格 — 与Form标签的Style管理器使用相同的Style列表，可像Presets一样进行内联编辑",
+        helpPrompt25: "Presets表格工具栏 — 搜索框旁边的★和B排序按钮，可将收藏／已加入Batch的预设排到列表顶部；两者可同时启用（★优先，B为次要条件），其余项保持原有的相对顺序",
         helpSettings1: "UI语言和摘要语言设置",
         helpSettings2: "主题选择（13种预设）+ 自定义：颜色调整、背景图案（条纹、波点、棋盘格、SVG平铺）、字体选择（含日文显示字体在内的16种Google Fonts）",
         helpSettings3: "工作流数据文件夹路径更改/重置",

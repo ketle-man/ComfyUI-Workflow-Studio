@@ -682,9 +682,15 @@ class GalleryService:
             logger.debug("JPEG metadata read error: %s", e)
         return result
 
-    def extract_workflow_from_metadata(self, image_path: str) -> dict | None:
-        """ワークフローを抽出する。
-        優先順位: PNG[workflow] > PNG[prompt] > gallery_metadata.json[workflow]
+    def _extract_embedded_workflow(self, image_path: str, prefer: str = "workflow") -> dict | None:
+        """埋め込みワークフローを抽出する（PNG[workflow]/PNG[prompt]の優先順位を選べる）。
+
+        prefer="workflow": UI形式(ノード位置・グループ等を保持)優先。GenerateUIへの
+        ロードやJSON表示などエディタ復元が必要な用途向け。
+        prefer="prompt": API形式(サブグラフ展開済みでフラット)優先。トップレベルと
+        サブグラフに独立した複数系統を持つワークフロー(例: Krea2)ではUI形式の
+        extractPromptsLiteGraphがトップレベル系統しか拾えないことがあるため、
+        プロンプト抽出専用にAPI形式を優先する（Metadataタブのプロンプト抽出と同じ優先順位）。
         """
         path = Path(image_path).resolve()
         if not self._check_path_allowed(path):
@@ -692,26 +698,31 @@ class GalleryService:
 
         if path.suffix.lower() == ".png":
             embedded = self._read_png_metadata(path)
-            # 1. workflow キー (ComfyUI UI形式)
-            for key in ("workflow", "Workflow"):
-                s = embedded.get(key)
-                if s:
-                    try:
-                        return json.loads(s)
-                    except json.JSONDecodeError:
-                        pass
-            # 2. prompt キー (ComfyUI API形式 — 大多数の生成画像)
-            for key in ("prompt", "Prompt"):
-                s = embedded.get(key)
-                if s:
-                    try:
-                        return json.loads(s)
-                    except json.JSONDecodeError:
-                        pass
+            key_groups = (("workflow", "Workflow"), ("prompt", "Prompt"))
+            if prefer == "prompt":
+                key_groups = tuple(reversed(key_groups))
+            for keys in key_groups:
+                for key in keys:
+                    s = embedded.get(key)
+                    if s:
+                        try:
+                            return json.loads(s)
+                        except json.JSONDecodeError:
+                            pass
 
-        # 3. gallery_metadata.json に保存されたworkflow
+        # gallery_metadata.json に保存されたworkflow
         saved = self.metadata_store.get(str(path))
         return saved.get("workflow") or None
+
+    def extract_workflow_from_metadata(self, image_path: str) -> dict | None:
+        """ワークフローを抽出する。
+        優先順位: PNG[workflow] > PNG[prompt] > gallery_metadata.json[workflow]
+        """
+        return self._extract_embedded_workflow(image_path, prefer="workflow")
+
+    def extract_prompt_workflow_from_metadata(self, image_path: str) -> dict | None:
+        """プロンプト抽出専用: PNG[prompt] > PNG[workflow] > gallery_metadata.json[workflow]"""
+        return self._extract_embedded_workflow(image_path, prefer="prompt")
 
     # ──────────────────────────────────────────────────────────────
     # メタデータ保存

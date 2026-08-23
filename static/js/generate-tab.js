@@ -1458,9 +1458,12 @@ async function _coreGenerate(silent = false, workflowOverride = null, genOptions
     if (progressBar) progressBar.style.width = "0%";
     if (progressText) progressText.textContent = "Starting...";
 
+    // Style must be applied *before* wildcard expansion so a __name__ reference written
+    // inside a Style's prompt/negative_prompt also gets expanded, not just wildcards
+    // already present in the base workflow's prompt nodes.
     const baseWorkflow = workflowOverride || comfyUI.currentWorkflow;
-    const workflowExpanded = await _expandWildcardsInWorkflow({ ...baseWorkflow });
-    const workflowForGenerate = _applyStyleToWorkflow(workflowExpanded);
+    const workflowStyled = _applyStyleToWorkflow({ ...baseWorkflow });
+    const workflowForGenerate = await _expandWildcardsInWorkflow(workflowStyled);
     const { images, seed, svgOutputs } = await comfyUI.generate(
         workflowForGenerate,
         {

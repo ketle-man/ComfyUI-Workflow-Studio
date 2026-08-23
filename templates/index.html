@@ -1178,6 +1178,8 @@
                             <input type="text" id="wfm-ptable-presets-search" class="wfm-search-input" placeholder="Search presets...">
                             <button class="wfm-search-clear-btn" id="wfm-ptable-presets-search-clear-btn" title="Clear search">✕</button>
                         </div>
+                        <button id="wfm-ptable-presets-sort-fav-btn" class="wfm-btn wfm-btn-sm" title="Sort favorites to top">★</button>
+                        <button id="wfm-ptable-presets-sort-batch-btn" class="wfm-btn wfm-btn-sm" title="Sort batch-selected to top">B</button>
                         <span id="wfm-ptable-presets-count" class="wfm-nodes-count"></span>
                         <span style="flex:1;"></span>
                         <button id="wfm-ptable-presets-copy-pos-btn" class="wfm-btn wfm-btn-sm" title="Copy selected preset's positive prompt">PP Copy</button>
@@ -1597,6 +1599,7 @@
                                 <li id="wfm-help-prompt-22">Presets Group table — create, rename, and delete groups; each group's members are shown as removable badges (&#10005;). The reserved <b>Batch</b> group is not listed here — it's managed entirely through the Presets table's B column and BC button instead</li>
                                 <li id="wfm-help-prompt-23">Wildcards table — same files as the Form tab's Wildcard file manager; editing the <b>File</b> path or the <b>Ext</b> dropdown renames the file (saves the content under the new name, then removes the old file)</li>
                                 <li id="wfm-help-prompt-24">Style table — same styles as the Form tab's Style manager, editable inline the same way as Presets</li>
+                                <li id="wfm-help-prompt-25">Presets table toolbar — the ★ and B sort buttons (next to the search box) bring favorited / batch-selected presets to the top of the list; both can be enabled together (★ takes priority, B breaks ties), and everything else keeps its original relative order</li>
                             </ul>
                         </div>
                     </div>
@@ -2266,9 +2269,10 @@
                     </div>
                     <!-- タブナビ -->
                     <div class="wfm-side-tab-nav">
-                        <button class="wfm-gallery-detail-tab-btn active" data-detail-tab="info">Info</button>
+                        <button class="wfm-gallery-detail-tab-btn" data-detail-tab="info">Info</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="meta">JSON</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="group">Groups</button>
+                        <button class="wfm-gallery-detail-tab-btn active" data-detail-tab="prompt">Prompt</button>
                     </div>
                     <div class="wfm-gallery-detail-action-row">
                         <button id="wfm-gallery-open-metadata-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-green" title="Open in Metadata tab (or Alt+click image)">Metadata</button>
@@ -2276,7 +2280,7 @@
                         <button id="wfm-gallery-open-tagger-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-tagger" title="Open in Tagger"></button>
                     </div>
                     <!-- Info タブ -->
-                    <div id="wfm-gallery-detail-info" class="wfm-gallery-detail-tab-content active">
+                    <div id="wfm-gallery-detail-info" class="wfm-gallery-detail-tab-content" style="display:none;">
                         <div class="wfm-gallery-info-section">
                             <div class="wfm-gallery-info-row" id="wfm-gallery-info-name"></div>
                             <div class="wfm-gallery-info-row" id="wfm-gallery-info-size"></div>
@@ -2324,6 +2328,21 @@
                     <!-- Group タブ -->
                     <div id="wfm-gallery-detail-group" class="wfm-gallery-detail-tab-content" style="display:none;overflow-y:auto;">
                         <!-- JS動的生成: renderDetailGroup() -->
+                    </div>
+
+                    <!-- Prompt タブ（埋め込みワークフローから抽出したpositive/negative。Metadataタブより
+                         手数少なく確認できるよう、頻度の高いプロンプト確認用に既定選択タブとしている。
+                         複数プロンプト候補がある場合に備え、Metadataタブと同じPOS/NEGリスト
+                         → クリックで全文表示のUIをそのまま再利用している（見た目・挙動を統一）。 -->
+                    <div id="wfm-gallery-detail-prompt" class="wfm-gallery-detail-tab-content">
+                        <div class="wfm-meta-section wfm-meta-prompt-section" id="wfm-gallery-prompt-section">
+                            <div class="wfm-meta-section-title">Prompt</div>
+                            <div class="wfm-meta-list" id="wfm-gallery-prompt-list"></div>
+                            <div class="wfm-meta-prompt-full-wrap">
+                                <div class="wfm-meta-prompt-full-label" id="wfm-gallery-prompt-full-label"></div>
+                                <textarea class="wfm-meta-prompt-full" id="wfm-gallery-prompt-full" readonly placeholder="Select a prompt above to view full text..."></textarea>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

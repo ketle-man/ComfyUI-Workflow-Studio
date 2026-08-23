@@ -216,6 +216,7 @@ function applyI18nToHtml() {
         if (btn.dataset.detailTab === "info") btn.textContent = t("modelsSideInfo");
         if (btn.dataset.detailTab === "meta") btn.textContent = t("gallerySideMetadata");
         if (btn.dataset.detailTab === "group") btn.textContent = t("modelsSideGroup");
+        if (btn.dataset.detailTab === "prompt") btn.textContent = t("gallerySidePrompt");
     });
     const galleryBulkDeselect = document.getElementById("wfm-gallery-bulk-deselect");
     if (galleryBulkDeselect) galleryBulkDeselect.textContent = t("galleryBulkDeselectAll");
@@ -532,7 +533,7 @@ function applyI18nToHtml() {
         "wfm-help-prompt-18": "helpPrompt18", "wfm-help-prompt-19": "helpPrompt19",
         "wfm-help-prompt-20": "helpPrompt20", "wfm-help-prompt-21": "helpPrompt21",
         "wfm-help-prompt-22": "helpPrompt22", "wfm-help-prompt-23": "helpPrompt23",
-        "wfm-help-prompt-24": "helpPrompt24",
+        "wfm-help-prompt-24": "helpPrompt24", "wfm-help-prompt-25": "helpPrompt25",
         "wfm-help-settings-1": "helpSettings1", "wfm-help-settings-2": "helpSettings2",
         "wfm-help-settings-3": "helpSettings3", "wfm-help-settings-4": "helpSettings4",
         "wfm-help-settings-5": "helpSettings5", "wfm-help-settings-6": "helpSettings6",

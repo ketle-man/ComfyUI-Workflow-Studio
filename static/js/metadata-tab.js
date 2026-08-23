@@ -203,7 +203,7 @@ function resolveEditPlusText(mode, textEdit, text1, text2) {
     }
 }
 
-function extractPrompts(wf) {
+export function extractPrompts(wf) {
     if (!wf || typeof wf !== "object") return { positives: [], negatives: [] };
     return Array.isArray(wf.nodes) ? extractPromptsLiteGraph(wf) : extractPromptsAPI(wf);
 }
@@ -693,7 +693,7 @@ function buildLoRAItem(lora) {
     return el;
 }
 
-function buildPromptItem(label, type, full, fullArea, fullLabel, listEl) {
+export function buildPromptItem(label, type, full, fullArea, fullLabel, listEl) {
     const el = document.createElement("div");
     el.className = "wfm-meta-item wfm-meta-item-clickable";
     const snippet = label.length > 60 ? label.slice(0, 60) + "…" : label;

@@ -163,9 +163,15 @@ async def get_image_workflow(request: web.Request) -> web.Response:
         return web.json_response({"error": "path required"}, status=400)
     try:
         wf = _service.extract_workflow_from_metadata(path)
-        if wf is None:
-            return web.json_response({"workflow": None, "has_workflow": False})
-        return web.json_response({"workflow": wf, "has_workflow": True})
+        # prompt_workflow: プロンプト抽出専用（PNG[prompt]優先）。トップレベルとサブグラフに
+        # 独立した複数系統を持つワークフローではUI形式(workflow)からの抽出がトップレベル
+        # 系統しか拾えないことがあるため、Promptタブはこちらを使う(Metadataタブと揃える)。
+        prompt_wf = _service.extract_prompt_workflow_from_metadata(path)
+        return web.json_response({
+            "workflow": wf,
+            "has_workflow": wf is not None,
+            "prompt_workflow": prompt_wf,
+        })
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 

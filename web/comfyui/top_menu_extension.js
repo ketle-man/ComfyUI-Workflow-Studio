@@ -1,5 +1,5 @@
 import { app } from "../../scripts/app.js";
-import { togglePanel, getNodeSetsIcon, NODE_SETS_TOOLTIP, saveSelectedAsNodeSet } from "./node_sets_menu.js";
+import { togglePanel, getNodeSetsIcon, NODE_SETS_TOOLTIP, saveSelectedAsNodeSet, showWorkflowInLibrary } from "./node_sets_menu.js";
 
 const BUTTON_TOOLTIP = "Launch Workflow Studio (Shift+Click opens in new window)";
 const SNAPSHOT_TOOLTIP = "Save workflow canvas image as thumbnail";
@@ -572,6 +572,23 @@ app.registerExtension({
         };
     },
     async setup() {
+        // Send to Canvas fallback: when the Workflow Studio SPA can't reach this page
+        // directly via window.opener (e.g. it isn't the opener that spawned it, or
+        // the workflow is API-format and window.opener.wfmReceiveWorkflow can't
+        // handle it either), the SPA writes the workflow's filename here instead of
+        // the old title-drag mechanism. localStorage "storage" events fire in every
+        // same-origin tab except the one that wrote the value, so this listener
+        // picks it up here and opens the Library panel pre-filtered to that
+        // workflow's card for the user to drag onto the canvas themselves.
+        window.addEventListener("storage", (e) => {
+            if (e.key === "wfm_library_filter_request" && e.newValue != null) {
+                showWorkflowInLibrary(e.newValue);
+                // Consume it so a future page load (which reads the stale value but
+                // never sees a "storage" event for it) doesn't re-trigger the filter.
+                localStorage.removeItem("wfm_library_filter_request");
+            }
+        });
+
         const injectStyles = () => {
             const styleId = "wfm-top-menu-button-styles";
             if (document.getElementById(styleId)) return;

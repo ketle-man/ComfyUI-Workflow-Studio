@@ -5,7 +5,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { loadFileIntoMetadataTab } from "./metadata-tab.js";
+import { loadFileIntoMetadataTab, extractPrompts, buildPromptItem } from "./metadata-tab.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
 import { escapeHtml, setupSearchClearBtn, getAiBackendDefaultUrl } from "./util.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
@@ -914,10 +914,15 @@ async function loadImageDetail(img) {
         renderWorkflowJson(state.embeddedWorkflow);
         _updateCopyCanvasBtn();
         renderImagePromptSection(metaRes.image_prompt);
+        // Promptタブは prompt_workflow (API形式優先) を使う。トップレベルとサブグラフに
+        // 独立した複数系統を持つワークフローでは workflow (UI形式) からの抽出だと
+        // トップレベル系統しか拾えないことがあるため（Metadataタブと同じ優先順位に揃える）。
+        renderPromptTab(wfRes.prompt_workflow ?? state.embeddedWorkflow);
     } catch (e) {
         renderWorkflowJson(null);
         _updateCopyCanvasBtn();
         renderImagePromptSection(null);
+        renderPromptTab(null);
     }
 
     // グループタブ更新
@@ -962,6 +967,44 @@ function renderWorkflowJson(workflow) {
         if (statusEl) statusEl.textContent = "No workflow";
         if (copyBtn) copyBtn.disabled = true;
     }
+}
+
+// 埋め込みワークフローからpositive/negativeプロンプトを抽出してPromptタブに表示する。
+// 複数候補があるケース(PromptStyler等で正負が複数生成される場合)に対応するため、
+// Metadataタブと同じ POS/NEGリスト → クリックで全文表示のUI(buildPromptItem)をそのまま
+// 再利用する。選択画像を切り替えるたびにマウス操作無しで読めるよう、先頭項目を自動選択する。
+function renderPromptTab(workflow) {
+    const listEl = document.getElementById("wfm-gallery-prompt-list");
+    const fullArea = document.getElementById("wfm-gallery-prompt-full");
+    const fullLabel = document.getElementById("wfm-gallery-prompt-full-label");
+    if (!listEl || !fullArea || !fullLabel) return;
+
+    listEl.innerHTML = "";
+    fullArea.value = "";
+    fullLabel.textContent = "";
+
+    if (!workflow) {
+        listEl.innerHTML = `<div class="wfm-meta-item" style="opacity:0.6;">No workflow embedded in this image.</div>`;
+        return;
+    }
+
+    const { positives, negatives, texts } = extractPrompts(workflow);
+    const allPrompts = [
+        ...positives.map(p => ({ type: "positive", text: p })),
+        ...negatives.map(p => ({ type: "negative", text: p })),
+        ...(texts ?? []).map(p => ({ type: "text", text: p })),
+    ];
+
+    if (allPrompts.length === 0) {
+        listEl.innerHTML = `<div class="wfm-meta-item" style="opacity:0.6;">No prompt found.</div>`;
+        return;
+    }
+
+    for (const { type, text } of allPrompts) {
+        listEl.appendChild(buildPromptItem(text, type, text, fullArea, fullLabel, listEl));
+    }
+    // Auto-select first item (positive prompts come first in allPrompts)
+    listEl.querySelector(".wfm-meta-item-clickable")?.click();
 }
 
 // ── タグ操作 ─────────────────────────────────────────────────

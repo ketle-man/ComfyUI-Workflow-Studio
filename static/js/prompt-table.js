@@ -20,6 +20,7 @@ import {
     pmGroups, saveGroups, PROMPT_RESERVED_GROUPS, renderPresetManager,
     isInBatchPreset, toggleBatchPreset, clearBatchPresets,
 } from "./prompt-tab.js";
+import { createWildcardToolbar } from "./prompt-wildcards.js";
 
 function flashCell(el) {
     if (!el) return;
@@ -61,8 +62,13 @@ function buildNumCell(tr, { isNew, index, selected, onToggle, onDblClick }) {
 // Shared Positive/Negative prompt-editor modal for Presets & Style (both have the two
 // fields). onSave receives the (possibly edited) positive/negative text and is
 // responsible for persisting them and closing the modal on success.
-function openPositiveNegativeModal(title, initialPos, initialNeg, onSave) {
+// wildcardToolbar: true adds the { } | __ : ; $$ [ ] <lora> n${ } 📂File input-assist toolbar
+// above the textarea. Only passed for Preset prompts (openPresetPromptModal) — that's the
+// only place the Form tab's Wildcard Composer feeds into via its "→ Pos / → Neg" buttons;
+// Style prompts have no such wildcard connection, so they don't get the toolbar.
+function openPositiveNegativeModal(title, initialPos, initialNeg, onSave, { wildcardToolbar = false } = {}) {
     const html = `
+        ${wildcardToolbar ? '<div id="wfm-ptable-modal-wc-toolbar"></div>' : ""}
         <div class="wfm-prompt-modal-toggle">
             <button id="wfm-ptable-modal-pos-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">Positive</button>
             <button id="wfm-ptable-modal-neg-btn" class="wfm-btn wfm-btn-sm">Negative</button>
@@ -80,6 +86,10 @@ function openPositiveNegativeModal(title, initialPos, initialNeg, onSave) {
     const ta = document.getElementById("wfm-ptable-modal-textarea");
     const saveBtn = document.getElementById("wfm-ptable-modal-save-btn");
     const closeBtn = document.getElementById("wfm-ptable-modal-close-btn");
+
+    if (wildcardToolbar) {
+        document.getElementById("wfm-ptable-modal-wc-toolbar")?.appendChild(createWildcardToolbar(ta));
+    }
 
     let active = "pos";
     let posText = initialPos || "";
@@ -130,6 +140,10 @@ let tablePresets = [];
 let presetsSearch = "";
 let pendingNewPreset = false;
 const selectedPresetIds = new Set();
+// Toolbar ★/B sort toggles: bring favorites and/or batch-selected presets to the top.
+// Both can be active at once — ★ acts as the primary key, B as the secondary key.
+let presetsSortFav = false;
+let presetsSortBatch = false;
 
 function presetMatchesSearch(p) {
     if (!presetsSearch) return true;
@@ -137,6 +151,23 @@ function presetMatchesSearch(p) {
     return (p.name || "").toLowerCase().includes(s) ||
            (p.text || "").toLowerCase().includes(s) ||
            (p.category || "").toLowerCase().includes(s);
+}
+
+// Stable sort (Array.prototype.sort is stable per spec) so presets with equal
+// ★/B status keep their original relative order instead of jumping around.
+function sortPresetsForDisplay(items) {
+    if (!presetsSortFav && !presetsSortBatch) return items;
+    return [...items].sort((a, b) => {
+        if (presetsSortFav) {
+            const diff = (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+            if (diff !== 0) return diff;
+        }
+        if (presetsSortBatch) {
+            const diff = (isInBatchPreset(b.id) ? 1 : 0) - (isInBatchPreset(a.id) ? 1 : 0);
+            if (diff !== 0) return diff;
+        }
+        return 0;
+    });
 }
 
 function updatePresetsDeleteBtn() {
@@ -183,7 +214,7 @@ function renderPresetsTable() {
 
     if (pendingNewPreset) tbody.appendChild(buildPresetRow(null, -1));
 
-    const items = tablePresets.filter(presetMatchesSearch);
+    const items = sortPresetsForDisplay(tablePresets.filter(presetMatchesSearch));
     items.forEach((p, i) => tbody.appendChild(buildPresetRow(p, i + 1)));
 
     const countEl = document.getElementById("wfm-ptable-presets-count");
@@ -242,6 +273,8 @@ function buildPresetRow(preset, index) {
                 Object.assign(preset, updated);
                 favBtn.classList.toggle("active", !!preset.favorite);
                 loadAllPresets();
+                // ★ソート中は状態変化で順位が動くため、部分更新に加えて再描画で追従する
+                if (presetsSortFav) renderPresetsTable();
             }
         });
         tdFav.appendChild(favBtn);
@@ -293,6 +326,8 @@ function buildPresetRow(preset, index) {
         batchBtn.addEventListener("click", () => {
             toggleBatchPreset(preset.id);
             batchBtn.classList.toggle("active", isInBatchPreset(preset.id));
+            // Bソート中は状態変化で順位が動くため、部分更新に加えて再描画で追従する
+            if (presetsSortBatch) renderPresetsTable();
         });
         tdBatch.appendChild(batchBtn);
     }
@@ -385,7 +420,7 @@ function openPresetPromptModal(preset) {
         } else {
             showToast(t("saveFailed"), "error");
         }
-    });
+    }, { wildcardToolbar: true });
 }
 
 // ============================================
@@ -979,6 +1014,16 @@ export function initPromptTableTab() {
     });
     document.getElementById("wfm-ptable-presets-search")?.addEventListener("input", (e) => {
         presetsSearch = e.target.value.trim();
+        renderPresetsTable();
+    });
+    document.getElementById("wfm-ptable-presets-sort-fav-btn")?.addEventListener("click", (e) => {
+        presetsSortFav = !presetsSortFav;
+        e.currentTarget.classList.toggle("wfm-btn-primary", presetsSortFav);
+        renderPresetsTable();
+    });
+    document.getElementById("wfm-ptable-presets-sort-batch-btn")?.addEventListener("click", (e) => {
+        presetsSortBatch = !presetsSortBatch;
+        e.currentTarget.classList.toggle("wfm-btn-primary", presetsSortBatch);
         renderPresetsTable();
     });
 
