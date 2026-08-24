@@ -567,6 +567,8 @@
                                                     </div>
                                                 </div>
                                                 <div class="wfm-lab-col-btns">
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-up" data-col="model" title="Move selected keyframe up">▲</button>
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-down" data-col="model" title="Move selected keyframe down">▼</button>
                                                     <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-add" data-col="model" title="Add keyframe">＋</button>
                                                     <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-remove" data-col="model" title="Remove last keyframe">－</button>
                                                 </div>
@@ -577,6 +579,9 @@
                                             <div class="wfm-lab-col-header">
                                                 <span>プロンプト</span>
                                                 <div class="wfm-lab-col-btns">
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-up" data-col="prompt" title="Move selected keyframe up">▲</button>
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-down" data-col="prompt" title="Move selected keyframe down">▼</button>
+                                                    <button type="button" id="wfm-lab-prompt-group-btn" class="wfm-btn wfm-btn-xs" title="Apply Prompt Group">PG</button>
                                                     <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-add" data-col="prompt" title="Add keyframe">＋</button>
                                                     <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-remove" data-col="prompt" title="Remove last keyframe">－</button>
                                                 </div>
@@ -587,6 +592,8 @@
                                             <div class="wfm-lab-col-header">
                                                 <span>Ksampler</span>
                                                 <div class="wfm-lab-col-btns">
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-up" data-col="ksampler" title="Move selected keyframe up">▲</button>
+                                                    <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-down" data-col="ksampler" title="Move selected keyframe down">▼</button>
                                                     <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-add" data-col="ksampler" title="Add keyframe">＋</button>
                                                     <button type="button" class="wfm-btn wfm-btn-xs wfm-lab-col-remove" data-col="ksampler" title="Remove last keyframe">－</button>
                                                 </div>
@@ -1277,6 +1284,7 @@
                         <span style="flex:1;"></span>
                         <button id="wfm-ptable-style-deselect-btn" class="wfm-btn wfm-btn-sm" disabled title="Clear row selection">Deselect</button>
                         <button id="wfm-ptable-style-delete-btn" class="wfm-btn wfm-btn-sm wfm-btn-danger" disabled>Delete</button>
+                        <button id="wfm-ptable-style-addfile-btn" class="wfm-btn wfm-btn-sm" disabled title="Select a style whose file is not custom.json to add a new style to that same file">+ Add to this file</button>
                         <button id="wfm-ptable-style-add-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary">+ New Style</button>
                     </div>
                     <div class="wfm-prompt-table-scroll">
@@ -1512,6 +1520,8 @@
                                 <li id="wfm-help-lab-15">Checkpoint / LoRA / VAE each carry forward independently, the same effective-value rule as every other column (see above): a keyframe in one never resets the other two to the workflow default. A field left blank in the edit modal shows "(inherits: ...)" as its placeholder instead of "(workflow default)" when an earlier keyframe in that same list already set something, so it's clear what actually applies. "Revert to #1's setting" and Bypass — like +/- — only ever affect whichever ONE of the three is currently selected by the C/L/V toggle, never the other two</li>
                                 <li id="wfm-help-lab-16">Bypass LoRA node checkbox (LoRA keyframe's own edit modal only): forces that keyframe's strength_model/strength_clip to 0 at apply-time, standing in for ComfyUI's own node Bypass (mode:4) — the workflow used here is already converted to API format, which has no mode concept, so zeroing strength is the behavioral equivalent. Disables the strength fields while checked; independent of the row-level Bypass checkbox above, which skips the whole row instead of touching the node</li>
                                 <li id="wfm-help-lab-17">Apply LoRA syntax + trigger words to Positive prompt checkbox (LoRA column only): when checked, appends &lt;lora:name:strengthModel:strengthClip&gt; plus that LoRA's cached CivitAI trigger words to the Positive prompt, comma-separated, at apply-time — the same format GenerateUI's own Model tab Apply button writes. Switching keyframes (a different LoRA, this checkbox turned off, or the row Bypassed) always strips exactly what the previous iteration injected before adding anything new, so a batch never accumulates every LoRA it has used. Disabled automatically while Bypass LoRA node is checked</li>
+                                <li id="wfm-help-lab-18">A single click on a keyframe cell selects it (blue outline) instead of opening it — double-click to open the edit modal as before. Each column's header (Model / Prompt / Ksampler) also has <b>&#9650; / &#9660;</b> buttons that swap the selected keyframe with its immediate neighbor to reorder them without retyping anything; keyframe #1 (the baseline) can never move, and nothing can be swapped into its slot</li>
+                                <li id="wfm-help-lab-19">Prompt column header's <b>PG</b> button: pick one of the Prompt tab's preset groups (Table view's Presets Group, the same groups used by the Batch tab's checklist) and replace the entire Prompt column with one keyframe per preset in that group's order, starting at #1 (#1 is overwritten, not appended after). If the group has more presets than the current Batch count, Batch count is raised automatically to fit (capped at 50, the Batch input's own limit); anything still beyond that shows the usual "keyframes beyond Batch count" warning instead of being silently dropped</li>
                             </ul>
                         </div>
 
@@ -1600,6 +1610,7 @@
                                 <li id="wfm-help-prompt-23">Wildcards table — same files as the Form tab's Wildcard file manager; editing the <b>File</b> path or the <b>Ext</b> dropdown renames the file (saves the content under the new name, then removes the old file)</li>
                                 <li id="wfm-help-prompt-24">Style table — same styles as the Form tab's Style manager, editable inline the same way as Presets</li>
                                 <li id="wfm-help-prompt-25">Presets table toolbar — the ★ and B sort buttons (next to the search box) bring favorited / batch-selected presets to the top of the list; both can be enabled together (★ takes priority, B breaks ties), and everything else keeps its original relative order</li>
+                                <li id="wfm-help-prompt-26">Style table toolbar — select exactly one row whose <b>File</b> badge isn't <code>custom.json</code> to enable <b>+ Add to this file</b>: it adds a blank row targeting that same file (shown as a badge in the File column even before saving) — the same capability as the Form tab's Style manager (see above); custom.json entries and multi-row selections leave the button disabled, use the regular <b>+ New Style</b> button for those instead</li>
                             </ul>
                         </div>
                     </div>

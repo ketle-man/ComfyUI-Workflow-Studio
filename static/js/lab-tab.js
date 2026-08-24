@@ -16,6 +16,7 @@ import { escapeHtml, embedPngTextChunk, getEagleSettings, saveToEagle, setupSear
 import { extractAllMetadata, readAllPNGTextChunks } from "./metadata-tab.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { _expandWildcardsInWorkflow } from "./generate-tab.js";
+import { pmGroups, getPresetsInGroup } from "./prompt-presets.js";
 
 // Checkpoint/LoRA/VAE are three fully independent keyframe timelines — same as
 // Prompt/KSampler — each with its own +/-, its own atIteration sequence, its own
@@ -128,6 +129,13 @@ let _lastGeneratedImageRef = null; // ComfyUI "name [type]" annotated ref of the
 // with the plan and simply resets to "checkpoint" on page load.
 let _modelViewMode = "checkpoint";
 
+// Single-click-selected keyframe index per real column key (checkpoint/lora/vae/prompt/
+// ksampler) — used by that column's up/down reorder buttons. A single click selects
+// (this object); a double click still opens the edit modal directly, bypassing
+// selection. Not part of the Plan data — resets whenever columns are replaced wholesale
+// (plan load/clear, Prompt Group apply) so a stale index never points past the new array.
+let _selectedIdx = {};
+
 // ============================================
 // Init
 // ============================================
@@ -137,6 +145,8 @@ export function initLabTab() {
     _initPlanDropZone();
     _initSubtabToggle();
     _initColumnButtons();
+    _initReorderButtons();
+    _initPromptGroupButton();
     _initModelViewToggle();
     _initRunControls();
     _initPlanButtons();
@@ -400,6 +410,133 @@ function _initColumnButtons() {
     });
 }
 
+// Single click on a cell selects it (for the up/down reorder buttons below) instead of
+// opening the edit modal — opening now requires a double click (_renderColumn wires
+// both listeners on the same cell).
+function _selectCell(col, idx) {
+    _selectedIdx[col] = idx;
+    _renderColumnForKey(col);
+}
+
+// Up/down buttons: swap the selected keyframe with its immediate array neighbor. Row 1
+// (idx 0, the baseline) can never move and nothing can be swapped into its slot — it has
+// no atIteration input of its own and drives the "live GenerateUI value" display, so
+// letting another keyframe take its place would silently change that keyframe's
+// behavior. Swapping the two keyframes' atIteration values (rather than reordering the
+// array directly) keeps each object's own value permanently paired with its own
+// atIteration field; re-deriving the array order from those swapped values below is
+// then just "swap array position to match", not a re-sort of the whole column.
+function _initReorderButtons() {
+    document.querySelectorAll(".wfm-lab-col-up").forEach((btn) => {
+        btn.addEventListener("click", () => _moveSelectedKeyframe(_resolveColumnKey(btn.dataset.col), -1));
+    });
+    document.querySelectorAll(".wfm-lab-col-down").forEach((btn) => {
+        btn.addEventListener("click", () => _moveSelectedKeyframe(_resolveColumnKey(btn.dataset.col), 1));
+    });
+}
+
+function _moveSelectedKeyframe(col, direction) {
+    const kfs = _lab.columns[col];
+    const idx = _selectedIdx[col];
+    if (idx == null || idx >= kfs.length) { // unselected, or stale after a bulk replace/remove
+        showToast(t("labSelectKeyframeFirst"), "error");
+        return;
+    }
+    const targetIdx = idx + direction;
+    if (idx <= 0 || targetIdx <= 0 || targetIdx >= kfs.length) return; // baseline immovable; can't swap past either end
+
+    const tmpIter = kfs[idx].atIteration;
+    kfs[idx].atIteration = kfs[targetIdx].atIteration;
+    kfs[targetIdx].atIteration = tmpIter;
+    [kfs[idx], kfs[targetIdx]] = [kfs[targetIdx], kfs[idx]];
+
+    _selectedIdx[col] = targetIdx;
+    _renderColumnForKey(col);
+}
+
+// "PG" button on the Prompt column header: lets the user pick one of the Prompt tab's
+// preset groups (pmGroups, defined in prompt-presets.js) and replace the ENTIRE Prompt
+// column with one keyframe per preset in the group, in group order, starting at
+// iteration #1 (which is overwritten, not appended to).
+function _initPromptGroupButton() {
+    const btn = document.getElementById("wfm-lab-prompt-group-btn");
+    if (btn) btn.title = t("labPromptGroupBtnTitle");
+    btn?.addEventListener("click", () => _openPromptGroupModal());
+}
+
+function _openPromptGroupModal() {
+    const groupNames = Object.keys(pmGroups).sort();
+    const listHtml = groupNames.length === 0
+        ? `<div class="wfm-pm-empty">${t("labPromptGroupEmpty")}</div>`
+        : groupNames.map((g) => {
+            const count = getPresetsInGroup(g).length;
+            return `<div class="wfm-pm-item wfm-lab-pg-item" data-group="${escapeHtml(g)}">
+                <div class="wfm-pm-item-body">
+                    <div class="wfm-pm-item-name">${escapeHtml(g)}</div>
+                    <div class="wfm-pm-item-sub">${t("labPromptGroupCount", count)}</div>
+                </div>
+            </div>`;
+        }).join("");
+
+    const html = `
+        <div id="wfm-lab-pg-list">${listHtml}</div>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+            <button id="wfm-lab-pg-apply" class="wfm-btn wfm-btn-primary" disabled>${t("labApply")}</button>
+        </div>`;
+    openModal(t("labPromptGroupModalTitle"), html);
+
+    let selectedGroup = null;
+    const applyBtn = document.getElementById("wfm-lab-pg-apply");
+    document.querySelectorAll(".wfm-lab-pg-item").forEach((el) => {
+        el.addEventListener("click", () => {
+            document.querySelectorAll(".wfm-lab-pg-item").forEach((o) => o.classList.remove("active"));
+            el.classList.add("active");
+            selectedGroup = el.dataset.group;
+            if (applyBtn) applyBtn.disabled = false;
+        });
+    });
+    applyBtn?.addEventListener("click", () => {
+        if (!selectedGroup) { showToast(t("labPromptGroupSelectFirst"), "error"); return; }
+        _applyPromptGroupToLab(selectedGroup);
+    });
+}
+
+// Full replacement of _lab.columns.prompt: one keyframe per preset in the group, in
+// group order, atIteration 1..N — #1 is overwritten (never appended after), matching
+// how every other "bulk load" action on Lab (e.g. plan load) replaces rather than merges.
+function _applyPromptGroupToLab(groupName) {
+    const presets = getPresetsInGroup(groupName);
+    if (presets.length === 0) { showToast(t("labPromptGroupNoPresets"), "error"); return; }
+
+    // Batch input caps at 50 (see templates/index.html); raise batchCount to fit the
+    // group up to that cap, same as the existing keyframe-beyond-batch warning handles
+    // anything past it (see _warnIfKeyframesExceedBatch below) rather than silently
+    // dropping presets past #50.
+    if (presets.length > _lab.batchCount) {
+        _lab.batchCount = Math.min(presets.length, 50);
+        const batchEl = document.getElementById("wfm-lab-batch-count");
+        if (batchEl) batchEl.value = _lab.batchCount;
+        showToast(t("labPromptGroupBatchRaised", _lab.batchCount), "info");
+    }
+
+    _lab.columns.prompt = presets.map((p, idx) => ({
+        atIteration: idx + 1,
+        value: {
+            positive: p.text || p.posText || "",
+            negative: p.negText || "",
+            styleApplied: false,
+            styleName: "",
+        },
+        revertToBase: false,
+        bypassed: false,
+    }));
+    delete _selectedIdx.prompt; // stale selection would point past the freshly replaced array
+    _renderColumnForKey("prompt");
+    _warnIfKeyframesExceedBatch();
+    closeModal();
+    showToast(t("labPromptGroupApplied", groupName, presets.length), "success");
+}
+
 // Wires the Model column header's C/L/V buttons — switches which independent field
 // (checkpoint/lora/vae) the shared cell list, +/-, and cell-click modal all operate on.
 // Purely a display/routing selector: none of the three keyframe arrays are touched by
@@ -464,8 +601,12 @@ function _renderColumn(col, containerId = `wfm-lab-col-cells-${col}`) {
     }
     const keyframes = _lab.columns[col];
     container.innerHTML = keyframes.map((kf, idx) => _cellHtml(col, kf, idx)).join("");
+    // Single click selects (for the up/down reorder buttons); double click still opens
+    // the edit modal directly, independent of whatever is currently selected.
     container.querySelectorAll(".wfm-lab-cell").forEach((el) => {
-        el.addEventListener("click", () => _openCellModal(col, parseInt(el.dataset.idx, 10)));
+        const idx = parseInt(el.dataset.idx, 10);
+        el.addEventListener("click", () => _selectCell(col, idx));
+        el.addEventListener("dblclick", () => _openCellModal(col, idx));
     });
 }
 
@@ -485,6 +626,7 @@ function _cellHtml(col, kf, idx) {
     const revertClass = kf.revertToBase ? " wfm-lab-cell-revert" : "";
     const bypassClass = kf.bypassed ? " wfm-lab-cell-bypassed" : "";
     const nodeBypassClass = (col === "lora" && kf.value?.nodeBypass) ? " wfm-lab-cell-node-bypassed" : "";
+    const selectedClass = _selectedIdx[col] === idx ? " wfm-lab-cell-selected" : "";
     if (idx === 0) {
         // Bypassed takes priority over the live-reflect display — an explicit "skip this
         // row" toggle shouldn't be masked by Setting 1's usual "show the workflow's
@@ -492,13 +634,13 @@ function _cellHtml(col, kf, idx) {
         const live = !kf.bypassed && _isLiveDisplay(col, idx);
         const liveClass = live ? " wfm-lab-cell-live" : "";
         const label = live ? _cellLabel(col, { value: _liveValueFor(col), revertToBase: false, bypassed: false }) : _cellLabel(col, kf);
-        return `<div class="wfm-lab-cell${revertClass}${bypassClass}${nodeBypassClass}${liveClass}" data-idx="${idx}">
+        return `<div class="wfm-lab-cell${revertClass}${bypassClass}${nodeBypassClass}${liveClass}${selectedClass}" data-idx="${idx}">
             <span class="wfm-lab-cell-index">${kf.atIteration}:</span>
             <span class="wfm-lab-cell-value">${label}</span>
         </div>`;
     }
     // Iteration #2 and beyond: value on its own line, applied-at iteration below it
-    return `<div class="wfm-lab-cell${revertClass}${bypassClass}${nodeBypassClass}" data-idx="${idx}">
+    return `<div class="wfm-lab-cell${revertClass}${bypassClass}${nodeBypassClass}${selectedClass}" data-idx="${idx}">
         <div class="wfm-lab-cell-value">${_cellLabel(col, kf)}</div>
         <div class="wfm-lab-cell-applied">${t("labAppliedAt", kf.atIteration)}</div>
     </div>`;
@@ -1517,6 +1659,7 @@ function _applyPlanData(filename, data) {
     _lab.workflowFilename = data.workflow_filename || null;
     _lab.columns = _migrateLabColumns(data.columns);
     _lab.results = { images: (data.results?.images || []).slice(0, MAX_RESULTS) };
+    _selectedIdx = {}; // every column's array was just replaced wholesale
     _updatePlanWorkflowUI();
     _updateT2IModeUI();
 
@@ -1596,6 +1739,7 @@ async function _loadPlanFromServer(filename) {
 function _clearPlan() {
     if (!window.confirm(t("labConfirmClear"))) return;
     _lab = _emptyLabState();
+    _selectedIdx = {};
 
     const noteEl = document.getElementById("wfm-lab-note");
     const batchEl = document.getElementById("wfm-lab-batch-count");

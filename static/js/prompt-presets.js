@@ -208,6 +208,13 @@ function matchesSearch(p) {
            (p.tags || []).some(t => t.toLowerCase().includes(s));
 }
 
+// Ordered list of actual preset objects for a group (stale ids already filtered out by
+// loadAllPresets, but this is defensive for callers that read pmGroups directly too).
+export function getPresetsInGroup(groupName) {
+    const ids = pmGroups[groupName] || [];
+    return ids.map(id => promptPresets.find(p => p.id === id)).filter(Boolean);
+}
+
 export function isInBatchPreset(id) {
     return (pmGroups["Batch"] || []).includes(id);
 }

@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.4.8** — 機能追加: LabタブにPromptグループ一括適用＋キーフレーム並べ替え + バグ修正: デフォルトワークフローの上書き保存が反映されない + Styleテーブルの「このファイルへ追加」対応
 - **v0.4.7** — 機能追加: Prompt Tab内部リファクタ + Gallery Promptタブ新設 + Send to Canvas改善 + Presetsソート
 - **v0.4.6** — 機能追加: MetadataタブをGalleryタブへ統合 + Promptタブに一覧編集可能なTable表示を新設
 - **v0.4.5** — 調査: トップバー保存ワークフローのRMBG不具合報告（原因なし） + バグ修正: LabタブModel列の無意味な空キーフレーム表示を解消

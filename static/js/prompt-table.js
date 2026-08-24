@@ -768,6 +768,7 @@ function openWildcardPromptModal(file) {
 let tableStyles = [];
 let stylesSearch = "";
 let pendingNewStyle = false;
+let pendingNewStyleFile = null; // null = default custom.json; set by "+ Add to this file"
 const selectedStyleNames = new Set();
 
 function styleMatchesSearch(s) {
@@ -781,9 +782,18 @@ function styleMatchesSearch(s) {
 function updateStylesDeleteBtn() {
     const btn = document.getElementById("wfm-ptable-style-delete-btn");
     const deselectBtn = document.getElementById("wfm-ptable-style-deselect-btn");
+    const addFileBtn = document.getElementById("wfm-ptable-style-addfile-btn");
     const n = selectedStyleNames.size;
     if (btn) { btn.disabled = n === 0; btn.textContent = n > 0 ? `Delete (${n})` : "Delete"; }
     if (deselectBtn) deselectBtn.disabled = n === 0;
+    // 「このファイルへ追加」は選択が1件かつcustom.json以外のファイル由来のときだけ有効
+    // （prompt-styles.js の Form 版と同じ制約 — custom.jsonは既に「+ New Style」で追加可能）
+    if (addFileBtn) {
+        const single = n === 1 ? tableStyles.find(s => selectedStyleNames.has(s.name)) : null;
+        const targetFile = (single?.file && single.file !== "custom.json") ? single.file : "";
+        addFileBtn.disabled = !targetFile;
+        addFileBtn.dataset.targetFile = targetFile;
+    }
 }
 
 async function loadStylesTable() {
@@ -841,11 +851,14 @@ function buildStyleRow(style, index) {
     tr.appendChild(tdName);
 
     const tdFile = document.createElement("td");
-    if (style?.file) {
+    // 新規行は保存先未定(=custom.json)なら空欄のまま、「このファイルへ追加」経由なら
+    // pendingNewStyleFile を保存前からバッジ表示して、どこに追加されるか分かるようにする
+    const fileForBadge = style?.file || (isNew ? pendingNewStyleFile : null);
+    if (fileForBadge) {
         const badge = document.createElement("span");
         badge.className = "wfm-prompt-edit-file-badge";
-        badge.title = style.file;
-        badge.textContent = style.file;
+        badge.title = fileForBadge;
+        badge.textContent = fileForBadge;
         tdFile.appendChild(badge);
     }
     tr.appendChild(tdFile);
@@ -872,9 +885,10 @@ function buildStyleRow(style, index) {
         addBtn.addEventListener("click", async () => {
             const name = nameInput.value.trim();
             if (!name) { showToast(t("pleaseEnterStyleName"), "error"); nameInput.focus(); return; }
-            const result = await styleApiCreate(name, posTA.value, negTA.value, null);
+            const result = await styleApiCreate(name, posTA.value, negTA.value, pendingNewStyleFile);
             if (result.ok) {
                 pendingNewStyle = false;
+                pendingNewStyleFile = null;
                 await loadStylesTable();
                 await styleRefreshList();
                 await refreshStylesList();
@@ -883,7 +897,7 @@ function buildStyleRow(style, index) {
                 showToast(t("errorWithMsg", result.error), "error");
             }
         });
-        cancelBtn.addEventListener("click", () => { pendingNewStyle = false; renderStylesTable(); });
+        cancelBtn.addEventListener("click", () => { pendingNewStyle = false; pendingNewStyleFile = null; renderStylesTable(); });
     } else {
         const saveStyleRow = async (changedEl) => {
             const nameNow = nameInput.value.trim();
@@ -1073,6 +1087,16 @@ export function initPromptTableTab() {
     document.getElementById("wfm-ptable-style-add-btn")?.addEventListener("click", () => {
         if (pendingNewStyle) return;
         pendingNewStyle = true;
+        pendingNewStyleFile = null;
+        renderStylesTable();
+        document.querySelector("#wfm-ptable-style-tbody input")?.focus();
+    });
+    document.getElementById("wfm-ptable-style-addfile-btn")?.addEventListener("click", (e) => {
+        if (pendingNewStyle) return;
+        const targetFile = e.currentTarget.dataset.targetFile;
+        if (!targetFile) return;
+        pendingNewStyle = true;
+        pendingNewStyleFile = targetFile;
         renderStylesTable();
         document.querySelector("#wfm-ptable-style-tbody input")?.focus();
     });

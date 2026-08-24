@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.4.7-green)
+![Version](https://img.shields.io/badge/version-0.4.8-green)
 
 ## Screenshots
 
@@ -90,6 +90,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 
 - **6-tab layout** — Input / Model / Settings / Feeder / Batch / **Lab** tabs; Input, Model, and Settings each include a Raw JSON column on the right for instant preview and direct editing
 - **Save button** — located at the right end of the subtab row; opens a filename dialog (default: current workflow name) and saves the current workflow as a `.json` file to the Workflow tab via the import API; hidden while the Batch or Lab subtab is active (v0.4.6), since those work on workflow copies / their own Plan files rather than the currently loaded workflow
+  - **Default-workflow snapshot fix** (v0.4.8) — overwriting the loaded workflow under a filename that's currently set as the auto-load **Default workflow** (Settings tab, see below) now also refreshes that cached snapshot; previously only the file on disk was updated, so the old (pre-edit) version — including any checkpoint no longer installed — kept reappearing after every page reload until the default was re-set by hand
 - **Input tab** — Prompt and Image inner tabs (drag-and-drop upload); Prompt tab shows Positive Prompt and Negative Prompt textareas, plus an **Embeddings selector** at the bottom (Filter + Select + Weight input + Paste button); Paste inserts `(embedding:Name:weight)` at the cursor position of the last focused textarea (defaults to Positive when neither is focused); Raw JSON (540px) in the right column
   - **Revert button** (v0.3.70) — a ↺ button next to each Apply button reverts the textarea to the node's currently applied value (the reverse of Apply)
   - **Emphasis weight editing** (v0.3.70) — select text (or just place the cursor on a word/parenthesis block) and press Ctrl+↑/↓ to adjust `(text:weight)` by ±0.05, A1111/native-ComfyUI style; parentheses are removed automatically when the weight returns to 1.0
@@ -148,7 +149,7 @@ Two independent modes selectable via **[Image Loop] / [Gallery]** toggle buttons
 </details>
 
 <details>
-<summary><h3>Lab subtab (v0.3.87 – v0.4.5)</h3></summary>
+<summary><h3>Lab subtab (v0.3.87 – v0.4.8)</h3></summary>
 
 An experimental batch generator: runs the workflow currently loaded in GenerateUI N times, letting Model (Checkpoint/LoRA Single/VAE) / Prompt / KSampler each change independently starting at a chosen iteration — unlike the Batch tab's single-axis queue, every column keeps its own list of change points. Never mutates the loaded workflow; every iteration runs on a fresh clone. Works with both I2I and T2I workflows (v0.3.90).
 
@@ -170,6 +171,8 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Save index image to Output on Run** (v0.3.90, on by default since v0.3.93) — checkbox in the run controls; when checked, every completed Run also builds the same contact-sheet index image used for Plan files and saves it directly into ComfyUI's own Output folder as `Lab_index_<counter>_.png` (auto-numbered like a normal generated image, right alongside the images that Run just generated); independent of Plan Save, which always writes its own copy next to the plan file regardless of this checkbox; saved with the plan as `save_index_on_run`
 - **Index images are self-contained plan files** (v0.3.91) — every index-image PNG, whether from Plan Save/Save As or from Save index image to Output on Run, carries the entire plan embedded directly in the file as a PNG `wfm_lab_plan` chunk; this is what lets the Output-folder copy above work as a Plan Load source even though it has no matching `.json` anywhere
 - **Eagle integration** — every image Lab generates is auto-saved to Eagle the same way as GenerateUI's own Generate button, if enabled in the Settings tab; the Output-folder index image above is included too (v0.3.90) once saved
+- **Select vs. edit, and keyframe reordering** (v0.4.8) — a single click on a keyframe cell now only selects it (blue outline); double-click to open its edit modal as before. Each column's header (Model / Prompt / KSampler) also gets **▲ / ▼** buttons that swap the selected keyframe with its immediate neighbor, reordering keyframes without retyping them; keyframe #1 (the live-reflecting baseline) can never move, and nothing can be swapped into its slot
+- **PG — apply a Prompt tab preset group** (v0.4.8) — a **PG** button on the Prompt column header opens a picker for the Prompt tab's Table-view preset groups (the same groups the Batch tab's checklist uses); choosing one replaces the entire Prompt column with one keyframe per preset in that group's order, starting at #1 (#1 is overwritten, not appended after). If the group has more presets than the current Batch count, Batch count is raised automatically to fit (capped at 50, the Batch input's own limit); anything still beyond that shows the existing "keyframes beyond Batch count" warning instead of being dropped
 
 </details>
 
@@ -204,6 +207,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
   - **Presets Group table** — create, rename, and delete groups, with each group's members shown as removable badges; the reserved **Batch** group is not listed here — it's managed entirely through the Presets table's B column and BC button instead
   - **Wildcards table** — same files as the Form tab's Wildcard file manager above; editing the File path or the Ext dropdown renames the file (saves the content under the new name, then removes the old file)
   - **Style table** — same styles as the Form tab's Style manager above, editable inline the same way as Presets
+    - **+ Add to this file** (v0.4.8) — select exactly one row whose File badge isn't `custom.json` to enable this toolbar button, bringing the Form tab's same-file-add capability (above) to the Table view too; it adds a blank row targeting that same file (shown as a badge in the File column even before saving); custom.json entries and multi-row selections leave it disabled — use the regular + New Style button for those instead
 
 </details>
 

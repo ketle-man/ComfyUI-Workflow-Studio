@@ -280,6 +280,13 @@
     color: var(--wfm-danger);
 }
 
+/* Single-click selection target for the column header's up/down reorder buttons —
+   layered as a box-shadow (not border-color) so it never conflicts with the
+   revert/live/bypassed/node-bypassed border-color signaling above. */
+.wfm-lab-cell.wfm-lab-cell-selected {
+    box-shadow: 0 0 0 2px var(--wfm-primary);
+}
+
 .wfm-lab-cell-applied {
     margin-top: 3px;
     padding-top: 3px;

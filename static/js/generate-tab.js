@@ -164,6 +164,17 @@ async function saveCurrentWorkflow() {
                     nameEl.dataset.filename = filename;
                 }
             }
+
+            // このファイル名が「デフォルトワークフロー」(workflow-tab.jsの「デフォルトに設定」で
+            // localStorageにスナップショットされたAPI形式JSON、ページ起動時に自動読込される)に
+            // 一致する場合、保存内容と食い違ったまま残らないようスナップショットも更新する。
+            // 更新しないと、ここで上書き保存しても次回リロード時に古いモデル等が復活する。
+            const settings = getSettings();
+            if (settings.defaultWorkflow === filename) {
+                settings.defaultWorkflowData = workflow;
+                localStorage.setItem("wfm_settings", JSON.stringify(settings));
+            }
+
             showToast(t("savedAs", filename), "success");
         } catch (err) {
             showToast(t("saveFailed", err.message), "error");
