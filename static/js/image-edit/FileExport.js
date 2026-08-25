@@ -2,7 +2,8 @@
  * Image Edit Tab - File Export
  * Composites the visible layers (respecting mask-apply clipping) into a
  * flat canvas and offers three destinations: local PNG download, WFS
- * Gallery, and ComfyUI's own /upload/image endpoint.
+ * Gallery, and the selected node's image widget on the ComfyUI canvas
+ * (Send to Workflow).
  */
 
 import { showToast } from "../app.js";
@@ -104,24 +105,7 @@ export class FileExport {
         }
     }
 
-    async uploadToComfyUI() {
-        if (!this._cb.getLayerManager()) { showToast("No image loaded", "error"); return; }
-        const canvas = this._buildCompositeCanvas();
-        const blob   = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-        const file   = new File([blob], (this._cb.getBaseName() || "wfs-edit") + "-output.png", { type: "image/png" });
-        const form   = new FormData();
-        form.append("image", file);
-        form.append("overwrite", "true");
-        try {
-            const r    = await fetch("/upload/image", { method: "POST", body: form });
-            const data = await r.json();
-            showToast(`Uploaded: ${data.name}`, "success");
-        } catch {
-            showToast("Upload failed", "error");
-        }
-    }
-
-    // Uploads the composite like uploadToComfyUI(), then (via window.opener,
+    // Uploads the composite via /upload/image, then (via window.opener,
     // since WFS runs in its own window — same cross-window pattern as
     // wfmReceiveWorkflow/wfmOpenMaskEditorForNode) writes the resulting
     // filename into the "image" widget of the currently selected ComfyUI

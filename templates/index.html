@@ -2062,8 +2062,7 @@
                             <ul>
                                 <li id="wfm-help-imageedit-17">Save PNG: composites all visible layers and downloads the result as a PNG file</li>
                                 <li id="wfm-help-imageedit-18">Save to Gallery: prompts for a filename (default: wfs-image-YYYYMMDDHHmmss) and saves the composite PNG directly to the Gallery root folder (configured in Settings &gt; Gallery Output Folder); requires the Gallery tab to have been opened at least once to set the root</li>
-                                <li id="wfm-help-imageedit-19">Save to Input: uploads the composite PNG to ComfyUI's input folder via /upload/image, making it selectable in Load Image nodes</li>
-                                <li id="wfm-help-imageedit-19b">Send to Workflow: uploads the composite PNG (same as Save to Input) and additionally writes the resulting filename into the image widget of the currently selected node in the ComfyUI graph, falling back to the first LoadImage-type node found; requires Workflow Studio to have been opened from ComfyUI's top menu button so the ComfyUI tab is reachable</li>
+                                <li id="wfm-help-imageedit-19b">Send to Workflow: uploads the composite PNG to ComfyUI's input folder via /upload/image and writes the resulting filename into the image widget of the currently selected node in the ComfyUI graph, falling back to the first LoadImage-type node found; requires Workflow Studio to have been opened from ComfyUI's top menu button so the ComfyUI tab is reachable</li>
                                 <li id="wfm-help-imageedit-20">Canvas navigation: scroll wheel to zoom, Space + drag to pan</li>
                                 <li id="wfm-help-imageedit-21">Undo / Redo: Ctrl+Z / Ctrl+Y (or toolbar buttons ↩ ↪)</li>
                             </ul>
@@ -2603,7 +2602,6 @@
                         <button class="wfm-btn wfm-btn-sm" id="ie-redo-btn" title="Redo (Ctrl+Y)">↪</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-save-btn">Save PNG</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-save-gallery-btn" title="Save to Gallery root folder">Save to Gallery</button>
-                        <button class="wfm-btn wfm-btn-sm" id="ie-upload-comfy-btn">Save to Input</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-send-workflow-btn" title="Upload and write this image's filename into the selected node's image widget (e.g. LoadImage)">Send to Workflow</button>
                     </div>
 

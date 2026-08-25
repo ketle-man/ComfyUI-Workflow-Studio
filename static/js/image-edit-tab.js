@@ -1112,7 +1112,6 @@ class ImageEditTab {
         document.getElementById("ie-redo-btn")?.addEventListener("click", () => this._redo());
         document.getElementById("ie-save-btn")?.addEventListener("click", () => this._fileExport.savePng());
         document.getElementById("ie-save-gallery-btn")?.addEventListener("click", () => this._fileExport.saveToGallery());
-        document.getElementById("ie-upload-comfy-btn")?.addEventListener("click", () => this._fileExport.uploadToComfyUI());
         document.getElementById("ie-send-workflow-btn")?.addEventListener("click", () => this._fileExport.sendToWorkflow());
         document.getElementById("ie-zoom-fit")?.addEventListener("click", () => this._fitToView());
         document.getElementById("ie-zoom-100")?.addEventListener("click", () => {

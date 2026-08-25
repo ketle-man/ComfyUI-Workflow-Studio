@@ -615,7 +615,7 @@ function applyI18nToHtml() {
         "wfm-help-imageedit-12": "helpImageEdit12", "wfm-help-imageedit-13": "helpImageEdit13",
         "wfm-help-imageedit-14": "helpImageEdit14", "wfm-help-imageedit-15": "helpImageEdit15",
         "wfm-help-imageedit-16": "helpImageEdit16", "wfm-help-imageedit-17": "helpImageEdit17",
-        "wfm-help-imageedit-18": "helpImageEdit18", "wfm-help-imageedit-19": "helpImageEdit19",
+        "wfm-help-imageedit-18": "helpImageEdit18",
         "wfm-help-imageedit-19b": "helpImageEdit19b",
         "wfm-help-imageedit-20": "helpImageEdit20", "wfm-help-imageedit-21": "helpImageEdit21",
         "wfm-help-imageedit-22": "helpImageEdit22", "wfm-help-imageedit-23": "helpImageEdit23",
