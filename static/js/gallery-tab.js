@@ -260,6 +260,13 @@ function formatDate(mtime) {
     return new Date(mtime * 1000).toLocaleString();
 }
 
+function formatDuration(seconds) {
+    const total = Math.round(seconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 async function openImageInMetadataTab(img) {
     try {
         const res = await fetch(API.serveImage(img.path));
@@ -929,6 +936,7 @@ async function loadImageDetail(img) {
         renderWorkflowJson(state.embeddedWorkflow);
         _updateCopyCanvasBtn();
         renderImagePromptSection(metaRes.image_prompt);
+        renderDimensionInfo(metaRes);
         // Promptタブは prompt_workflow (API形式優先) を使う。トップレベルとサブグラフに
         // 独立した複数系統を持つワークフローでは workflow (UI形式) からの抽出だと
         // トップレベル系統しか拾えないことがあるため（Metadataタブと同じ優先順位に揃える）。
@@ -937,11 +945,21 @@ async function loadImageDetail(img) {
         renderWorkflowJson(null);
         _updateCopyCanvasBtn();
         renderImagePromptSection(null);
+        renderDimensionInfo(null);
         renderPromptTab(null);
     }
 
     // グループタブ更新
     renderDetailGroup(img);
+}
+
+function renderDimensionInfo(metaRes) {
+    const el = document.getElementById("wfm-gallery-info-dim");
+    if (!el) return;
+    const parts = [];
+    if (metaRes?.width && metaRes?.height) parts.push(`${metaRes.width}×${metaRes.height}`);
+    if (metaRes?.duration) parts.push(formatDuration(metaRes.duration));
+    el.textContent = parts.length ? parts.join(" · ") : "";
 }
 
 function renderImagePromptSection(imagePrompt) {

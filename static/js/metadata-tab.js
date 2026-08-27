@@ -97,6 +97,81 @@ export async function readAllPNGTextChunks(file) {
     return chunks;
 }
 
+// ── MP4 container metadata (moov/udta/meta の mdta keys/ilst) ──
+// ComfyUIのSaveVideoはPNGのtEXtチャンクと同じキー名(workflow=UI形式, prompt=API形式)で
+// JSON文字列をisobmff(mp4)のudta/meta(mdta)にコンテナレベルタグとして書き込む(FFmpegの
+// movflags=+use_metadata_tags)。ここではPyAV等に頼らずブラウザ側でボックスを直接辿って読む。
+function findMP4Box(view, bytes, start, end, targetType) {
+    let offset = start;
+    while (offset + 8 <= end) {
+        const size = view.getUint32(offset);
+        const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+        let boxSize = size;
+        let bodyStart = offset + 8;
+        if (size === 1) {
+            if (offset + 16 > end) break;
+            const hi = view.getUint32(offset + 8);
+            const lo = view.getUint32(offset + 12);
+            boxSize = hi * 4294967296 + lo;
+            bodyStart = offset + 16;
+        } else if (size === 0) {
+            boxSize = end - offset;
+        }
+        if (boxSize < 8) break;
+        if (type === targetType) return { bodyStart, end: offset + boxSize };
+        offset += boxSize;
+    }
+    return null;
+}
+
+export async function readMP4MetaTags(file) {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    if (bytes.length < 12) return null;
+    const ftyp = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]);
+    if (ftyp !== "ftyp") return null;
+
+    const moov = findMP4Box(view, bytes, 0, bytes.length, "moov");
+    if (!moov) return null;
+    const udta = findMP4Box(view, bytes, moov.bodyStart, moov.end, "udta");
+    let meta = udta ? findMP4Box(view, bytes, udta.bodyStart, udta.end, "meta") : null;
+    if (!meta) meta = findMP4Box(view, bytes, moov.bodyStart, moov.end, "meta");
+    if (!meta) return null;
+    const metaBody = meta.bodyStart + 4; // meta は FullBox (version+flags 4バイト)
+    const keysBox = findMP4Box(view, bytes, metaBody, meta.end, "keys");
+    const ilstBox = findMP4Box(view, bytes, metaBody, meta.end, "ilst");
+    if (!keysBox || !ilstBox) return null;
+
+    const utf8 = new TextDecoder("utf-8", { fatal: false });
+    let off = keysBox.bodyStart + 4; // version+flags をスキップ
+    const count = view.getUint32(off); off += 4;
+    const keyNames = [];
+    for (let i = 0; i < count && off + 8 <= keysBox.end; i++) {
+        const ksize = view.getUint32(off);
+        if (ksize < 8) break;
+        keyNames.push(utf8.decode(bytes.slice(off + 8, off + ksize)));
+        off += ksize;
+    }
+
+    const result = {};
+    let ioff = ilstBox.bodyStart;
+    while (ioff + 8 <= ilstBox.end) {
+        const itemSize = view.getUint32(ioff);
+        const keyIndex = view.getUint32(ioff + 4);
+        if (itemSize < 8) break;
+        const itemEnd = Math.min(ioff + itemSize, ilstBox.end);
+        const data = findMP4Box(view, bytes, ioff + 8, itemEnd, "data");
+        if (data) {
+            const payload = bytes.slice(data.bodyStart + 8, data.end); // type(4)+locale(4)をスキップ
+            const name = keyNames[keyIndex - 1];
+            if (name) { try { result[name] = utf8.decode(payload); } catch { /* skip */ } }
+        }
+        ioff = itemEnd;
+    }
+    return result;
+}
+
 // ── Workflow extraction helpers ───────────────────────────────
 function collectUnique(arr) {
     const seen = new Set(), out = [];
@@ -459,6 +534,13 @@ function extractPromptsAPI(wf) {
             if (combined) textMap.set(id, combined);
             continue;
         }
+        // MiniMaxH3ImageToVideo等の動画生成オールインワンノード。CLIPTextEncode等を経由せず
+        // 自ノードの"prompt"入力に直接テキストを持つ(positive/negativeの区別も無い)ため、
+        // isTextEncoderNode判定を通さずtextMapへ直接投入する(fallbackのtextsに載る)。
+        if (typeof n.inputs?.prompt === "string" && /ImageToVideo|TextToVideo/i.test(ct)) {
+            textMap.set(id, n.inputs.prompt);
+            continue;
+        }
         if (!isTextEncoderNode(ct)) continue;
         // "prompt" — TextEncodeQwenImageEdit(Plus)/TextEncodeBooguEdit and similar Image Edit
         // model text encoders use this key instead of "text"/"text_g".
@@ -607,6 +689,7 @@ export async function extractAllMetadata(file) {
     const name = file.name.toLowerCase();
     const isJSON = file.type === "application/json" || name.endsWith(".json");
     const isWebP = file.type === "image/webp" || name.endsWith(".webp");
+    const isMP4 = file.type === "video/mp4" || name.endsWith(".mp4");
 
     async function fromWorkflow(originalWf, source) {
         let wf = originalWf;
@@ -643,6 +726,17 @@ export async function extractAllMetadata(file) {
         if (!exif) return null;
         const wf = extractWorkflowFromEXIF(exif);
         return wf ? await fromWorkflow(wf, "comfyui") : null;
+    }
+    if (isMP4) {
+        let tags; try { tags = await readMP4MetaTags(file); } catch { return null; }
+        if (!tags) return null;
+        for (const key of ["prompt", "workflow"]) {
+            const raw = tags[key];
+            if (!raw) continue;
+            let wf; try { wf = JSON.parse(sanitizeJSON(raw)); } catch { continue; }
+            if (wf) return await fromWorkflow(wf, "comfyui");
+        }
+        return null;
     }
     // PNG
     const chunks = await readAllPNGTextChunks(file);

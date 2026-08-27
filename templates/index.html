@@ -1643,7 +1643,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-metadata-card-formats-title">Supported Formats</h3>
                             <ul>
-                                <li id="wfm-help-metadata-5">Supported: ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Mage-Flow subgraph workflows), SD WebUI, SD Forge, Fooocus. Model extraction covers UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, and QuadrupleCLIPLoader (e.g. HiDream 4-CLIP).</li>
+                                <li id="wfm-help-metadata-5">Supported: ComfyUI PNG/WebP/MP4/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Mage-Flow subgraph workflows; MP4 reads the workflow/prompt container tags written by SaveVideo, including all-in-one video nodes like MiniMax H3 ImageToVideo), SD WebUI, SD Forge, Fooocus. Model extraction covers UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, and QuadrupleCLIPLoader (e.g. HiDream 4-CLIP).</li>
                             </ul>
                         </div>
                     </div>
@@ -1767,7 +1767,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-gallery-card-detail-title">Detail Panel</h3>
                             <ul>
-                                <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, date, tags (add/remove), memo; <b>download icon</b> (on image hover) to download the single image; "Move To..." moves the image to another folder, "Delete File" removes it permanently</li>
+                                <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, dimensions (image width×height) or video duration, date, tags (add/remove), memo; <b>download icon</b> (on image hover) to download the single image; "Move To..." moves the image to another folder, "Delete File" removes it permanently</li>
                                 <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; 'Copy &amp; Send Canvas' button copies to clipboard and stores the workflow for title-drag to canvas</li>
                                 <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image; the <b>__Feeder__</b> group is reserved (shown with 🔒) and cannot be renamed or deleted — rename and delete buttons are disabled when it is selected</li>
                             </ul>
@@ -1786,7 +1786,7 @@
                             <h3 id="wfm-help-gallery-card-formats-title">Formats &amp; Auto-save</h3>
                             <ul>
                                 <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the JSON tab</li>
-                                <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF; workflow extraction reads ComfyUI prompt and workflow keys embedded in PNG metadata</li>
+                                <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF, MP4; workflow extraction reads ComfyUI prompt/workflow keys embedded in PNG metadata or in MP4 container tags (as written by SaveVideo, e.g. MiniMax H3 output)</li>
                             </ul>
                         </div>
                     </div>
@@ -1863,7 +1863,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-sidepanel-card-info-title">Information (I) tab</h3>
                             <ul>
-                                <li id="wfm-help-sidepanel-13">I tab (Information): drop a ComfyUI PNG/WebP/JSON to inspect model, LoRA, and prompt metadata in the side panel — sub-tabs: model / lora / Prompts; supports UnetLoaderGGUF and QuadrupleCLIPLoader node types</li>
+                                <li id="wfm-help-sidepanel-13">I tab (Information): drop a ComfyUI PNG/WebP/MP4/JSON to inspect model, LoRA, and prompt metadata in the side panel — sub-tabs: model / lora / Prompts; supports UnetLoaderGGUF and QuadrupleCLIPLoader node types; MP4 reads the workflow/prompt tags embedded by SaveVideo, including all-in-one video nodes like MiniMax H3 ImageToVideo</li>
                                 <li id="wfm-help-sidepanel-14">Information tab — drag items to canvas: model sub-tab places the loader node (Checkpoint → CheckpointLoaderSimple, VAE → VAELoader, Diffusion Model → UNETLoader, Text Encoder → CLIPLoader); double-click also places at canvas center</li>
                                 <li id="wfm-help-sidepanel-15">Information tab — LoRA sub-tab: drag individual LoRA to place LoraLoader; "Multiple LORA" section at bottom places all LoRAs in a single Lora Loader (LoraManager) node; Prompts sub-tab: drag a prompt to place CLIPTextEncode node with text pre-filled; click prompt to view full text and copy</li>
                             </ul>
@@ -2313,6 +2313,7 @@
                         <div class="wfm-gallery-info-section">
                             <div class="wfm-gallery-info-row" id="wfm-gallery-info-name"></div>
                             <div class="wfm-gallery-info-row" id="wfm-gallery-info-size"></div>
+                            <div class="wfm-gallery-info-row" id="wfm-gallery-info-dim"></div>
                             <div class="wfm-gallery-info-row" id="wfm-gallery-info-date"></div>
                         </div>
                         <!-- ImagePromptサイドカー ( .txt / ponyxlWildcardsVault 由来のプロンプトがある画像のみ表示) -->
@@ -2526,8 +2527,8 @@
                     <div class="wfm-metadata-col1">
                         <div class="wfm-metadata-drop-zone" id="wfm-meta-drop">
                             <div class="wfm-meta-drop-label" id="wfm-meta-drop-label">
-                                <div class="wfm-meta-drop-main">Drop image / JSON</div>
-                                <div class="wfm-meta-drop-sub">PNG · WebP · JSON</div>
+                                <div class="wfm-meta-drop-main">Drop image / video / JSON</div>
+                                <div class="wfm-meta-drop-sub">PNG · WebP · MP4 · JSON</div>
                             </div>
                             <img id="wfm-meta-preview-img" class="wfm-meta-preview-img" style="display:none;" alt="preview">
                         </div>
@@ -2535,13 +2536,13 @@
                         <div class="wfm-meta-format-note" id="wfm-meta-format-note">
                             <div class="wfm-meta-format-note-title" id="wfm-meta-format-note-title">Supported formats</div>
                             <ul class="wfm-meta-format-list">
-                                <li id="wfm-meta-fmt-comfyui">ComfyUI — PNG / WebP / JSON</li>
+                                <li id="wfm-meta-fmt-comfyui">ComfyUI — PNG / WebP / MP4 / JSON</li>
                                 <li id="wfm-meta-fmt-sdwebui">SD WebUI / SD Forge — PNG (parameters)</li>
                                 <li id="wfm-meta-fmt-fooocus">Fooocus — PNG (fooocus_scheme)</li>
                             </ul>
                             <div class="wfm-meta-format-todo" id="wfm-meta-format-todo">Flux.2 / Qwen-Image / Z-Image subgraph workflows supported</div>
                         </div>
-                        <input type="file" id="wfm-meta-file-input" accept="image/png,image/webp,.json,application/json" style="display:none;">
+                        <input type="file" id="wfm-meta-file-input" accept="image/png,image/webp,video/mp4,.mp4,.json,application/json" style="display:none;">
                     </div>
 
                     <!-- Col2: Model info -->

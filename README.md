@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.5.0-green)
+![Version](https://img.shields.io/badge/version-0.5.1-green)
 
 ## Screenshots
 
@@ -248,6 +248,8 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To..., Export, and Delete File from the multi-select bar
 - **Download** (v0.5.0) — a dedicated orange **Download** button in the detail panel's action-button row (next to Tagger); replaces the old preview-image hover overlay, which blocked video playback controls
 - **MP4 video support** (v0.5.0) — `.mp4` files are browsable, previewable (detail panel with native `<video controls>`, lightbox, and Compare), and included in favorites/tags/groups/move/delete/export alongside images; server-side thumbnails are generated from the first video frame via PyAV (falls back to a placeholder if PyAV/ffmpeg decoding isn't available); a small ▶ badge overlays video thumbnails in the grid
+- **MP4 embedded metadata** (v0.5.1) — the Prompt and JSON tabs now also work for `.mp4` files: reads the `workflow`/`prompt` container tags ComfyUI's `SaveVideo` writes into the mp4 (via PyAV server-side), including all-in-one video-generation nodes that carry their prompt directly on a `prompt` input rather than a separate `CLIPTextEncode`-style node (e.g. `MiniMaxH3ImageToVideo`)
+- **Info tab: dimensions & duration** (v0.5.1) — the detail panel's Info tab now also shows image dimensions (width×height) or video duration, in addition to filename, size, date, tags, and memo
 - **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations: select group → "Add to Group" / "Remove from Group"; Favorite All / Unfavorite All; Compare (2–4 images); Move To...; **Export** (downloads all selected images as a ZIP file); Delete File
 - **Image Compare** — select 2–4 images with Ctrl+click, then click "Compare" in the Bulk Bar to open a side-by-side lightbox; grid adapts to the number of selected images
 - **Prompt search** — text search covers filename, tags, memo, and prompt text (A1111 `parameters` field cached on first detail panel open)
@@ -300,13 +302,14 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 
 - **Now inside Gallery** (v0.4.6) — this used to be its own top-level tab; it's now the fourth Gallery sub-tab, to the right of Style_Catalog — everything below works exactly the same as before
 - **3-column layout** — Drop zone (left) | Model info (center) | LoRA + Prompt (right)
-- **File drop** — drop a ComfyUI-generated PNG / WebP or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
+- **File drop** — drop a ComfyUI-generated PNG / WebP / MP4 or workflow JSON onto the drop zone (or click to open a file picker); PNG/WebP images are shown as a preview
+- **MP4 embedded metadata** (v0.5.1) — reads the `workflow`/`prompt` container tags ComfyUI's `SaveVideo` writes into the mp4's `moov/udta/meta` box (parsed client-side, no server round-trip); also recognizes all-in-one video-generation nodes that carry their prompt directly on a `prompt` input instead of a separate `CLIPTextEncode`-style node (e.g. `MiniMaxH3ImageToVideo`)
 - **Model extraction** — automatically extracts Checkpoint, VAE, Diffusion Model, and Text Encoder names from the workflow; supports both standard and subgraph-based workflows (Flux.2 Dev/Klein, Qwen-Image-Edit/2511/Layered, Z-Image Base/Turbo, Ernie Image, WAN2.2, Mage-Flow, LongCat, Boogu, HiDream E1, FireRed, Krea-2 Turbo); node types covered: UNETLoader, UnetLoaderGGUF, UNETLoaderGGUF (e.g. HiDream GGUF), CLIPLoader, DualCLIPLoader, TripleCLIPLoader, QuadrupleCLIPLoader (e.g. HiDream 4-CLIP)
 - **LoRA extraction** — lists all LoRA models with `strength_model / strength_clip` values
 - **Prompt extraction** — lists prompts with POS / NEG badges when positive/negative can be determined; when distinction is not possible (e.g. `SamplerCustomAdvanced`, intermediate nodes, cross-level connections), prompts are shown without a badge as plain **Text**; click any entry to view the full text below
   - **CLIP Text Encode edit+ support** (v0.3.92) — `CLIPTextEncodeEditPlus` nodes are resolved using the same RAW / EDIT / front / back combination rule as the node itself, correctly merging the linked `text1` (e.g. a Lora Manager's trigger words) with the editable `text_edit` field instead of showing only one side
 - **Prompt actions** — Copy to clipboard, **GenUI:P/N** (set GenerateUI positive/negative prompt), **Prompt:P/N** (set Prompt tab preset positive/negative)
-- **Format support** — ComfyUI PNG/WebP/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 / Mage-Flow / LongCat / Boogu / HiDream E1 / FireRed / Krea-2 Turbo subgraph workflows), SD WebUI, SD Forge, Fooocus
+- **Format support** — ComfyUI PNG/WebP/MP4/JSON (standard + Flux.2 / Qwen-Image / Z-Image / Ernie Image / WAN2.2 / Mage-Flow / LongCat / Boogu / HiDream E1 / FireRed / Krea-2 Turbo subgraph workflows), SD WebUI, SD Forge, Fooocus
 - **Format note** — supported formats and covered model types are always shown in the left column
 
 </details>
@@ -443,7 +446,8 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
   - **Package sub-tab** — dropdown to filter nodes by custom node package name
 - **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs); LoRA groups show an **All N LoRAs** item — drag to canvas to place a `Lora Loader (LoraManager)` node with all LoRAs pre-loaded
 - **P — Prompts tab** — browse prompt presets with All / ★ Favorites / Categories sub-tabs; **Groups sub-tab** (row 2) — view presets by group (shared with the Batch tab's `wfm_prompt_preset_groups`)
-- **I — Information tab** — drop a ComfyUI-generated PNG/WebP or workflow JSON in the side panel to view its metadata; detects LoRAs from `LoraLoader`, `LoraLoaderModelOnly`, and `Lora Loader (LoraManager)` nodes (API format supported); supports `UnetLoaderGGUF` and `QuadrupleCLIPLoader` node types; preview area fixed at 110px
+- **I — Information tab** — drop a ComfyUI-generated PNG/WebP/MP4 or workflow JSON in the side panel to view its metadata; detects LoRAs from `LoraLoader`, `LoraLoaderModelOnly`, and `Lora Loader (LoraManager)` nodes (API format supported); supports `UnetLoaderGGUF` and `QuadrupleCLIPLoader` node types; preview area fixed at 110px
+  - **MP4 embedded metadata** (v0.5.1) — reads the `workflow`/`prompt` container tags ComfyUI's `SaveVideo` writes into the mp4's `moov/udta/meta` box, parsed entirely client-side (same box-walking logic as the Gallery tab's Metadata sub-tab); also recognizes all-in-one video-generation nodes that carry their prompt directly on a `prompt` input rather than a separate `CLIPTextEncode`-style node (e.g. `MiniMaxH3ImageToVideo`)
 - **A — AI TOOL tab** — Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, Lemonade, or Unsloth; Chat supports multi-turn conversations (full history sent each turn); TOOLS includes VLM image analysis and wildcard generation; settings (backend, URL, model) shared with the SPA AI TOOL tab via `localStorage`
   - **model sub-tab** — Checkpoint, VAE, Diffusion Model, and Text Encoder; drag items to canvas to place the corresponding loader node (Checkpoint → `CheckpointLoaderSimple`, VAE → `VAELoader`, Diffusion Model → `UNETLoader`, Text Encoder → `CLIPLoader`); double-click also places at canvas center
   - **lora sub-tab** — detects LoRAs from `LoraLoader`, `LoraLoaderModelOnly`, and `Lora Loader (LoraManager)` nodes (API format `inputs.loras.__value__` supported); shows `strength_model / strength_clip` values; drag individual LoRA to place `LoraLoader`; **Multiple LORA** section (appears for 1+ LoRAs) drags all LoRAs into a single `Lora Loader (LoraManager)` node with LoRA syntax pre-filled

@@ -2,6 +2,30 @@
 
 ---
 
+## v0.5.1
+
+### 機能追加: mp4動画の埋め込みメタデータ対応（Gallery Prompt/JSON・Metadataサブタブ・サイドパネルIタブ）+ Gallery Infoタブに寸法/再生時間表示 + MiniMax H3等オールインワン動画ノードのプロンプト抽出バグ修正
+
+v0.5.0で追加したmp4 Gallery対応（一覧・サムネイル・再生のみ）に続き、「ギャラリータブでmp4のメタデータのプロンプトを表示できるようにしたい。メタデータタブでもプロンプト、表示可能ならモデル等も表示させたい。またInfoタブで画像サイズ、再生時間も表示したい」との要望を起点に着手。Eagleでmp4のプロンプト/Steps/Sampler/Seed/Modelが見えている実例（MiniMax H3で生成した`.mp4`）を手がかりに、ComfyUIの`SaveVideo`がmp4にどう埋め込んでいるかを`ffprobe`/実PyAVで直接確認した上で実装した。
+
+**1. 埋め込み形式の実地調査**: `ffprobe -show_format`で対象mp4を調べたところ、PNGのtEXtチャンクと全く同じキー名（`workflow`=UI形式寄りの内容、`prompt`=API形式）でJSON文字列がコンテナレベルのformatタグとして書き込まれていた。バイト単位で追うと`moov > udta > meta > (hdlr, keys, ilst)`という、iTunes系メタデータ（`mdta`名前空間の`keys`/`ilst`）の構造になっており、FFmpegの`movflags=+use_metadata_tags`相当の書き込み方だと判明。ComfyUI側は`comfy_api/latest/_input_impl/video_types.py`の`write_output_metadata()`がPyAV経由で`container.metadata[key] = json文字列`する実装。
+
+**2. バックエンド（`py/services/gallery_service.py`）**: 既存の`serve_thumbnail()`が動画フレーム抽出に使っていた`av`（PyAV）依存を再利用し、`_read_mp4_metadata()`（`container.metadata`からタグ辞書を取得）と`_read_media_dimensions()`（画像はPillowの`Image.size`、動画はPyAVの`stream.width/height`+`container.duration`）を追加。`get_image_metadata()`・`_extract_embedded_workflow()`にmp4分岐を追加し、既存のPNG向けワークフロー抽出ロジック（`workflow`/`prompt`優先順位の切り替え）をそのままmp4にも適用した。venv Pythonで`GalleryService`を直接呼び出すE2E検証、および実mp4に対する`ffprobe`/PyAVの値の突き合わせ（幅高さ608×352, 再生時間3.042秒, workflow/promptタグ長一致）で正しさを確認済み。
+
+**3. Galleryタブ Infoサブタブ**: 幅×高さ（画像）または再生時間（動画）を表示する行を追加（`gallery-tab.js` `renderDimensionInfo()`）。既存のPrompt/JSONタブは`extract_workflow_from_metadata`系のAPIをそのまま叩いているため、バックエンド対応だけでmp4でも自動的に動くようになった。
+
+**4. Metadataサブタブ（Iタブ、`metadata-tab.js`）とサイドパネルIタブ（`web/comfyui/node_sets_menu.js`）**: どちらもドラッグ&ドロップされたFile自体（サーバー未経由のバイト列）を直接パースする設計のため、MP4のボックス構造（`moov→udta→meta→keys/ilst`）をブラウザ上で直接読む`readMP4MetaTags()`/`_readMP4MetaTags()`をゼロから実装（`findMP4Box`でサイズ/タイプ解決→ `keys`ボックスからキー名一覧 → `ilst`ボックスの`data`アトムから値を取り出し名前に対応付け）。Node.jsで実mp4のバイト列に対して単体テストし、`workflow`/`prompt`タグの内容がPyAV/`ffprobe`の結果と完全一致することを確認した。サイドパネルIタブは`metadata-tab.js`と同一ロジックを保持する独立した複製実装（ComfyUIネイティブ拡張のため別ファイル）のため、同じ変更を両方に適用。
+
+**5. バグ発見・修正: オールインワン動画ノードのプロンプトが抽出されない**: 上記の実装後、実際のMiniMax H3出力mp4でPromptタブを確認したところ「プロンプトなし」と表示される問題を発見。原因は`MiniMaxH3ImageToVideo`のような、`CLIPTextEncode`系ノードを介さずノード自身の`prompt`入力に直接テキストを持つ「動画生成オールインワンノード」を、既存の`isTextEncoderNode()`判定（クラス名に`TextEncode`を含むかで判定）が拾えていなかったこと。`extractPromptsAPI()`（`metadata-tab.js`・`node_sets_menu.js`の両方）に、クラス名が`ImageToVideo`/`TextToVideo`を含み`inputs.prompt`が文字列のノードをtextMapへ直接投入する分岐を追加して解決（positive/negativeの区別が無いノードのため、フォールバックの`texts`バケットに載る）。
+
+**6. ヘルプ更新**: Gallery Tab（Infoタブの寸法/再生時間表示、Formats行のMP4追加）、Metadata Tab（Supported Formatsカード）、Workflow Studio Library / Iタブ（サイドパネル）のヘルプ本文を英語・日本語・中国語の3言語（`i18n.js`）+ `templates/index.html`で更新。
+
+**検証**: Python側は`GalleryService`をvenv Pythonで直接呼び出すE2Eテストと実mp4への`ffprobe`/PyAVでの突き合わせ、JS側のMP4パーサーとプロンプト抽出ロジックはNode.jsで実バイト列/実JSONに対する単体テストで検証。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイル（`gallery_service.py`, `gallery-tab.js`, `metadata-tab.js`, `node_sets_menu.js`, `i18n.js`, `templates/index.html`, `README.md`, `pyproject.toml`）を両フォルダへ同期し改行コード差異を除いた`diff`で完全一致を確認。ComfyUI実機でのブラウザ操作確認はユーザー側で実施済み（Gallery Prompt/JSON表示、サイドパネルIタブとも問題なしとの回答）。
+
+関連: [[project_v050_video_tab]]
+
+---
+
 ## v0.5.0
 
 ### 機能追加: mp4動画Gallery対応 + Videoタブ新設(MiniMax H3専用) + バグ修正: Galleryのタグ/メモが再起動後に消える

@@ -587,7 +587,10 @@ class GalleryService:
             embedded = self._read_png_metadata(path)
         elif ext in {".jpg", ".jpeg"}:
             embedded = self._read_jpeg_metadata(path)
+        elif ext == ".mp4":
+            embedded = self._read_mp4_metadata(path)
 
+        dims = self._read_media_dimensions(path, ext)
         saved = self.metadata_store.get(str(path))
 
         # workflow キーを除く文字列フィールドをプロンプトキャッシュとして保存（検索用）
@@ -606,6 +609,9 @@ class GalleryService:
             "mtime": stat.st_mtime,
             "ext": ext,
             "embedded": embedded,
+            "width": dims["width"],
+            "height": dims["height"],
+            "duration": dims["duration"],
             "favorite": saved.get("favorite", False),
             "tags": saved.get("tags", []),
             "memo": saved.get("memo", ""),
@@ -685,8 +691,43 @@ class GalleryService:
             logger.debug("JPEG metadata read error: %s", e)
         return result
 
+    def _read_mp4_metadata(self, path: Path) -> dict:
+        """MP4コンテナのformat-levelメタデータタグ（workflow/prompt等）をPyAVで抽出する。
+        ComfyUIのSaveVideoはPNGのtEXtチャンクと同じキー名（workflow=UI形式, prompt=API形式）で
+        moov/udta/meta（mdta）にJSON文字列を書き込む。"""
+        result = {}
+        try:
+            import av
+            with av.open(str(path)) as container:
+                for k, v in (container.metadata or {}).items():
+                    result[k] = v
+        except Exception as e:
+            logger.debug("MP4 metadata read error: %s", e)
+        return result
+
+    def _read_media_dimensions(self, path: Path, ext: str) -> dict:
+        """画像は幅高さ、動画は幅高さ+再生時間（秒）を返す。取得できない項目はNone。"""
+        info: dict = {"width": None, "height": None, "duration": None}
+        try:
+            if ext == ".mp4":
+                import av
+                with av.open(str(path)) as container:
+                    if container.streams.video:
+                        stream = container.streams.video[0]
+                        info["width"] = stream.width
+                        info["height"] = stream.height
+                    if container.duration:
+                        info["duration"] = container.duration / 1_000_000
+            elif ext != ".svg":
+                from PIL import Image
+                with Image.open(path) as img:
+                    info["width"], info["height"] = img.size
+        except Exception as e:
+            logger.debug("dimension read error for %s: %s", path, e)
+        return info
+
     def _extract_embedded_workflow(self, image_path: str, prefer: str = "workflow") -> dict | None:
-        """埋め込みワークフローを抽出する（PNG[workflow]/PNG[prompt]の優先順位を選べる）。
+        """埋め込みワークフローを抽出する（PNG/MP4の[workflow]/[prompt]の優先順位を選べる）。
 
         prefer="workflow": UI形式(ノード位置・グループ等を保持)優先。GenerateUIへの
         ロードやJSON表示などエディタ復元が必要な用途向け。
@@ -699,8 +740,14 @@ class GalleryService:
         if not self._check_path_allowed(path):
             return None
 
-        if path.suffix.lower() == ".png":
+        ext = path.suffix.lower()
+        embedded = None
+        if ext == ".png":
             embedded = self._read_png_metadata(path)
+        elif ext == ".mp4":
+            embedded = self._read_mp4_metadata(path)
+
+        if embedded:
             key_groups = (("workflow", "Workflow"), ("prompt", "Prompt"))
             if prefer == "prompt":
                 key_groups = tuple(reversed(key_groups))
