@@ -191,17 +191,33 @@ class GalleryMetadataStore:
                 return self._save_to_disk()
             return True
 
-    def cleanup_stale_images(self, folder_path: str, existing_paths: set) -> int:
+    def cleanup_stale_images(self, folder_path: str, existing_paths: set, recursive: bool = True) -> int:
         """folder_path 配下の存在しないファイルのメタデータを削除する。
         existing_paths: そのフォルダの現在のファイルパス集合（_normalize_path 済み）
+        recursive: False の場合、folder_path 直下のファイルのみを対象にする。
+            呼び出し元(list_images)が非recursiveスキャン(フォルダ直下のみ列挙)の
+            結果を existing_paths として渡してくる場合、サブフォルダ内のファイルは
+            existing_paths に含まれない。それにもかかわらず対象範囲を「folder_path配下
+            全階層」のままにすると、サブフォルダ内画像のメタデータ(tags/memo等)を
+            "存在しない"と誤判定して全削除してしまう(実際に発生した不具合: サブフォルダ
+            に動画を保存する運用で、ルートフォルダを非recursiveで開くたびに
+            サブフォルダ内の全メタデータが失われていた)。
         """
         folder_key = self._normalize_path(folder_path)
         if not folder_key.endswith("/"):
             folder_key += "/"
+
+        def _in_scope(key: str) -> bool:
+            if not key.startswith(folder_key):
+                return False
+            if recursive:
+                return True
+            return "/" not in key[len(folder_key):]
+
         with self._lock:
             stale = [
                 key for key in self._data["images"]
-                if key.startswith(folder_key) and key not in existing_paths
+                if _in_scope(key) and key not in existing_paths
             ]
             if not stale:
                 return 0

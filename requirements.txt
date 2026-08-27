@@ -22,3 +22,10 @@ piexif>=1.1.3
 
 # -- Required to load UNSLOTH_API_KEY from a local .env file (Unsloth backend, AI TOOL tab) --
 python-dotenv>=1.0,<2.0
+
+# -- MP4 thumbnail generation (Gallery tab) --
+# Uses PyAV (av) to decode the first frame. ComfyUI core already requires av>=17.0.0,
+# so it is normally pre-installed in python_embeded and no action is needed here.
+# If missing, mp4 thumbnail generation simply fails and falls back to a placeholder
+# (Gallery itself keeps working). Not pinned here on purpose — see torch note above.
+# av>=17.0.0

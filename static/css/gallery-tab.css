@@ -290,6 +290,24 @@
     color: #38bdf8;
 }
 
+/* 動画ファイル（mp4）の再生アイコンバッジ（サムネイル中央） */
+.wfm-gallery-thumb-video-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    pointer-events: none;
+}
+
 /* テーブルビューのお気に入りボタン */
 .wfm-gallery-table-fav-btn {
     background: none;
@@ -463,43 +481,6 @@
     max-height: 200px;
     object-fit: contain;
     cursor: pointer;
-}
-
-.wfm-gallery-preview-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-.wfm-gallery-preview-wrapper:hover .wfm-gallery-preview-overlay {
-    opacity: 1;
-}
-
-.wfm-gallery-download-btn {
-    background: var(--wfm-accent, #4f8ef7);
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 20px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    transition: background 0.2s;
-}
-
-.wfm-gallery-download-btn:hover {
-    background: var(--wfm-accent-hover, #3f7fe7);
 }
 
 /* タブコンテンツ */
@@ -834,6 +815,16 @@
 .wfm-gallery-action-btn-tagger:hover {
     background: #6a4de0;
     border-color: #6a4de0;
+}
+
+.wfm-gallery-action-btn-orange {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    color: #1a1a2e;
+}
+.wfm-gallery-action-btn-orange:hover {
+    background: #d97f06;
+    border-color: #d97f06;
 }
 
 /* ── ファイル操作ボタン (詳細パネル) ─────────────────────────── */

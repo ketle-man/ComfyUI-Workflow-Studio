@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.4.8-green)
+![Version](https://img.shields.io/badge/version-0.5.0-green)
 
 ## Screenshots
 
@@ -69,6 +69,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Badge management** — add, rename, delete badges with custom colors shared with the Models tab (⚙ Badge button)
 - **AI summary** — generate workflow descriptions using Ollama
 - **Import / Export** — import workflows from files or clipboard; **Send to Canvas** button sends the selected workflow directly to the ComfyUI canvas (UI and API formats both supported)
+- **Side panel toolbar buttons** (v0.5.0) — selecting a card shows three buttons in the top toolbar: **Load in GenerateUI**, **Load in Video** (new — loads a MiniMax H3 Image-to-Video workflow into the Video tab; shows an error toast for workflows that don't contain that node), and **Send to Canvas**; the detail modal's duplicate copies of these three buttons were removed in favor of this single toolbar location
 - **Default view setting** — persist your preferred view mode (Thumbnail / Table)
 - **Search clear (✕)** — inline ✕ button appears inside the search box whenever text is entered; click to clear immediately
 - **Clear all filters (✕ Clear)** — rightmost toolbar button; resets search text, group filter, and badge filter (ALL) in one click
@@ -245,7 +246,8 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Thumbnail / Table views** — switch view modes; Favorites column shown leftmost in Table view
 - **Folder management** — create subfolders ("+ New") or delete the selected folder with all contents ("Del") from the folder tree header
 - **File operations** — move or delete individual images from the detail panel's Info tab; bulk Move To..., Export, and Delete File from the multi-select bar
-- **Download** — hover over the image preview in the detail panel to reveal a download icon (⬇); click to download the single image
+- **Download** (v0.5.0) — a dedicated orange **Download** button in the detail panel's action-button row (next to Tagger); replaces the old preview-image hover overlay, which blocked video playback controls
+- **MP4 video support** (v0.5.0) — `.mp4` files are browsable, previewable (detail panel with native `<video controls>`, lightbox, and Compare), and included in favorites/tags/groups/move/delete/export alongside images; server-side thumbnails are generated from the first video frame via PyAV (falls back to a placeholder if PyAV/ffmpeg decoding isn't available); a small ▶ badge overlays video thumbnails in the grid
 - **Multi-select** — Ctrl+click to select multiple images; Bulk Bar appears for batch operations: select group → "Add to Group" / "Remove from Group"; Favorite All / Unfavorite All; Compare (2–4 images); Move To...; **Export** (downloads all selected images as a ZIP file); Delete File
 - **Image Compare** — select 2–4 images with Ctrl+click, then click "Compare" in the Bulk Bar to open a side-by-side lightbox; grid adapts to the number of selected images
 - **Prompt search** — text search covers filename, tags, memo, and prompt text (A1111 `parameters` field cached on first detail panel open)
@@ -256,7 +258,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Detail panel** — view filename, path, tags, groups, and metadata in a slide-out panel; four tabs — **Info** / **JSON** / **Groups** / **Prompt**
 - **Prompt tab** (v0.4.7) — selected by default (the most frequently checked piece of info shouldn't need an extra click); lists every positive/negative prompt candidate found in the embedded workflow with POS/NEG badges, reusing the exact same list→click→full-text UI as the Metadata tab; extracts from the API-format embedding when available rather than the UI-format one, since a workflow with independent top-level and subgraph sampling chains (e.g. Krea-2) can otherwise have some of its prompts missed
 - **Workflow viewer** — Metadata tab displays workflow JSON from PNG embedded data (`prompt` / `workflow` keys) or from workflow saved by the Generate UI tab; **Copy & Send Canvas** button copies the JSON to the clipboard and sends the workflow directly to the ComfyUI canvas (UI and API formats both supported)
-- **Load GenUI button** — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, Load GenUI button uses the primary accent color
+- **GenUI button** (renamed from "Load GenUI" in v0.5.0 for readability) — loads the embedded ComfyUI workflow from the selected image directly into the GenerateUI tab; shows a warning toast if no workflow is embedded or the format is unsupported; Metadata button is styled green, GenUI button uses the primary accent color
 - **Image Edit button** — toolbar button; sends the selected image directly to the Image Edit tab as the base layer
 - **Send GenUI Image button** — toolbar button (next to Image Edit); uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded
 - **Send CC button** (v0.3.69) — toolbar button, shown only when this Gallery tab is embedded as an iframe inside ComfyUI Comic Creator (a separate custom node); sends the selected image directly into Comic Creator's currently selected panel/overlay
@@ -389,6 +391,18 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Export** — Save PNG (download composite locally); **Save to Gallery** (saves to Gallery root folder with a timestamped default name `wfs-image-YYYYMMDDHHmmss`); **Send to Workflow** — uploads to ComfyUI's input folder via `/upload/image`, then writes the resulting filename directly into the `image` widget of the node currently selected on the ComfyUI canvas (falls back to the first LoadImage-type node found); requires Workflow Studio to have been launched from ComfyUI's top-menu button so the ComfyUI tab is reachable
 - **Canvas navigation** — scroll-wheel zoom, Space + drag to pan; zoom indicator in the bottom bar
 - **Undo / Redo** — Ctrl+Z / Ctrl+Y (or toolbar buttons); keyboard shortcuts: V (Select), B (Draw), T (Text), S (Shape), Delete (remove selected layer when 2+ exist)
+
+</details>
+
+<details>
+<summary><h3>Video Tab (v0.5.0)</h3></summary>
+
+- **Dedicated MiniMax H3 video generation UI, independent of GenerateUI** — a purpose-built tab for the MiniMax H3 (Image to Video) workflow; does not share state with the GenerateUI tab, and model selection (UNet/CLIP/VAE/Audio VAE) is fixed to the loaded workflow's own defaults rather than editable here
+- **3-pane layout** — left: form (First Frame / Last Frame / Prompt / Aspect Ratio / Megapixels / Multiple / Duration / Noise Seed / Generate); center: generation result preview, plus an Editing pane reserved for future video-editing tools; right: Properties pane reserved for future use — the two placeholder panes keep room for upcoming features without disturbing the layout as the result grows
+- **First Frame / Last Frame are both optional** — leaving First Frame empty runs the workflow text-only (the node is simply left unconnected — a "bypass"); workflows that don't even include a LoadImage node for First Frame are supported out of the box, and a LoadImage node is only injected into the graph on the fly if an image is actually supplied
+- **Node lookup instead of hardcoded IDs** — locates the MiniMax H3 subgraph instance, its linked Resolution Selector, and (if present) its linked LoadImage node by walking the workflow's subgraph definitions and links, so a workflow doesn't need to match the reference `minimax_test.json`'s exact node IDs
+- **Load in Video** (Workflow tab) — load any workflow containing a MiniMax H3 Image-to-Video node straight into this tab from the Workflow tab's side-panel toolbar (next to Load in GenerateUI); unsupported workflows show an error toast instead of loading
+- **Result panel** — generated mp4s play inline with native video controls; results are also saved to Gallery metadata (embedded workflow JSON) automatically, so the Gallery tab's Workflow/Prompt panels work on generated videos the same way they do for images
 
 </details>
 

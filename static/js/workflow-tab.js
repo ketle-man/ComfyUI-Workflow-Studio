@@ -7,6 +7,7 @@
 import { showToast, openModal, closeModal } from "./app.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
+import { loadWorkflowIntoVideoEditor } from "./video-tab.js";
 import { t, getSummaryPrompt } from "./i18n.js";
 import { highlightJSON } from "./json-highlight.js";
 import { openBadgeEditModal } from "./models-tab.js";
@@ -615,6 +616,8 @@ async function showSidePanel(wf, cardEl) {
     // Enable toolbar load buttons
     const listLoadBtn = document.getElementById("wfm-list-load-btn");
     if (listLoadBtn) { listLoadBtn.disabled = false; listLoadBtn.title = ""; }
+    const listLoadVideoBtn = document.getElementById("wfm-list-load-video-btn");
+    if (listLoadVideoBtn) { listLoadVideoBtn.disabled = false; listLoadVideoBtn.title = ""; }
     const listOpenComfyBtn = document.getElementById("wfm-list-open-comfyui-btn");
     if (listOpenComfyBtn) { listOpenComfyBtn.disabled = false; listOpenComfyBtn.title = ""; }
 
@@ -660,6 +663,8 @@ function closeSidePanel() {
     if (titleEl) titleEl.textContent = "";
     const listLoadBtn = document.getElementById("wfm-list-load-btn");
     if (listLoadBtn) { listLoadBtn.disabled = true; listLoadBtn.title = t("selectCardFirst"); }
+    const listLoadVideoBtn = document.getElementById("wfm-list-load-video-btn");
+    if (listLoadVideoBtn) { listLoadVideoBtn.disabled = true; listLoadVideoBtn.title = t("selectCardFirst"); }
     const listOpenComfyBtn = document.getElementById("wfm-list-open-comfyui-btn");
     if (listOpenComfyBtn) { listOpenComfyBtn.disabled = true; listOpenComfyBtn.title = t("selectCardFirst"); }
     renderSideGroup(null);
@@ -956,8 +961,6 @@ function openDetailModal(wf) {
                     <textarea class="wfm-textarea" id="wfm-detail-memo" rows="4" placeholder="${t("memoPlaceholder")}">${meta.memo || ""}</textarea>
                 </section>
                 <div class="wfm-modal-actions">
-                    <button class="wfm-btn wfm-btn-primary" id="wfm-detail-load">${t("loadInGenerate")}</button>
-                    <button class="wfm-btn wfm-btn-sm" id="wfm-detail-open-comfyui">${t("sendToCanvas")}</button>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-detail-set-default">${t("setAsDefault")}</button>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-detail-change-thumb">${t("changeThumbnail")}</button>
                     <input type="file" id="wfm-detail-thumb-file" accept="image/png,image/webp,image/jpeg" style="display:none">
@@ -1091,29 +1094,6 @@ function openDetailModal(wf) {
             showToast(t("modelsSaved"), "success");
         } catch (err) {
             showToast(t("saveError") + ": " + err.message, "error");
-        }
-    });
-
-    // Load in GenerateUI
-    document.getElementById("wfm-detail-load").addEventListener("click", async () => {
-        try {
-            const wfData = await getRawWorkflow(wf.filename);
-            const loaded = await loadWorkflowIntoEditor(wfData, wf.filename);
-            if (loaded === false) return;
-            document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
-            closeModal();
-        } catch (err) {
-            showToast(t("loadError") + ": " + err.message, "error");
-        }
-    });
-
-    // Send to Canvas
-    document.getElementById("wfm-detail-open-comfyui")?.addEventListener("click", async () => {
-        try {
-            const wfData = await getRawWorkflow(wf.filename);
-            sendToCanvas(wfData, wf.filename);
-        } catch (err) {
-            showToast(t("loadError") + ": " + err.message, "error");
         }
     });
 
@@ -1393,6 +1373,19 @@ export function initWorkflowTab() {
             const loaded = await loadWorkflowIntoEditor(wfData, state.selectedWf.filename);
             if (loaded === false) return;
             document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
+        } catch (err) {
+            showToast(t("loadError") + ": " + err.message, "error");
+        }
+    });
+
+    // Toolbar: Load in Video button (MiniMax H3専用。非対応ワークフローはloadWorkflowIntoVideoEditor内でエラートースト表示済み)
+    document.getElementById("wfm-list-load-video-btn")?.addEventListener("click", async () => {
+        if (!state.selectedWf) return;
+        try {
+            const wfData = await getRawWorkflow(state.selectedWf.filename);
+            const loaded = await loadWorkflowIntoVideoEditor(wfData, state.selectedWf.filename);
+            if (loaded === false) return;
+            document.querySelector('.wfm-tab[data-tab="video"]')?.click();
         } catch (err) {
             showToast(t("loadError") + ": " + err.message, "error");
         }

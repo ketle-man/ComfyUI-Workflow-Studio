@@ -46,6 +46,13 @@ const API = {
 
 export const FEEDER_GROUP = "__Feeder__";
 
+// 拡張子から動画ファイル（mp4）かどうかを判定する。
+// 一覧アイテムは path/filename、詳細メタ(get_image_metadata)は ext フィールドを持つため両対応。
+function isVideoFile(img) {
+    const source = img?.ext || img?.filename || img?.path || "";
+    return source.toLowerCase().endsWith(".mp4");
+}
+
 // ComfyUI Comic Creater からiframe越しに画像を受け取り、Generate UIのImage入力スロットへ直接セットする（I2I連携）。
 // Comic Creater側の「I2Iへ送る」ボタンから
 // iframe.contentWindow._wfmReceiveImageForI2I(blob, name, workflowData?, workflowFilename?) として呼ばれる。
@@ -578,6 +585,14 @@ function createThumbCard(img) {
     };
     card.appendChild(imgEl);
 
+    // 動画ファイルは再生アイコンバッジを重ねて表示（サムネイル自体は先頭フレームのJPEG）
+    if (isVideoFile(img)) {
+        const playBadge = document.createElement("div");
+        playBadge.className = "wfm-gallery-thumb-video-badge";
+        playBadge.textContent = "▶";
+        card.appendChild(playBadge);
+    }
+
     // お気に入りトグルボタン（カード右上）
     const favBtn = document.createElement("button");
     favBtn.className = `wfm-gallery-thumb-fav-btn${img.favorite ? " active" : ""}`;
@@ -877,18 +892,18 @@ async function loadImageDetail(img) {
     if (moveBtn) moveBtn.disabled = false;
     if (delBtn) delBtn.disabled = false;
 
-    // プレビュー
+    // プレビュー（mp4は<video controls>、それ以外は<img>）
     const preview = document.getElementById("wfm-gallery-detail-preview");
+    const isVideo = isVideoFile(img);
+    const mediaHtml = isVideo
+        ? `<video src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" controls title="Double-click to enlarge"></video>`
+        : `<img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${escapeHtml(img.filename)}" title="Double-click to enlarge">`;
     preview.innerHTML = `
         <div class="wfm-gallery-preview-wrapper">
-            <img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${escapeHtml(img.filename)}" title="Double-click to enlarge">
-            <div class="wfm-gallery-preview-overlay">
-                <button class="wfm-gallery-download-btn" title="Download image">⬇</button>
-            </div>
+            ${mediaHtml}
         </div>
     `;
-    preview.querySelector("img").addEventListener("dblclick", () => openLightbox(img));
-    preview.querySelector(".wfm-gallery-download-btn").addEventListener("click", () => downloadImage(img));
+    preview.querySelector(isVideo ? "video" : "img").addEventListener("dblclick", () => openLightbox(img));
 
     // ファイル名
     document.getElementById("wfm-gallery-detail-filename").textContent = img.filename;
@@ -1014,7 +1029,8 @@ async function addTag(tag) {
     const tags = [...(state.selectedImage.tags || [])];
     if (tags.includes(tag.trim())) return;
     tags.push(tag.trim());
-    await saveMetaField({ tags });
+    const ok = await saveMetaField({ tags });
+    if (!ok) return;
     state.selectedImage.tags = tags;
     renderTagsDisplay(tags);
     updateTagFilter(state.images);
@@ -1023,24 +1039,38 @@ async function addTag(tag) {
 async function removeTag(tag) {
     if (!state.selectedImage) return;
     const tags = (state.selectedImage.tags || []).filter(t => t !== tag);
-    await saveMetaField({ tags });
+    const ok = await saveMetaField({ tags });
+    if (!ok) return;
     state.selectedImage.tags = tags;
     renderTagsDisplay(tags);
     updateTagFilter(state.images);
 }
 
+// 戻り値: 保存が実際にサーバーへ永続化されたか(true/false)。呼び出し元はこれを見て
+// ローカル状態(state.selectedImage等)の更新可否を判断すること — でないと、サーバーが
+// 保存を拒否した場合にもUI上は成功したように見えてしまう(リロードすると消える不具合の原因)。
 async function saveMetaField(fields) {
-    if (!state.selectedImage) return;
+    if (!state.selectedImage) return false;
     try {
-        await fetch(API.saveImageMeta, {
+        const res = await fetch(API.saveImageMeta, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ path: state.selectedImage.path, ...fields }),
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        // サーバー側は常にHTTP 200を返し、成否は body.ok (bool) で表す設計
+        // (gallery_routes.py save_image_meta)。ここをチェックしないと、
+        // 許可パス外などでサーバーが保存を拒否してもUI上は成功したように見えてしまう。
+        if (json.error || json.ok === false) {
+            throw new Error(json.error || "Save rejected by server");
+        }
         const idx = state.images.findIndex(i => i.path === state.selectedImage.path);
         if (idx >= 0) Object.assign(state.images[idx], fields);
+        return true;
     } catch (e) {
         showToast(t("saveFailed", e.message), "error");
+        return false;
     }
 }
 
@@ -1583,9 +1613,12 @@ async function bulkSetFavorite(favoriteValue) {
 function openLightbox(img) {
     const overlay = document.createElement("div");
     overlay.className = "wfm-gallery-lightbox";
+    const mediaHtml = isVideoFile(img)
+        ? `<video src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" controls autoplay></video>`
+        : `<img src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" alt="${escapeHtml(img.filename)}">`;
     overlay.innerHTML = `
         <div class="wfm-gallery-lightbox-inner">
-            <img src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" alt="${escapeHtml(img.filename)}">
+            ${mediaHtml}
             <div class="wfm-gallery-lightbox-footer">${escapeHtml(img.filename)}</div>
             <button class="wfm-gallery-lightbox-close">&times;</button>
         </div>
@@ -1607,12 +1640,17 @@ function openCompare(paths) {
     const overlay = document.createElement("div");
     overlay.className = "wfm-gallery-lightbox wfm-lightbox-compare";
 
-    const itemsHtml = imgs.map(img => `
+    const itemsHtml = imgs.map(img => {
+        const mediaHtml = isVideoFile(img)
+            ? `<video src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" controls></video>`
+            : `<img src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" alt="${escapeHtml(img.filename)}" loading="lazy">`;
+        return `
         <div class="wfm-lightbox-compare-item">
-            <img src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" alt="${escapeHtml(img.filename)}" loading="lazy">
+            ${mediaHtml}
             <div class="wfm-lightbox-compare-label">${escapeHtml(img.filename)}</div>
         </div>
-    `).join("");
+    `;
+    }).join("");
 
     overlay.innerHTML = `
         <div class="wfm-lightbox-compare-inner">
@@ -1884,7 +1922,7 @@ function bindEvents() {
     // メモ保存
     document.getElementById("wfm-gallery-memo-save-btn")?.addEventListener("click", () => {
         const memo = document.getElementById("wfm-gallery-memo").value;
-        saveMetaField({ memo }).then(() => showToast(t("memoSaved"), "success"));
+        saveMetaField({ memo }).then((ok) => { if (ok) showToast(t("memoSaved"), "success"); });
     });
 
     // ワークフローコピー＆キャンバスへ送る
@@ -2015,6 +2053,16 @@ function bindEvents() {
         }
         const { openImageInTaggerTab } = await import("./tagger-tab.js");
         openImageInTaggerTab(state.selectedImage);
+    });
+
+    // Downloadボタン: プレビューのオーバーレイだと動画の再生コントロール操作を妨げるため、
+    // アクションボタン行に常時表示のボタンとして配置している
+    document.getElementById("wfm-gallery-download-btn")?.addEventListener("click", () => {
+        if (!state.selectedImage) {
+            showToast(t("gallerySelectImageFirst"), "error");
+            return;
+        }
+        downloadImage(state.selectedImage);
     });
 
     // Load in GenerateUI ボタン: 埋め込みワークフローをGenerateUIタブに読み込む

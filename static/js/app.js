@@ -112,7 +112,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", "image-edit": "tabImageEdit", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", "image-edit": "tabImageEdit", video: "tabVideo", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -132,6 +132,12 @@ function applyI18nToHtml() {
     if (listLoadBtn) {
         listLoadBtn.textContent = t("loadInGenerate");
         if (listLoadBtn.disabled) listLoadBtn.title = t("selectCardFirst");
+    }
+
+    const listLoadVideoBtn = document.getElementById("wfm-list-load-video-btn");
+    if (listLoadVideoBtn) {
+        listLoadVideoBtn.textContent = t("loadInVideo");
+        if (listLoadVideoBtn.disabled) listLoadVideoBtn.title = t("selectCardFirst");
     }
 
     const listOpenComfyBtn = document.getElementById("wfm-list-open-comfyui-btn");
@@ -724,6 +730,10 @@ function applyI18nToHtml() {
         "wfm-help-trouble-card-connection-title": "helpTroubleCardConnection",
         "wfm-help-trouble-card-workflow-title": "helpTroubleCardWorkflow",
         "wfm-help-trouble-card-tagger-title": "helpTroubleCardTagger",
+        "wfm-help-video-title": "helpVideoTitle",
+        "wfm-help-video-desc": "helpVideoDesc",
+        "wfm-help-video-1": "helpVideo1", "wfm-help-video-2": "helpVideo2",
+        "wfm-help-video-3": "helpVideo3", "wfm-help-video-4": "helpVideo4",
     };
     for (const [id, key] of Object.entries(helpIdMap)) {
         const el = document.getElementById(id);
@@ -814,6 +824,7 @@ import { initMetadataTab } from "./metadata-tab.js";
 import { initAiTab } from "./ai-tab.js";
 import { initTaggerTab } from "./tagger-tab.js";
 import { imageEditTab } from "./image-edit-tab.js";
+import { initVideoTab } from "./video-tab.js";
 
 // Apply saved theme immediately to prevent flash of default theme
 applyTheme(getSavedTheme());
@@ -865,6 +876,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initAiTab();
     initTaggerTab();
     imageEditTab.init();
+    initVideoTab();
 
     console.log("Workflow Studio: App initialized");
 });

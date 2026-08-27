@@ -16,8 +16,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# サポートする画像拡張子
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+# サポートする画像拡張子（.mp4は動画だがGalleryでは静止画と同じ一覧・配信経路を共有する）
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".mp4"}
 
 # data URL の MIME タイプ -> 拡張子（save_image_to_gallery / save_image_to_folder共用）
 _SAVE_EXT_BY_MIME = {
@@ -385,9 +385,12 @@ class GalleryService:
         # os.scandir() でファイル情報を一括取得（stat()の個別呼び出しを排除）
         raw_entries = self._scan_folder_recursive(folder) if recursive else self._scan_folder(folder)
 
-        # 孤立メタデータを自動クリーンアップ（移動・削除されたファイルの残骸を除去）
+        # 孤立メタデータを自動クリーンアップ（移動・削除されたファイルの残骸を除去）。
+        # recursive=False（非再帰スキャン）の場合、existing_pathsにはfolder直下の
+        # ファイルしか含まれないため、cleanup側にもrecursive=Falseを伝えて対象範囲を
+        # 直下のみに限定する（でないとサブフォルダ内ファイルのメタデータを誤削除する）。
         existing_paths = {abs_path for _, abs_path, _, _ in raw_entries}
-        self.metadata_store.cleanup_stale_images(str(folder), existing_paths)
+        self.metadata_store.cleanup_stale_images(str(folder), existing_paths, recursive=recursive)
 
         results = []
         for name, abs_path, size, mtime in raw_entries:
@@ -729,9 +732,14 @@ class GalleryService:
     # ──────────────────────────────────────────────────────────────
 
     def save_image_meta(self, image_path: str, data: dict) -> bool:
-        if not self._check_path_allowed(Path(image_path).resolve()):
+        resolved = Path(image_path).resolve()
+        if not self._check_path_allowed(resolved):
+            logger.warning("save_image_meta: path not allowed: %s", resolved)
             return False
-        return self.metadata_store.save(image_path, data)
+        # get_image_metadata() 側は resolve() 済みパスをキーにして取得するため、
+        # ここでも resolve() 後の文字列で統一して保存する（キー不一致による
+        # 「保存はできるが表示されない」というサイレントな食い違いを防ぐ）。
+        return self.metadata_store.save(str(resolved), data)
 
     def toggle_favorite(self, image_path: str) -> bool:
         if not self._check_path_allowed(Path(image_path).resolve()):
@@ -934,6 +942,8 @@ class GalleryService:
         ディスクキャッシュがあればそれを返し、なければPillowで生成して保存する。
         GIFはアニメーション保持のため元ファイルをそのまま返す。
         Pillowが使えない場合は元ファイルにフォールバック。
+        MP4はPillowで開けないためPyAVで先頭フレームを抽出しJPEGとしてキャッシュする
+        （元ファイルへのフォールバックはできないため、失敗時はNoneを返す）。
         """
         p = Path(image_path).resolve()
         if not p.is_file():
@@ -965,6 +975,24 @@ class GalleryService:
 
         if thumb_path.exists():
             return thumb_path
+
+        # MP4は動画のためPillowで開けない。PyAV(av)で先頭フレームを抽出しJPEGとしてキャッシュする。
+        # avが未導入/デコード失敗の場合、元mp4ファイルは<img>的な経路に渡せないため
+        # (GIF/SVGと違い元ファイルへフォールバックできない) Noneを返しプレースホルダー表示に委ねる。
+        if p.suffix.lower() == ".mp4":
+            try:
+                import av
+                from PIL import Image
+                with av.open(str(p)) as container:
+                    stream = container.streams.video[0]
+                    frame = next(container.decode(stream))
+                    img = frame.to_image().convert("RGB")
+                    img.thumbnail((width, width), Image.LANCZOS)
+                    img.save(thumb_path, "JPEG", quality=85, optimize=True)
+                return thumb_path
+            except Exception as e:
+                logger.warning("serve_thumbnail: mp4 frame extraction failed for %s: %s", p, e)
+                return None
 
         try:
             from PIL import Image

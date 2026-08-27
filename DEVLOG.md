@@ -2,6 +2,33 @@
 
 ---
 
+## v0.5.0
+
+### 機能追加: mp4動画Gallery対応 + Videoタブ新設(MiniMax H3専用) + バグ修正: Galleryのタグ/メモが再起動後に消える
+
+動画生成ワークフロー対応の第一弾。「1. 動画ファイルmp4対応 2. 動画生成に対応していきたい。まずはminimax_H3動画生成ワークフローに対応させたい」との要望を起点に、実機フィードバックを重ねながら仕上げた一連の作業。ブランチ`feature/mp4-video-gallery-and-video-tab`で実施。
+
+**1. Galleryタブのmp4動画対応**: `.mp4`を`IMAGE_EXTENSIONS`に追加し、一覧・お気に入り・タグ・グループ・移動・削除・エクスポートなど既存の画像操作全てにmp4も対象として乗るようにした。サムネイルはPillowで開けないため、PyAV (`av`) で先頭フレームを抽出しJPEGとしてディスクキャッシュする専用ロジックを追加（ComfyUI本体が既に`av>=17.0.0`を要求しており追加インストール不要。未導入環境ではサムネイル生成のみ失敗しプレースホルダー表示にフォールバックする設計）。フロントエンドは詳細パネル・lightbox・Compareビューで拡張子に応じて`<img>`/`<video controls>`を出し分け、サムネイルグリッドには▶バッジを重ねて動画であることを示す。
+
+**2. 新規Videoタブ（MiniMax H3専用、GenerateUIタブとは完全に独立）**: `C:\Users\...\ComfyUI_5\user\default\workflows\minimax_test.json`をリファレンスに、first_frame/last_frame/prompt/aspect_ratio/megapixels/multiple/duration/noise_seedのフォームを持つ新規タブ`video-tab.js`を作成。モデル選択（UNet/CLIP/VAE/Audio VAE）はワークフローの既定値に固定し編集不可とした（ユーザー確認済み）。`comfyWorkflow.convertUiToApi()`が既にサブグラフのflatten処理を内蔵していたため、Videoタブ独自のグラフ→プロンプト変換は不要で、生成そのものは既存の`comfyUI.generate()`をそのまま再利用できた（ComfyUI本体の`SaveVideo`/`PreviewVideo`が`{"images":[...], "animated":true}`という画像と同じレスポンス形式で動画を返すため）。
+
+**3. 実機フィードバックへの追随（ボタン配置・色・レイアウト）**: 一連の実機確認を経て、(a) Galleryの詳細パネルのダウンロードオーバーレイが動画の再生コントロール操作をブロックするため廃止し、Taggerボタン右隣に常時表示の「Download」ボタン（識別しやすいようオレンジ色）を新設、「Load GenUI」ボタンは「GenUI」に短縮、(b) Workflowタブのモーダルにあった「生成UIに読み込み」「Videoに読み込み」「キャンバスへ送る」の3ボタンを廃止し、一覧選択時のサイドパネルツールバー（生成UIに読み込みの右隣に新規追加した「Videoに読み込み」）へ統合、(c) Videoタブの結果パネルの位置・サイズを繰り返し調整 — 最終的に**3ペイン構成**（左:フォーム／中央:プレビュー＋将来の編集機能用プレースホルダー／右:将来のプロパティ機能用プレースホルダー）に落ち着いた。各ペインを独立したflexカラムにしたことで、中央の生成結果の高さがどれだけ変わっても左右のペインの位置が動かなくなる（`max-height`だけで高さを抑えていた前段の実装では、動画のコントロールバー分だけ実高さが伸び、下のフォームパネルを押し下げてしまっていた）。Kapture経由で実際のブラウザDOM（`getBoundingClientRect()`）とスクリーンショットを直接確認しながら調整した。
+
+**4. First Frame/Last Frameを両方optionalに、LoadImageノードが無いワークフローにも対応**: 「First Frameなしでも動作させたい（ノードをバイパスで処理）。またノードのないワークフローにも対応させたい」との要望。`minimax_test1.json`（first_frame/last_frame双方とも未接続、対応するLoadImageノードがトップレベルに存在しない構成）を新たに確認し、`locateMiniMaxNodes()`のLoadImageノード必須チェックを撤廃。first_frame未指定時はリンクなしのまま実行（バイパス）し、画像が指定された場合のみその場でLoadImageノードを動的に注入する設計に変更（ノードID/リンクIDはclone内の実際の最大値+1で採番するため重複の心配がない）。first_frameスロットにもlast_frameと同様のClearボタンを追加した。
+
+**5. バグ修正: mp4のタグ/メモがComfyUI再起動後に消える**: 「タグ、メモadd、保存操作はできるが記録されていない。画像ファイルもできていない。エラー表示はなし、ブラウザもなし」との報告を受け、`comfyui_8189.log`を直接確認したところ`Cleaned up 189 stale metadata entries from ...\Text2Img`という決定的なログを発見。**根本原因**: `cleanup_stale_images()`は「現在表示中のフォルダ配下」のメタデータキーを全階層（サブフォルダ含む）対象にstale判定するが、Galleryがルートフォルダを非再帰スキャンした場合、`existing_paths`（現在のファイル一覧）にはルート直下のファイルしか含まれない。Videoタブで生成した動画は`SaveVideo`の`filename_prefix`設定で`video/MiniMax_H3/`というサブフォルダに保存されるため、ルートフォルダを開くたびに「サブフォルダ内ファイルは非再帰スキャンには映らない→存在しないと誤判定→メタデータ削除」が発生し、189件ものタグ/メモ/お気に入り情報が消えていた。`cleanup_stale_images()`に`recursive`引数を追加し、非再帰スキャン時はfolder_path直下のみを対象にするよう修正（`gallery_service.py`の`list_images()`から`recursive`をそのまま伝播）。既に削除済みのデータはバックアップが無く復元不可能だった旨をユーザーに伝えた。
+  - 副次的に発見したフロントエンドのバグも合わせて修正: `saveMetaField()`がサーバーのレスポンス（`{"ok": bool}`）を一切チェックせず常に成功したかのようにローカル状態を楽観的更新していたため、サーバー側で保存が拒否されてもUI上はエラーなく成功したように見えてしまう作りになっていた。レスポンスの`ok`フィールドを検証し失敗時は例外を投げるよう変更、`addTag`/`removeTag`/メモ保存ハンドラは戻り値を見て成功時のみローカル状態を更新するよう修正した。保険的措置として`save_image_meta`（バックエンド）の保存キーも`get_image_metadata`と同じ`resolve()`後のパスに統一した。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、新規Video Tabヘルプページを追加。README.mdはバージョンバッジ更新、Workflow Tab（サイドパネルツールバーの3ボタン構成）、Gallery Tab（Downloadボタンの新配置・mp4対応・GenUIボタンへの改名）、新規Video Tabセクション（3ペイン構成・optional First/Last Frame・ノードなしワークフロー対応）を追加した。
+
+**検証**: 全JS/Pythonファイルを`node --check`/`ast.parse()`で構文確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更した全11ファイルを都度同期しmd5ハッシュ比較で完全一致を確認、Pythonファイル変更時は`__pycache__`を全クリア。Kapture（ブラウザDevTools連携）で実際のブラウザに接続し、DOM要素の`getComputedStyle()`/`getBoundingClientRect()`とスクリーンショットで3ペインレイアウトの実測検証、生成後状態はダミー画像をDOMに直接注入して左右ペインが動かないことを確認。mp4のGallery表示・再生、タグ/メモ保存とComfyUI再起動後の永続性、Workflowタブの新規ボタン導線はユーザー自身の実機で確認済み。
+
+**How to apply**: サーバーAPIが常にHTTP 200を返し成否をレスポンスボディの`ok`フィールドで表す設計（このプロジェクト全体で頻出するパターン）では、呼び出し側で必ずそのフィールドをチェックする — でないと「操作はできるがエラーも出ず、実は保存されていない」というサイレント障害が発生し得る。複数のパネルを横並びに配置するレイアウトで「あるパネルの内容量に応じて他のパネルの位置がずれる」不具合が出た場合、`max-height`のような上限指定では実コンテンツが小さいときに縮んでしまい根本解決にならない — 各パネルを独立したflexカラムに分離し、パネル間で高さを共有させない構造にするのが確実。「フォルダ配下」を対象にした一括処理（今回のstale cleanup）を書く際は、その処理が使う「現在のファイル一覧」がフォルダの全階層をカバーしているか（非再帰スキャンならサブフォルダは含まれない）を必ず確認し、範囲の不一致がないか意識する。ブラウザで実際に何が起きているか切り分けが必要な場面では、コードを読むだけでなくKapture等でDOMの実測値を直接取得するのが最も確実。
+
+関連: [[project_dev_deploy_sync]], [[project_v0336_conventions]]
+
+---
+
 ## v0.4.8
 
 ### 機能追加: LabタブにPromptグループ一括適用＋キーフレーム並べ替え + バグ修正: デフォルトワークフローの上書き保存が反映されない + Styleテーブルの「このファイルへ追加」対応

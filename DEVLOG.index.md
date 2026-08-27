@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.5.0** — 機能追加: mp4動画Gallery対応 + Videoタブ新設(MiniMax H3専用) + バグ修正: Galleryのタグ/メモが再起動後に消える
 - **v0.4.8** — 機能追加: LabタブにPromptグループ一括適用＋キーフレーム並べ替え + バグ修正: デフォルトワークフローの上書き保存が反映されない + Styleテーブルの「このファイルへ追加」対応
 - **v0.4.7** — 機能追加: Prompt Tab内部リファクタ + Gallery Promptタブ新設 + Send to Canvas改善 + Presetsソート
 - **v0.4.6** — 機能追加: MetadataタブをGalleryタブへ統合 + Promptタブに一覧編集可能なTable表示を新設

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/wfm_static/css/tagger-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/image-edit-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/lab-tab.css">
+    <link rel="stylesheet" href="/wfm_static/css/video-tab.css">
 </head>
 <body>
     <!-- Header -->
@@ -25,6 +26,7 @@
             <button class="wfm-tab" data-tab="prompt">Prompt</button>
             <button class="wfm-tab" data-tab="gallery">Gallery</button>
             <button class="wfm-tab" data-tab="image-edit">Image Edit</button>
+            <button class="wfm-tab" data-tab="video">Video</button>
             <button class="wfm-tab" data-tab="tagger">Tagger</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
@@ -54,6 +56,7 @@
                         <option value="">All Groups</option>
                     </select>
                     <button id="wfm-list-load-btn" class="wfm-btn wfm-btn-sm wfm-btn-primary" disabled title="Select a card first">Load in GenerateUI</button>
+                    <button id="wfm-list-load-video-btn" class="wfm-btn wfm-btn-sm" disabled title="Select a card first">Load in Video</button>
                     <button id="wfm-list-open-comfyui-btn" class="wfm-btn wfm-btn-sm" disabled title="Select a card first">Send to Canvas</button>
                     <div class="wfm-view-btns">
                         <button class="wfm-view-btn active" data-view="thumb" title="Thumbnail">&#8862;</button>
@@ -1336,6 +1339,7 @@
                         <button class="wfm-help-nav-item" data-help-page="aitool">AI TOOL Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="tagger">Tagger Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="imageedit">Image Edit Tab</button>
+                        <button class="wfm-help-nav-item" data-help-page="video">Video Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="shortcuts">Keyboard Shortcuts</button>
                         <button class="wfm-help-nav-item" data-help-page="trouble">Troubleshooting</button>
                     </div>
@@ -2083,6 +2087,20 @@
                         </div>
                     </div>
 
+                    <div class="wfm-help-page" id="wfm-help-page-video">
+                        <h2 id="wfm-help-video-title">Video Tab</h2>
+                        <p id="wfm-help-video-desc">A dedicated video generation tab for the MiniMax H3 (Image to Video) workflow, independent of the GenerateUI tab.</p>
+                        <div class="wfm-help-card">
+                            <ul>
+                                <li id="wfm-help-video-1">Set first_frame (optional) / last_frame (optional) images, prompt, aspect_ratio / megapixels / multiple (resolution), duration (seconds), and noise_seed, then click Generate. Leaving first_frame empty runs the workflow text-only (bypassed), and workflows with no LoadImage node at all are also supported.</li>
+                                <li id="wfm-help-video-2">Model selection (UNet / CLIP / VAE / Audio VAE) is fixed to the loaded workflow's defaults and cannot be changed from this tab.</li>
+                                <li id="wfm-help-video-3">Use the "Load in Video" button in the Workflow tab's detail modal to load a workflow containing a MiniMax H3 Image-to-Video node. Unsupported workflows show an error instead.</li>
+                                <li id="wfm-help-video-4">Generated videos (mp4) can also be browsed and played back in the Gallery tab.</li>
+                            </ul>
+                        </div>
+                        <button class="wfm-help-jump-btn wfm-btn wfm-btn-sm" data-jump-tab="video">Go to Video Tab</button>
+                    </div>
+
                     <div class="wfm-help-page" id="wfm-help-page-shortcuts">
                         <div class="wfm-help-article-header">
                             <h2 id="wfm-help-shortcuts-title">Keyboard Shortcuts</h2>
@@ -2286,8 +2304,9 @@
                     </div>
                     <div class="wfm-gallery-detail-action-row">
                         <button id="wfm-gallery-open-metadata-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-green" title="Open in Metadata tab (or Alt+click image)">Metadata</button>
-                        <button id="wfm-gallery-load-genui-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-primary" title="Load workflow into GenerateUI">Load GenUI</button>
+                        <button id="wfm-gallery-load-genui-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-primary" title="Load workflow into GenerateUI">GenUI</button>
                         <button id="wfm-gallery-open-tagger-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-tagger" title="Open in Tagger"></button>
+                        <button id="wfm-gallery-download-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-orange" title="Download">Download</button>
                     </div>
                     <!-- Info タブ -->
                     <div id="wfm-gallery-detail-info" class="wfm-gallery-detail-tab-content" style="display:none;">
@@ -2655,6 +2674,110 @@
                         <input type="range" id="ie-layer-opacity" min="0" max="100" value="100">
                         <span id="ie-layer-opacity-label">100%</span>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Video Tab (MiniMax H3専用・GenerateUIタブとは独立) -->
+        <section id="wfm-tab-video" class="wfm-tab-content">
+            <div class="wfm-video-layout">
+                <div class="wfm-video-form-panel">
+                    <div class="wfm-video-header">
+                        <h3 id="wfm-video-title-label">Video (MiniMax H3)</h3>
+                        <span id="wfm-video-wf-name" class="wfm-video-wf-name">No workflow loaded</span>
+                    </div>
+
+                    <div class="wfm-video-frame-slots">
+                        <div class="wfm-video-frame-slot">
+                            <label id="wfm-video-first-frame-label">First Frame (optional)</label>
+                            <div class="wfm-i2i-preview-wrap" id="wfm-video-first-frame-wrap" style="display:none;">
+                                <img class="wfm-i2i-preview-img" id="wfm-video-first-frame-preview">
+                            </div>
+                            <div class="wfm-i2i-drop-zone" id="wfm-video-first-frame-drop">
+                                <label class="wfm-i2i-drop-label">
+                                    <span id="wfm-video-first-frame-drop-label">Drop image or click to select</span>
+                                    <input type="file" accept="image/*" id="wfm-video-first-frame-file" style="display:none;">
+                                </label>
+                            </div>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <span class="wfm-i2i-status" id="wfm-video-first-frame-status" style="flex:1;"></span>
+                                <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-first-frame-clear">Clear</button>
+                            </div>
+                        </div>
+                        <div class="wfm-video-frame-slot">
+                            <label id="wfm-video-last-frame-label">Last Frame (optional)</label>
+                            <div class="wfm-i2i-preview-wrap" id="wfm-video-last-frame-wrap" style="display:none;">
+                                <img class="wfm-i2i-preview-img" id="wfm-video-last-frame-preview">
+                            </div>
+                            <div class="wfm-i2i-drop-zone" id="wfm-video-last-frame-drop">
+                                <label class="wfm-i2i-drop-label">
+                                    <span id="wfm-video-last-frame-drop-label">Drop image or click to select</span>
+                                    <input type="file" accept="image/*" id="wfm-video-last-frame-file" style="display:none;">
+                                </label>
+                            </div>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <span class="wfm-i2i-status" id="wfm-video-last-frame-status" style="flex:1;"></span>
+                                <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-last-frame-clear">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <label for="wfm-video-prompt" id="wfm-video-prompt-label">Prompt</label>
+                    <textarea id="wfm-video-prompt" class="wfm-textarea" rows="6"></textarea>
+
+                    <div class="wfm-video-resolution-row">
+                        <div>
+                            <label for="wfm-video-aspect-ratio" id="wfm-video-aspect-ratio-label">Aspect Ratio</label>
+                            <select id="wfm-video-aspect-ratio" class="wfm-input"></select>
+                        </div>
+                        <div>
+                            <label for="wfm-video-megapixels" id="wfm-video-megapixels-label">Megapixels</label>
+                            <input type="number" id="wfm-video-megapixels" class="wfm-input" step="0.01" min="0.01" value="0.2">
+                        </div>
+                        <div>
+                            <label for="wfm-video-multiple" id="wfm-video-multiple-label">Multiple</label>
+                            <input type="number" id="wfm-video-multiple" class="wfm-input" step="8" min="8" value="32">
+                        </div>
+                    </div>
+
+                    <div class="wfm-video-resolution-row">
+                        <div>
+                            <label for="wfm-video-duration" id="wfm-video-duration-label">Duration (seconds)</label>
+                            <input type="number" id="wfm-video-duration" class="wfm-input" step="0.5" min="0.5" value="2">
+                        </div>
+                        <div>
+                            <label for="wfm-video-noise-seed" id="wfm-video-noise-seed-label">Noise Seed</label>
+                            <input type="number" id="wfm-video-noise-seed" class="wfm-input" value="0">
+                        </div>
+                        <div class="wfm-video-seed-randomize-wrap">
+                            <label><input type="checkbox" id="wfm-video-seed-randomize" checked> <span id="wfm-video-randomize-label">Randomize</span></label>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+                        <button id="wfm-video-generate-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Generate</button>
+                    </div>
+                    <div class="wfm-gen-progress-container">
+                        <div class="wfm-gen-progress-track">
+                            <div id="wfm-video-progress-bar" class="wfm-gen-progress-bar"></div>
+                        </div>
+                        <span id="wfm-video-progress-text" class="wfm-gen-progress-text">Ready</span>
+                    </div>
+                </div>
+                <!-- 中央ペイン: プレビュー + 編集(将来機能用プレースホルダー) -->
+                <div class="wfm-video-center-panel">
+                    <div class="wfm-video-result-panel">
+                        <h4 id="wfm-video-result-label">Result</h4>
+                        <div id="wfm-video-result"><p class="wfm-placeholder" id="wfm-video-no-result-label">No result yet</p></div>
+                    </div>
+                    <div class="wfm-video-edit-panel">
+                        <span id="wfm-video-edit-placeholder-label" class="wfm-placeholder">Editing tools coming soon</span>
+                    </div>
+                </div>
+                <!-- 右ペイン: プロパティ(将来機能用プレースホルダー) -->
+                <div class="wfm-video-properties-panel">
+                    <h4 id="wfm-video-properties-label">Properties</h4>
+                    <span id="wfm-video-properties-placeholder-label" class="wfm-placeholder">Coming soon</span>
                 </div>
             </div>
         </section>
