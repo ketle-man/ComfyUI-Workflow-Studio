@@ -1,8 +1,11 @@
 """Settings API routes."""
 
 import asyncio
+import io
 import json
 import logging
+import shutil
+import zipfile
 from pathlib import Path
 
 from aiohttp import web
@@ -24,6 +27,7 @@ _DATA_FILES = [
     "model_metadata.json",
     "gallery_metadata.json",
     "tagger_settings.json",
+    "civitai_cache.json",
 ]
 
 
@@ -37,6 +41,8 @@ def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/settings/output-dir", handle_set_output_dir)
     app.router.add_get("/api/wfm/settings/export", handle_export)
     app.router.add_post("/api/wfm/settings/import", handle_import)
+    app.router.add_get("/api/wfm/settings/export-full", handle_export_full)
+    app.router.add_post("/api/wfm/settings/import-full", handle_import_full)
     app.router.add_get("/api/wfm/styles", handle_get_styles)
     app.router.add_post("/api/wfm/styles", handle_create_style)
     app.router.add_put("/api/wfm/styles/{name}", handle_update_style)
@@ -245,6 +251,152 @@ async def handle_import(request: web.Request) -> web.Response:
         return web.json_response({"status": "ok", **summary})
     except Exception as e:
         logger.error("Error importing data: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+# Full-backup (ZIP) export/import: unlike the flat _DATA_FILES JSON bundle above, this
+# covers the whole DATA_DIR — directory-shaped data (ai_skills/, lab_plan/, style/) and
+# the SQLite tagger.db that the JSON bundle can't represent. Excludes transient/cache
+# dirs, and wildcard/ specifically because it's typically a symlink into a *different*
+# custom_node's folder (comfyui-impact-pack) rather than this plugin's own data.
+_FULL_BACKUP_EXCLUDE_NAMES = {"gmic_temp", "thumb_cache", "wildcard"}
+
+
+def _add_file_to_zip(zf: zipfile.ZipFile, path: Path, base: Path):
+    rel = str(path.relative_to(base)).replace("\\", "/")
+    if path.name == "settings.json":
+        # Same API-key scrubbing as the JSON-bundle export — fall through to a raw
+        # copy if the file turns out to be unreadable/corrupt rather than skipping it.
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            data = {k: v for k, v in data.items() if k not in _SETTINGS_EXPORT_EXCLUDE}
+            zf.writestr(rel, json.dumps(data, ensure_ascii=False, indent=2))
+            return
+        except Exception:
+            pass
+    zf.write(path, rel)
+
+
+# Two folders this plugin doesn't own but users often want backed up alongside their
+# own data: ComfyUI's own default workflows dir, and the Impact Pack's wildcard
+# library (a separate custom_node — the plugin's own wildcard/ is usually just a
+# symlink into this same folder, see _FULL_BACKUP_EXCLUDE_NAMES above). Opt-in only
+# (see handle_export_full's include_workflows/include_wildcard query params), and
+# stored under an "_external/" prefix so _apply_full_backup_zip can recognize and
+# skip them on restore — see that function's docstring for why.
+def _default_workflows_dir() -> Path:
+    from ..config import COMFYUI_ROOT
+    return COMFYUI_ROOT / "user" / "default" / "workflows"
+
+
+def _impact_pack_wildcard_dir() -> Path:
+    from ..config import COMFYUI_ROOT
+    return COMFYUI_ROOT / "custom_nodes" / "comfyui-impact-pack" / "wildcards"
+
+
+def _add_external_dir_to_zip(zf: zipfile.ZipFile, src_dir: Path, zip_prefix: str):
+    if not src_dir.is_dir() or src_dir.is_symlink():
+        return
+    for path in src_dir.rglob("*"):
+        if path.is_dir() or path.is_symlink():
+            continue
+        rel = f"{zip_prefix}/{path.relative_to(src_dir)}".replace("\\", "/")
+        zf.write(path, rel)
+
+
+def _build_full_backup_zip(include_workflows: bool = False, include_wildcard: bool = False) -> bytes:
+    """Zips everything under DATA_DIR except the excluded names above. Walks
+    top-level entries first so an excluded symlinked directory (wildcard/) is never
+    even opened, rather than filtering after a recursive walk has already followed it.
+    Optionally also includes the two external folders above under "_external/"."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for top in sorted(DATA_DIR.iterdir()):
+            if top.name in _FULL_BACKUP_EXCLUDE_NAMES or top.is_symlink():
+                continue
+            if top.is_file():
+                _add_file_to_zip(zf, top, DATA_DIR)
+            elif top.is_dir():
+                for path in top.rglob("*"):
+                    if path.is_dir() or path.is_symlink():
+                        continue
+                    _add_file_to_zip(zf, path, DATA_DIR)
+
+        if include_workflows:
+            _add_external_dir_to_zip(zf, _default_workflows_dir(), "_external/default_workflows")
+        if include_wildcard:
+            _add_external_dir_to_zip(zf, _impact_pack_wildcard_dir(), "_external/wildcard")
+    return buf.getvalue()
+
+
+def _apply_full_backup_zip(zip_bytes: bytes) -> dict:
+    """Extracts a full-backup ZIP into DATA_DIR, overwriting existing files. Guards
+    against Zip Slip (entries whose path resolves outside DATA_DIR via '..' or an
+    absolute path) by checking each entry before writing it.
+
+    Entries under "_external/" (default workflows dir, Impact Pack wildcards — see
+    _build_full_backup_zip) are always skipped here rather than restored: they live
+    outside DATA_DIR and are managed by ComfyUI core / a different custom_node, so
+    auto-restoring them could silently overwrite files this plugin doesn't own. They
+    stay in the ZIP for the user to copy back manually if they want them."""
+    summary = {"extracted": [], "skipped": []}
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    base = DATA_DIR.resolve()
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            if info.filename.startswith("_external/"):
+                summary["skipped"].append(info.filename)
+                continue
+            target = (base / info.filename).resolve()
+            try:
+                target.relative_to(base)
+            except ValueError:
+                summary["skipped"].append(info.filename)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            summary["extracted"].append(info.filename)
+    return summary
+
+
+async def handle_export_full(request: web.Request) -> web.Response:
+    """GET /api/wfm/settings/export-full - Download a ZIP of the entire data
+    directory, including data the flat JSON bundle (handle_export) can't represent.
+    Optional query params include_workflows=1 / include_wildcard=1 additionally bundle
+    ComfyUI's default workflows dir / the Impact Pack's wildcard dir (see
+    _build_full_backup_zip) — both restore-excluded, export-only, manual-copy-back."""
+    try:
+        include_workflows = request.rel_url.query.get("include_workflows") == "1"
+        include_wildcard = request.rel_url.query.get("include_wildcard") == "1"
+        zip_bytes = await asyncio.to_thread(_build_full_backup_zip, include_workflows, include_wildcard)
+        return web.Response(
+            body=zip_bytes,
+            content_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="wfm-full-backup.zip"'},
+        )
+    except Exception as e:
+        logger.error("Error building full backup: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_import_full(request: web.Request) -> web.Response:
+    """POST /api/wfm/settings/import-full - Upload and restore a full-backup ZIP."""
+    try:
+        reader = await request.multipart()
+        field = await reader.next()
+        if field is None or field.name != "file":
+            return web.json_response({"error": "file field required"}, status=400)
+        zip_bytes = await field.read(decode=False)
+        summary = await asyncio.to_thread(_apply_full_backup_zip, zip_bytes)
+        return web.json_response({"status": "ok", **summary})
+    except zipfile.BadZipFile:
+        return web.json_response({"error": "Not a valid ZIP file"}, status=400)
+    except Exception as e:
+        logger.error("Error importing full backup: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 

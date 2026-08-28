@@ -908,6 +908,7 @@
                     <!-- Result Display -->
                     <div class="wfm-gen-result">
                         <img id="wfm-gen-result-img" style="display:none;max-width:100%;border-radius:6px;">
+                        <video id="wfm-gen-result-video" controls style="display:none;max-width:100%;border-radius:6px;"></video>
                         <div id="wfm-gen-result-thumbs" class="wfm-gen-thumbs"></div>
                     </div>
                 </div>
@@ -1688,7 +1689,9 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-settings-card-misc-title">Data &amp; Misc</h3>
                             <ul>
-                                <li id="wfm-help-settings-8">Data Management: export all plugin data to JSON / import to restore</li>
+                                <li id="wfm-help-settings-8">Data Management: export core settings/metadata/prompts to JSON / import to restore</li>
+                                <li id="wfm-help-settings-15">Full Backup (ZIP): unlike the JSON export above, also includes folder-based data (AI Skills, Lab Plans, Style presets) and the Tagger database; Restore overwrites existing files — restart ComfyUI afterward</li>
+                                <li id="wfm-help-settings-16">Two opt-in checkboxes above the Full Backup buttons additionally include ComfyUI's default workflows folder and the Impact Pack's wildcard folder in the export — both export-only, never restored automatically; copy the ZIP's _external/ folder back by hand if you want them</li>
                                 <li id="wfm-help-settings-13">CivitAI Host: choose between civitai.com (SFW only) and civitai.red (unrestricted) — determines which site opens when clicking a model link in the Models tab CivitAI panel</li>
                             </ul>
                         </div>
@@ -1780,6 +1783,7 @@
                                 <li id="wfm-help-gallery-14"><b>Tagger</b> button (purple, in the detail panel action row): opens the selected image directly in the Tagger tab's Single mode for instant tagging</li>
                                 <li id="wfm-help-gallery-16"><b>Image Edit</b> button (toolbar, next to Refresh): sends the currently selected image to the Image Edit tab; if layers already exist the image is added as a new layer scaled to fit the canvas, otherwise it becomes Layer 1</li>
                                 <li id="wfm-help-gallery-17"><b>Send GenUI Image</b> button (toolbar, next to Image Edit): uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded first</li>
+                                <li id="wfm-help-gallery-27"><b>Send to LI node</b> button (toolbar, next to Send GenUI Image): uploads the selected image and writes its filename into the image widget of the currently selected node on the ComfyUI canvas (falling back to the first LoadImage-type node found) — same destination as Image Edit tab's Send to LI node; requires Workflow Studio to have been opened from ComfyUI's top menu button</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -2096,6 +2100,9 @@
                                 <li id="wfm-help-video-2">Model selection (UNet / CLIP / VAE / Audio VAE) is fixed to the loaded workflow's defaults and cannot be changed from this tab.</li>
                                 <li id="wfm-help-video-3">Use the "Load in Video" button in the Workflow tab's detail modal to load a workflow containing a MiniMax H3 Image-to-Video node. Unsupported workflows show an error instead.</li>
                                 <li id="wfm-help-video-4">Generated videos (mp4) can also be browsed and played back in the Gallery tab.</li>
+                                <li id="wfm-help-video-5">The Video Source panel next to the preview lets you drop or pick any local video (not just a generated one) to use the Frame/GIF tools below without running MiniMax H3 first; Clear resets it back to empty.</li>
+                                <li id="wfm-help-video-6">Frame tab (right panel): play/seek the preview video to the position you want, click Capture Frame to grab that frame client-side, then Save to Output to write it as a PNG into ComfyUI's output folder.</li>
+                                <li id="wfm-help-video-7">GIF tab (right panel): set Start/End (seconds), FPS, and an optional Max Width, then Convert to GIF — the server decodes the video and encodes an animated GIF into ComfyUI's output folder.</li>
                             </ul>
                         </div>
                         <button class="wfm-help-jump-btn wfm-btn wfm-btn-sm" data-jump-tab="video">Go to Video Tab</button>
@@ -2233,6 +2240,7 @@
                         <option value="name_asc">Name A-Z</option>
                         <option value="name_desc">Name Z-A</option>
                     </select>
+                    <button id="wfm-gallery-clear-filters-btn" class="wfm-btn wfm-btn-sm" title="Clear all filters"></button>
                     <div class="wfm-view-btns">
                         <button class="wfm-view-btn active" data-gallery-view="thumb" title="Thumbnail">&#8862;</button>
                         <button class="wfm-view-btn" data-gallery-view="table" title="Table">&#8801;</button>
@@ -2241,8 +2249,8 @@
                     <button id="wfm-gallery-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
                     <button id="wfm-gallery-send-image-edit-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to Image Edit tab">Image Edit</button>
                     <button id="wfm-gallery-send-genui-image-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to GenerateUI Image input">Send GenUI Image</button>
+                    <button id="wfm-gallery-send-li-node-btn" class="wfm-btn wfm-btn-sm" title="Upload and write selected image's filename into the selected node's image widget (e.g. LoadImage)">Send to LI node</button>
                     <button id="wfm-gallery-send-cc-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to ComfyUI Comic Creator's selected panel" style="display:none;">Send CC</button>
-                    <button id="wfm-gallery-clear-filters-btn" class="wfm-btn wfm-btn-sm" title="Clear all filters"></button>
                 </div>
                 <!-- 複数選択時の一括操作バー -->
                 <div id="wfm-gallery-bulk-bar" class="wfm-gallery-bulk-bar" style="display:none;">
@@ -2622,7 +2630,7 @@
                         <button class="wfm-btn wfm-btn-sm" id="ie-redo-btn" title="Redo (Ctrl+Y)">↪</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-save-btn">Save PNG</button>
                         <button class="wfm-btn wfm-btn-sm" id="ie-save-gallery-btn" title="Save to Gallery root folder">Save to Gallery</button>
-                        <button class="wfm-btn wfm-btn-sm" id="ie-send-workflow-btn" title="Upload and write this image's filename into the selected node's image widget (e.g. LoadImage)">Send to Workflow</button>
+                        <button class="wfm-btn wfm-btn-sm" id="ie-send-workflow-btn" title="Upload and write this image's filename into the selected node's image widget (e.g. LoadImage)">Send to LI node</button>
                     </div>
 
                     <!-- Tool options -->
@@ -2765,20 +2773,78 @@
                         <span id="wfm-video-progress-text" class="wfm-gen-progress-text">Ready</span>
                     </div>
                 </div>
-                <!-- 中央ペイン: プレビュー + 編集(将来機能用プレースホルダー) -->
+                <!-- 中央ペイン: プレビュー(生成結果 or ドロップされた任意の動画) + 編集(将来機能用プレースホルダー) -->
                 <div class="wfm-video-center-panel">
-                    <div class="wfm-video-result-panel">
-                        <h4 id="wfm-video-result-label">Result</h4>
-                        <div id="wfm-video-result"><p class="wfm-placeholder" id="wfm-video-no-result-label">No result yet</p></div>
+                    <div class="wfm-video-preview-row">
+                        <div class="wfm-video-preview-frame" id="wfm-video-preview-frame">
+                            <span class="wfm-placeholder" id="wfm-video-preview-placeholder">No video</span>
+                            <video id="wfm-video-preview-video" class="wfm-video-preview-el" controls style="display:none;"></video>
+                        </div>
+                        <div class="wfm-video-source-panel">
+                            <div class="wfm-video-pane-header" id="wfm-video-source-label">Video Source</div>
+                            <p class="wfm-video-prop-hint" id="wfm-video-source-hint">Load any video here to use Frame/GIF tools without generating one.</p>
+                            <div class="wfm-i2i-drop-zone" id="wfm-video-source-drop">
+                                <label class="wfm-i2i-drop-label">
+                                    <span id="wfm-video-source-drop-label">Drop video or click to select</span>
+                                    <input type="file" accept="video/*" id="wfm-video-source-file" style="display:none;">
+                                </label>
+                            </div>
+                            <div style="display:flex;gap:6px;align-items:center;margin-top:6px;">
+                                <span class="wfm-i2i-status" id="wfm-video-source-status" style="flex:1;"></span>
+                                <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-source-clear">Clear</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="wfm-video-edit-panel">
                         <span id="wfm-video-edit-placeholder-label" class="wfm-placeholder">Editing tools coming soon</span>
                     </div>
                 </div>
-                <!-- 右ペイン: プロパティ(将来機能用プレースホルダー) -->
+                <!-- 右ペイン: プロパティ(Frame抽出 / GIF変換の2タブ) -->
                 <div class="wfm-video-properties-panel">
-                    <h4 id="wfm-video-properties-label">Properties</h4>
-                    <span id="wfm-video-properties-placeholder-label" class="wfm-placeholder">Coming soon</span>
+                    <div class="wfm-video-prop-tabnav">
+                        <button type="button" class="wfm-video-prop-tab active" data-prop-tab="frame" id="wfm-video-prop-tab-frame">Frame</button>
+                        <button type="button" class="wfm-video-prop-tab" data-prop-tab="gif" id="wfm-video-prop-tab-gif">GIF</button>
+                    </div>
+
+                    <div id="wfm-video-prop-frame" class="wfm-video-prop-content active">
+                        <p class="wfm-video-prop-hint" id="wfm-video-frame-hint">Play/seek the preview video to the position you want, then capture.</p>
+                        <button type="button" id="wfm-video-frame-capture-btn" class="wfm-btn wfm-btn-sm" style="width:100%;">Capture Frame</button>
+                        <div class="wfm-i2i-preview-wrap" id="wfm-video-frame-preview-wrap" style="display:none;">
+                            <img class="wfm-i2i-preview-img" id="wfm-video-frame-preview-img">
+                        </div>
+                        <button type="button" id="wfm-video-frame-save-btn" class="wfm-btn wfm-btn-primary wfm-btn-sm" style="width:100%;margin-top:6px;" disabled>Save to Output</button>
+                        <span class="wfm-i2i-status" id="wfm-video-frame-status"></span>
+                    </div>
+
+                    <div id="wfm-video-prop-gif" class="wfm-video-prop-content" style="display:none;">
+                        <div class="wfm-lab-field-row">
+                            <label id="wfm-video-gif-start-label">Start (s)</label>
+                            <input type="number" id="wfm-video-gif-start" class="wfm-input" value="0" min="0" step="0.1">
+                        </div>
+                        <div class="wfm-lab-field-row">
+                            <label id="wfm-video-gif-end-label">End (s)</label>
+                            <input type="number" id="wfm-video-gif-end" class="wfm-input" placeholder="end" min="0" step="0.1">
+                        </div>
+                        <div class="wfm-lab-field-row">
+                            <label id="wfm-video-gif-fps-label">FPS</label>
+                            <input type="number" id="wfm-video-gif-fps" class="wfm-input" value="10" min="1" max="30">
+                        </div>
+                        <div class="wfm-lab-field-row">
+                            <label id="wfm-video-gif-width-label">Max Width</label>
+                            <input type="number" id="wfm-video-gif-width" class="wfm-input" placeholder="original" min="16">
+                        </div>
+                        <button type="button" id="wfm-video-gif-convert-btn" class="wfm-btn wfm-btn-primary wfm-btn-sm" style="width:100%;margin-top:8px;">Convert to GIF</button>
+                        <div class="wfm-gen-progress-container" style="margin-top:8px;">
+                            <div class="wfm-gen-progress-track">
+                                <div id="wfm-video-gif-progress-bar" class="wfm-gen-progress-bar"></div>
+                            </div>
+                            <span id="wfm-video-gif-progress-text" class="wfm-gen-progress-text"></span>
+                        </div>
+                        <div class="wfm-i2i-preview-wrap" id="wfm-video-gif-preview-wrap" style="display:none;">
+                            <img class="wfm-i2i-preview-img" id="wfm-video-gif-preview-img">
+                        </div>
+                        <span class="wfm-i2i-status" id="wfm-video-gif-status"></span>
+                    </div>
                 </div>
             </div>
         </section>

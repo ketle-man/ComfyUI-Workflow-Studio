@@ -2,6 +2,38 @@
 
 ---
 
+## v0.5.2
+
+### 機能追加: GenerateUI/Labタブの動画ワークフロー対応 + VideoタブにFrame抽出/GIF変換機能 + データ管理監査とZIPフルバックアップ + Send to LI node統一
+
+v0.5.0/v0.5.1で専用Videoタブを整備したMiniMax H3動画生成ワークフローを、GenerateUI/Labタブ本体でも扱えるようにする要望を起点に着手。1セッションで複数の要望・バグ報告・監査依頼を順に実装した一連の作業。
+
+**1. GenerateUI/Labタブの動画ワークフロー対応**: 「MiniMax H3の動画生成ワークフローを生成UIタブ、Labタブでも生成できるようにしたい」との要望。実際には`comfyWorkflow.convertUiToApi()`+`comfyUI.generate()`が既に汎用的で生成自体は動いていたが、`analyzeWorkflow()`が`MiniMaxH3ImageToVideo`のようなCLIPTextEncodeを介さないオールインワン動画ノードのpromptを検出できず、GenerateUIのInput>Promptタブが空になっていた。クラス名が`ImageToVideo`/`TextToVideo`を含み`inputs.prompt`が文字列のノードを汎用的に拾う分岐を追加（`metadata-tab.js`/`node_sets_menu.js`に既にあったプロンプト抽出と同じ判定パターン）。GenerateUIとLabタブは共に同じ`comfyUI.currentAnalysis`を参照する設計だったため、この一箇所の修正でPromptタブとLabのキーフレーム書き込みの両方が動画ワークフローに対応した。画像(first_frame)は既存のLoadImage検出がそのまま拾う。あわせて、動画生成は静止画より大幅に時間がかかるため`comfyWorkflow.isVideoWorkflow(analysis)`ヘルパーを新設し、動画ワークフロー検出時はGenerateUI/Labとも生成タイムアウトを30分に延長。GenerateUIの結果プレビューは`<img>`固定だったため動画結果が正しく表示できなかった問題も、`<video>`要素を追加し出力ファイルの拡張子で出し分けるよう修正した。
+
+**2. バグ修正: Labタブのindex imageが真っ黒になる**: 実機確認で発覚。コンタクトシート生成（`_buildIndexImageDataUrl`）が各結果を`<img>`要素として読み込もうとしており、mp4は画像として読み込めず失敗、そのセルはcanvasの黒背景がそのまま残っていた。動画結果は既存のchain image機能で使っていた最終フレーム抽出ロジック（`extractLastFrameBlob`、`<video>`+`<canvas>`でクライアント側完結）を再利用してフレームを取り出してから描画するよう修正。
+
+**3. バグ修正: LabタブKsampler列が動画ワークフローでも表示される**: 「Model同様に該当ノードがなければ非表示にしたい」との要望に対し当初`sampler_nodes.length > 0`で判定したが、実機確認で「まだ表示される」との報告。原因はMiniMax H3のサブグラフ内部に実際に`SamplerCustomAdvanced`が配線されており（内部プリセットの一部で、ユーザーが調整すべきものではない）、単純な有無判定では引っかからなかったこと。判定を`comfyWorkflow.isVideoWorkflow(analysis)`ベースに切り替え、動画ワークフロー全体ではKsampler列自体を常に非表示にするよう修正した。
+
+**4. Videoタブ拡張: Frame抽出 / アニメーションGIF変換**: Eagleプラグイン（video-to-frame, video2gif）を参考に要望された2機能。Eagle版はNode.js+ffmpegバイナリ直接呼び出しの実装だったため、ComfyUI-Workflow-Studioの構成（Python/aiohttpバックエンド）に合わせて設計し直した。フレーム抽出は`<video>`+`<canvas>`でブラウザ完結（サーバー往復・追加依存なし）。GIF変換はユーザー確認の上サーバー側実装を選択：PyAV（デコード）+ Pillow（GIFエンコード）— どちらもComfyUI本体が既に要求している依存のため、ffmpegバイナリや新規ライブラリの追加インストールは不要。`py/services/video_service.py` / `py/routes/video_routes.py`を新規追加し、`folder_paths.get_save_image_path()`でComfyUI標準の自動採番保存パターンをそのまま踏襲。合成テスト動画（PyAVで生成）を使いvenv環境でデコード→GIFエンコードの実処理を検証済み。
+  - あわせてVideoタブの中央パネルを再設計：「結果」見出し/「まだ結果がありません」表示を廃止し、生成結果とドロップされた任意のローカル動画を同じプレビュー枠に統合、横に**Video Source**ドロップ/クリック選択エリア（Clearボタン付き）を新設。右パネルの「Properties」プレースホルダーを**Frame**/**GIF**の2タブに置き換え。生成結果に限らず任意の動画に対してFrame/GIF機能が使える設計にした。
+
+**5. データ管理の監査とZIPフルバックアップ機能の新規実装**: 「設定のデータ管理を現在のバージョンで対応できているか確認してほしい」との依頼を受け、既存の`_DATA_FILES`（単一JSONバンドル方式）と実際のデータディレクトリを突き合わせ監査。**`civitai_cache.json`（3.6MB、CivitAI連携キャッシュ）がエクスポート対象から漏れていた**ことを発見し即修正。また、ヘルプが謳う「export all plugin data」に反し、フォルダ形式のデータ（`ai_skills/`、`lab_plan/`、`style/`）とSQLite DB（`tagger.db`）が単一JSONバンドル方式では原理的に扱えず完全に対象外になっていた点をユーザーに報告、ZIP形式のフルバックアップ機能を新規実装する方針で合意。`DATA_DIR`配下を丸ごとZIP化する`GET /api/wfm/settings/export-full`/`POST /api/wfm/settings/import-full`を追加（一時ファイル系`gmic_temp`/`thumb_cache`と、他custom_node（comfyui-impact-pack）へのシンボリックリンクである`wildcard/`のみ除外、`settings.json`はAPIキーを除外してから含める）。復元側はZip Slip対策（`../`等でDATA_DIR外に書き込もうとするエントリは`relative_to()`チェックでスキップ）を実装し、悪意あるZIPでの検証済み。
+  - 追加要望「デフォルトワークフローフォルダー（`user/default/workflows`）とwildcardフォルダー（`comfyui-impact-pack/wildcards`）もオプションでバックアップに含めたいが、インポートは除外し手動対応としたい」に対応：エクスポート画面にオプトインのチェックボックスを2つ追加、有効時はZIP内に`_external/`プレフィックスで格納し、復元処理は`_external/`配下のエントリを常にスキップする実装にした（他プラグイン/ComfyUI本体が管理する領域を自動上書きしないため）。実データ（ワークフロー535件・wildcard 34件）で検証済み。
+
+**6. Send to LI node機能をGalleryタブにも追加 + ボタン名統一**: Image Editタブに既にあった「選択画像をComfyUIキャンバス上の選択中ノードのimageウィジェットへ送る」機能（`window.opener.wfmSendImageToSelectedNode`、`node_sets_menu.js`で定義されたクロスウィンドウ橋渡し）を、Galleryタブの選択画像にも使えるよう追加。Galleryの画像は任意のフォルダにあり得るため、既存の「Send GenUI Image」と異なりLoadImageノードの有無に依存せず、`/upload/image`でinputフォルダへアップロードしてからファイル名を書き込む方式にした。あわせてImage Edit側の既存ボタン名「Send to Workflow」を「Send to LI node」に統一（トースト文言・コメント・ヘルプも合わせて更新）。
+
+**7. Galleryタブ ✕クリアボタンの位置移動**: 「表示形式切替ボタン左隣に移動したい」との要望どおり、`wfm-gallery-clear-filters-btn`をSort selectとView切替ボタンの間から、View切替ボタン（Thumbnail/Table）の左隣へ移動。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、Video Tab（Video Source/Frame/GIFの3項目）、Lab subtab（Ksampler非表示・chain image動画対応の項目文言修正）、Settings（Data Managementのフルバックアップ・オプション外部フォルダの2項目）、Gallery Tab（Send to LI nodeボタンの項目）のヘルプ本文を英語・日本語・中国語の3言語で追加・更新。README.mdはVideo Tab（Frame/GIFタブ、Video Sourceパネル）、GenerateUI Tab（動画ワークフロー対応）、Lab subtab（動画ワークフロー対応・chain image動画対応、バージョン見出し範囲更新）、Settings Tab（Data Management更新）、Gallery Tab（Send to LI node・✕クリアボタン位置）、Image Edit Tab（ボタン名統一）を更新。
+
+**検証**: 全JS/Pythonファイルを`node --check`/`ast.parse()`で構文確認。GIF変換・フルバックアップZIP・Zip Slipガードはvenv Python環境で実データ・合成テストデータに対する実処理検証を実施（PyAVで生成した合成テスト動画のフレーム抽出→Pillow GIFエンコード、実際のデータディレクトリ（civitai_cache.json含む36ファイル・約2.6MB）のZIP化、悪意あるパストラバーサルZIPでのスキップ確認、外部フォルダオプション有効時のワークフロー535件・wildcard 34件の`_external/`格納とインポート時全skipの確認）。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更・新規ファイルを都度両フォルダへ同期し改行コード差異を除いた`diff`で完全一致を確認、Pythonファイル追加時は`__pycache__`を都度クリア。動画ワークフロー対応・Labバグ修正・Videoタブ新機能・Send to LI node機能はユーザー自身の実機確認で動作を確認済み。
+
+**How to apply**: `analyzeWorkflow()`のような中央解析関数に新しいノードパターンの検出を1箇所追加するだけで、それを参照する複数タブ（GenerateUI/Lab）に同時に効果が及ぶ設計は、機能追加のコストを大きく下げる — 逆に言えば、新しいワークフロータイプに対応する際はまずこの中央解析関数を疑うべき。「該当ノードが無ければ列を非表示にする」系の判定は、`sampler_nodes.length`のような表面的なノード種別の有無だけでなく、そのノードが「ユーザーが調整すべき設定」を表しているか（動画生成モデル内部に固定配線されたサンプラーのように、単に存在するだけでは判定材料にならない場合がある）を意識する必要がある。「all plugin data」のような謳い文句を持つ機能は、実装が実際にその範囲をカバーしているか定期的に実データと突き合わせて監査する価値がある — 今回`civitai_cache.json`の漏れは3.6MBというサイズながら発見されていなかった。
+
+関連: [[project_v050_video_tab]], [[project_v051_mp4_metadata]], [[project_dev_deploy_sync]], [[project_v0336_conventions]]
+
+---
+
 ## v0.5.1
 
 ### 機能追加: mp4動画の埋め込みメタデータ対応（Gallery Prompt/JSON・Metadataサブタブ・サイドパネルIタブ）+ Gallery Infoタブに寸法/再生時間表示 + MiniMax H3等オールインワン動画ノードのプロンプト抽出バグ修正

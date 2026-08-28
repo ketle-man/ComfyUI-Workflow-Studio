@@ -1336,6 +1336,19 @@ export const comfyWorkflow = {
                 });
             }
 
+            // Video all-in-one nodes (e.g. MiniMaxH3ImageToVideo) — hold their own "prompt"
+            // widget directly instead of going through a separate CLIPTextEncode, and have
+            // no negative counterpart. Matched generically by class name (ImageToVideo /
+            // TextToVideo) rather than a fixed list so future models sharing this pattern
+            // (WAN, HunyuanVideo, etc.) work without a code change — same detection metadata-tab.js
+            // and node_sets_menu.js already use for prompt extraction (see extractPromptsAPI).
+            if ((ct.includes("ImageToVideo") || ct.includes("TextToVideo")) && typeof inputs.prompt === "string") {
+                result.prompt_nodes.push({
+                    id, type: ct, title, role: "positive",
+                    text: inputs.prompt, textKey: "prompt",
+                });
+            }
+
             // --- Latent nodes ---
             // EmptyFlux2LatentImage (Flux.2 templates) often has width/height wired to a
             // GetImageSize node (auto-follows the reference image) rather than a direct number —
@@ -1517,6 +1530,14 @@ export const comfyWorkflow = {
 
         result.all_nodes.sort((a, b) => Number(a.id) - Number(b.id));
         return result;
+    },
+
+    // True if this analysis found a video all-in-one node (see analyzeWorkflow's
+    // ImageToVideo/TextToVideo prompt_nodes branch). Callers use this to pick a longer
+    // generation timeout (video generation runs far longer than a still image) — see
+    // generate-tab.js _coreGenerate and lab-tab.js _runLabBatch.
+    isVideoWorkflow(analysis) {
+        return (analysis?.prompt_nodes || []).some((n) => /ImageToVideo|TextToVideo/.test(n.type));
     },
 
     applyParams(workflow, params) {

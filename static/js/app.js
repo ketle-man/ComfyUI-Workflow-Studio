@@ -549,6 +549,7 @@ function applyI18nToHtml() {
         "wfm-help-settings-9": "helpSettings9", "wfm-help-settings-10": "helpSettings10",
         "wfm-help-settings-11": "helpSettings11", "wfm-help-settings-12": "helpSettings12",
         "wfm-help-settings-13": "helpSettings13", "wfm-help-settings-14": "helpSettings14",
+        "wfm-help-settings-15": "helpSettings15", "wfm-help-settings-16": "helpSettings16",
         "wfm-help-nodes-1": "helpNodes1", "wfm-help-nodes-2": "helpNodes2",
         "wfm-help-nodes-3": "helpNodes3", "wfm-help-nodes-4": "helpNodes4",
         "wfm-help-nodes-5": "helpNodes5", "wfm-help-nodes-6": "helpNodes6",
@@ -568,7 +569,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-11": "helpGallery11", "wfm-help-gallery-12": "helpGallery12",
         "wfm-help-gallery-13": "helpGallery13", "wfm-help-gallery-14": "helpGallery14",
         "wfm-help-gallery-15": "helpGallery15", "wfm-help-gallery-16": "helpGallery16",
-        "wfm-help-gallery-17": "helpGallery17",
+        "wfm-help-gallery-17": "helpGallery17", "wfm-help-gallery-27": "helpGallery27",
         "wfm-help-gallery-18": "helpGallery18", "wfm-help-gallery-19": "helpGallery19",
         "wfm-help-gallery-20": "helpGallery20", "wfm-help-gallery-21": "helpGallery21",
         "wfm-help-gallery-22": "helpGallery22", "wfm-help-gallery-23": "helpGallery23",
@@ -734,6 +735,8 @@ function applyI18nToHtml() {
         "wfm-help-video-desc": "helpVideoDesc",
         "wfm-help-video-1": "helpVideo1", "wfm-help-video-2": "helpVideo2",
         "wfm-help-video-3": "helpVideo3", "wfm-help-video-4": "helpVideo4",
+        "wfm-help-video-5": "helpVideo5", "wfm-help-video-6": "helpVideo6",
+        "wfm-help-video-7": "helpVideo7",
     };
     for (const [id, key] of Object.entries(helpIdMap)) {
         const el = document.getElementById(id);

@@ -1807,6 +1807,34 @@ function bindEvents() {
         }
     });
 
+    // 選択画像をComfyUIキャンバス上で選択中のノード（LoadImage系）のimageウィジェットへ送信。
+    // Image Editタブの「Send to LI node」と同じ橋渡し(window.opener.wfmSendImageToSelectedNode、
+    // node_sets_menu.js側で定義)を使う。Galleryの画像はGalleryルート配下の任意フォルダにあり得るため、
+    // GenUI送信と違いLoadImageノードの有無に依存しない — /upload/imageでinputフォルダへ
+    // アップロードしてから、そのファイル名を書き込む。
+    document.getElementById("wfm-gallery-send-li-node-btn")?.addEventListener("click", async () => {
+        if (!state.selectedImage) {
+            showToast(t("gallerySelectImageFirst"), "info");
+            return;
+        }
+        if (!window.opener || typeof window.opener.wfmSendImageToSelectedNode !== "function") {
+            showToast(t("sendToLiNodeNoOpener"), "error");
+            return;
+        }
+        try {
+            const res = await fetch(API.serveImage(state.selectedImage.path));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            const file = new File([blob], state.selectedImage.filename || "gallery-image.png", { type: blob.type || "image/png" });
+            const result = await comfyUI.uploadImage(file, file.name);
+            const filename = result.subfolder ? `${result.subfolder}/${result.name}` : result.name;
+            window.opener.wfmSendImageToSelectedNode(filename);
+            showToast(t("sendToLiNodeSuccess", filename), "success");
+        } catch (e) {
+            showToast(t("errorWithMsg", e.message), "error");
+        }
+    });
+
     // 選択画像を ComfyUI Comic Creator の選択コマ／オーバーレイへ送信
     // （ComfyUI Comic CreaterからこのGalleryタブがiframe埋め込みされている場合のみ表示・動作する）
     const sendCcBtn = document.getElementById("wfm-gallery-send-cc-btn");

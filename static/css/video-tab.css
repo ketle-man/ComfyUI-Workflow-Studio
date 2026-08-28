@@ -89,27 +89,49 @@
     border-right: 1px solid var(--wfm-border);
 }
 
-.wfm-video-result-panel {
+/* 生成結果 or ソース選択エリアで読み込んだ動画を横並びで表示する行。
+   プレビュー枠が主役、ソースパネルは選択UIのみの固定幅。 */
+.wfm-video-preview-row {
     flex: none;
-}
-
-.wfm-video-result-panel h4 {
-    margin: 0 0 10px 0;
-    text-align: center;
-}
-
-#wfm-video-result {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
+    flex-direction: row;
+    gap: 16px;
 }
 
-.wfm-video-result-item {
+.wfm-video-preview-frame {
+    flex: 1;
+    min-width: 0;
+    min-height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--wfm-border);
+    border-radius: 6px;
+    background: var(--wfm-bg-hover, #111);
+}
+
+.wfm-video-preview-el {
     max-width: 100%;
     max-height: 60vh;
     border-radius: 6px;
-    background: var(--wfm-bg-hover, #111);
+}
+
+.wfm-video-source-panel {
+    width: 220px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.wfm-video-pane-header {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.wfm-video-prop-hint {
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+    margin: 0 0 8px 0;
 }
 
 /* 将来の動画編集機能(トリミング等)用のプレースホルダー領域 */
@@ -125,15 +147,39 @@
     font-size: 13px;
 }
 
-/* ── 右ペイン: プロパティ ── */
+/* ── 右ペイン: プロパティ (Frame抽出 / GIF変換タブ) ── */
 .wfm-video-properties-panel {
     width: 240px;
     flex: none;
     padding: 16px;
     overflow-y: auto;
-    color: var(--wfm-text-secondary);
 }
 
-.wfm-video-properties-panel h4 {
-    margin: 0 0 10px 0;
+.wfm-video-prop-tabnav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--wfm-border);
+}
+
+.wfm-video-prop-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 6px 4px;
+    cursor: pointer;
+    color: var(--wfm-text-secondary);
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+}
+
+.wfm-video-prop-tab.active {
+    color: var(--wfm-text);
+    border-bottom-color: var(--wfm-primary);
+}
+
+.wfm-video-prop-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }

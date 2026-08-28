@@ -673,9 +673,9 @@ window.wfmOpenMaskEditorForNode = async (imageDataUrl, maskDataUrl) => {
 };
 
 // ============================================
-// Cross-window bridge for SPA "Send to Workflow"
+// Cross-window bridge for SPA "Send to LI node"
 // ============================================
-// WFS Image Edit タブから呼ばれる。アップロード済みの画像ファイル名を、現在ComfyUIキャンバス上で
+// WFS Image Edit / Galleryタブから呼ばれる。アップロード済みの画像ファイル名を、現在ComfyUIキャンバス上で
 // 選択中のノードの "image" ウィジェット（LoadImage / LoadImage 互換ノード）へ書き込む。
 // 選択ノードに該当ウィジェットが無ければグラフ内の最初の該当ノードにフォールバックする。
 // chat_TE カスタムノードの "Send to workflow" ボタンと同じロジック。

@@ -824,6 +824,25 @@ export async function initSettingsTab() {
                     <input type="file" id="wfm-settings-import-file" accept=".json" style="display:none;">
                 </label>
             </div>
+            <p style="font-size:12px;color:var(--wfm-text-secondary);margin:12px 0 8px 0;">${t("fullBackupHint")}</p>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
+                <label class="wfm-lab-checkbox-label" style="font-size:12px;">
+                    <input type="checkbox" id="wfm-settings-backup-include-workflows">
+                    ${t("fullBackupIncludeWorkflows")}
+                </label>
+                <label class="wfm-lab-checkbox-label" style="font-size:12px;">
+                    <input type="checkbox" id="wfm-settings-backup-include-wildcard">
+                    ${t("fullBackupIncludeWildcard")}
+                </label>
+                <span style="font-size:11px;color:var(--wfm-text-secondary);">${t("fullBackupExternalHint")}</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="wfm-btn wfm-btn-sm" id="wfm-settings-export-full">${t("exportFullBackup")}</button>
+                <label class="wfm-btn wfm-btn-sm" style="cursor:pointer;margin:0;">
+                    ${t("importFullBackup")}
+                    <input type="file" id="wfm-settings-import-full-file" accept=".zip" style="display:none;">
+                </label>
+            </div>
             <div id="wfm-settings-data-status" style="font-size:12px;margin-top:8px;"></div>
         </details>
 
@@ -1532,8 +1551,53 @@ export async function initSettingsTab() {
             statusEl.textContent = t("importError") + ": " + e.message;
             statusEl.style.color = "var(--wfm-error, #f44336)";
         }
-        // Reset file input so same file can be re-selected
-        e.target.value = "";
+    });
+
+    // --- Full Backup Export (ZIP) ---
+    document.getElementById("wfm-settings-export-full")?.addEventListener("click", async () => {
+        const statusEl = document.getElementById("wfm-settings-data-status");
+        try {
+            const includeWorkflows = document.getElementById("wfm-settings-backup-include-workflows")?.checked ? "1" : "0";
+            const includeWildcard = document.getElementById("wfm-settings-backup-include-wildcard")?.checked ? "1" : "0";
+            const res = await fetch(`/api/wfm/settings/export-full?include_workflows=${includeWorkflows}&include_wildcard=${includeWildcard}`);
+            if (!res.ok) throw new Error(await res.text());
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "wfm-full-backup.zip";
+            a.click();
+            URL.revokeObjectURL(url);
+            statusEl.textContent = t("exportSuccess");
+            statusEl.style.color = "var(--wfm-success, #4caf50)";
+        } catch (e) {
+            statusEl.textContent = t("exportError") + ": " + e.message;
+            statusEl.style.color = "var(--wfm-error, #f44336)";
+        }
+    });
+
+    // --- Full Backup Import (ZIP) ---
+    document.getElementById("wfm-settings-import-full-file")?.addEventListener("change", async (e) => {
+        const statusEl = document.getElementById("wfm-settings-data-status");
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const fd = new FormData();
+            fd.append("file", file, file.name);
+            const res = await fetch("/api/wfm/settings/import-full", {
+                method: "POST",
+                body: fd,
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || res.statusText);
+            statusEl.textContent = `${t("importSuccess")}: ${result.extracted?.length ?? 0} ${t("fullBackupFilesUnit")}`;
+            statusEl.style.color = "var(--wfm-success, #4caf50)";
+        } catch (e) {
+            statusEl.textContent = t("importError") + ": " + e.message;
+            statusEl.style.color = "var(--wfm-error, #f44336)";
+        } finally {
+            e.target.value = "";
+        }
     });
 
     // Save G'MIC path setting

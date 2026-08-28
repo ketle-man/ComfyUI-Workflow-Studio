@@ -26,7 +26,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.5.1-green)
+![Version](https://img.shields.io/badge/version-0.5.2-green)
 
 ## Features (tab -> feature names)
 
@@ -37,13 +37,13 @@ Thumbnail / Table views, Thumbnail side panel, Badge filtering, Search, Side pan
 One-click capture, Auto-save as thumbnail, Embedded workflow metadata, Auto-import
 
 ### GenerateUI Tab (v0.3.5)
-6-tab layout, Save button, Input tab, Model tab, Settings tab, Always-visible Raw JSON, Bypass/Mute node handling, One-click generation, Seed control, Style selector, Create Catalog / Catalog buttons, Batch type selector, Batch tab, UI-to-API conversion, Eagle integration
+6-tab layout, Save button, Input tab, Model tab, Settings tab, Always-visible Raw JSON, Bypass/Mute node handling, One-click generation, Seed control, Style selector, Create Catalog / Catalog buttons, Batch type selector, Batch tab, UI-to-API conversion, Video workflow support, Eagle integration
 
 ### Feeder subtab (v0.3.5 / v0.3.42)
 ImageFeeder node control, Image library, Selection management, Presets, Continuous Run loop, Index sync, Seed, WFS_GalleryFeeder node, Node & group selector, Image grid, After Gen modes, Run / Stop controls
 
-### Lab subtab (v0.3.87 – v0.4.8)
-Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column — Checkpoint / LoRA Single / VAE, Empty state when no matching node exists, Wildcards, Prompt cell extras, Keyframe #1 live-reflect, Bypass checkbox, LoRA node bypass & prompt injection, T2I workflow support, Use generated image for next, Workflow recall, Plan files, Plan Load, Plan JSON tab, Save index image to Output on Run, Index images are self-contained plan files, Eagle integration, Select vs. edit, and keyframe reordering, PG — apply a Prompt tab preset group
+### Lab subtab (v0.3.87 – v0.5.2)
+Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column — Checkpoint / LoRA Single / VAE, Empty state when no matching node exists, Wildcards, Prompt cell extras, Keyframe #1 live-reflect, Bypass checkbox, LoRA node bypass & prompt injection, T2I workflow support, Use generated image for next, Workflow recall, Plan files, Plan Load, Plan JSON tab, Save index image to Output on Run, Index images are self-contained plan files, Eagle integration, Select vs. edit, and keyframe reordering, PG — apply a Prompt tab preset group, Video workflow support, Use generated image for next, now video-aware
 
 ### Prompt Tab
 3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager, Form / Table toggle, Table view — Presets / Presets Group / Wildcards / Style
@@ -52,7 +52,7 @@ Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column —
 2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, Ollama connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
 
 ### Gallery Tab (v0.3.44)
-Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, Performance
+Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, Performance
 
 ### ImagePrompt Gallery subtab (v0.3.94, renamed from Style/Prompt in v0.3.95)
 Visual prompt library, 3-column layout, Prompt builder (right pane), Plain-text prompt storage, ponyxlWildcardsVault format support, Seed data importer
@@ -75,8 +75,8 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 ### Image Edit Tab (v0.3.65)
 Layer-based image editor, Loading images, New button, Tools, Layer panel, Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
 
-### Video Tab (v0.5.0)
-Dedicated MiniMax H3 video generation UI, independent of GenerateUI, 3-pane layout, First Frame / Last Frame are both optional, Node lookup instead of hardcoded IDs, Load in Video, Result panel
+### Video Tab (v0.5.0 – v0.5.2)
+Dedicated MiniMax H3 video generation UI, independent of GenerateUI, 3-pane layout, First Frame / Last Frame are both optional, Node lookup instead of hardcoded IDs, Load in Video, Preview frame + Video Source panel, Frame tab, GIF tab
 
 ### AI TOOL Tab (v0.3.14)
 4-pane layout, Translation pane, Chat pane, Chat pane — image generation via Tool Calling, Chat pane — generate_image extra parameters, TOOLS pane (VLM), TOOLS pane — shared Chat attachment, TOOLS pane (Wildcards), Chat pane — image-to-image (I2I), Chat pane — SVG generation, no ComfyUI workflow involved, Chat pane — Skills, Settings pane, Unsloth backend, Settings pane — Chat Image Generation, Settings pane — Chat I2I Generation, Settings pane — Generation, Settings shared, Backend support, URL security, Lemonade's other endpoints (not integrated)

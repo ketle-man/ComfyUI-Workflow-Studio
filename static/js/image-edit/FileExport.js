@@ -3,7 +3,7 @@
  * Composites the visible layers (respecting mask-apply clipping) into a
  * flat canvas and offers three destinations: local PNG download, WFS
  * Gallery, and the selected node's image widget on the ComfyUI canvas
- * (Send to Workflow).
+ * (Send to LI node).
  */
 
 import { showToast } from "../app.js";
@@ -128,9 +128,9 @@ export class FileExport {
             const data = await r.json();
             const filename = data.subfolder ? `${data.subfolder}/${data.name}` : data.name;
             window.opener.wfmSendImageToSelectedNode(filename);
-            showToast(`Sent "${filename}" to workflow`, "success");
+            showToast(`Sent "${filename}" to LI node`, "success");
         } catch (err) {
-            showToast(`Send to workflow failed: ${err.message}`, "error");
+            showToast(`Send to LI node failed: ${err.message}`, "error");
         }
     }
 }

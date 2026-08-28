@@ -9,6 +9,7 @@
  */
 
 import { comfyUI } from "./comfyui-client.js";
+import { comfyWorkflow } from "./comfyui-workflow.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { showToast, openModal, closeModal } from "./app.js";
 import { t } from "./i18n.js";
@@ -17,6 +18,7 @@ import { extractAllMetadata, readAllPNGTextChunks } from "./metadata-tab.js";
 import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { _expandWildcardsInWorkflow } from "./generate-tab.js";
 import { pmGroups, getPresetsInGroup } from "./prompt-presets.js";
+import { isVideoFilename, extractLastFrameBlob } from "./video-utils.js";
 
 // Checkpoint/LoRA/VAE are three fully independent keyframe timelines — same as
 // Prompt/KSampler — each with its own +/-, its own atIteration sequence, its own
@@ -584,6 +586,17 @@ function _hasNodeForColumn(col) {
     if (col === "lora") return (analysis?.lora_nodes?.length || 0) > 0;
     if (col === "vae") {
         return (analysis?.vae_nodes?.length || 0) > 0 || (analysis?.checkpoint_nodes?.length || 0) > 0;
+    }
+    // Video all-in-one nodes (e.g. MiniMaxH3ImageToVideo) DO wire through a
+    // SamplerCustomAdvanced internally, so sampler_nodes.length alone isn't enough to
+    // detect "no user-adjustable sampler here" — that internal sampler is a fixed part
+    // of the model's own preset, not something meant to be edited per keyframe (unlike a
+    // real Advanced Sampling workflow's SamplerCustomAdvanced, e.g. Flux/SD3.5). Treat
+    // any video workflow as having no editable Ksampler column, same as the Model
+    // sub-columns above hide when their node is absent.
+    if (col === "ksampler") {
+        if (comfyWorkflow.isVideoWorkflow(analysis)) return false;
+        return (analysis?.sampler_nodes?.length || 0) > 0;
     }
     return true;
 }
@@ -1360,6 +1373,20 @@ function _annotatedImageRef(img) {
     return `${rel} [${img.type || "output"}]`;
 }
 
+// Extracts the last frame of a just-generated video output and uploads it as a plain
+// "input" image, returning the filename LoadImage's image widget expects (no [type]
+// suffix needed — uploadImage always lands in the input folder). Used only by the
+// chain-image path below; the Video tab will reuse extractLastFrameBlob() directly
+// once it grows its own batch/chaining feature.
+async function _extractAndUploadLastFrame(img) {
+    const url = _resultImageUrl(img);
+    const blob = await extractLastFrameBlob(url);
+    const file = new File([blob], `lab_lastframe_${Date.now()}.png`, { type: "image/png" });
+    const result = await comfyUI.uploadImage(file, file.name);
+    if (!result.name) throw new Error("Upload returned no filename");
+    return result.name;
+}
+
 // ============================================
 // Batch execution
 // ============================================
@@ -1403,6 +1430,10 @@ async function _runLabBatch() {
     const progressBar = document.getElementById("wfm-lab-progress-bar");
     const progressText = document.getElementById("wfm-lab-progress-text");
     const eagleAutoSave = getEagleSettings().autoSave;
+    // Video workflows (e.g. MiniMax H3) run far longer than a still image — use a longer
+    // timeout for every iteration so a multi-minute generation doesn't get force-rejected
+    // mid-batch (see comfyWorkflow.isVideoWorkflow and generate-tab.js's own use of this).
+    const isVideoWf = comfyWorkflow.isVideoWorkflow(comfyUI.currentAnalysis);
 
     let completed = 0, failed = 0;
     let prevLoraInjection = null;
@@ -1422,6 +1453,7 @@ async function _runLabBatch() {
                 const { images } = await comfyUI.generate(workflowExpanded, {
                     seedMode: seed != null ? "fixed" : "random",
                     seedValue: seed ?? -1,
+                    timeoutMs: isVideoWf ? 30 * 60 * 1000 : undefined,
                     onProgress: (pct) => {
                         if (progressBar) progressBar.style.width = `${(pct * 100).toFixed(1)}%`;
                         if (progressText) progressText.textContent = `[${i}/${_lab.batchCount}] ${(pct * 100).toFixed(0)}%`;
@@ -1429,7 +1461,20 @@ async function _runLabBatch() {
                 });
                 const outputImages = images.filter((img) => img.type !== "temp");
                 if (outputImages.length > 0) {
-                    _lastGeneratedImageRef = _annotatedImageRef(outputImages[0]);
+                    const first = outputImages[0];
+                    if (isVideoFilename(first.filename)) {
+                        // LoadImage can't take an mp4 directly — extract its last frame
+                        // client-side and upload that as an "input" image, so the chain
+                        // (Use generated image for next) can feed it back in as first_frame.
+                        try {
+                            _lastGeneratedImageRef = await _extractAndUploadLastFrame(first);
+                        } catch (err) {
+                            showToast(t("labLastFrameExtractFailed", err.message), "error");
+                            _lastGeneratedImageRef = null;
+                        }
+                    } else {
+                        _lastGeneratedImageRef = _annotatedImageRef(first);
+                    }
                 }
                 for (const img of outputImages) {
                     if (_lab.results.images.length < MAX_RESULTS) {
@@ -1479,14 +1524,23 @@ function _renderResultsGrid() {
         grid.innerHTML = `<p class="wfm-placeholder">${t("labNoResultsYet")}</p>`;
         return;
     }
-    grid.innerHTML = _lab.results.images.map((img, i) => `
+    grid.innerHTML = _lab.results.images.map((img, i) => {
+        const url = _resultImageUrl(img);
+        const media = isVideoFilename(img.filename)
+            ? `<video class="wfm-lab-result-thumb" data-idx="${i}" src="${url}" muted></video>`
+            : `<img class="wfm-lab-result-thumb" data-idx="${i}" src="${url}">`;
+        return `
         <div class="wfm-lab-result-item">
             <span class="wfm-lab-result-index">${img.iteration}</span>
-            <img class="wfm-lab-result-thumb" data-idx="${i}" src="${_resultImageUrl(img)}">
-        </div>`).join("");
+            ${media}
+        </div>`;
+    }).join("");
     grid.querySelectorAll(".wfm-lab-result-thumb").forEach((el) => {
         el.addEventListener("click", () => {
-            openModal(t("labResultPreview"), `<img src="${el.src}" style="max-width:100%;max-height:80vh;display:block;margin:0 auto;">`);
+            const content = el.tagName === "VIDEO"
+                ? `<video src="${el.src}" controls style="max-width:100%;max-height:80vh;display:block;margin:0 auto;"></video>`
+                : `<img src="${el.src}" style="max-width:100%;max-height:80vh;display:block;margin:0 auto;">`;
+            openModal(t("labResultPreview"), content);
         });
     });
 }
@@ -1533,6 +1587,23 @@ function _loadImageEl(src) {
     });
 }
 
+// A result item's own URL (e.g. .mp4) can't be loaded into an <img> — extract its
+// last frame first so the index/contact-sheet gets a real thumbnail instead of
+// silently failing onto the canvas's black background (see _buildIndexImageDataUrl).
+async function _loadIndexCellImage(img) {
+    const url = _resultImageUrl(img);
+    if (!isVideoFilename(img.filename)) return _loadImageEl(url);
+    try {
+        const blob = await extractLastFrameBlob(url);
+        const blobUrl = URL.createObjectURL(blob);
+        const im = await _loadImageEl(blobUrl);
+        URL.revokeObjectURL(blobUrl);
+        return im;
+    } catch {
+        return null;
+    }
+}
+
 // planData, when given, is embedded into the resulting PNG as an iTXt chunk
 // (LAB_PLAN_PNG_KEY) so the image alone — dropped onto the Plan drop zone, from
 // anywhere, not just lab_plan/ — can be loaded back without needing a same-named
@@ -1552,7 +1623,7 @@ async function _buildIndexImageDataUrl(planData) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     for (let i = 0; i < imgs.length; i++) {
-        const im = await _loadImageEl(_resultImageUrl(imgs[i]));
+        const im = await _loadIndexCellImage(imgs[i]);
         if (!im) continue;
         const col = i % cols, row = Math.floor(i / cols);
         const scale = Math.max(cellSize / im.width, cellSize / im.height);

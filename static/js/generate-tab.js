@@ -11,6 +11,7 @@ import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js";
 import { initLabTab, refreshLabLiveDefaults } from "./lab-tab.js";
 import { getSettings, readJsonStorage, escapeHtml, getEagleSettings, saveToEagle } from "./util.js";
+import { isVideoFilename } from "./video-utils.js";
 
 // ============================================
 // Gallery Metadata - ワークフロー保存
@@ -1458,6 +1459,7 @@ async function _coreGenerate(silent = false, workflowOverride = null, genOptions
     const progressBar = document.getElementById("wfm-gen-progress-bar");
     const progressText = document.getElementById("wfm-gen-progress-text");
     const resultImg = document.getElementById("wfm-gen-result-img");
+    const resultVideo = document.getElementById("wfm-gen-result-video");
     const resultThumbs = document.getElementById("wfm-gen-result-thumbs");
 
     // genOptions.seedValue lets a caller (e.g. AI TOOL Chat's generate_image tool)
@@ -1475,11 +1477,16 @@ async function _coreGenerate(silent = false, workflowOverride = null, genOptions
     const baseWorkflow = workflowOverride || comfyUI.currentWorkflow;
     const workflowStyled = _applyStyleToWorkflow({ ...baseWorkflow });
     const workflowForGenerate = await _expandWildcardsInWorkflow(workflowStyled);
+    // Video workflows (e.g. MiniMax H3) run far longer than a still image — use a longer
+    // timeout so a multi-minute generation doesn't get force-rejected mid-run (see
+    // comfyWorkflow.isVideoWorkflow and video-tab.js's own 30-minute timeout).
+    const isVideo = comfyWorkflow.isVideoWorkflow(comfyUI.currentAnalysis);
     const { images, seed, svgOutputs } = await comfyUI.generate(
         workflowForGenerate,
         {
             seedMode,
             seedValue,
+            timeoutMs: isVideo ? 30 * 60 * 1000 : undefined,
             onProgress: (pct) => {
                 if (progressBar) progressBar.style.width = `${(pct * 100).toFixed(1)}%`;
                 if (progressText) progressText.textContent = `${(pct * 100).toFixed(0)}%`;
@@ -1525,23 +1532,36 @@ async function _coreGenerate(silent = false, workflowOverride = null, genOptions
             });
         }
     } else if (outputImages.length > 0) {
+        // Video outputs (SaveVideo/PreviewVideo, e.g. MiniMax H3) come back through the
+        // same {"images":[...]} shape as still images — dispatch to <video> vs <img>
+        // per-item by extension rather than assuming the whole batch is one media type.
+        const showMedia = (blob, filename) => {
+            const url = URL.createObjectURL(blob);
+            if (isVideoFilename(filename)) {
+                if (resultVideo) { resultVideo.src = url; resultVideo.style.display = "block"; }
+                if (resultImg) resultImg.style.display = "none";
+            } else {
+                if (resultImg) { resultImg.src = url; resultImg.style.display = "block"; }
+                if (resultVideo) { resultVideo.pause(); resultVideo.style.display = "none"; }
+            }
+        };
+
         const blob = await comfyUI.getImageBlob(outputImages[0]);
-        const url = URL.createObjectURL(blob);
-        if (resultImg) {
-            resultImg.src = url;
-            resultImg.style.display = "block";
-        }
+        showMedia(blob, outputImages[0].filename);
 
         if (resultThumbs && outputImages.length > 1) {
             resultThumbs.innerHTML = "";
             for (let i = 0; i < outputImages.length; i++) {
                 const b = i === 0 ? blob : await comfyUI.getImageBlob(outputImages[i]);
-                const u = i === 0 ? url : URL.createObjectURL(b);
-                const thumb = document.createElement("img");
+                const filename = outputImages[i].filename;
+                const u = URL.createObjectURL(b);
+                const isVid = isVideoFilename(filename);
+                const thumb = document.createElement(isVid ? "video" : "img");
                 thumb.src = u;
+                if (isVid) thumb.muted = true;
                 thumb.className = `wfm-gen-thumb ${i === 0 ? "active" : ""}`;
                 thumb.addEventListener("click", () => {
-                    resultImg.src = u;
+                    showMedia(b, filename);
                     resultThumbs.querySelectorAll(".wfm-gen-thumb").forEach((t) => t.classList.remove("active"));
                     thumb.classList.add("active");
                 });
