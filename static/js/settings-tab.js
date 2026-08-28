@@ -336,6 +336,34 @@ export function applyTextareaFontSize(size) {
     el.textContent = `${TEXTAREA_FONT_SIZE_TARGETS} { font-size: ${px}px !important; }`;
 }
 
+// Video playback volume — shared by every <video> player in the app (Video tab preview,
+// Gallery detail/lightbox/compare). The browser default for a freshly created <video> element
+// is always 100%, and Gallery's players are recreated from scratch each time a different video
+// is opened, so without this the volume silently jumps back to max on every video switch.
+const VIDEO_VOLUME_DEFAULT = 1;
+
+export function getVideoVolume() {
+    const v = loadLocalSettings().videoVolume;
+    return typeof v === "number" && v >= 0 && v <= 1 ? v : VIDEO_VOLUME_DEFAULT;
+}
+
+function setVideoVolume(volume) {
+    const clamped = Math.max(0, Math.min(1, volume));
+    saveLocalSettings({ videoVolume: clamped });
+    return clamped;
+}
+
+// Applies the saved volume to a <video> element, and keeps it in sync with any further change
+// the user makes via that element's own native controls — so adjusting the volume on any video
+// player anywhere in the app is remembered for the next video opened anywhere else.
+export function applyStoredVideoVolume(videoEl) {
+    if (!videoEl) return;
+    videoEl.volume = getVideoVolume();
+    if (videoEl.dataset.wfmVolumeWired) return;
+    videoEl.dataset.wfmVolumeWired = "1";
+    videoEl.addEventListener("volumechange", () => setVideoVolume(videoEl.volume));
+}
+
 // JSON highlight color settings
 const JSON_COLOR_STYLE_ID = "wfm-json-color-style";
 
@@ -571,6 +599,24 @@ export async function initSettingsTab() {
                     style="width:100%;margin-top:4px;">
                 <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-top:4px;">
                     ${t("textSizeHint") || "Applies to: Generate UI prompts, AI Assistant chat, Preset prompts, Wildcard textarea, Metadata prompt preview"}
+                </small>
+            </div>
+        </details>
+
+        <!-- Video Volume -->
+        <details class="wfm-settings-section" open>
+            <summary class="wfm-settings-summary">${t("videoVolumeLabel") || "Video Volume"}</summary>
+            <div class="wfm-form-group">
+                <label style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>${t("videoVolumeLabel") || "Video Volume"}</span>
+                    <span id="wfm-video-volume-val" style="font-size:12px;color:var(--wfm-text-secondary);">${Math.round(getVideoVolume() * 100)}%</span>
+                </label>
+                <input type="range" class="wfm-range" id="wfm-video-volume"
+                    min="0" max="100" step="1"
+                    value="${Math.round(getVideoVolume() * 100)}"
+                    style="width:100%;margin-top:4px;">
+                <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-top:4px;">
+                    ${t("videoVolumeHint") || "Applies to: Video tab preview, Gallery detail/lightbox/compare video players"}
                 </small>
             </div>
         </details>
@@ -1359,6 +1405,16 @@ export async function initSettingsTab() {
         const valEl = document.getElementById("wfm-ta-font-size-val");
         if (valEl) valEl.textContent = `${px}px`;
         applyTextareaFontSize(px);
+    });
+
+    // --- Video volume slider (auto-saves immediately, no "Save" click needed — a dragged
+    // slider that silently didn't persist would defeat the whole point of this setting) ---
+    document.getElementById("wfm-video-volume")?.addEventListener("input", (e) => {
+        const pct = parseInt(e.target.value) || 0;
+        const valEl = document.getElementById("wfm-video-volume-val");
+        if (valEl) valEl.textContent = `${pct}%`;
+        const volume = setVideoVolume(pct / 100);
+        document.querySelectorAll("video").forEach((v) => { v.volume = volume; });
     });
 
     // --- JSON highlight color pickers ---

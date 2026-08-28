@@ -2093,14 +2093,14 @@
 
                     <div class="wfm-help-page" id="wfm-help-page-video">
                         <h2 id="wfm-help-video-title">Video Tab</h2>
-                        <p id="wfm-help-video-desc">A dedicated video generation tab for the MiniMax H3 (Image to Video) workflow, independent of the GenerateUI tab.</p>
+                        <p id="wfm-help-video-desc">A dedicated video generation tab for MiniMax H3 (Image to Video), LTX-2.5 (Text / Image / First & Last Frame to Video), and Wan2.2 (Text to Video) workflows, independent of the GenerateUI tab.</p>
                         <div class="wfm-help-card">
                             <ul>
                                 <li id="wfm-help-video-1">Set first_frame (optional) / last_frame (optional) images, prompt, aspect_ratio / megapixels / multiple (resolution), duration (seconds), and noise_seed, then click Generate. Leaving first_frame empty runs the workflow text-only (bypassed), and workflows with no LoadImage node at all are also supported.</li>
-                                <li id="wfm-help-video-2">Model selection (UNet / CLIP / VAE / Audio VAE) is fixed to the loaded workflow's defaults and cannot be changed from this tab.</li>
-                                <li id="wfm-help-video-3">Use the "Load in Video" button in the Workflow tab's detail modal to load a workflow containing a MiniMax H3 Image-to-Video node. Unsupported workflows show an error instead.</li>
+                                <li id="wfm-help-video-2">Model selection (UNet / CLIP / VAE / Audio VAE) is fixed to the loaded workflow's defaults and cannot be changed from this tab. For workflows with no ResolutionSelector node (e.g. Wan2.2), resolution also stays fixed to the loaded workflow's defaults and the Aspect Ratio / Megapixels / Multiple fields are disabled.</li>
+                                <li id="wfm-help-video-3">Use the "Load in Video" button in the Workflow tab's detail modal to load a workflow containing a MiniMax H3 Image-to-Video node, an LTX-2.5 Text/Image/First&Last-Frame-to-Video node, or a Wan2.2 Text-to-Video node. Unsupported workflows show an error instead.</li>
                                 <li id="wfm-help-video-4">Generated videos (mp4) can also be browsed and played back in the Gallery tab.</li>
-                                <li id="wfm-help-video-5">The Video Source panel next to the preview lets you drop or pick any local video (not just a generated one) to use the Frame/GIF tools below without running MiniMax H3 first; Clear resets it back to empty.</li>
+                                <li id="wfm-help-video-5">The Video Source panel next to the preview lets you drop or pick any local video (not just a generated one) to use the Frame/GIF tools below without running the loaded video workflow first; Clear resets it back to empty.</li>
                                 <li id="wfm-help-video-6">Frame tab (right panel): play/seek the preview video to the position you want, click Capture Frame to grab that frame client-side, then Save to Output to write it as a PNG into ComfyUI's output folder.</li>
                                 <li id="wfm-help-video-7">GIF tab (right panel): set Start/End (seconds), FPS, and an optional Max Width, then Convert to GIF — the server decodes the video and encodes an animated GIF into ComfyUI's output folder.</li>
                             </ul>
@@ -2687,12 +2687,12 @@
             </div>
         </section>
 
-        <!-- Video Tab (MiniMax H3専用・GenerateUIタブとは独立) -->
+        <!-- Video Tab (MiniMax H3 / LTX-2.5対応・GenerateUIタブとは独立) -->
         <section id="wfm-tab-video" class="wfm-tab-content">
             <div class="wfm-video-layout">
                 <div class="wfm-video-form-panel">
                     <div class="wfm-video-header">
-                        <h3 id="wfm-video-title-label">Video (MiniMax H3)</h3>
+                        <h3 id="wfm-video-title-label">Video</h3>
                         <span id="wfm-video-wf-name" class="wfm-video-wf-name">No workflow loaded</span>
                     </div>
 

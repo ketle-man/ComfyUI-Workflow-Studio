@@ -14,6 +14,7 @@ import { comfyEditor } from "./comfyui-editor.js";
 import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
 import { initImagePromptTab, activateImagePromptTab } from "./image-prompt-tab.js";
 import { initStyleCatalogTab, activateStyleCatalogTab } from "./style-catalog-tab.js";
+import { applyStoredVideoVolume } from "./settings-tab.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -920,7 +921,9 @@ async function loadImageDetail(img) {
             ${mediaHtml}
         </div>
     `;
-    preview.querySelector(isVideo ? "video" : "img").addEventListener("dblclick", () => openLightbox(img));
+    const previewMediaEl = preview.querySelector(isVideo ? "video" : "img");
+    previewMediaEl.addEventListener("dblclick", () => openLightbox(img));
+    if (isVideo) applyStoredVideoVolume(previewMediaEl);
 
     // ファイル名
     document.getElementById("wfm-gallery-detail-filename").textContent = img.filename;
@@ -1657,6 +1660,7 @@ function openLightbox(img) {
         }
     });
     document.body.appendChild(overlay);
+    if (isVideoFile(img)) applyStoredVideoVolume(overlay.querySelector("video"));
 }
 
 // ── 画像比較ライトボックス ─────────────────────────────────────
@@ -1692,6 +1696,7 @@ function openCompare(paths) {
         }
     });
     document.body.appendChild(overlay);
+    overlay.querySelectorAll("video").forEach(applyStoredVideoVolume);
 }
 
 // ── outputパス取得 ────────────────────────────────────────────

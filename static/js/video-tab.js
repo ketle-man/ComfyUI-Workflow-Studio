@@ -1,8 +1,8 @@
 /**
- * Video Tab - MiniMax H3 (Image to Video) 専用の動画生成UI
- * GenerateUIタブとは完全に独立。UI形式ワークフローJSONを直接編集し、
- * comfyWorkflow.convertUiToApi() でAPI形式に変換して実行する。
- * 状態は「テンプレートJSON＋フォーム値」のみ保持し、生成の都度
+ * Video Tab - MiniMax H3 (Image to Video) / LTX-2.5 (Text・Image・First&Last-Frame to
+ * Video) / Wan2.2 (Text to Video) 対応の動画生成UI。GenerateUIタブとは完全に独立。
+ * UI形式ワークフローJSONを直接編集し、comfyWorkflow.convertUiToApi() でAPI形式に
+ * 変換して実行する。状態は「テンプレートJSON＋フォーム値」のみ保持し、生成の都度
  * structuredClone() したコピーに書き込む（複数回生成をまたいだID不整合を防ぐ）。
  */
 
@@ -11,8 +11,7 @@ import { t } from "./i18n.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
 import { escapeHtml } from "./util.js";
-
-const DEFAULT_WORKFLOW_FILENAME = "minimax_test.json";
+import { applyStoredVideoVolume } from "./settings-tab.js";
 
 const state = {
     templateWorkflow: null,
@@ -29,62 +28,111 @@ const state = {
 };
 
 // ============================================
-// ワークフロー取得
+// 動画モデルノードの動的特定（ノードIDをハードコードしない）
+// MiniMax H3 / LTX-2.5 (Text・Image・First&Last-Frame to Video) / Wan2.2 (Text to Video)
+// に対応。サブグラフの内部ノード型（Wan2.2のみサブグラフ名）で対象ワークフローの種類を
+// 判定し、以降はサブグラフが公開する入力のlabel（無ければname）で意味的にスロットを
+// 特定する。これによりLTX-2.5の3バリアント間で公開入力のname（text/value/value_1...）
+// が揺れていても、label（prompt/duration/width...）は共通しているため同じロジックで
+// 処理できる。
 // ============================================
 
-async function getRawWorkflow(filename) {
-    const res = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(filename)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+// ノードのinputs[]のうちwidgetキーを持つものだけを抽出した並び順で、指定した入力定義の
+// インデックスを引く。widgets_values配列はこの並び順と1:1対応する（link接続されていても
+// widgetキーを持つ入力はwidgets_valuesにスロットを持つ「legacy full」形式のため）。
+function _widgetIndexOf(node, inputDef) {
+    if (!inputDef) return -1;
+    const widgetInputs = (node?.inputs || []).filter((inp) => inp.widget);
+    return widgetInputs.indexOf(inputDef);
 }
 
-// ============================================
-// MiniMax H3ノードの動的特定（ノードIDをハードコードしない）
-// ============================================
-
-// ノードのinputs[]のうちwidgetキーを持つものだけを抽出した並び順で、名前からインデックスを引く。
-// widgets_values配列はこの並び順と1:1対応する（link接続されていてもwidgetキーを持つ入力は
-// widgets_valuesにスロットを持つ「legacy full」形式のため）。
+// 上と同じ並び順ルールで、名前から直接インデックスを引く版（ResolutionSelectorや
+// LoadImageなど、モデルファミリー間で入力名が揺れないノードに使う）。
 function _widgetIndex(node, name) {
     const widgetInputs = (node?.inputs || []).filter((inp) => inp.widget);
     return widgetInputs.findIndex((inp) => inp.name === name);
 }
 
-function locateMiniMaxNodes(workflow) {
-    if (!Array.isArray(workflow?.nodes) || !Array.isArray(workflow?.links)) return null;
+// サブグラフが公開する入力は、labelがあればlabel、無ければnameが意味的な役割を表す
+// （例: MiniMax H3の"width"はlabel無しでname自体が"width"、LTX-2.5の"value_2"はlabelが
+// "width"）。
+function _findInputByLabel(node, label) {
+    return (node?.inputs || []).find((inp) => (inp.label || inp.name) === label) || null;
+}
 
-    const sgDef = (workflow.definitions?.subgraphs || [])
-        .find((sg) => (sg.nodes || []).some((n) => n.type === "MiniMaxH3ImageToVideo"));
-    if (!sgDef) return null;
+function _detectVideoSubgraph(workflow) {
+    if (!Array.isArray(workflow?.nodes) || !Array.isArray(workflow?.links)) return null;
+    const subgraphs = workflow.definitions?.subgraphs || [];
+
+    const minimax = subgraphs.find((sg) => (sg.nodes || []).some((n) => n.type === "MiniMaxH3ImageToVideo"));
+    if (minimax) return { family: "minimax", sgDef: minimax };
+
+    // LTX-2.5のText/Image/First&Last-Frame to Videoはいずれも内部にLTXV*系ノードを持つ
+    // サブグラフとして配布される。バリアントごとにサブグラフの公開入力nameが異なるため、
+    // 内部ノード型のプレフィックスで検出する。
+    const ltx = subgraphs.find((sg) => (sg.nodes || []).some((n) => typeof n.type === "string" && n.type.startsWith("LTXV")));
+    if (ltx) return { family: "ltx25", sgDef: ltx };
+
+    // Wan2.2はUNETLoader/KSamplerAdvanced/EmptyHunyuanLatentVideoなど汎用ノードのみで
+    // 構成されており、MiniMax H3/LTX-2.5のような固有ノード型による検出ができない。
+    // そのためサブグラフ自体の名前（公式テンプレート由来の "...(Wan2.2)" 表記）で検出する。
+    const wan22 = subgraphs.find((sg) => /wan\s*2\.2/i.test(sg.name || ""));
+    if (wan22) return { family: "wan22", sgDef: wan22 };
+
+    return null;
+}
+
+function locateVideoModelNodes(workflow) {
+    const detected = _detectVideoSubgraph(workflow);
+    if (!detected) return null;
+    const { family, sgDef } = detected;
 
     const instanceNode = workflow.nodes.find((n) => n.type === sgDef.id);
     if (!instanceNode || !Array.isArray(instanceNode.widgets_values)) return null;
 
-    const firstFrameSlot = instanceNode.inputs.findIndex((inp) => inp.name === "first_frame");
-    const lastFrameSlot = instanceNode.inputs.findIndex((inp) => inp.name === "last_frame");
-    const widthSlot = instanceNode.inputs.findIndex((inp) => inp.name === "width");
-    if (firstFrameSlot === -1 || lastFrameSlot === -1 || widthSlot === -1) return null;
+    // Wan2.2の公開入力はプロンプトが label 無しの name="text" のまま(MiniMax H3の"prompt"や
+    // LTX-2.5の label="prompt" と異なる)ため、"prompt" が見つからない場合は "text" にフォール
+    // バックする。
+    const promptInput = _findInputByLabel(instanceNode, "prompt") || _findInputByLabel(instanceNode, "text");
+    const durationInput = _findInputByLabel(instanceNode, "duration");
+    const widthInput = _findInputByLabel(instanceNode, "width");
+    if (!promptInput || !durationInput || !widthInput) return null;
+
+    const promptIdx = _widgetIndexOf(instanceNode, promptInput);
+    const durationIdx = _widgetIndexOf(instanceNode, durationInput);
+    if (promptIdx === -1 || durationIdx === -1) return null;
+
+    const widthSlot = instanceNode.inputs.indexOf(widthInput);
 
     const findLinkedNode = (targetSlot) => {
+        if (targetSlot === -1) return null;
         const link = workflow.links.find((l) => l[3] === instanceNode.id && l[4] === targetSlot);
         if (!link) return null;
         return workflow.nodes.find((n) => n.id === link[1]) || null;
     };
 
-    // first_frameはoptional入力のため、LoadImageノードが接続されていないワークフロー
-    // (テキストのみで動作するT2V構成など)もサポート対象とする。未接続の場合は
-    // loadImageNode: null のまま返し、必要ならrunGeneration側で動的にノードを注入する。
+    // 一部のLTX-2.5バリアント(First & Last Frame to Video等)はResolutionSelectorを介さず、
+    // width/heightをサブグラフの直接ウィジェット値として持つ。その場合はresolutionNode: null
+    // を返し、以降の処理ではaspect_ratio等の操作をスキップする(テンプレートのwidth/height値が
+    // そのまま使われる)。
+    const rawResolutionNode = findLinkedNode(widthSlot);
+    const resolutionNode = (rawResolutionNode && rawResolutionNode.type === "ResolutionSelector") ? rawResolutionNode : null;
+
+    // first_frame/last_frameはoptional入力のため、対応するLoadImageノードが接続されて
+    // いないワークフロー(テキストのみで動作するT2V構成など)もサポート対象とする。
+    // 未接続の場合はnullのまま返し、必要ならrunGeneration側で動的にノードを注入する。
+    const firstFrameInput = _findInputByLabel(instanceNode, "first_frame");
+    const lastFrameInput = _findInputByLabel(instanceNode, "last_frame");
+    const firstFrameSlot = firstFrameInput ? instanceNode.inputs.indexOf(firstFrameInput) : -1;
+    const lastFrameSlot = lastFrameInput ? instanceNode.inputs.indexOf(lastFrameInput) : -1;
+
     const rawLoadImageNode = findLinkedNode(firstFrameSlot);
     const loadImageNode = (rawLoadImageNode && rawLoadImageNode.type === "LoadImage") ? rawLoadImageNode : null;
-    const resolutionNode = findLinkedNode(widthSlot);
-    if (!resolutionNode || resolutionNode.type !== "ResolutionSelector") return null;
-
-    const promptIdx = _widgetIndex(instanceNode, "prompt");
-    const durationIdx = _widgetIndex(instanceNode, "value_1");
-    if (promptIdx === -1 || durationIdx === -1) return null;
+    const rawLastLoadImageNode = findLinkedNode(lastFrameSlot);
+    const lastLoadImageNode = (rawLastLoadImageNode && rawLastLoadImageNode.type === "LoadImage") ? rawLastLoadImageNode : null;
 
     return {
-        sgDef, instanceNode, loadImageNode, resolutionNode,
+        family, sgDef, instanceNode, loadImageNode, lastLoadImageNode, resolutionNode,
         firstFrameSlot, lastFrameSlot, promptIdx, durationIdx,
     };
 }
@@ -102,7 +150,7 @@ function _showFramePreview(which, filename) {
 }
 
 export async function loadWorkflowIntoVideoEditor(workflow, filename) {
-    const nodes = locateMiniMaxNodes(workflow);
+    const nodes = locateVideoModelNodes(workflow);
     if (!nodes) {
         showToast(t("videoUnsupportedWorkflow"), "error");
         return false;
@@ -110,13 +158,16 @@ export async function loadWorkflowIntoVideoEditor(workflow, filename) {
 
     state.templateWorkflow = workflow;
     state.templateFilename = filename || "";
-    state.firstFrameFilename = null;
-    state.lastFrameFilename = null;
+    // 前回読み込んだワークフローのFirst/Last Frameプレビューが残っていると、画像を使わない
+    // ワークフロー(T2V構成など)を読み込んだ際に誤って画像が使われるかのように見えてしまう。
+    // state自体は下で再設定されるが、プレビュー表示(DOM)側は明示的にクリアしないと残留する。
+    _clearFrame("first");
+    _clearFrame("last");
 
     const nameEl = document.getElementById("wfm-video-wf-name");
     if (nameEl) nameEl.textContent = filename || "Loaded Workflow";
 
-    const { instanceNode, resolutionNode, loadImageNode, promptIdx, durationIdx } = nodes;
+    const { instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx } = nodes;
 
     const promptEl = document.getElementById("wfm-video-prompt");
     if (promptEl) promptEl.value = instanceNode.widgets_values[promptIdx] ?? "";
@@ -135,25 +186,23 @@ export async function loadWorkflowIntoVideoEditor(workflow, filename) {
     if (mpEl && mpIdx !== -1) mpEl.value = resolutionNode.widgets_values[mpIdx] ?? mpEl.value;
     const multEl = document.getElementById("wfm-video-multiple");
     if (multEl && multIdx !== -1) multEl.value = resolutionNode.widgets_values[multIdx] ?? multEl.value;
+    // ResolutionSelectorを介さないバリアント(width/heightが直接ウィジェット値)では
+    // aspect_ratio/megapixels/multipleを反映する先が無いため、操作できないことが分かるよう無効化する。
+    [aspectEl, mpEl, multEl].forEach((el) => { if (el) el.disabled = !resolutionNode; });
 
     const fnIdx = _widgetIndex(loadImageNode, "image");
     if (fnIdx !== -1 && loadImageNode.widgets_values[fnIdx]) {
         state.firstFrameFilename = loadImageNode.widgets_values[fnIdx];
         _showFramePreview("first", state.firstFrameFilename);
     }
+    const lastFnIdx = _widgetIndex(lastLoadImageNode, "image");
+    if (lastFnIdx !== -1 && lastLoadImageNode.widgets_values[lastFnIdx]) {
+        state.lastFrameFilename = lastLoadImageNode.widgets_values[lastFnIdx];
+        _showFramePreview("last", state.lastFrameFilename);
+    }
 
     showToast(t("videoWorkflowLoaded", filename || ""), "success");
     return true;
-}
-
-async function loadDefaultWorkflow() {
-    try {
-        const wf = await getRawWorkflow(DEFAULT_WORKFLOW_FILENAME);
-        await loadWorkflowIntoVideoEditor(wf, DEFAULT_WORKFLOW_FILENAME);
-    } catch {
-        // 初回自動ロード失敗は静かに無視する（環境によってファイルが存在しないこともある）。
-        // Workflowタブの「Load in Video」ボタンから明示的に読み込める。
-    }
 }
 
 // ============================================
@@ -252,7 +301,7 @@ function _readFormValues() {
 }
 
 function _applyFormToWorkflow(nodes, form) {
-    const { instanceNode, resolutionNode, loadImageNode, promptIdx, durationIdx } = nodes;
+    const { instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx } = nodes;
 
     instanceNode.widgets_values[promptIdx] = form.prompt;
     instanceNode.widgets_values[durationIdx] = form.duration;
@@ -264,12 +313,16 @@ function _applyFormToWorkflow(nodes, form) {
     if (mpIdx !== -1) resolutionNode.widgets_values[mpIdx] = form.megapixels;
     if (multIdx !== -1) resolutionNode.widgets_values[multIdx] = form.multiple;
 
-    // first_frameは既存のLoadImageノードが接続されている場合のみここで書き換える。
-    // 接続が無い場合(loadImageNode: null)は、first_frameが新規指定された時だけ
+    // first_frame/last_frameは既存のLoadImageノードが接続されている場合のみここで書き換える。
+    // 接続が無い場合(loadImageNode/lastLoadImageNode: null)は、画像が新規指定された時だけ
     // _injectFrameNode()でノードごと注入する（未指定ならバイパス=未接続のまま実行）。
     if (loadImageNode) {
         const fnIdx = _widgetIndex(loadImageNode, "image");
         if (fnIdx !== -1) loadImageNode.widgets_values[fnIdx] = state.firstFrameFilename;
+    }
+    if (lastLoadImageNode) {
+        const fnIdx = _widgetIndex(lastLoadImageNode, "image");
+        if (fnIdx !== -1) lastLoadImageNode.widgets_values[fnIdx] = state.lastFrameFilename;
     }
 }
 
@@ -324,19 +377,19 @@ async function runGeneration() {
     }
 
     const clone = structuredClone(state.templateWorkflow);
-    const nodes = locateMiniMaxNodes(clone);
+    const nodes = locateVideoModelNodes(clone);
     if (!nodes) {
         showToast(t("videoUnsupportedWorkflow"), "error");
         return;
     }
 
     _applyFormToWorkflow(nodes, _readFormValues());
-    // first_frame: 既存のLoadImageノードが無いワークフロー(T2V構成等)で、
+    // first_frame/last_frame: 既存のLoadImageノードが無いワークフロー(T2V構成等)で、
     // ユーザーが新たに画像を指定した場合のみノードを注入する。未指定ならバイパス(未接続のまま実行)。
     if (!nodes.loadImageNode && state.firstFrameFilename) {
         _injectFrameNode(clone, nodes.instanceNode, nodes.firstFrameSlot, state.firstFrameFilename);
     }
-    if (state.lastFrameFilename) {
+    if (!nodes.lastLoadImageNode && state.lastFrameFilename) {
         _injectFrameNode(clone, nodes.instanceNode, nodes.lastFrameSlot, state.lastFrameFilename);
     }
 
@@ -420,8 +473,8 @@ function _setPreviewMedia(url, source) {
 }
 
 function _renderResult(images) {
-    // MiniMax H3 always emits a single VIDEO output — but guard generically (prefer
-    // an mp4 if present) in case a future video workflow's SaveVideo/PreviewVideo
+    // Both MiniMax H3 and LTX-2.5 emit a single VIDEO output — but guard generically
+    // (prefer an mp4 if present) in case a future video workflow's SaveVideo/PreviewVideo
     // ordering differs.
     const media = (images || []).find((img) => img.filename.toLowerCase().endsWith(".mp4")) || images?.[0];
     if (!media) {
@@ -517,7 +570,7 @@ function _applyVideoI18n() {
 
 // ============================================
 // Video Source panel — loads any local video into the preview frame, independent of
-// generation, so Frame/GIF tools work without running MiniMax H3 first.
+// generation, so Frame/GIF tools work without running the loaded video workflow first.
 // ============================================
 
 function _wireVideoSourcePanel() {
@@ -721,5 +774,7 @@ export function initVideoTab() {
     _initFrameTab();
     _initGifTab();
 
-    loadDefaultWorkflow();
+    // 保存済みの音量を適用し、以降ユーザーがネイティブコントロールで変更した音量も
+    // 自動保存する（要素自体は永続的なので初期化時に一度呼べば十分）。
+    applyStoredVideoVolume(document.getElementById("wfm-video-preview-video"));
 }

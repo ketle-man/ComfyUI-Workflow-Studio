@@ -1378,7 +1378,7 @@ export function initWorkflowTab() {
         }
     });
 
-    // Toolbar: Load in Video button (MiniMax H3専用。非対応ワークフローはloadWorkflowIntoVideoEditor内でエラートースト表示済み)
+    // Toolbar: Load in Video button (MiniMax H3 / LTX-2.5 / Wan2.2対応。非対応ワークフローはloadWorkflowIntoVideoEditor内でエラートースト表示済み)
     document.getElementById("wfm-list-load-video-btn")?.addEventListener("click", async () => {
         if (!state.selectedWf) return;
         try {

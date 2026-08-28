@@ -75,6 +75,35 @@ async function _loadObjectInfo() {
  * Get ordered widget (non-link) input names for a node class from object_info.
  * These correspond to widgets_values in UI-format nodes.
  */
+// Scalar widget types object_info can declare for a required/optional input.
+const _WIDGET_TYPE_SET = new Set(["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO", "COMFY_DYNAMICCOMBO_V3"]);
+
+/**
+ * Resolve a possibly-compound object_info type spec (e.g. LTXVEmptyLatentAudio's frame_rate:
+ * "FLOAT,INT", a MultiType declaration meaning "widget defaults to FLOAT but also accepts an INT
+ * link") down to the single scalar widget type it actually occupies a widgets_values slot as.
+ * Preferring the explicit widgetType hint some MultiType specs carry, else the first comma-
+ * separated segment. Returns null for link-only types (MODEL, CLIP, LATENT, etc.) or arrays that
+ * aren't combo option lists.
+ *
+ * Without this, a plain `upper === "INT" || ...` exact-match check silently drops any
+ * comma-joined MultiType widget from the name/type lists entirely — which corrupts every widget
+ * declared after it in the node's schema order in _simulateWidgetValues (see its own docstring),
+ * exactly the class of bug that produced e.g. LTXVEmptyLatentAudio's batch_size reading
+ * frame_rate's stale value instead of its own.
+ */
+function _resolveWidgetType(type, spec) {
+    if (Array.isArray(type)) return "COMBO";
+    if (typeof type !== "string") return null;
+    const explicit = spec?.[1]?.widgetType;
+    if (typeof explicit === "string" && _WIDGET_TYPE_SET.has(explicit.toUpperCase())) return explicit.toUpperCase();
+    for (const part of type.split(",")) {
+        const upper = part.trim().toUpperCase();
+        if (_WIDGET_TYPE_SET.has(upper)) return upper;
+    }
+    return null;
+}
+
 function _getWidgetInputNames(objectInfo, classType) {
     const info = objectInfo[classType];
     if (!info) return [];
@@ -89,31 +118,16 @@ function _getWidgetInputNames(objectInfo, classType) {
         // (e.g. CLIPTextEncodeEditPlus's text1/text2). Never has a widgets_values entry.
         if (Array.isArray(spec) && spec[1]?.forceInput) continue;
         // Link types are strings like "MODEL", "CLIP", "CONDITIONING", "LATENT", "IMAGE", etc.
-        // Widget types are: "INT", "FLOAT", "STRING", "BOOLEAN", or an array of choices
-        if (Array.isArray(type)) {
-            // Combo/enum widget
-            names.push(name);
-        } else if (typeof type === "string") {
-            const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
-                names.push(name);
-            }
-            // Other uppercase types (MODEL, CLIP, etc.) are link inputs, skip
-        }
+        // Widget types are: "INT", "FLOAT", "STRING", "BOOLEAN", an array of choices, or a
+        // comma-joined MultiType union of those (e.g. "FLOAT,INT") — see _resolveWidgetType.
+        if (_resolveWidgetType(type, spec)) names.push(name);
     }
 
     // Optional inputs that are widgets
     for (const [name, spec] of Object.entries(optional)) {
         const type = Array.isArray(spec) ? spec[0] : spec;
         if (Array.isArray(spec) && spec[1]?.forceInput) continue;
-        if (Array.isArray(type)) {
-            names.push(name);
-        } else if (typeof type === "string") {
-            const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMFY_DYNAMICCOMBO_V3") {
-                names.push(name);
-            }
-        }
+        if (_resolveWidgetType(type, spec)) names.push(name);
     }
 
     return names;
@@ -133,26 +147,14 @@ function _getWidgetInputTypes(objectInfo, classType) {
     for (const [name, spec] of Object.entries(required)) {
         const type = Array.isArray(spec) ? spec[0] : spec;
         if (Array.isArray(spec) && spec[1]?.forceInput) continue;
-        if (Array.isArray(type)) {
-            types.push("COMBO");
-        } else if (typeof type === "string") {
-            const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
-                types.push(upper);
-            }
-        }
+        const resolved = _resolveWidgetType(type, spec);
+        if (resolved) types.push(resolved);
     }
     for (const [name, spec] of Object.entries(optional)) {
         const type = Array.isArray(spec) ? spec[0] : spec;
         if (Array.isArray(spec) && spec[1]?.forceInput) continue;
-        if (Array.isArray(type)) {
-            types.push("COMBO");
-        } else if (typeof type === "string") {
-            const upper = type.toUpperCase();
-            if (upper === "INT" || upper === "FLOAT" || upper === "STRING" || upper === "BOOLEAN" || upper === "COMBO" || upper === "COMFY_DYNAMICCOMBO_V3") {
-                types.push(upper);
-            }
-        }
+        const resolved = _resolveWidgetType(type, spec);
+        if (resolved) types.push(resolved);
     }
     return types;
 }
