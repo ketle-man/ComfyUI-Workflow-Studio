@@ -293,6 +293,13 @@ export async function loadWorkflowIntoEditor(workflow, filename) {
 
     refreshFeederNodeList();
 
+    // Lab subtab may already be the active one (e.g. it was active when this workflow
+    // was loaded) — the subtab-click handler that normally triggers this refresh never
+    // fires in that case, leaving Setting 1's live-reflected cells showing the previous
+    // workflow until the user clicks a cell or revisits the subtab.
+    const activeSubtab = document.querySelector(".wfm-gen-subtab-btn.active")?.dataset.subtab;
+    if (activeSubtab === "lab") refreshLabLiveDefaults();
+
     if (ckptWarning) {
         showToast(ckptWarning, "error");
     } else {

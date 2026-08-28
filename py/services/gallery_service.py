@@ -312,15 +312,22 @@ class GalleryService:
         try:
             with os.scandir(folder) as it:
                 for entry in it:
-                    if not entry.is_file(follow_symlinks=True):
+                    # follow_symlinks=True forces stat() to make an extra syscall per file
+                    # to resolve the link target even for plain files. Output folders don't
+                    # contain symlinked images, so False is safe and much cheaper.
+                    if not entry.is_file(follow_symlinks=False):
                         continue
                     if Path(entry.name).suffix.lower() not in IMAGE_EXTENSIONS:
                         continue
                     try:
-                        st = entry.stat(follow_symlinks=True)
+                        st = entry.stat(follow_symlinks=False)
+                        # entry.path is already absolute+resolved because callers always
+                        # pass in an already-resolved `folder`. Re-resolving it here via
+                        # Path(entry.path).resolve() costs an extra filesystem round-trip
+                        # per file — on a 9786-file folder that alone was 6.7s vs 0.07s.
                         entries.append((
                             entry.name,
-                            str(Path(entry.path).resolve()).replace("\\", "/"),
+                            entry.path.replace("\\", "/"),
                             st.st_size,
                             st.st_mtime,
                         ))
@@ -333,30 +340,45 @@ class GalleryService:
         return entries
 
     def _scan_folder_recursive(self, folder: Path) -> list[tuple[str, str, int, float]]:
-        """os.walk() でフォルダ配下を再帰的に列挙する（サブフォルダの画像も含む）。
+        """フォルダ配下を再帰的に列挙する（サブフォルダの画像も含む）。
         ImagePrompt/Style Catalogギャラリーのように深い階層に画像が置かれるケース用。
         キャッシュはしない（フォルダ数が少なく、都度スキャンしても軽い想定）。
+        os.walk()はDirEntryを介さずPath.stat()（follow_symlinks=True相当）を呼ぶため、
+        _scan_folder()と同じ理由でフォルダ内ファイル数に対して極端に遅くなる。
+        os.scandir()を自前で再帰し、follow_symlinks=Falseでstatする。
         """
         entries = []
-        try:
-            for root, dirs, files in os.walk(folder):
-                dirs[:] = [d for d in dirs if not d.startswith(".")]
-                for name in files:
-                    if Path(name).suffix.lower() not in IMAGE_EXTENSIONS:
-                        continue
-                    full = Path(root) / name
-                    try:
-                        st = full.stat()
-                        entries.append((
-                            name,
-                            str(full.resolve()).replace("\\", "/"),
-                            st.st_size,
-                            st.st_mtime,
-                        ))
-                    except OSError:
-                        continue
-        except PermissionError:
-            pass
+
+        def _walk(d):
+            try:
+                with os.scandir(d) as it:
+                    dir_entries = list(it)
+            except (PermissionError, OSError):
+                return
+            for entry in dir_entries:
+                if entry.is_dir(follow_symlinks=False):
+                    if not entry.name.startswith("."):
+                        _walk(entry.path)
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                if Path(entry.name).suffix.lower() not in IMAGE_EXTENSIONS:
+                    continue
+                try:
+                    st = entry.stat(follow_symlinks=False)
+                    # entry.path is already absolute since the top-level `folder` passed
+                    # in by callers is always pre-resolved — see _scan_folder() for why
+                    # re-resolving per file here would be costly.
+                    entries.append((
+                        entry.name,
+                        entry.path.replace("\\", "/"),
+                        st.st_size,
+                        st.st_mtime,
+                    ))
+                except OSError:
+                    continue
+
+        _walk(folder)
         return entries
 
     def list_images(

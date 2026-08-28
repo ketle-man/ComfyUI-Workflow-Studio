@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.5.3** — バグ修正: Labタブのワークフロー切替時に前の内容が残留 + Galleryタブの読み込み高速化・root自動展開 + READMEスクリーンショット刷新
 - **v0.5.2** — 機能追加: GenerateUI/Labタブの動画ワークフロー対応 + VideoタブにFrame抽出/GIF変換機能 + データ管理監査とZIPフルバックアップ + Send to LI node統一
 - **v0.5.1** — 機能追加: mp4動画の埋め込みメタデータ対応（Gallery Prompt/JSON・Metadataサブタブ・サイドパネルIタブ）+ Gallery Infoタブに寸法/再生時間表示 + MiniMax H3等オールインワン動画ノードのプロンプト抽出バグ修正
 - **v0.5.0** — 機能追加: mp4動画Gallery対応 + Videoタブ新設(MiniMax H3専用) + バグ修正: Galleryのタグ/メモが再起動後に消える

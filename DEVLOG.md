@@ -2,6 +2,28 @@
 
 ---
 
+## v0.5.3
+
+### バグ修正: Labタブのワークフロー切替時に前の内容が残留 + Galleryタブの読み込み高速化・root自動展開 + READMEスクリーンショット刷新
+
+ユーザーからの複数のバグ報告・改善要望を1セッションで順に対応した作業。
+
+**1. バグ修正: Labタブで起動時デフォルトワークフロー読み込み後に別ワークフローを読み込むと前の内容が残る**: 「別のワークフローを読み込んだ。一部以前のワークフローの内容が残ったまま表示される（クリックするか他のタブから戻ると消える）」との報告。Labタブの「Setting 1」列（Checkpoint/LoRA/VAE/Prompt/KSampler）はGenerateUIの現在の読み込み内容をライブ反映する仕組みだが、その再描画（`refreshLabLiveDefaults()`）は「サブタブをLabに切り替えたとき」の一箇所（`generate-tab.js`のサブタブクリックハンドラ）でしかトリガーされていなかった。Labタブを既に開いた状態で別のワークフローを読み込んだ場合、`loadWorkflowIntoEditor()`側では再描画が一切呼ばれず、前のワークフローの表示がそのまま残っていた。「セルをクリックしたり他のタブから戻ると直る」という報告内容は、それらの操作がたまたま再描画をトリガーしていたことの裏返しだった。`loadWorkflowIntoEditor()`の末尾で、現在アクティブなサブタブがLabの場合は`refreshLabLiveDefaults()`を追加で呼ぶよう修正。
+
+**2. 改善: Galleryタブの生成後の更新が遅い**: 「生成後の画像表示に更新して読み直すのに時間がかかる」との報告。実データ（Output先の`Text2Img`フォルダ、画像9,777枚）で`_scan_folder()`を実測したところ**7.5秒**かかっており、原因を切り分けたところ`entry.stat(follow_symlinks=True)`と、各ファイルごとに呼んでいた`Path(entry.path).resolve()`の2箇所がボトルネックと判明。特に`resolve()`の再解決が支配的で、これだけで1ファイルあたり約0.7ms×9,777件のファイルシステム往復が発生していた。`_scan_folder()`の呼び出し元（`list_images()`/`_bg_index_folder()`）は既にフォルダ自体を`Path(folder_path).resolve()`済みで渡しているため、`entry.path`は既に絶対パスであり、エントリ単位での再`resolve()`は不要だった。`entry.is_file()`/`entry.stat()`を`follow_symlinks=False`に変更し、パス生成も`entry.path.replace("\\", "/")`に簡略化（出力フォルダにシンボリックリンクの画像が置かれる想定はないため安全と判断）。同じ理由で`os.walk()`ベースだった`_scan_folder_recursive()`（ImagePrompt/Style Catalog用の再帰スキャン）も、`os.scandir()`を自前で再帰しDirEntryベースでstatする実装に書き換えた。実測で9,777枚のフォルダに対する`list_images()`全体が0.14秒（コールド）/0.08秒（フォルダキャッシュ温存時）まで短縮（約50倍高速化）。
+
+**3. 改善: Galleryフォルダツリーのrootをデフォルト展開状態に**: 上記の高速化を受けて「rootフォルダはデフォルトで展開状態で表示したい」との要望。フォルダスキャンが軽くなったことでサブフォルダの内容もすぐ確認できるようになった一方、`renderTreeNode()`はrootも他のノードと同じく初期状態は折りたたみ（▶）だったため気付きにくかった。root（`isRoot`）の場合のみ、ツリー構築時に矢印を展開済み（▼）にし子ノードを即座にレンダリングするよう`gallery-tab.js`を修正。
+
+**4. READMEスクリーンショット刷新**: 「以下のスクリーンショットは削除したい」との依頼でGenUI Feeder / GenUI LoRA Stack / Models Multi-select Menu / Tagger Tab / Customizeの5件をREADME.mdの表と`docs/`実ファイルの両方から削除（残った項目は2列レイアウトに詰め直し）。続けてVideo Tab・Lab Tab（2枚）・AI TOOL Tabの新規スクリーンショット計4枚をユーザーが`docs/`に配置し、READMEの表に追加した。
+
+**検証**: JS/Pythonとも`node --check`/`ast.parse()`で構文確認。Gallery高速化は開発元リポジトリの`GalleryService`を実データ（実際の`Text2Img`フォルダ、9,777枚）に対してvenv Pythonから直接呼び出し、修正前後の`_scan_folder()`/`list_images()`の実行時間をベンチマークして改善を数値で確認（7.5秒→0.063秒、`list_images()`全体は0.14秒）。返却されるパス文字列が修正前と同じ絶対パス形式であることも確認済み。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更・削除した全ファイル（`generate-tab.js`, `gallery_service.py`, `gallery-tab.js`, `README.md`, `docs/`配下の画像）を都度両フォルダへ同期し`diff`/存在確認で完全一致を確認、Pythonファイル変更のため`__pycache__`もクリア。全項目ともユーザー自身の実機確認で解消・反映を確認済み。
+
+**How to apply**: あるタブ/サブタブの表示を「別の場所（GenerateUI本体など）の現在の状態をライブ反映する」設計にする場合、再描画のトリガーを「そのタブへの切替」1箇所だけに置くと、切替を経由しない別の更新経路（今回はワークフロー読み込み）で表示が古いまま取り残される。ライブ反映される値の更新元（今回は`loadWorkflowIntoEditor()`）側でも、現在表示中のタブを見て能動的に再描画を呼ぶ必要がある。パフォーマンス調査では「体感で重い処理」を分解して各行を実測するまで真犯人を決め打ちしない方がよい — 今回も当初`follow_symlinks=True`のstat呼び出しを主因と想定したが、実測すると`Path.resolve()`の方が支配的だった。Windows上で大量ファイルを扱う`os.scandir()`ループでは、`entry.path`が既に呼び出し元でresolve済みのフォルダ配下の絶対パスであることを踏まえ、エントリ単位での`resolve()`/`follow_symlinks=True`はファイル数に比例した無視できないコストになり得るため避ける。バックエンドの表示速度を改善した際は、それに応じてフロントエンドのデフォルトUI状態（今回は折りたたみ初期状態）も見直す価値がある — 「遅いから畳んでおく」という妥協がボトルネック解消後も残ったままになりがち。
+
+関連: [[project_dev_deploy_sync]]
+
+---
+
 ## v0.5.2
 
 ### 機能追加: GenerateUI/Labタブの動画ワークフロー対応 + VideoタブにFrame抽出/GIF変換機能 + データ管理監査とZIPフルバックアップ + Send to LI node統一

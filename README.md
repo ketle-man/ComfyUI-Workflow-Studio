@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.5.2-green)
+![Version](https://img.shields.io/badge/version-0.5.3-green)
 
 ## Screenshots
 
@@ -30,29 +30,25 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 | :-------------------------------------: | :---------------------------------: |
 | ![Workflow Tab](docs/1_workflowtab.png) | ![Models Tab](docs/2_modelstab.png) |
 
-|                   Prompt Input Assistance                   |               Gen UI Feeder               |
-| :----------------------------------------------------------: | :---------------------------------------: |
-| ![Prompt Input Assistance](docs/3_PromptInputAssistance.png) | ![Gen UI Feeder](docs/4_GenUI_feeder.png) |
+|                   Prompt Input Assistance                   |               GenUI Batch               |
+| :----------------------------------------------------------: | :-------------------------------------: |
+| ![Prompt Input Assistance](docs/3_PromptInputAssistance.png) | ![GenUI Batch](docs/10_GenUI_Batch.png) |
 
-|                GenUI LoRA Stack                |               GenUI Batch               |
-| :---------------------------------------------: | :-------------------------------------: |
-| ![GenUI LoRA Stack](docs/9_GenUI_LoraStack.png) | ![GenUI Batch](docs/10_GenUI_Batch.png) |
-
-|                   Models Multi-select Menu                   |            Top Bar            |
-| :-----------------------------------------------------------: | :---------------------------: |
-| ![Models Multi-select Menu](docs/11_multiple_select_menu.png) | ![Top Bar](docs/5_topbar.png) |
+|            Top Bar            |              Image Edit Tab              |
+| :----------------------------: | :--------------------------------------: |
+| ![Top Bar](docs/5_topbar.png) | ![Image Edit Tab](docs/13_ImageEdit.png) |
 
 |              WS Library              |                  Library Information                  |
 | :----------------------------------: | :---------------------------------------------------: |
 | ![WS Library](docs/6_ws_library.png) | ![Library Information](docs/7_library_Infomation.png) |
 
-|            Tagger Tab            |              Image Edit Tab              |
-| :-------------------------------: | :--------------------------------------: |
-| ![Tagger Tab](docs/12_Tagger.png) | ![Image Edit Tab](docs/13_ImageEdit.png) |
+|              Video Tab              |               AI TOOL Tab               |
+| :----------------------------------: | :--------------------------------------: |
+| ![Video Tab](docs/14_videotab.png) | ![AI TOOL Tab](docs/17_aitooltab.png) |
 
-|             Customize             |  |
-| :--------------------------------: | :-: |
-| ![Customize](docs/8_Customize.png) |  |
+|              Lab Tab              |               Lab Index Image               |
+| :--------------------------------: | :------------------------------------------: |
+| ![Lab Tab](docs/15_labtab.png) | ![Lab Index Image](docs/16_lab_index.png) |
 
 ---
 

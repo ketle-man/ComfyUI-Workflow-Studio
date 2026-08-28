@@ -467,6 +467,16 @@ function renderTreeNode(node, container, depth, isRoot) {
 
         container.appendChild(item);
         container.appendChild(childContainer);
+
+        // root フォルダはデフォルトで展開状態にする（フォルダスキャン高速化により
+        // サブフォルダの内容もすぐ確認できるようになったため、折りたたみ初期状態だと
+        // 気付きにくい）
+        if (isRoot) {
+            arrow.dataset.expanded = "true";
+            arrow.textContent = "▼";
+            childContainer.style.display = "";
+            node.children.forEach(child => renderTreeNode(child, childContainer, depth + 1, false));
+        }
     } else {
         container.appendChild(item);
     }
