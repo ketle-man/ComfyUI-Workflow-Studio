@@ -964,6 +964,14 @@ export const comfyWorkflow = {
                 if (Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
                 if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
             }
+            // LTXVDualCFGGuider (LTX-2.5's video+audio guider) — positive/negative both
+            // commonly point at the *same* LTXVConditioning node (different output slots),
+            // so this only seeds the role on that node; LTXVConditioning below splits it
+            // back out per-slot onto its own positive/negative inputs.
+            if (ct === "LTXVDualCFGGuider") {
+                if (Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
+                if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
+            }
         }
 
         // === Pass 1b: Expand refs through CONDITIONING graph (BFS, 5 iterations) ===
@@ -1037,6 +1045,13 @@ export const comfyWorkflow = {
                 // role must route only to its own input (not both) or the negative CLIPTextEncode
                 // would incorrectly get marked positive too via the positive-output branch.
                 if (ct === "InstructPixToPixConditioning") {
+                    if (isPos && Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
+                    if (isNeg && Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
+                }
+                // LTXVConditioning (LTX-2.5) — same shape as InstructPixToPixConditioning:
+                // separate positive/negative inputs feeding separate outputs consumed by
+                // LTXVDualCFGGuider, so each role must route only to its own input.
+                if (ct === "LTXVConditioning") {
                     if (isPos && Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
                     if (isNeg && Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
                 }
@@ -1365,6 +1380,21 @@ export const comfyWorkflow = {
                 });
             }
 
+            // Video latent nodes (Wan2.2's EmptyHunyuanLatentVideo, LTX-2.5's
+            // EmptyLTXVLatentVideo) — same width/height/batch_size shape as EmptyLatentImage
+            // plus a frame-count "length" input, usually linked to a duration*fps expression
+            // (see video-tab.js's own Wan2.2/LTX-2.5 handling) rather than a literal number —
+            // left undefined in that case so the settings-tab UI shows "linked".
+            if (ct === "EmptyHunyuanLatentVideo" || ct === "EmptyLTXVLatentVideo") {
+                result.latent_nodes.push({
+                    id, type: ct, title, isVideoLatent: true,
+                    width: typeof inputs.width === "number" ? inputs.width : undefined,
+                    height: typeof inputs.height === "number" ? inputs.height : undefined,
+                    batch_size: inputs.batch_size,
+                    length: typeof inputs.length === "number" ? inputs.length : undefined,
+                });
+            }
+
             // ResolutionSelector (ComfyUI core, comfy_extras.nodes_resolution): typically
             // feeds an EmptyLatentImage's width/height rather than being a latent node
             // itself. aspect_ratio is a fixed-choice COMBO (e.g. "3:2 (Photo)") — its exact
@@ -1539,7 +1569,12 @@ export const comfyWorkflow = {
     // generation timeout (video generation runs far longer than a still image) — see
     // generate-tab.js _coreGenerate and lab-tab.js _runLabBatch.
     isVideoWorkflow(analysis) {
-        return (analysis?.prompt_nodes || []).some((n) => /ImageToVideo|TextToVideo/.test(n.type));
+        if ((analysis?.prompt_nodes || []).some((n) => /ImageToVideo|TextToVideo/.test(n.type))) return true;
+        // LTX-2.5/Wan2.2: no all-in-one *ToVideo node — detected instead via their
+        // EmptyHunyuanLatentVideo/EmptyLTXVLatentVideo latent node (see analyzeWorkflow)
+        // or a SaveVideo/CreateVideo node anywhere in the flattened graph.
+        if ((analysis?.latent_nodes || []).some((n) => n.isVideoLatent)) return true;
+        return (analysis?.all_nodes || []).some((n) => n.type === "SaveVideo" || n.type === "CreateVideo");
     },
 
     applyParams(workflow, params) {

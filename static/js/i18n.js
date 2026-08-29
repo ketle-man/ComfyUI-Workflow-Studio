@@ -793,7 +793,8 @@ const LANGUAGES = {
         helpGen5: "Model tab: Checkpoint, VAE, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors) are always shown; ControlNet and Hypernetwork (with Strength field) are collapsed by default since they're used less often — click their header to expand; LoRA (Single/Stack tabs) has its own column to the right; all selectors have a filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones",
         helpGen28: "Model tab — Highlight color: the label of each model type (Checkpoint, VAE, Diffusion Model, Text Encoder, ControlNet, Hypernetwork) and the LoRA column header turn a distinct color (default bright green) when the loaded workflow actually contains that type of node; this stays visible even while ControlNet/Hypernetwork are collapsed, so you can tell at a glance whether they're in use without expanding them; the color is customizable in the Settings tab",
         helpGen6: "Settings tab: KSampler and Latent Image side by side, each at 50% width",
-        helpGen7: "Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow; if the loaded workflow has Bypass or Mute nodes, a note listing them appears above the search bar (Bypass nodes are excluded with their wires reconnected around them; Mute nodes are excluded with no reconnection, matching ComfyUI itself)",
+        helpGen31: "LTX-2.5 and Wan2.2 video workflows also work when loaded as regular workflows in this tab (not just the dedicated Video tab): Positive/Negative Prompt detection follows LTX-2.5's LTXVDualCFGGuider / LTXVConditioning nodes to find the actual prompt text, and the Settings tab's Latent Image section recognizes Wan2.2's EmptyHunyuanLatentVideo and LTX-2.5's EmptyLTXVLatentVideo nodes (with an added Length (frames) field) instead of showing \"No EmptyLatentImage node found\"; generating from these workflows also gets the same extended timeout as MiniMax H3 video generations",
+        helpGen7: "Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow; if the loaded workflow has Bypass or Mute nodes, a note listing them appears above the search bar (Bypass nodes are excluded with their wires reconnected around them; Mute nodes are excluded with no reconnection, matching ComfyUI itself); the search bar highlights matches and scrolls to them without moving the cursor into the editor, so typing right after a search can't accidentally overwrite the JSON — click into the editor first to actually edit",
         helpGen8: "Seed control: random, fixed, increment, decrement",
         helpGen9: "Generate, progress display, stop, and view results",
         helpGen10: "Eagle integration: auto-save generated images to Eagle (SVG output supported too — both the standard SaveSVGNode and comfyui-tosvg's Save SVG String node)",
@@ -1373,6 +1374,7 @@ const LANGUAGES = {
         helpVideo5: "The Video Source panel next to the preview lets you drop or pick any local video (not just a generated one) to use the Frame/GIF tools below without running the loaded video workflow first; Clear resets it back to empty.",
         helpVideo6: "Frame tab (right panel): play/seek the preview video to the position you want, click Capture Frame to grab that frame client-side, then Save to Output to write it as a PNG into ComfyUI's output folder.",
         helpVideo7: "GIF tab (right panel): set Start/End (seconds), FPS, and an optional Max Width, then Convert to GIF — the server decodes the video and encodes an animated GIF into ComfyUI's output folder.",
+        helpVideo8: "Highlight color: the Prompt / Duration / First Frame / Last Frame / Aspect Ratio / Megapixels / Multiple labels turn the same highlight color as the GenerateUI Model tab (customizable in the Settings tab) when the loaded workflow actually supports that field — e.g. for a Wan2.2 workflow (no ResolutionSelector node), the Aspect Ratio / Megapixels / Multiple labels stay unhighlighted since those fields are disabled.",
     },
 
     ja: {
@@ -2162,7 +2164,8 @@ const LANGUAGES = {
         helpGen5: "Modelタブ：Checkpoint/VAE/Diffusion Model（UNETLoader / UnetLoaderGGUF / LoaderGGUF対応）/Text Encoder（CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF対応 — typeおよびdevice選択付き、DualCLIPは2段モデル選択）は常時表示；ControlNetとHypernetwork（Strength入力付き）は使用頻度が低いためデフォルトで折りたたみ — 見出しをクリックで展開；LoRA（Single/Stackタブ）は右側に独立した列を表示；すべてのセレクタにフィルタ検索付き；LoRA Stack — Applyで有効な全LoRAを対象ノードに書き込み、同時にLoRA構文とCivitAIトリガーワードをPositiveプロンプトへ挿入；再Applyでは非アクティブなLoRAを削除し、アクティブなLoRAを再追加してプロンプトを更新",
         helpGen28: "Modelタブ — ハイライト色：読み込んだワークフローに実際に該当ノードが含まれる場合、各モデル種別（Checkpoint/VAE/Diffusion Model/Text Encoder/ControlNet/Hypernetwork）のラベルとLoRA列見出しが指定色（デフォルトは明るい緑）で表示される；ControlNet/Hypernetworkが折りたたまれた状態でも色は見えるため、展開しなくても使用有無が一目で分かる；色はSettingsタブでカスタマイズ可能",
         helpGen6: "Settingsタブ：KSamplerとLatent Imageを横並び（各50%幅）",
-        helpGen7: "Raw JSONを各タブの右列に常時表示 — 直接編集してApplyでワークフロー即時反映；読み込んだワークフローにBypass/Muteノードがある場合、検索バー上部に一覧が表示される（Bypassは除外され配線が再接続される、Muteは除外されるが再接続はされない点はComfyUI本体と同じ）",
+        helpGen31: "LTX-2.5とWan2.2の動画ワークフローも、専用のVideoタブだけでなく本タブに通常ワークフローとして読み込んだ場合に対応 — Positive/Negative PromptはLTX-2.5のLTXVDualCFGGuider / LTXVConditioningノードをたどって実際のプロンプト文を検出し、SettingsタブのLatent ImageはWan2.2のEmptyHunyuanLatentVideoとLTX-2.5のEmptyLTXVLatentVideoノードを認識（Length（フレーム数）欄も追加表示）して「No EmptyLatentImage node found」にならない；これらのワークフローからの生成もMiniMax H3の動画生成と同じ延長タイムアウトが適用される",
+        helpGen7: "Raw JSONを各タブの右列に常時表示 — 直接編集してApplyでワークフロー即時反映；読み込んだワークフローにBypass/Muteノードがある場合、検索バー上部に一覧が表示される（Bypassは除外され配線が再接続される、Muteは除外されるが再接続はされない点はComfyUI本体と同じ）；検索バーはヒット箇所をハイライト表示してスクロールするだけでエディタにカーソルを移動しないため、検索直後にキー入力してもJSONが誤って書き換わることはない — 編集する際はエディタ内をクリックしてから行う",
         helpGen8: "シード管理：ランダム / 固定 / 増加 / 減少",
         helpGen9: "画像生成、進捗表示、生成停止、結果表示",
         helpGen10: "Eagle連携：生成画像をEagleへ自動保存（SVG出力にも対応 — 標準SaveSVGNodeおよびcomfyui-tosvgのSave SVG Stringノードの両方）",
@@ -2740,6 +2743,7 @@ const LANGUAGES = {
         helpVideo5: "プレビューの横にある「Video Source」パネルでは、生成した動画に限らず任意のローカル動画をドロップ/選択して、下のFrame/GIF機能を読み込んだワークフローを実行せずに使えます。Clearで選択をリセットできます。",
         helpVideo6: "Frameタブ（右パネル）: プレビュー動画を再生・シークして止めたい位置で「Capture Frame」を押すとその場でフレームをキャプチャし、「Save to Output」でPNGとしてComfyUIのOutputフォルダに保存します。",
         helpVideo7: "GIFタブ（右パネル）: Start/End（秒）・FPS・Max Width（任意）を指定して「Convert to GIF」を押すと、サーバー側で動画をデコードしアニメーションGIFとしてComfyUIのOutputフォルダに保存します。",
+        helpVideo8: "ハイライト色: 読み込んだワークフローが実際に対応する項目（Prompt・Duration・First Frame・Last Frame・Aspect Ratio・Megapixels・Multiple）のラベルが、生成UIタブのModelタブと同じハイライト色（設定タブでカスタマイズ可能）で表示されます — 例えばWan2.2ワークフロー（ResolutionSelectorノードなし）ではAspect Ratio/Megapixels/Multipleのラベルは非表示のままです（それらの項目は操作不可のため）。",
     },
 
     zh: {
@@ -3529,7 +3533,8 @@ const LANGUAGES = {
         helpGen5: "Model标签：Checkpoint/VAE/Diffusion Model（支持UNETLoader / UnetLoaderGGUF / LoaderGGUF）/Text Encoder（支持CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — 含type和device选择器，DualCLIP显示两段模型选择）始终显示；ControlNet和Hypernetwork（带Strength输入）因使用频率较低默认折叠 — 点击标题展开；LoRA（Single/Stack标签）拥有独立的列；所有选择器均含筛选；LoRA Stack — 点击Apply会将所有启用的LoRA写入目标节点，并同时将LoRA语法和CivitAI触发词插入Positive提示词；再次Apply会移除未启用的LoRA并重新添加启用的LoRA以更新提示词",
         helpGen28: "Model标签 — 高亮颜色：当前工作流实际包含某类型节点时（Checkpoint/VAE/Diffusion Model/Text Encoder/ControlNet/Hypernetwork），对应标签及LoRA列标题会以指定颜色（默认亮绿色）显示；即使ControlNet/Hypernetwork处于折叠状态该颜色依然可见，无需展开即可判断是否在使用；颜色可在Settings标签中自定义",
         helpGen6: "Settings标签：KSampler与Latent Image并排显示（各占50%宽度）",
-        helpGen7: "Raw JSON在每个标签右列常驻显示 — 直接编辑并Apply即时重载工作流；如果加载的工作流包含Bypass或Mute节点，搜索栏上方会显示列表(Bypass节点会被排除但其连线会重新连接；Mute节点会被排除且不重新连接，与ComfyUI本体行为一致)",
+        helpGen31: "LTX-2.5和Wan2.2视频工作流在本标签中作为普通工作流加载时（不仅限于专用的Video标签）也可正常使用 — Positive/Negative Prompt会沿LTX-2.5的LTXVDualCFGGuider / LTXVConditioning节点追溯找到实际提示词文本，Settings标签的Latent Image部分能识别Wan2.2的EmptyHunyuanLatentVideo和LTX-2.5的EmptyLTXVLatentVideo节点（并新增Length（帧数）字段），不再显示\"No EmptyLatentImage node found\"；从这些工作流生成时也会应用与MiniMax H3视频生成相同的延长超时",
+        helpGen7: "Raw JSON在每个标签右列常驻显示 — 直接编辑并Apply即时重载工作流；如果加载的工作流包含Bypass或Mute节点，搜索栏上方会显示列表(Bypass节点会被排除但其连线会重新连接；Mute节点会被排除且不重新连接，与ComfyUI本体行为一致)；搜索栏只会高亮匹配项并滚动到该位置，不会将光标移入编辑器，因此搜索后立即按键不会意外覆盖JSON — 需要先点击编辑器内部才能实际编辑",
         helpGen8: "种子管理：随机/固定/递增/递减",
         helpGen9: "生成图片、进度显示、停止生成、查看结果",
         helpGen10: "Eagle集成：自动保存生成图片到Eagle（也支持SVG输出 — 标准SaveSVGNode节点和comfyui-tosvg的Save SVG String节点均可）",
@@ -4108,6 +4113,7 @@ const LANGUAGES = {
         helpVideo5: "预览旁边的「Video Source」面板可以拖放或选择任意本地视频（不仅限于生成的视频），无需先运行已加载的视频工作流即可使用下方的Frame/GIF工具。点击Clear可重置选择。",
         helpVideo6: "Frame标签页（右侧面板）：播放/拖动预览视频到想要的位置，点击「Capture Frame」在客户端截取该帧，再点击「Save to Output」将其保存为PNG到ComfyUI的输出文件夹。",
         helpVideo7: "GIF标签页（右侧面板）：设置Start/End（秒）、FPS和可选的Max Width，点击「Convert to GIF」后，服务器会解码视频并将动画GIF保存到ComfyUI的输出文件夹。",
+        helpVideo8: "高亮颜色：当加载的工作流实际支持某个字段时（Prompt、Duration、First Frame、Last Frame、Aspect Ratio、Megapixels、Multiple），对应标签会以与生成UI标签Model页相同的高亮颜色显示（可在设置标签中自定义）——例如Wan2.2工作流（没有ResolutionSelector节点）中，Aspect Ratio/Megapixels/Multiple标签保持不高亮，因为这些字段处于禁用状态。",
     },
 };
 

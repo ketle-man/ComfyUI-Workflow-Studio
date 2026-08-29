@@ -26,7 +26,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.5.3-green)
+![Version](https://img.shields.io/badge/version-0.5.4-green)
 
 ## Features (tab -> feature names)
 
@@ -49,7 +49,7 @@ Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column —
 3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager, Form / Table toggle, Table view — Presets / Presets Group / Wildcards / Style
 
 ### Settings Tab
-2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, Ollama connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
+2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, Video Playback Volume, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
 
 ### Gallery Tab (v0.3.44)
 Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, Performance
@@ -70,16 +70,16 @@ Node Browser, Search & Filter, Package badges, Node detail panel, Node Sets, Rig
 Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User-defined badges, Side panel tabs, CivitAI integration, CivitAI panel — Info / Sample sub-tabs, CivitAI panel states, Batch CivitAI fetch, Detail modal, GenUI Model button, Group management, Table view memo, Preview images, Enable / Disable models, Multi-select & bulk operations, Search clear (✕), Clear all filters (✕ Clear)
 
 ### Tagger Tab (v0.3.38)
-3 sub-tabs, Model support, Threshold sliders, Ollama VLM, Single tab, Single output options, Batch tab, DB tab, Dependencies
+3 sub-tabs, Model support, Threshold sliders, VLM tagging, Single tab, Single output options, Batch tab, DB tab, Dependencies
 
 ### Image Edit Tab (v0.3.65)
 Layer-based image editor, Loading images, New button, Tools, Layer panel, Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
 
-### Video Tab (v0.5.0 – v0.5.2)
-Dedicated MiniMax H3 video generation UI, independent of GenerateUI, 3-pane layout, First Frame / Last Frame are both optional, Node lookup instead of hardcoded IDs, Load in Video, Preview frame + Video Source panel, Frame tab, GIF tab
+### Video Tab (v0.5.0 – v0.5.4)
+Dedicated video generation UI, independent of GenerateUI, 3-pane layout, First Frame / Last Frame are both optional, Semantic node lookup, not hardcoded IDs, Field highlight color, Load in Video, Preview frame + Video Source panel, Frame tab, GIF tab, Playback volume
 
 ### AI TOOL Tab (v0.3.14)
-4-pane layout, Translation pane, Chat pane, Chat pane — image generation via Tool Calling, Chat pane — generate_image extra parameters, TOOLS pane (VLM), TOOLS pane — shared Chat attachment, TOOLS pane (Wildcards), Chat pane — image-to-image (I2I), Chat pane — SVG generation, no ComfyUI workflow involved, Chat pane — Skills, Settings pane, Unsloth backend, Settings pane — Chat Image Generation, Settings pane — Chat I2I Generation, Settings pane — Generation, Settings shared, Backend support, URL security, Lemonade's other endpoints (not integrated)
+4-pane layout, Translation pane, Chat pane, Chat pane — image generation via Tool Calling, Chat pane — generate_image extra parameters, TOOLS pane (VLM), TOOLS pane — shared Chat attachment, TOOLS pane (Wildcards), Chat pane — image-to-image (I2I), Chat pane — SVG generation, no ComfyUI workflow involved, Chat pane — Skills, Settings pane, Unsloth backend, Settings pane — Chat Image Generation, Settings pane — Chat I2I Generation, Settings pane — Generation, Model unload, Settings shared, Backend support, URL security, Lemonade's other endpoints (not integrated)
 
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
 Tab layout (W / N / P / M / I / A), W — Workflows tab, N — Nodes tab, M — Models tab, P — Prompts tab, I — Information tab, A — AI TOOL tab, Drag & drop workflows, Drag & drop nodes, Drag & drop prompts, Send to Canvas, Copy prompts, Double-click, Search, ⚙ Theme settings

@@ -141,6 +141,40 @@ function locateVideoModelNodes(workflow) {
 // ワークフロー読み込み
 // ============================================
 
+// GenerateUIタブのModelタブが使う「ロードされたワークフローに該当する項目」ハイライト
+// (wfm-model-label-active、色は設定のGenerateUI Modelタブ ハイライト色と共通) を、
+// Videoタブの左パネルにも適用する。Wan2.2などResolutionSelectorを持たないファミリーは
+// Aspect Ratio/Megapixels/Multipleが操作不可(既にdisabled)になるため、ここでも
+// 該当なし扱いにしてハイライトしない。
+const _VIDEO_FIELD_LABEL_IDS = [
+    "wfm-video-prompt-label",
+    "wfm-video-duration-label",
+    "wfm-video-first-frame-label",
+    "wfm-video-last-frame-label",
+    "wfm-video-aspect-ratio-label",
+    "wfm-video-megapixels-label",
+    "wfm-video-multiple-label",
+];
+
+function _setFieldActive(id, active) {
+    document.getElementById(id)?.classList.toggle("wfm-model-label-active", !!active);
+}
+
+function _updateFieldHighlights(nodes) {
+    if (!nodes) {
+        _VIDEO_FIELD_LABEL_IDS.forEach((id) => _setFieldActive(id, false));
+        return;
+    }
+    const hasResolution = !!nodes.resolutionNode;
+    _setFieldActive("wfm-video-prompt-label", true);
+    _setFieldActive("wfm-video-duration-label", true);
+    _setFieldActive("wfm-video-first-frame-label", nodes.firstFrameSlot !== -1);
+    _setFieldActive("wfm-video-last-frame-label", nodes.lastFrameSlot !== -1);
+    _setFieldActive("wfm-video-aspect-ratio-label", hasResolution);
+    _setFieldActive("wfm-video-megapixels-label", hasResolution);
+    _setFieldActive("wfm-video-multiple-label", hasResolution);
+}
+
 function _showFramePreview(which, filename) {
     const previewImg = document.getElementById(`wfm-video-${which}-frame-preview`);
     const wrap = document.getElementById(`wfm-video-${which}-frame-wrap`);
@@ -153,9 +187,11 @@ export async function loadWorkflowIntoVideoEditor(workflow, filename) {
     const nodes = locateVideoModelNodes(workflow);
     if (!nodes) {
         showToast(t("videoUnsupportedWorkflow"), "error");
+        _updateFieldHighlights(null);
         return false;
     }
 
+    _updateFieldHighlights(nodes);
     state.templateWorkflow = workflow;
     state.templateFilename = filename || "";
     // 前回読み込んだワークフローのFirst/Last Frameプレビューが残っていると、画像を使わない

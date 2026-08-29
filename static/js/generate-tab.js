@@ -2291,10 +2291,11 @@ export async function initGenerateTab() {
             });
             searchOverlay.innerHTML = html + "\n";
 
-            // Scroll editor to current match
+            // Scroll editor to current match. フォーカス/selectionRangeは意図的に設定しない
+            // (テキストエリアにカーソルが当たった状態になり、検索直後のキー入力が選択範囲を
+            // 上書きして不意にJSONを編集してしまうため)。ハイライトはsearchOverlayの<mark>
+            // 表示のみで行い、編集はユーザーが明示的にエディタをクリックした場合に限る。
             const pos = matchPositions[currentMatchIndex];
-            editor.focus();
-            editor.setSelectionRange(pos, pos + term.length);
             const lineNum = (text.slice(0, pos).match(/\n/g) || []).length;
             const lineH = parseFloat(getComputedStyle(editor).lineHeight) || 18;
             editor.scrollTop = Math.max(0, lineH * lineNum - editor.clientHeight / 2);

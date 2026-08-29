@@ -485,6 +485,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-28": "helpGen28",
         "wfm-help-gen-29": "helpGen29",
         "wfm-help-gen-30": "helpGen30",
+        "wfm-help-gen-31": "helpGen31",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",
@@ -734,7 +735,7 @@ function applyI18nToHtml() {
         "wfm-help-video-1": "helpVideo1", "wfm-help-video-2": "helpVideo2",
         "wfm-help-video-3": "helpVideo3", "wfm-help-video-4": "helpVideo4",
         "wfm-help-video-5": "helpVideo5", "wfm-help-video-6": "helpVideo6",
-        "wfm-help-video-7": "helpVideo7",
+        "wfm-help-video-7": "helpVideo7", "wfm-help-video-8": "helpVideo8",
     };
     for (const [id, key] of Object.entries(helpIdMap)) {
         const el = document.getElementById(id);

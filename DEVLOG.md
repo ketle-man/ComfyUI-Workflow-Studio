@@ -2,6 +2,41 @@
 
 ---
 
+## v0.5.4
+
+### 機能追加: Video/GenerateUIタブのLTX-2.5・Wan2.2対応拡大 + AI Assistant設定のUnsloth対応・独立モーダル化・モデルアンロード機能
+
+複数セッションにまたがり実施された作業をまとめてリリース。Videoタブが従来MiniMax H3専用だった検出/生成ロジックをLTX-2.5・Wan2.2にも対応させ、続けて生成UIタブ側の解析ロジックにも同じ2ファミリーへの対応を追加した。並行してAI Assistant設定（Prompt/Tagger）をUnslothバックエンド対応・タブ別モーダル化・モデルアンロード機能へ刷新した。
+
+**1. Videoタブ: LTX-2.5 / Wan2.2対応（ノード検出の汎用化）**: 従来MiniMax H3専用だったサブグラフ検出/フォーム反映ロジックを、サブグラフが公開する入力のlabel（無ければname）ベースで意味的にスロットを特定する方式に一般化した。MiniMax H3/LTX-2.5系は内部ノード型のプレフィックス（`LTXV*`等）で、Wan2.2は該当する固有ノード型を持たないためサブグラフ名自体（"...(Wan2.2)"表記）で家系を判定する。これによりVideoタブの「Load in Video」からLTX-2.5のText/Image/First&Last-Frame to VideoワークフローとWan2.2のText to Videoワークフローも読み込み・生成できるようになった。同梱していない`minimax_test.json`の自動読み込みも廃止。
+
+**2. バグ修正: convertUiToApi()のMultiTypeウィジェット脱落**: object_infoが複合型（例: `LTXVEmptyLatentAudio.frame_rate: "FLOAT,INT"`）を宣言している入力が、単純な完全一致判定（`upper === "INT" || ...`）に引っかからずウィジェット名/型リストから丸ごと脱落し、後続ウィジェットの値が1つずつずれる問題を発見・修正した。実際に`LTXVEmptyLatentAudio.batch_size`にframe_rateの値が誤って書き込まれ、動画生成が"Expected size 1 but got size 25"で失敗する原因になっていた。`_resolveWidgetType()`を新設し、カンマ区切りの型宣言から実際にウィジェットスロットを占める単一のスカラー型を解決するよう修正。
+
+**3. 動画再生ボリュームの保存設定**: 動画を切り替えるたびに音量が最大へ戻ってしまう問題を解消するため、設定タブに音量設定を追加しVideo/Galleryタブの全プレーヤー間で保存・共有されるようにした。
+
+**4. GenerateUIタブ: LTX-2.5 / Wan2.2対応（プロンプト検出・Latent Image・タイムアウト）**: Videoタブとは独立した解析経路（`analyzeWorkflow()`、フラット化済みAPI形式ワークフローを解析）側でも同じ2ファミリーの通常ワークフロー読み込みに対応させる作業。実機確認したところ、Model タブ（Checkpoint/VAE/Diffusion Model/Text Encoder/LoRA）は既存の`UNETLoader`/`CLIPLoader`/`VAELoader`ベースの汎用検出でWan2.2/LTX-2.5とも既に問題なく動作していたが、次の2点に不備を発見した。
+  - **Positive/Negative Prompt検出（LTX-2.5）**: LTX-2.5は`LTXVDualCFGGuider`（positive/negativeが同一の`LTXVConditioning`ノードの別出力スロットを指す）+ `LTXVConditioning`（自身のpositive/negative入力を介して実際のプロンプトソースへ分岐）という専用ノード構成を使うため、既存の`CFGGuider`/`InstructPixToPixConditioning`向けロール伝播ロジックでは拾えず、Positive/Negative Promptが空欄のままSaveVideoノードへのフォールバック表示になっていた。`LTXVDualCFGGuider`をロール伝播の起点に、`LTXVConditioning`を`InstructPixToPixConditioning`と同型の分岐伝播ノードとして追加し解決した。
+  - **Latent Image検出（Wan2.2・LTX-2.5共通）**: SettingsタブのLatent Imageセクションが`EmptyLatentImage`/`EmptySD3LatentImage`/`EmptyFlux2LatentImage`のみ対応しており、Wan2.2の`EmptyHunyuanLatentVideo`とLTX-2.5の`EmptyLTXVLatentVideo`が未対応で「No EmptyLatentImage node found」表示になっていた。両ノード型を追加し、動画特有の`length`（フレーム数）入力を編集するフィールドも新設した（Duration×FPSの数式ノードにリンクされ非リテラルなことが多いため、Width/Height同様「linked」表示にフォールバックする）。
+  - あわせて`isVideoWorkflow()`（生成タイムアウトを30分に延長する判定）を、`SaveVideo`/`CreateVideo`ノードや動画用latentノードの存在でも判定できるよう拡張した。従来はMiniMax H3のようなオールインワン`*ToVideo`ノードの有無でしか判定できず、LTX-2.5/Wan2.2は通常の静止画と同じ短いタイムアウトで打ち切られる恐れがあった。
+
+**5. Videoタブ左パネルのハイライト表示**: GenerateUIのModelタブが持つ「ワークフローに実際に該当する項目のラベルをハイライト」する仕組み（`wfm-model-label-active`クラス、設定タブでカスタマイズ可能な共通色）をVideoタブの左パネルにも適用した。Prompt/Durationは常時、First Frame/Last Frameはサブグラフがそのスロットを公開している場合のみ、Aspect Ratio/Megapixels/MultipleはResolutionSelectorノードが存在する場合のみハイライトする — Wan2.2のように該当ノードがなく操作不可（disabled）な項目は、既存の無効化表示と矛盾しないよう非ハイライトのままにした。
+
+**6. バグ修正: 生成UIタブRAW JSON検索がヒット箇所にカーソルを当てて不意に編集させてしまう**: 検索でヒットした際に`editor.focus()` + `setSelectionRange()`でテキストエリアへフォーカス・選択範囲を作っていたため、検索直後にキー入力すると選択範囲が上書きされ意図せずJSONが書き換わってしまう問題があった。ハイライト表示（`<mark>`によるオーバーレイ）とスクロール追従は維持しつつ、フォーカス移動と選択状態の作成のみを取りやめ、編集はユーザーが明示的にエディタをクリックした場合のみに限定した。
+
+**7. AI Assistant設定: Unsloth対応・Prompt/Tagger独立モーダル化・モデルアンロード機能**: Prompt AI（Prompt タブ）とTagger VLM（Taggerタブ）にUnslothバックエンドを追加した（サーバー側プロキシでAPIキーを付与）。Taggerタブは従来Ollama直呼び出しだった実装を、Ollama/LM Studio/Lemonade/Unslothの4バックエンド共通の`vlm_models`/`vlm_predict`エンドポイントに統一し、API URL直接入力欄を廃止した。中央Settingsタブにあった単一の「AI Assistant Settings」パネルを廃止し、Prompt/Tagger各タブに⚙設定ボタン+専用モーダル（`ai-settings-modal.js`、Backend/Connection/Model/Generation/Unload/Saveの共通UIコンポーネント）を新設、それぞれ独立した`localStorage`キーで設定を持つように変更した（PromptとTaggerで異なるバックエンド/モデルを使い分けられる）。Thinking mode / Max tokensの設定をPrompt/Tagger双方の生成呼び出しに反映（Tagger側はPython側の`vlm_predict`にも反映）。Ollama（`keep_alive:0`）/LM Studio（`/api/v1/models/unload`）/Lemonade（`/api/v1/unload`）向けのモデルアンロード機能を追加し、AI TOOLタブの設定にもUnloadボタンを追加した（Unslothは対応する公式APIが無いため非対応として明示）。
+
+**8. CI: publish-node-actionのバージョンをSHA固定**: `Comfy-Org/publish-node-action@main`という可変ブランチ参照は、アクション側が更新された際に挙動が変わりうるサプライチェーンリスクのため、リリースタグ1.0.1のコミットSHAに固定するよう`.github/workflows/publish.yml`を修正した（[[project_registry_flagged_versions]]で追跡している過去のRegistry Banned/Flagged原因調査の一環）。
+
+**ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、GenerateUIタブ（LTX-2.5/Wan2.2対応・RAW JSON検索の挙動）とVideoタブ（ハイライト色機能）のヘルプ本文を英語・日本語・中国語の3言語で追加・更新した（Prompt/Settings/AI TOOL/Taggerタブのヘルプは7番の対応セッション内で既に更新済み）。README.mdはWorkflowタブ（Load in Video対象の拡大）、GenerateUIタブ（MultiTypeバグ修正・LTX-2.5/Wan2.2対応）、Videoタブ（対応ファミリー拡大・ハイライト色・音量設定・見出しバージョン範囲更新）、Settingsタブ（AI Assistant Settings廃止の案内・音量設定・ハイライト色の共有先追記）、Prompt/Taggerタブ（AI Assistant設定のモーダル化・マルチバックエンド化）、AI TOOLタブ（モデルアンロード機能）を更新した。
+
+**検証**: 全JS/Pythonファイルを`node --check`/`ast.parse()`で構文確認。GenerateUIタブのLTX-2.5/Wan2.2対応は、実機ブラウザ（Kapture）でwan22_test.json / ltx_25_test.jsonの2ワークフローを実際に生成UIタブへ読み込み、Positive/Negative Promptの実文表示・Latent Image欄（Width/Height/Batch Size/Length）の表示・ハイライト色の点灯状態をスクリーンショットで確認した。RAW JSON検索のフォーカス修正は、検索実行後にキー入力してもtextareaの値が変化しないことを実機で確認した。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイルを都度両フォルダへ同期しCRLF/LF差異を除いた`diff`で完全一致を確認した。
+
+**How to apply**: `analyzeWorkflow()`のような中央解析関数はワークフロー「ファミリー」が増えるたびに、既存パターン（KSampler系のロール伝播、EmptyLatentImage系のlatentノード検出）と同型の分岐を追加していく設計で拡張できる — 逆に言えば、新しいノード構成（今回のLTXVDualCFGGuider/LTXVConditioningのような「複数出力を持つ1ノードがpositive/negativeを兼ねる」パターン）は`InstructPixToPixConditioning`のような既存の同型ケースを探して倣うと実装が速い。同じワークフローファミリーへの対応が複数タブ（Video/GenerateUI）にまたがる場合、検出ロジック自体は各タブの解析経路（Video: サブグラフを直接歩く、GenerateUI: フラット化済みAPI形式を解析）が別実装なので、片方を直しても他方は直らない — 「Videoタブでは動くのにGenerateUIでは動かない」という状況は、まさにこの二重実装のズレが原因だった。テキストエリアへの自動フォーカス/selectionRangeは、検索・ハイライトのような「見せるだけ」の操作と「編集を許可する」操作を暗黙に混同させるため、ハイライト表示に徹する機能ではフォーカス移動自体を避けるのが安全。
+
+関連: [[project_v050_video_tab]], [[project_dev_deploy_sync]], [[project_v0336_conventions]], [[project_registry_flagged_versions]]
+
+---
+
 ## v0.5.3
 
 ### バグ修正: Labタブのワークフロー切替時に前の内容が残留 + Galleryタブの読み込み高速化・root自動展開 + READMEスクリーンショット刷新

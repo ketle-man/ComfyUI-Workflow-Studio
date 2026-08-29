@@ -1446,6 +1446,12 @@ export const comfyEditor = {
                         <label>Batch Size</label>
                         <input type="number" class="wfm-input" id="wfm-settings-batch" value="${latent.batch_size ?? 1}" min="1" max="64">
                     </div>
+                    ${latent.isVideoLatent ? `
+                    <div class="wfm-form-group">
+                        <label>Length (frames)</label>
+                        <input type="number" class="wfm-input" id="wfm-settings-latent-length" value="${latent.length ?? ""}" placeholder="${latent.length === undefined ? "linked" : ""}" step="1" min="1">
+                    </div>
+                    ` : ""}
                     <button class="wfm-btn wfm-btn-sm" id="wfm-settings-latent-apply">Apply</button>
                     ${latent.width === undefined || latent.height === undefined ? `<p class="wfm-placeholder" style="margin-top:6px;">Width/Height is linked to another node (e.g. auto-follows the input image) — leave blank to keep it linked.</p>` : ""}
                     <div style="margin-top:10px;border-top:1px solid var(--wfm-border);padding-top:10px;">
@@ -1502,6 +1508,8 @@ export const comfyEditor = {
             if (wEl?.value !== "") inputs.width = parseInt(wEl.value) || 512;
             if (hEl?.value !== "") inputs.height = parseInt(hEl.value) || 512;
             inputs.batch_size = parseInt(document.getElementById("wfm-settings-batch")?.value) || 1;
+            const lenEl = document.getElementById("wfm-settings-latent-length");
+            if (lenEl && lenEl.value !== "") inputs.length = parseInt(lenEl.value) || 1;
             _syncRawJson();
         });
 
