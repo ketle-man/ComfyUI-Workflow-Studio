@@ -5,7 +5,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { readJsonStorage, getAiBackendDefaultUrl, escapeHtml } from "./util.js";
+import { readJsonStorage, getAiBackendDefaultUrl, escapeHtml, unloadAiModel } from "./util.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
@@ -453,6 +453,20 @@ function initSettingsTab() {
             }
         } finally {
             if (testBtn) testBtn.disabled = false;
+        }
+    });
+
+    // Unload model
+    document.getElementById("wfm-ai-unload-btn")?.addEventListener("click", async () => {
+        const backend = document.querySelector("input[name='wfm-ai-backend']:checked")?.value || "ollama";
+        const url = urlInput?.value?.trim() || "";
+        const model = document.getElementById("wfm-ai-model-select")?.value || "";
+        if (!model) { showToast(t("aiUnloadNoModel"), "error"); return; }
+        try {
+            await unloadAiModel(url, backend, model);
+            showToast(t("aiUnloadDone"), "success");
+        } catch (err) {
+            showToast(err.message === "UNSUPPORTED" ? t("aiUnloadUnsupported") : t("aiUnloadFailed") + err.message, "error");
         }
     });
 

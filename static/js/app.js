@@ -319,10 +319,8 @@ function applyI18nToHtml() {
     if (assistantHeader) assistantHeader.textContent = t("assistantSubtab");
     const presetsHeader = document.querySelector(".wfm-prompt-split-right .wfm-prompt-split-header");
     if (presetsHeader) presetsHeader.textContent = t("presetsSubtab");
-    const ollamaRefreshBtn = document.getElementById("wfm-ollama-refresh-btn");
-    if (ollamaRefreshBtn) ollamaRefreshBtn.textContent = t("refresh");
-    const ollamaTestBtn = document.getElementById("wfm-ollama-test-btn");
-    if (ollamaTestBtn) ollamaTestBtn.textContent = t("test");
+    const ollamaSettingsBtn = document.getElementById("wfm-ollama-settings-btn");
+    if (ollamaSettingsBtn) ollamaSettingsBtn.title = t("settings");
     const ollamaAttachBtn = document.getElementById("wfm-ollama-attach-btn");
     if (ollamaAttachBtn) ollamaAttachBtn.textContent = t("attachImage");
     const ollamaClearBtn = document.getElementById("wfm-ollama-clear-btn");

@@ -951,12 +951,8 @@
                     <div class="wfm-prompt-split-header">AI Assistant</div>
                     <div class="wfm-ollama-assistant">
                         <div class="wfm-ollama-controls">
-                            <select id="wfm-ollama-model" class="wfm-select" style="flex:1;min-width:120px;">
-                                <option value="">Loading models...</option>
-                            </select>
-                            <button id="wfm-ollama-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
-                            <button id="wfm-ollama-test-btn" class="wfm-btn wfm-btn-sm">Test</button>
                             <span id="wfm-ollama-status" class="wfm-ollama-status">Disconnected</span>
+                            <button id="wfm-ollama-settings-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;" title="Settings">&#9881;</button>
                         </div>
                         <div class="wfm-ollama-controls" style="margin-top:6px;">
                             <button id="wfm-ollama-attach-btn" class="wfm-btn wfm-btn-sm">Attach Image</button>
@@ -1571,7 +1567,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-prompt-card-ai-title">AI Assistant &amp; Translation</h3>
                             <ul>
-                                <li id="wfm-help-prompt-1">AI assistant (Ollama): model selection, chat for prompt consultation, image attachment (vision models)</li>
+                                <li id="wfm-help-prompt-1">AI assistant (Ollama / LM Studio / Lemonade / Unsloth): chat for prompt consultation, image attachment (vision models); click the &#9881; Settings button to choose backend, connection URL, model, Thinking mode, Max tokens, and unload the loaded model &mdash; settings are independent from the AI TOOL and Tagger tabs</li>
                                 <li id="wfm-help-prompt-2">Apply AI responses to GenerateUI prompts</li>
                                 <li id="wfm-help-prompt-3">Translation: JA&#8596;EN, ZH&#8596;EN</li>
                             </ul>
@@ -1666,7 +1662,7 @@
                             <h3 id="wfm-help-settings-card-connections-title">Connections</h3>
                             <ul>
                                 <li id="wfm-help-settings-4">ComfyUI connection URL and test</li>
-                                <li id="wfm-help-settings-5">Ollama URL, default model, and connection test</li>
+                                <li id="wfm-help-settings-5">AI Assistant settings have moved out of this tab &mdash; the Prompt tab, Tagger tab, and AI TOOL tab each have their own &#9881; Settings button (backend, URL, model, Thinking mode, Max tokens, unload model), saved independently</li>
                                 <li id="wfm-help-settings-7">Eagle integration URL and auto-save toggle</li>
                             </ul>
                         </div>
@@ -1922,7 +1918,7 @@
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-ai-card-settings-title">Settings pane</h3>
-                            <p id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade / Unsloth), set API URL, test connection, select model; Unsloth always requires an API key even for local access — set UNSLOTH_API_KEY in a .env file in the plugin folder (copy .env.example) and restart ComfyUI, the key is read server-side and never sent to the browser; Unsloth also requires "Auto model switching (OpenAI API)" to be turned ON in the Unsloth Desktop app itself (its own Settings screen) — without it, requests fail with HTTP 404 unless a model was already manually loaded in the Unsloth Studio UI; Unsloth reasoning models return their thinking in a separate reasoning_content field rather than inline &lt;think&gt; tags, so a low Max tokens can make the model spend its whole budget reasoning and return an empty reply — increase Max tokens (2048+) if replies come back blank; Generation section — Thinking mode toggle (off by default; Ollama receives a `think` flag, and regardless of backend any &lt;think&gt;...&lt;/think&gt; block is stripped from the output when off, so reasoning models don't clutter Translation/Chat/TOOLS results) and Max tokens (Ollama: num_predict, LM Studio/Lemonade/Unsloth: max_tokens; 0 = unlimited); configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</p>
+                            <p id="wfm-help-ai-6">Settings pane: choose backend (Ollama / LM Studio / Lemonade / Unsloth), set API URL, test connection, select model, and use the Unload Model button (next to Test connection) to free the loaded model from VRAM/memory &mdash; Ollama uses keep_alive:0, LM Studio uses /api/v1/models/unload, Lemonade uses /api/v1/unload; Unsloth has no unload API, so this shows an unsupported message for it; Unsloth always requires an API key even for local access — set UNSLOTH_API_KEY in a .env file in the plugin folder (copy .env.example) and restart ComfyUI, the key is read server-side and never sent to the browser; Unsloth also requires "Auto model switching (OpenAI API)" to be turned ON in the Unsloth Desktop app itself (its own Settings screen) — without it, requests fail with HTTP 404 unless a model was already manually loaded in the Unsloth Studio UI; Unsloth reasoning models return their thinking in a separate reasoning_content field rather than inline &lt;think&gt; tags, so a low Max tokens can make the model spend its whole budget reasoning and return an empty reply — increase Max tokens (2048+) if replies come back blank; Generation section — Thinking mode toggle (off by default; Ollama receives a `think` flag, and regardless of backend any &lt;think&gt;...&lt;/think&gt; block is stripped from the output when off, so reasoning models don't clutter Translation/Chat/TOOLS results) and Max tokens (Ollama: num_predict, LM Studio/Lemonade/Unsloth: max_tokens; 0 = unlimited); configure Free language names; Chat Image Generation section lets you enable a dedicated workflow for Chat-triggered text-to-image generation instead of the one currently loaded in GenerateUI; Chat I2I Generation section is the same but for image-to-image generation when an image is attached; settings are shared with the Library panel's A tab via localStorage</p>
                         </div>
                     </div>
 
@@ -1934,7 +1930,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-tagger-card-overview-title">Overview &amp; Setup</h3>
                             <ul>
-                                <li id="wfm-help-tagger-1">Automatic image tagging using WD Tagger (ONNX), SwinV2, DeepDanbooru (.h5), and Ollama VLM — 3 sub-tabs: Single / Batch / DB</li>
+                                <li id="wfm-help-tagger-1">Automatic image tagging using WD Tagger (ONNX), SwinV2, DeepDanbooru (.h5), and VLM (Ollama / LM Studio / Lemonade / Unsloth) — 3 sub-tabs: Single / Batch / DB</li>
                                 <li id="wfm-help-tagger-2">Model placement: put each model in its own subfolder under ComfyUI/models/tagger/&lt;model-name&gt;/; the folder must contain a .onnx file + selected_tags.csv (or .h5 + label file for DeepDanbooru)</li>
                                 <li id="wfm-help-tagger-9">Install dependencies into ComfyUI's embedded Python: python_embeded\python.exe -m pip install -r requirements.txt; for GPU ONNX inference install onnxruntime-gpu instead of onnxruntime; TensorFlow (for DeepDanbooru) is commented out by default due to size</li>
                             </ul>
@@ -1944,7 +1940,7 @@
                             <ul>
                                 <li id="wfm-help-tagger-3">Single tab: drag &amp; drop an image onto the preview area, or click Upload to pick a file; the Tagger button in the Gallery detail panel opens the selected image directly here</li>
                                 <li id="wfm-help-tagger-4">Threshold slider: minimum confidence score for general tags (default 0.35); Character Threshold: separate threshold for character: prefix tags (default 0.85)</li>
-                                <li id="wfm-help-tagger-5">Ollama VLM: enable the checkbox to run a vision model alongside WD Tagger; set API URL, select model (click ↻ to refresh), and customize the prompt; results from both models are merged</li>
+                                <li id="wfm-help-tagger-5">VLM Tagging: enable the checkbox to run a vision model alongside WD Tagger; click the &#9881; Settings button to choose backend (Ollama / LM Studio / Lemonade / Unsloth), URL, model, Thinking mode, Max tokens, and unload the model &mdash; independent from the Prompt tab's own AI settings; customize the prompt and Max Tags inline; results from both models are merged</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1956,7 +1952,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-tagger-card-batch-title">Batch &amp; DB Tabs</h3>
                             <ul>
-                                <li id="wfm-help-tagger-7">Batch tab: enter a folder path, configure WD Tagger and Ollama settings; output options: Save to DB (default on), Write to File (EXIF/PNG metadata), Write .txt (creates &lt;filename&gt;.txt alongside each image); click Start Batch to process all images in the folder; progress bar and log are updated in real time; Stop cancels after the current image</li>
+                                <li id="wfm-help-tagger-7">Batch tab: enter a folder path, configure WD Tagger and enable VLM tagging (uses the same &#9881; Settings as the Single tab); output options: Save to DB (default on), Write to File (EXIF/PNG metadata), Write .txt (creates &lt;filename&gt;.txt alongside each image); click Start Batch to process all images in the folder; progress bar and log are updated in real time; Stop cancels after the current image</li>
                                 <li id="wfm-help-tagger-8">DB tab: searchable database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records as a CSV file</li>
                             </ul>
                         </div>
@@ -2907,13 +2903,8 @@
                             </div>
                             <div id="wfm-tagger-ollama-settings" style="display:none">
                                 <div class="wfm-form-row wfm-tagger-form-row">
-                                    <label class="wfm-tagger-label" id="wfm-tagger-ollama-url-label"></label>
-                                    <input type="text" id="wfm-tagger-ollama-url" class="wfm-search-input" value="http://127.0.0.1:11434" style="flex:1;">
-                                </div>
-                                <div class="wfm-form-row wfm-tagger-form-row">
-                                    <label class="wfm-tagger-label" id="wfm-tagger-ollama-model-label"></label>
-                                    <select id="wfm-tagger-ollama-model" class="wfm-select wfm-tagger-select"></select>
-                                    <button id="wfm-tagger-ollama-refresh-btn" class="wfm-btn wfm-btn-sm" title="Refresh models">↻</button>
+                                    <span id="wfm-tagger-ollama-backend-value" style="flex:1;color:var(--wfm-text-secondary);font-size:12px;"></span>
+                                    <button id="wfm-tagger-ollama-settings-btn" class="wfm-btn wfm-btn-sm" title="Settings">&#9881;</button>
                                 </div>
                                 <div class="wfm-form-row wfm-tagger-form-row" style="align-items:flex-start">
                                     <label class="wfm-tagger-label" id="wfm-tagger-ollama-prompt-label" style="padding-top:4px;"></label>
@@ -2975,18 +2966,13 @@
                             <div class="wfm-tagger-section-header">
                                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
                                     <input type="checkbox" id="wfm-tagger-batch-ollama-enable">
-                                    Ollama VLM
+                                    <span id="wfm-tagger-batch-ollama-header-label">VLM Tagging</span>
                                 </label>
                             </div>
                             <div id="wfm-tagger-batch-ollama-settings">
                                 <div class="wfm-form-row wfm-tagger-form-row">
-                                    <label class="wfm-tagger-label" id="wfm-tagger-batch-url-label"></label>
-                                    <input type="text" id="wfm-tagger-batch-ollama-url" class="wfm-search-input" value="http://127.0.0.1:11434" style="flex:1;">
-                                </div>
-                                <div class="wfm-form-row wfm-tagger-form-row">
-                                    <label class="wfm-tagger-label" id="wfm-tagger-batch-model-label"></label>
-                                    <select id="wfm-tagger-batch-ollama-model" class="wfm-select wfm-tagger-select"></select>
-                                    <button id="wfm-tagger-batch-ollama-refresh-btn" class="wfm-btn wfm-btn-sm">↻</button>
+                                    <span id="wfm-tagger-batch-backend-value" style="flex:1;color:var(--wfm-text-secondary);font-size:12px;"></span>
+                                    <button id="wfm-tagger-batch-ollama-settings-btn" class="wfm-btn wfm-btn-sm" title="Settings">&#9881;</button>
                                 </div>
                                 <div class="wfm-form-row wfm-tagger-form-row" style="align-items:flex-start">
                                     <label class="wfm-tagger-label" id="wfm-tagger-batch-prompt-label" style="padding-top:4px;"></label>
@@ -3214,6 +3200,7 @@
                         </div>
                         <div class="wfm-ai-settings-row">
                             <button id="wfm-ai-test-btn" class="wfm-btn">Test connection</button>
+                            <button id="wfm-ai-unload-btn" class="wfm-btn">Unload Model</button>
                             <span id="wfm-ai-test-result" class="wfm-ai-test-result"></span>
                         </div>
                     </div>

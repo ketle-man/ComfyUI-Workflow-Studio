@@ -109,6 +109,52 @@ export function getAiBackendDefaultUrl(backend) {
     return AI_BACKEND_DEFAULT_URLS[backend] || AI_BACKEND_DEFAULT_URLS.ollama;
 }
 
+// Unslothはローカルでも常にAPIキーが必要なため、フロントから直接叩かず
+// サーバー側プロキシ(/api/wfm/unsloth/proxy)経由でキーを付与して中継する
+// (see py/routes/unsloth_routes.py)
+export async function unslothProxy(baseUrl, path, method, payload) {
+    const res = await fetch("/api/wfm/unsloth/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl, path, method, payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    return data;
+}
+
+// ローカルVLM/LLMバックエンドからモデルをVRAM/メモリからアンロードする。
+// 公式APIが存在しない場合(Unsloth)は "UNSUPPORTED" エラーを投げる。
+export async function unloadAiModel(url, backend, model) {
+    if (!model) throw new Error("No model selected");
+    if (backend === "ollama") {
+        // keep_alive:0 + 空プロンプトが公式に文書化されたアンロード方法
+        // (専用エンドポイントは存在しない) https://docs.ollama.com/api
+        const res = await fetch(`${url}/api/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, prompt: "", keep_alive: 0 }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } else if (backend === "lmstudio") {
+        const res = await fetch(`${url}/api/v1/models/unload`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ instance_id: model }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } else if (backend === "lemonade") {
+        const res = await fetch(`${url}/api/v1/unload`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_name: model }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } else {
+        throw new Error("UNSUPPORTED");
+    }
+}
+
 // ============================================
 // Eagle Auto-Save
 // ============================================

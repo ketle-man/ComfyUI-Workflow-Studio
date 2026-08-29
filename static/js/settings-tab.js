@@ -6,7 +6,7 @@ import { showToast } from "./app.js";
 import { comfyUI } from "./comfyui-client.js";
 import { t, getLang, getSummaryLang, setLang, setSummaryLang, getLanguageOptions, getSummaryLanguageOptions } from "./i18n.js";
 
-import { getSettings, readJsonStorage, getAiBackendDefaultUrl } from "./util.js";
+import { getSettings, readJsonStorage } from "./util.js";
 
 const SETTINGS_KEY = "wfm_settings";
 
@@ -737,44 +737,6 @@ export async function initSettingsTab() {
             <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-default-ckpt-save">${t("save")}</button>
         </details>
 
-        <!-- AI Assistant Settings (Prompt Tab) -->
-        <details class="wfm-settings-section">
-            <summary class="wfm-settings-summary">${t("ollamaSettings")}</summary>
-            <div class="wfm-form-group">
-                <label>${t("aiSettingsBackend")}</label>
-                <div class="wfm-ai-backend-row">
-                    <label class="wfm-ai-radio-label">
-                        <input type="radio" name="wfm-prompt-ai-backend" value="ollama"> Ollama
-                    </label>
-                    <label class="wfm-ai-radio-label">
-                        <input type="radio" name="wfm-prompt-ai-backend" value="lmstudio"> LM Studio
-                    </label>
-                    <label class="wfm-ai-radio-label">
-                        <input type="radio" name="wfm-prompt-ai-backend" value="lemonade"> Lemonade
-                    </label>
-                </div>
-            </div>
-            <div class="wfm-form-group">
-                <label>${t("ollamaUrl")}</label>
-                <input type="text" class="wfm-input" id="wfm-settings-prompt-ai-url"
-                    placeholder="http://localhost:11434">
-            </div>
-            <div class="wfm-form-group">
-                <label>${t("ollamaDefaultModel")}</label>
-                <div style="display:flex;gap:8px;">
-                    <select class="wfm-select" id="wfm-settings-prompt-ai-model" style="flex:1;">
-                        <option value="">${t("selectModel")}</option>
-                    </select>
-                    <button class="wfm-btn wfm-btn-sm" id="wfm-settings-prompt-ai-refresh">${t("refresh")}</button>
-                </div>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:8px;">
-                <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-prompt-ai-save">${t("saveOllama")}</button>
-                <button class="wfm-btn wfm-btn-sm" id="wfm-settings-prompt-ai-test">${t("testConnection")}</button>
-                <span id="wfm-settings-prompt-ai-status" style="font-size:12px;line-height:28px;"></span>
-            </div>
-        </details>
-
         <!-- CivitAI Settings -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">${t("civitaiApiKeySetting")}</summary>
@@ -1202,92 +1164,6 @@ export async function initSettingsTab() {
         } catch (err) {
             showToast(`${t("workflowsDirError")}: ${err.message}`, "error");
         }
-    });
-
-    // --- AI Assistant (Prompt Tab) settings ---
-    const PROMPT_AI_KEY = "wfm_prompt_ai_settings";
-    const loadPromptAiCfg = () => {
-        try { return JSON.parse(localStorage.getItem(PROMPT_AI_KEY) || "{}"); } catch { return {}; }
-    };
-    const savePromptAiCfg = (patch) => {
-        const data = { ...loadPromptAiCfg(), ...patch };
-        localStorage.setItem(PROMPT_AI_KEY, JSON.stringify(data));
-    };
-
-    // Restore saved values into UI
-    const promptAiSaved = loadPromptAiCfg();
-    const promptAiBackendSaved = promptAiSaved.backend || "ollama";
-    document.querySelectorAll('input[name="wfm-prompt-ai-backend"]').forEach(r => {
-        r.checked = r.value === promptAiBackendSaved;
-    });
-    const promptAiUrlEl = document.getElementById("wfm-settings-prompt-ai-url");
-    if (promptAiUrlEl) {
-        promptAiUrlEl.value = promptAiSaved.backendUrl || "";
-        promptAiUrlEl.placeholder = getAiBackendDefaultUrl(promptAiBackendSaved);
-    }
-
-    // Backend change → switch URL to the new backend's default
-    document.querySelectorAll('input[name="wfm-prompt-ai-backend"]').forEach(r => {
-        r.addEventListener("change", () => {
-            const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
-            if (promptAiUrlEl) promptAiUrlEl.value = getAiBackendDefaultUrl(backend);
-        });
-    });
-
-    // Load models directly from the selected backend
-    async function loadPromptAiModels() {
-        const select = document.getElementById("wfm-settings-prompt-ai-model");
-        if (!select) return;
-        const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
-        const url = (promptAiUrlEl?.value.trim() || getAiBackendDefaultUrl(backend)).replace(/\/$/, "");
-        try {
-            let models = [];
-            if (backend === "ollama") {
-                const res = await fetch(`${url}/api/tags`);
-                models = (await res.json()).models?.map(m => m.name) || [];
-            } else {
-                const res = await fetch(`${url}/v1/models`);
-                models = ((await res.json()).data || []).map(m => m.id);
-            }
-            const saved = loadPromptAiCfg().model || "";
-            select.innerHTML = models.length
-                ? models.map(name => `<option value="${name}" ${name === saved ? "selected" : ""}>${name}</option>`).join("")
-                : `<option value="">${t("noModelsFound")}</option>`;
-        } catch {
-            select.innerHTML = `<option value="">${t("failedLoadModels")}</option>`;
-        }
-    }
-    await loadPromptAiModels();
-
-    document.getElementById("wfm-settings-prompt-ai-refresh")?.addEventListener("click", loadPromptAiModels);
-
-    document.getElementById("wfm-settings-prompt-ai-test")?.addEventListener("click", async () => {
-        const statusEl = document.getElementById("wfm-settings-prompt-ai-status");
-        const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
-        const url = (promptAiUrlEl?.value.trim() || getAiBackendDefaultUrl(backend)).replace(/\/$/, "");
-        if (statusEl) { statusEl.textContent = t("aiStatusConnecting"); statusEl.style.color = "var(--wfm-text-secondary)"; }
-        try {
-            let count = 0;
-            if (backend === "ollama") {
-                const res = await fetch(`${url}/api/tags`);
-                count = ((await res.json()).models || []).length;
-            } else {
-                const res = await fetch(`${url}/v1/models`);
-                count = ((await res.json()).data || []).length;
-            }
-            if (statusEl) { statusEl.textContent = `${t("ollamaConnected")} (${count} models)`; statusEl.style.color = "var(--wfm-success)"; }
-            await loadPromptAiModels();
-        } catch (err) {
-            if (statusEl) { statusEl.textContent = `${t("ollamaFailed")}: ${err.message}`; statusEl.style.color = "var(--wfm-danger)"; }
-        }
-    });
-
-    document.getElementById("wfm-settings-prompt-ai-save")?.addEventListener("click", () => {
-        const backend = document.querySelector('input[name="wfm-prompt-ai-backend"]:checked')?.value || "ollama";
-        const url = promptAiUrlEl?.value.trim() || "";
-        const model = document.getElementById("wfm-settings-prompt-ai-model")?.value || "";
-        savePromptAiCfg({ backend, backendUrl: url, model });
-        showToast(t("ollamaSaved"), "success");
     });
 
     // CivitAI host select

@@ -18,8 +18,8 @@ _db = TaggerDbService(TAGGER_DB_FILE)
 def setup_routes(app: web.Application):
     app.router.add_get("/wfm/tagger/models", handle_models)
     app.router.add_post("/wfm/tagger/predict", handle_predict)
-    app.router.add_get("/wfm/tagger/ollama/models", handle_ollama_models)
-    app.router.add_post("/wfm/tagger/ollama/predict", handle_ollama_predict)
+    app.router.add_get("/wfm/tagger/vlm/models", handle_vlm_models)
+    app.router.add_post("/wfm/tagger/vlm/predict", handle_vlm_predict)
     app.router.add_post("/wfm/tagger/batch/start", handle_batch_start)
     app.router.add_get("/wfm/tagger/batch/status", handle_batch_status)
     app.router.add_post("/wfm/tagger/batch/stop", handle_batch_stop)
@@ -61,25 +61,29 @@ async def handle_predict(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def handle_ollama_models(request: web.Request) -> web.Response:
+async def handle_vlm_models(request: web.Request) -> web.Response:
+    backend = request.rel_url.query.get("backend", "ollama")
     api_url = request.rel_url.query.get("api_url", "http://127.0.0.1:11434")
     try:
-        models = await asyncio.to_thread(_svc.ollama_models, api_url)
+        models = await asyncio.to_thread(_svc.vlm_models, backend, api_url)
         return web.json_response({"models": models})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def handle_ollama_predict(request: web.Request) -> web.Response:
+async def handle_vlm_predict(request: web.Request) -> web.Response:
     try:
         body = await request.json()
         result = await asyncio.to_thread(
-            _svc.ollama_predict,
+            _svc.vlm_predict,
             body.get("image_b64", ""),
+            body.get("backend", "ollama"),
             body.get("api_url", "http://127.0.0.1:11434"),
             body.get("model", ""),
             body.get("prompt", ""),
             int(body.get("max_tags", 40)),
+            bool(body.get("thinking_mode", False)),
+            int(body.get("max_tokens", 0)),
         )
         return web.json_response(result)
     except Exception as e:
@@ -96,7 +100,8 @@ async def handle_batch_start(request: web.Request) -> web.Response:
             float(body.get("threshold", 0.35)),
             float(body.get("char_threshold", 0.85)),
             bool(body.get("use_ollama", False)),
-            body.get("ollama_api", "http://127.0.0.1:11434"),
+            body.get("vlm_backend", "ollama"),
+            body.get("vlm_api_url", "http://127.0.0.1:11434"),
             body.get("ollama_model", ""),
             body.get("ollama_prompt", ""),
             int(body.get("ollama_max_tags", 40)),
@@ -104,6 +109,8 @@ async def handle_batch_start(request: web.Request) -> web.Response:
             bool(body.get("write_file", False)),
             bool(body.get("write_txt", False)),
             _db,
+            bool(body.get("thinking_mode", False)),
+            int(body.get("max_tokens", 0)),
         )
         return web.json_response(result)
     except Exception as e:

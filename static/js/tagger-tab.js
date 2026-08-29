@@ -1,10 +1,16 @@
 /**
  * Tagger Tab
- * Handles WD Tagger / DeepDanbooru + Ollama VLM single/batch tagging.
+ * Handles WD Tagger / DeepDanbooru + VLM (Ollama/LM Studio/Lemonade/Unsloth) single/batch tagging.
  */
 
 import { t } from "./i18n.js";
 import { showToast } from "./app.js";
+import { openAiBackendSettingsModal, getAiBackendConfig } from "./ai-settings-modal.js";
+
+const TAGGER_AI_KEY = "wfm_tagger_ai_settings";
+function getTaggerAiConfig() {
+    return getAiBackendConfig(TAGGER_AI_KEY);
+}
 
 // ── 状態 ────────────────────────────────────────────────────────
 
@@ -32,7 +38,7 @@ export function initTaggerTab() {
     _setupBatchActions();
     _setupDbActions();
     _loadModels();
-    _loadSettings();
+    _updateVlmBackendIndicators();
 }
 
 /** GalleryタブからTaggerタブへ画像を渡す */
@@ -74,8 +80,6 @@ function _applyI18n() {
         "wfm-tagger-char-threshold-label": "taggerCharThreshold",
         "wfm-tagger-generate-btn": "taggerGenerateTags",
         "wfm-tagger-ollama-header-label": "taggerOllamaEnable",
-        "wfm-tagger-ollama-url-label": "taggerOllamaUrl",
-        "wfm-tagger-ollama-model-label": "taggerOllamaModel",
         "wfm-tagger-ollama-prompt-label": "taggerOllamaPrompt",
         "wfm-tagger-ollama-max-label": "taggerOllamaMaxTags",
         "wfm-tagger-result-header": "taggerResult",
@@ -87,8 +91,7 @@ function _applyI18n() {
         "wfm-tagger-batch-folder-header": "taggerBatchFolder",
         "wfm-tagger-batch-threshold-label": "taggerThreshold",
         "wfm-tagger-batch-char-threshold-label": "taggerCharThreshold",
-        "wfm-tagger-batch-url-label": "taggerOllamaUrl",
-        "wfm-tagger-batch-model-label": "taggerOllamaModel",
+        "wfm-tagger-batch-ollama-header-label": "taggerOllamaEnable",
         "wfm-tagger-batch-prompt-label": "taggerOllamaPrompt",
         "wfm-tagger-batch-output-header": "taggerBatchOutput",
         "wfm-tagger-batch-save-db-label": "taggerSaveToDB",
@@ -112,6 +115,11 @@ function _applyI18n() {
         const el = document.getElementById(id);
         if (el) el.textContent = t(key);
     }
+
+    ["wfm-tagger-ollama-settings-btn", "wfm-tagger-batch-ollama-settings-btn"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.title = t("settings");
+    });
 
     // サブタブボタン
     const subtabKeys = ["taggerSingleTab", "taggerBatchTab", "taggerDbTab"];
@@ -168,6 +176,24 @@ function _setupOllamaToggle() {
         });
         wrap.style.display = chk.checked ? "" : "none";
     }
+
+    document.getElementById("wfm-tagger-ollama-settings-btn")?.addEventListener("click", () => {
+        openAiBackendSettingsModal(TAGGER_AI_KEY, t("settings"), _updateVlmBackendIndicators);
+    });
+    document.getElementById("wfm-tagger-batch-ollama-settings-btn")?.addEventListener("click", () => {
+        openAiBackendSettingsModal(TAGGER_AI_KEY, t("settings"), _updateVlmBackendIndicators);
+    });
+}
+
+// ── VLMバックエンド表示 (Taggerタブ独自のAI設定を参照) ────────────
+
+function _updateVlmBackendIndicators() {
+    const { backend, model } = getTaggerAiConfig();
+    const label = `${backend}: ${model || t("taggerNoModel")}`;
+    const singleEl = document.getElementById("wfm-tagger-ollama-backend-value");
+    if (singleEl) singleEl.textContent = label;
+    const batchEl = document.getElementById("wfm-tagger-batch-backend-value");
+    if (batchEl) batchEl.textContent = label;
 }
 
 // ── モデル一覧ロード ─────────────────────────────────────────────
@@ -185,61 +211,6 @@ async function _loadModels() {
         });
     } catch (e) {
         console.warn("tagger: _loadModels error", e);
-    }
-}
-
-// ── Ollamaモデル一覧ロード ───────────────────────────────────────
-
-async function _loadOllamaModels(urlId, selId) {
-    const urlEl = document.getElementById(urlId);
-    const selEl = document.getElementById(selId);
-    if (!urlEl || !selEl) return;
-    const api = urlEl.value || "http://127.0.0.1:11434";
-    try {
-        const res = await fetch(`/wfm/tagger/ollama/models?api_url=${encodeURIComponent(api)}`);
-        const data = await res.json();
-        const models = data.models || [];
-        if (models.length === 0) {
-            selEl.innerHTML = `<option value="">(${t("taggerNoModel")})</option>`;
-        } else {
-            selEl.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join("");
-        }
-    } catch {
-        selEl.innerHTML = `<option value="">(${t("taggerNoModel")})</option>`;
-    }
-}
-
-// ── 設定の読み込み/保存 ─────────────────────────────────────────
-
-async function _loadSettings() {
-    try {
-        const res = await fetch("/wfm/tagger/settings");
-        const data = await res.json();
-        if (data.ollama_url) {
-            const el = document.getElementById("wfm-tagger-ollama-url");
-            if (el) el.value = data.ollama_url;
-        }
-        if (data.batch_ollama_url) {
-            const el = document.getElementById("wfm-tagger-batch-ollama-url");
-            if (el) el.value = data.batch_ollama_url;
-        }
-    } catch {
-        // 初回は無視
-    }
-}
-
-async function _saveSettings() {
-    try {
-        await fetch("/wfm/tagger/settings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                ollama_url: document.getElementById("wfm-tagger-ollama-url")?.value || "",
-                batch_ollama_url: document.getElementById("wfm-tagger-batch-ollama-url")?.value || "",
-            }),
-        });
-    } catch {
-        // サイレントに失敗
     }
 }
 
@@ -279,11 +250,6 @@ function _setupSingleActions() {
     // タグ生成
     document.getElementById("wfm-tagger-generate-btn")?.addEventListener("click", _generateTags);
 
-    // Ollamaリフレッシュ
-    document.getElementById("wfm-tagger-ollama-refresh-btn")?.addEventListener("click", () => {
-        _loadOllamaModels("wfm-tagger-ollama-url", "wfm-tagger-ollama-model");
-    });
-
     // 結果アクション
     document.getElementById("wfm-tagger-send-genui-btn")?.addEventListener("click", _sendToGenUI);
     document.getElementById("wfm-tagger-send-prompt-btn")?.addEventListener("click", _sendToPrompt);
@@ -321,8 +287,7 @@ async function _generateTags() {
     const threshold = parseFloat(document.getElementById("wfm-tagger-threshold")?.value || "0.35");
     const charThreshold = parseFloat(document.getElementById("wfm-tagger-char-threshold")?.value || "0.85");
     const useOllama = document.getElementById("wfm-tagger-ollama-enable")?.checked || false;
-    const ollamaUrl = document.getElementById("wfm-tagger-ollama-url")?.value || "http://127.0.0.1:11434";
-    const ollamaModel = document.getElementById("wfm-tagger-ollama-model")?.value || "";
+    const { backend: vlmBackend, url: vlmUrl, model: ollamaModel, thinkingMode, maxTokens } = getTaggerAiConfig();
     const ollamaPrompt = document.getElementById("wfm-tagger-ollama-prompt")?.value || "";
     const maxTags = parseInt(document.getElementById("wfm-tagger-ollama-max-tags")?.value || "40");
 
@@ -344,12 +309,13 @@ async function _generateTags() {
         }
 
         if (useOllama && ollamaModel) {
-            const res2 = await fetch("/wfm/tagger/ollama/predict", {
+            const res2 = await fetch("/wfm/tagger/vlm/predict", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    image_b64: state.imageB64, api_url: ollamaUrl,
+                    image_b64: state.imageB64, backend: vlmBackend, api_url: vlmUrl,
                     model: ollamaModel, prompt: ollamaPrompt, max_tags: maxTags,
+                    thinking_mode: thinkingMode, max_tokens: maxTokens,
                 }),
             });
             const data2 = await res2.json();
@@ -361,7 +327,6 @@ async function _generateTags() {
         if (!tags) { showToast(t("taggerNoTags"), "warning"); return; }
         document.getElementById("wfm-tagger-result").value = tags;
         showToast(t("taggerDone"), "success");
-        _saveSettings();
     } catch (e) {
         showToast(e.message, "error");
     } finally {
@@ -453,10 +418,6 @@ async function _saveToDb() {
 // ── Batch サブタブ ───────────────────────────────────────────────
 
 function _setupBatchActions() {
-    document.getElementById("wfm-tagger-batch-ollama-refresh-btn")?.addEventListener("click", () => {
-        _loadOllamaModels("wfm-tagger-batch-ollama-url", "wfm-tagger-batch-ollama-model");
-    });
-
     document.getElementById("wfm-tagger-batch-start-btn")?.addEventListener("click", _batchStart);
     document.getElementById("wfm-tagger-batch-stop-btn")?.addEventListener("click", _batchStop);
 }
@@ -465,15 +426,19 @@ async function _batchStart() {
     const folder = document.getElementById("wfm-tagger-batch-folder")?.value || "";
     if (!folder) { showToast(t("taggerBatchFolder"), "warning"); return; }
 
+    const { backend: vlmBackend, url: vlmUrl, model: vlmModel, thinkingMode, maxTokens } = getTaggerAiConfig();
     const body = {
         folder,
         model: document.getElementById("wfm-tagger-batch-model")?.value || "",
         threshold: parseFloat(document.getElementById("wfm-tagger-batch-threshold")?.value || "0.35"),
         char_threshold: parseFloat(document.getElementById("wfm-tagger-batch-char-threshold")?.value || "0.85"),
         use_ollama: document.getElementById("wfm-tagger-batch-ollama-enable")?.checked || false,
-        ollama_api: document.getElementById("wfm-tagger-batch-ollama-url")?.value || "http://127.0.0.1:11434",
-        ollama_model: document.getElementById("wfm-tagger-batch-ollama-model")?.value || "",
+        vlm_backend: vlmBackend,
+        vlm_api_url: vlmUrl,
+        ollama_model: vlmModel,
         ollama_prompt: document.getElementById("wfm-tagger-batch-ollama-prompt")?.value || "",
+        thinking_mode: thinkingMode,
+        max_tokens: maxTokens,
         save_db: document.getElementById("wfm-tagger-batch-save-db")?.checked ?? true,
         write_file: document.getElementById("wfm-tagger-batch-write-file")?.checked || false,
         write_txt: document.getElementById("wfm-tagger-batch-write-txt")?.checked || false,

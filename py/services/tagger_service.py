@@ -5,6 +5,8 @@ import csv
 import io
 import json
 import logging
+import os
+import re
 import tempfile
 import threading
 import urllib.request
@@ -223,39 +225,107 @@ class TaggerService:
                 tags.append(label.replace("character:", ""))
         return tags
 
-    # ── Ollama VLM ────────────────────────────────────────────
+    # ── VLM Tagging (Ollama / LM Studio / Lemonade / Unsloth) ──
 
-    def ollama_models(self, api_url: str) -> list:
+    @staticmethod
+    def _unsloth_api_key() -> Optional[str]:
+        """UNSLOTH_API_KEY を環境変数(.env)から取得。Unslothはローカルでも常に必須。"""
+        return os.environ.get("UNSLOTH_API_KEY", "").strip() or None
+
+    @staticmethod
+    def _strip_thinking_tags(text: str) -> str:
+        text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"<thinking>[\s\S]*?</thinking>", "", text, flags=re.IGNORECASE)
+        return text.strip()
+
+    def vlm_models(self, backend: str, api_url: str) -> list:
+        backend = (backend or "ollama").lower()
         try:
-            req = urllib.request.Request(api_url.rstrip("/") + "/api/tags")
+            if backend == "ollama":
+                req = urllib.request.Request(api_url.rstrip("/") + "/api/tags")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                return sorted(m["name"] for m in data.get("models", []))
+
+            headers = {}
+            if backend == "unsloth":
+                key = self._unsloth_api_key()
+                if not key:
+                    logger.error("vlm_models: UNSLOTH_API_KEY is not set")
+                    return []
+                headers["Authorization"] = f"Bearer {key}"
+            req = urllib.request.Request(api_url.rstrip("/") + "/v1/models", headers=headers)
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-            return sorted(m["name"] for m in data.get("models", []))
+            return sorted(m["id"] for m in data.get("data", []))
         except Exception as e:
-            logger.error("ollama_models: %s", e)
+            logger.error("vlm_models: %s", e)
             return []
 
-    def ollama_predict(self, image_b64: str, api_url: str, model: str, prompt: str, max_tags: int = 40) -> dict:
-        payload = json.dumps({
-            "model": model,
-            "messages": [{"role": "user", "content": prompt, "images": [image_b64]}],
-            "stream": False,
-            "options": {"temperature": 0.7, "num_ctx": 4096},
-        }).encode("utf-8")
+    def vlm_predict(self, image_b64: str, backend: str, api_url: str, model: str, prompt: str, max_tags: int = 40,
+                     thinking_mode: bool = False, max_tokens: int = 0) -> dict:
+        backend = (backend or "ollama").lower()
         try:
-            req = urllib.request.Request(
-                api_url.rstrip("/") + "/api/chat",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=180) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            content = data.get("message", {}).get("content", "")
+            if backend == "ollama":
+                body = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt, "images": [image_b64]}],
+                    "stream": False,
+                    "think": bool(thinking_mode),
+                    "options": {"temperature": 0.7, "num_ctx": 4096},
+                }
+                if max_tokens > 0:
+                    body["options"]["num_predict"] = max_tokens
+                payload = json.dumps(body).encode("utf-8")
+                req = urllib.request.Request(
+                    api_url.rstrip("/") + "/api/chat",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=180) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                content = data.get("message", {}).get("content", "")
+            else:
+                headers = {"Content-Type": "application/json"}
+                if backend == "unsloth":
+                    key = self._unsloth_api_key()
+                    if not key:
+                        return {"error": "UNSLOTH_API_KEY is not set. Copy .env.example to .env in the "
+                                          "plugin folder, fill in the key, and restart ComfyUI."}
+                    headers["Authorization"] = f"Bearer {key}"
+                body = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+                    ]}],
+                    "stream": False,
+                }
+                if max_tokens > 0:
+                    body["max_tokens"] = max_tokens
+                payload = json.dumps(body).encode("utf-8")
+                req = urllib.request.Request(
+                    api_url.rstrip("/") + "/v1/chat/completions",
+                    data=payload,
+                    headers=headers,
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=180) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                message = data.get("choices", [{}])[0].get("message", {})
+                content = message.get("content", "")
+                # Unslothはreasoningを別フィールドで返すため<think>タグに畳んで統一的に扱う
+                reasoning = message.get("reasoning_content")
+                if reasoning:
+                    content = f"<think>{reasoning}</think>{content}"
+
+            if not thinking_mode:
+                content = self._strip_thinking_tags(content)
             tags = [t.strip() for t in content.split(",") if t.strip()][:max_tags]
             return {"tags": ", ".join(tags), "count": len(tags)}
         except Exception as e:
-            logger.error("ollama_predict: %s", e)
+            logger.error("vlm_predict: %s", e)
             return {"error": str(e)}
 
     # ── ファイルメタデータ書込 ────────────────────────────────
@@ -334,8 +404,9 @@ class TaggerService:
         self._batch_state["stop"] = True
 
     def batch_start(self, folder: str, model_name: str, threshold: float, char_threshold: float,
-                    use_ollama: bool, ollama_api: str, ollama_model: str, ollama_prompt: str,
-                    ollama_max_tags: int, save_db: bool, write_file: bool, write_txt: bool, db_service) -> dict:
+                    use_ollama: bool, vlm_backend: str, vlm_api_url: str, ollama_model: str, ollama_prompt: str,
+                    ollama_max_tags: int, save_db: bool, write_file: bool, write_txt: bool, db_service,
+                    thinking_mode: bool = False, max_tokens: int = 0) -> dict:
         if self._batch_state["running"]:
             return {"error": "Batch already running"}
         folder_path = Path(folder)
@@ -370,7 +441,8 @@ class TaggerService:
 
                     vlm_tags = ""
                     if use_ollama and ollama_model:
-                        res2 = self.ollama_predict(b64, ollama_api, ollama_model, ollama_prompt, ollama_max_tags)
+                        res2 = self.vlm_predict(b64, vlm_backend, vlm_api_url, ollama_model, ollama_prompt, ollama_max_tags,
+                                                 thinking_mode, max_tokens)
                         vlm_tags = res2.get("tags", "")
 
                     all_tags = ", ".join(filter(None, [interrogator_tags, vlm_tags]))

@@ -1,10 +1,11 @@
 /**
- * Prompt Tab - AI Assistant (Ollama / LM Studio chat, translate, apply to GenerateUI)
+ * Prompt Tab - AI Assistant (Ollama / LM Studio / Lemonade / Unsloth chat, translate, apply to GenerateUI)
  */
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { getAiBackendDefaultUrl } from "./util.js";
+import { unslothProxy } from "./util.js";
+import { openAiBackendSettingsModal, getAiBackendConfig } from "./ai-settings-modal.js";
 
 // ============================================
 // State
@@ -17,64 +18,73 @@ const ollamaState = {
 
 const PROMPT_AI_KEY = "wfm_prompt_ai_settings";
 
-function loadPromptAiSettings() {
-    try { return JSON.parse(localStorage.getItem(PROMPT_AI_KEY) || "{}"); } catch { return {}; }
-}
-
-// バックエンド変更検知用: モデル一覧を取得した時点のバックエンド名を記録
-let _promptAiBackendForModels = null;
-
 export function getPromptAiConfig() {
-    const s = loadPromptAiSettings();
-    const backend = s.backend || "ollama";
-    const url = (s.backendUrl || getAiBackendDefaultUrl(backend)).replace(/\/$/, "");
-    return { backend, url };
+    return getAiBackendConfig(PROMPT_AI_KEY);
 }
 
-export async function fetchAiModels() {
-    const { backend, url } = getPromptAiConfig();
+// Ollama-style messages (with .images) → OpenAI互換 content 配列に変換
+function _toOpenAiMessages(messages) {
+    return messages.map(msg => {
+        if (msg.images?.length) {
+            return {
+                role: msg.role,
+                content: [
+                    { type: "text", text: msg.content },
+                    ...msg.images.map(b64 => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } })),
+                ],
+            };
+        }
+        return { role: msg.role, content: msg.content };
+    });
+}
+
+function _stripThinkingTags(text) {
+    return (text || "")
+        .replace(/<think>[\s\S]*?<\/think>/gi, "")
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+        .trim();
+}
+
+// Ollamaは `think` (bool) と `options.num_predict`、OpenAI互換は `max_tokens` で制御
+function _applyGenOptions(body, backend, cfg) {
     if (backend === "ollama") {
-        const res = await fetch(`${url}/api/tags`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).models?.map(m => m.name) || [];
-    } else {
-        const res = await fetch(`${url}/v1/models`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return ((await res.json()).data || []).map(m => m.id);
+        body.think = !!cfg.thinkingMode;
+        if (cfg.maxTokens > 0) body.options = { ...(body.options || {}), num_predict: cfg.maxTokens };
+    } else if (cfg.maxTokens > 0) {
+        body.max_tokens = cfg.maxTokens;
     }
+    return body;
 }
 
 async function chatWithAi(model, messages) {
-    const { backend, url } = getPromptAiConfig();
+    const cfg = getPromptAiConfig();
+    const { backend, url } = cfg;
     if (backend === "ollama") {
         const res = await fetch(`${url}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, messages, stream: false }),
+            body: JSON.stringify(_applyGenOptions({ model, messages, stream: false }, backend, cfg)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).message?.content || "";
+        const text = (await res.json()).message?.content || "";
+        return cfg.thinkingMode ? text : _stripThinkingTags(text);
+    } else if (backend === "unsloth") {
+        const body = _applyGenOptions({ model, messages: _toOpenAiMessages(messages), stream: false }, backend, cfg);
+        const data = await unslothProxy(url, "/v1/chat/completions", "POST", body);
+        const msg = data.choices?.[0]?.message;
+        // Unslothはreasoningを別フィールドで返すため<think>タグに畳んで表示に混ぜる
+        const text = (msg?.reasoning_content ? `<think>${msg.reasoning_content}</think>` : "") + (msg?.content || "");
+        return cfg.thinkingMode ? text : _stripThinkingTags(text);
     } else {
-        // LM Studio / Lemonade (OpenAI-compatible): convert Ollama-style messages (with .images) to OpenAI content arrays
-        const openAiMessages = messages.map(msg => {
-            if (msg.images?.length) {
-                return {
-                    role: msg.role,
-                    content: [
-                        { type: "text", text: msg.content },
-                        ...msg.images.map(b64 => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } })),
-                    ],
-                };
-            }
-            return { role: msg.role, content: msg.content };
-        });
+        // LM Studio / Lemonade (OpenAI-compatible)
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, messages: openAiMessages, stream: false }),
+            body: JSON.stringify(_applyGenOptions({ model, messages: _toOpenAiMessages(messages), stream: false }, backend, cfg)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).choices?.[0]?.message?.content || "";
+        const text = (await res.json()).choices?.[0]?.message?.content || "";
+        return cfg.thinkingMode ? text : _stripThinkingTags(text);
     }
 }
 
@@ -193,36 +203,29 @@ function updateAttachmentDisplay() {
 }
 
 // ============================================
+// Status label (設定モーダルで選択中のbackend/modelを表示)
+// ============================================
+
+function _updateStatusLabel() {
+    const status = document.getElementById("wfm-ollama-status");
+    if (!status) return;
+    const { backend, model } = getPromptAiConfig();
+    status.textContent = model ? `${backend}: ${model}` : `${backend}: ${t("selectModelFirst")}`;
+    status.className = model ? "wfm-ollama-status connected" : "wfm-ollama-status error";
+}
+
+// ============================================
 // Send Message
 // ============================================
 
 async function sendMessage() {
     const input = document.getElementById("wfm-ollama-input");
-    const modelSelect = document.getElementById("wfm-ollama-model");
-    if (!input || !modelSelect) return;
+    if (!input) return;
 
     const message = input.value.trim();
     if (!message) return;
 
-    // バックエンドが変更されていたらモデル一覧を自動更新
-    const { backend } = getPromptAiConfig();
-    if (backend !== _promptAiBackendForModels) {
-        const status = document.getElementById("wfm-ollama-status");
-        if (status) { status.textContent = `Switching to ${backend}...`; status.className = "wfm-ollama-status"; }
-        try {
-            const models = await fetchAiModels();
-            const savedModel = loadPromptAiSettings().model || "";
-            modelSelect.innerHTML = models.length
-                ? models.map(name => `<option value="${name}" ${name === savedModel ? "selected" : ""}>${name}</option>`).join("")
-                : `<option value="">${t("noModelsFound")}</option>`;
-            _promptAiBackendForModels = backend;
-            if (status) { status.textContent = `${models.length} models [${backend}]`; status.className = "wfm-ollama-status connected"; }
-        } catch {
-            if (status) { status.textContent = t("failedConnect"); status.className = "wfm-ollama-status error"; }
-        }
-    }
-
-    const model = modelSelect.value;
+    const { model } = getPromptAiConfig();
     if (!model) {
         showToast(t("selectModelFirst"), "error");
         return;
@@ -259,13 +262,12 @@ async function sendMessage() {
 
 async function sendTranslate(direction) {
     const input = document.getElementById("wfm-ollama-input");
-    const modelSelect = document.getElementById("wfm-ollama-model");
-    if (!input || !modelSelect) return;
+    if (!input) return;
 
     const text = input.value.trim();
     if (!text) return;
 
-    const model = modelSelect.value;
+    const { model } = getPromptAiConfig();
     if (!model) {
         showToast(t("selectModelFirst"), "error");
         return;
@@ -318,48 +320,11 @@ function applyToGenerateUI(text) {
 // ============================================
 
 export function initAiChatUI() {
-    // AI model refresh
-    async function refreshModels() {
-        const select = document.getElementById("wfm-ollama-model");
-        const status = document.getElementById("wfm-ollama-status");
-        const { backend } = getPromptAiConfig();
-        try {
-            const models = await fetchAiModels();
-            const savedModel = loadPromptAiSettings().model || "";
-            if (select) {
-                select.innerHTML = models.length
-                    ? models.map(name => `<option value="${name}" ${name === savedModel ? "selected" : ""}>${name}</option>`).join("")
-                    : `<option value="">${t("noModelsFound")}</option>`;
-            }
-            _promptAiBackendForModels = backend;
-            if (status) {
-                status.textContent = `${models.length} models [${backend}]`;
-                status.className = "wfm-ollama-status connected";
-            }
-        } catch {
-            if (status) {
-                status.textContent = t("failedConnect");
-                status.className = "wfm-ollama-status error";
-            }
-        }
-    }
+    _updateStatusLabel();
 
-    // Auto-load models on init
-    refreshModels();
-
-    document.getElementById("wfm-ollama-refresh-btn")?.addEventListener("click", refreshModels);
-
-    // Test connection
-    document.getElementById("wfm-ollama-test-btn")?.addEventListener("click", async () => {
-        const status = document.getElementById("wfm-ollama-status");
-        if (status) { status.textContent = "Testing..."; status.className = "wfm-ollama-status"; }
-        try {
-            await fetchAiModels();
-            if (status) { status.textContent = t("connectedCheck"); status.className = "wfm-ollama-status connected"; }
-            await refreshModels();
-        } catch {
-            if (status) { status.textContent = t("failedConnect"); status.className = "wfm-ollama-status error"; }
-        }
+    // Settings modal
+    document.getElementById("wfm-ollama-settings-btn")?.addEventListener("click", () => {
+        openAiBackendSettingsModal(PROMPT_AI_KEY, t("settings"), _updateStatusLabel);
     });
 
     // Send message
