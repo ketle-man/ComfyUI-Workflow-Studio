@@ -8,7 +8,7 @@
  * to the real Gallery tab via the "Open in Gallery" button.
  */
 
-import { VIDEO_GROUP, VTEMP_GROUP } from "./gallery-tab.js";
+import { VIDEO_GROUP, VTEMP_GROUP, ensureVideoGroup } from "./gallery-tab.js";
 
 // Sentinel for the "All Video Assets" option — not a real backend group, since
 // Gallery's group filter only ever matches one group at a time. Selecting it
@@ -273,4 +273,11 @@ export function initVideoAssetTab() {
         _loadImages();
     });
     document.getElementById("wfm-video-asset-refresh")?.addEventListener("click", () => _loadImages());
+
+    // __VideoAssets__ is never auto-created by a batch run (see video-plan-tab.js —
+    // only VideoPlan:<name>/__vtemp__ are ensured there), so a fresh install or a
+    // group deleted via Gallery's Manage Groups would otherwise never come back on
+    // its own — add_to_group() happily records membership on individual images
+    // without ever re-registering the group itself.
+    ensureVideoGroup();
 }

@@ -1151,6 +1151,24 @@ export async function ensureFeederGroup() {
     }
 }
 
+/** __VideoAssets__グループが存在しない場合に作成する。add_to_groupは対象グループが
+ * レジストリに登録されているかを確認せず画像側にグループ名を書き込むだけのため、
+ * 一度レジストリから消える(例: 予約保護が効く前の版で削除された)と、以後の手動追加は
+ * 画像には記録されてもグループ一覧・フィルタには一切出てこなくなる。VideoタブのAsset
+ * タブ初期化時に呼び、レジストリを確実に存在させる。 */
+export async function ensureVideoGroup() {
+    try {
+        await fetch(API.groupEnsure, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: VIDEO_GROUP }),
+        });
+        await loadGroups();
+    } catch (e) {
+        console.warn("[Gallery] ensureVideoGroup error:", e);
+    }
+}
+
 /** Feederグループ内の全画像を除外する（FC ボタン） */
 async function clearFeederGroup() {
     try {
