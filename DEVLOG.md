@@ -2,6 +2,32 @@
 
 ---
 
+## 2026-08-30: Videoタブに Plan/Asset/Edit のバッチ動画生成機能を追加（作業ブランチ `feature/video-plan-batch-tab`、未リリース）
+
+「Videoタブにバッチ動画生成機能を追加したい。既存の生成UIタブのLab機能を動画生成用に整えたイメージ」との要望を起点に着手。従来のVideoタブ（単発生成フォーム）をPlan/Asset/Editの3タブ構成に再設計し、複数回のユーザー実機確認とレイアウト調整、および調査の過程で発見した3件の既存バグ修正を1ブランチでまとめた。main未マージのチェックポイントとして記録する。
+
+**1. Planタブ: タイムラインブロックによるバッチ動画生成**: 「基本設定→タイムラインをブロック分割→各ブロックにFirst/Last画像とプロンプトを設定→実行で順次バッチ生成」という要望を実装。LabタブがCheckpoint/LoRA/VAE/Prompt/Ksamplerそれぞれ独立したキーフレーム配列を持つ設計なのに対し、Video Planは「各ブロックが完結した1本の生成ジョブ」という単位でデータを持つ点が本質的に異なるため、Lab方式（`_buildWorkflowForIteration`によるキーフレーム解決）ではなく新規のデータモデル（`{id, color, duration, prompt, first_image_mode, first_image_filename, last_image_filename}`の配列）を設計した。First ImageはNone/画像を指定/前ブロックの最終フレームを使用の3択（`first_image_mode`）を持ち、chain_previous選択時は前ブロックに明示的なLast Imageがあればそれを直接使い（フレーム抽出不要）、無ければ前ブロックの生成動画から実際の最終フレームを`extractLastFrameBlob()`（Labのchain image機能で実績のある関数を再利用）でクライアント側抽出してアップロードする、という優先順位をユーザーと合意の上で実装した。Run/Pause/Cancelと進捗バーはLabタブの`_runLabBatch`と同じPromiseベースの一時停止機構を踏襲。ワークフロー操作（モデルファミリー自動判定・ノードへの値注入）はVideoタブの既存ロジックから`video-workflow.js`として抽出し、Plan/旧単発フォームの双方から呼べる純粋関数群にした。
+
+**2. Plan永続化**: Labの`ws_labplan_`プレフィックス＋PNGコンタクトシートへのiTXt埋め込み方式をそのまま踏襲し、`ws_videoplan_`プレフィックスでPlan JSON＋インデックス画像を保存する仕組みを新規実装（`video_plan_service.py`はLabのサービスを複製、共通化はしない方針）。ブロックが1個のPlan＝旧来の単発生成と等価になるよう設計し、「Load in Video」ボタンは常にブロック1個の新規Planを生成するようにした。
+
+**3. Assetタブ: Galleryのグループ機能を再利用した素材管理**: 独自のフォルダブラウザを新規実装する代わりに、`feeder-tab.js`の「Galleryモード」（Gallery既存バックエンドをグループスコープで叩く軽量グリッド）と同じパターンを踏襲。当初は生成された動画を全て予約グループ`__VideoAssets__`へ自動追加する設計だったが、ユーザーからのフィードバックで用途を再定義：`__VideoAssets__`はユーザーがGalleryで手動キュレーションする「素材」グループとし、バッチ実行の自動追加先は新設の予約グループ`__vtemp__`（Planを保存していない生成物の一時置き場）に変更。Plan保存済みの場合は`VideoPlan:<name>`サブグループへ、未保存の場合は`__vtemp__`へ、という条件分岐にした。Assetタブのグループ選択には「All Video Assets」（`__VideoAssets__`+`__vtemp__`の合算、バックエンドに単一グループでの合算フィルタが無いため2回フェッチしてマージ）に加え、両グループの個別選択・Plan別サブグループ選択も追加。Galleryタブ側には`__vtemp__`用の🔒予約表示（`__Feeder__`と同様リネーム・削除不可）と、詳細パネルに`__vtemp__`をワンクリックでクリアする「VtC」ボタン（既存の`__Feeder__`用「FC」ボタンと同じ`groups/{name}/clear`APIを利用）を追加した。
+
+**4. UIレイアウトの複数回反復**: 初回実装は左サイドバー（380px固定幅）にPlan/Asset/Editの3サブタブを縦積みする構成にしたが、実機確認で「Timeline+First/Last画像+Promptを横並びにしたい」という要望とレイアウト崩れの報告を受け、Planタブの中身を中央の広いプレビュー欄の下部に移動（ブロックエディタをFirst Image/Last Image/Prompt/Duration+colorスウォッチの横並び4カラムに再設計、実行系(Run/Pause/Cancel/進捗/Seed)とプラン管理系(Note/Save/Load)を「Run」「Plan」の2タブに整理）。続けて「これをPlanタブ化してEditタブを追加、左ペインのPlan/Editは削除」との指示で、中央パネルにPlan/Edit専用のタブナビを新設し、左サイドバーにはAssetのみを残した。この際、両タブナビが同じ`.wfm-video-subtab-btn`/`.wfm-video-subtab-panel`クラスを共有する実装だったため「Assetを選ぶと中央のPlan/Editも連動して消える」という不具合が発生 — 中央タブの切替処理を`.wfm-video-center-panel`スコープに限定したquerySelectorAllに変更し、サイドバーのAsset単独ボタンは独立したshow/hideトグルとして分離することで解消した。中央・右ペイン（プレビュー、Frame抽出/GIF変換/Video Source）はサブタブ切替と独立した常時表示パネルとして、レイアウト変更を通じて無改修のまま維持している。
+
+**5. バグ修正: Galleryのグループ追加がジャンクションフォルダ環境で一覧に反映されない**: 「生成完了後に`__vtemp__`グループには入らない。Galleryで手動追加したコンテンツは表示される」との報告を受けた調査で発見。ユーザー環境の`ComfyUI_5\output`はStabilityMatrixの共有出力フォルダ機能によるWindowsジャンクション（実体は`StabilityMatrix\Images\Text2Img`）だった。`save_image_meta`（タグ/メモ保存）には既に「`get_image_metadata()`側はresolve()済みパスをキーにするため保存側も統一する」という同種バグの修正コメントがあったが、`add_to_group`/`remove_from_group`/`toggle_favorite`/`bulk_set_favorite`の4箇所には同じ修正が未適用のまま残っていた。そのためグループ追加自体はサーバー上で成功する（ジャンクション形式の未解決パスをキーに保存）が、一覧取得（`list_images`）はフォルダを`.resolve()`した実パスでスキャンするためキーが一致せず、「追加はされるが一覧に出てこない」というサイレント不具合になっていた。4箇所とも`save_image_meta`と同じresolve()統一パターンに修正。Video機能に限らずGallery全体（お気に入り・グループ機能）に影響していた既存バグで、今回の調査で偶然発見・修正できた。
+
+**6. バグ修正: Galleryのグループフィルタがサブフォルダ内のファイルを見つけられない**: 5の修正後も「rootで`__VideoAssets__`フィルタ時は画像のみ、動画は表示されない」との報告。動画は`video/`サブフォルダに保存されるが、Galleryタブの`loadImages()`はグループフィルタの有無に関わらず常に非再帰スキャン（現在のフォルダ直下のみ）だったため、グループメンバーがサブフォルダにあると机上から漏れていた。グループフィルタが有効な時のみ`recursive=true`を付与するよう修正。
+
+**7. バグ修正: チェイン画像が無関係な既存ファイルにすり替わる**: 「2ブロックのPlanで2つ目のFirst Imageを前ブロックの最終フレームに設定したが、生成された2つ目の動画は無関係な画像が使われている」との報告。調査の結果、`convertUiToApi()`（UI形式→API形式変換の共通処理）が持つ「COMBO項目の値がキャッシュ済み`/object_info`の選択肢に無い場合、無警告で選択肢の先頭に差し替える」というフォールバック機構（チェックポイント名の互換性対応が主目的で元々存在）が原因と判明。LoadImageノードの「image」もCOMBO型のため対象になり、バッチ実行中にアップロードした抽出フレーム画像のファイル名はその時点でキャッシュ済みの`/object_info`にまだ存在せず、無関係な既存ファイル（選択肢の先頭）に差し替えられていた。LabタブのchainImage機能がこの問題に遭遇しないのは、Labが既にAPI形式のワークフローを直接操作し`convertUiToApi()`を経由しないため。`comfyui-workflow.js`に`invalidateObjectInfoCache()`を新設し、チェイン用フレーム・ユーザーの手動画像アップロードの直後に呼んで次回変換時に最新の`/object_info`を再取得させるよう修正した。
+
+**検証**: 全JS/Pythonファイルを`node --check`/`python -m py_compile`で構文確認、`templates/index.html`はPythonの`html.parser`でタグ対応チェックとJinja2実レンダリングで検証。ジャンクションバグの調査・検証は、ユーザーが起動中のComfyUI_5（ポート8189で稼働）に対し`curl`でAPIを直接叩いて実施 — `os.path.realpath()`で実際にジャンクションであることを確認し、`groups/{name}/images`（生成成功）と`list_images`（グループフィルタで空）の食い違いを再現、修正版デプロイ後の再検証はユーザー自身の実機確認で完了。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更・新規ファイルを都度両フォルダへ同期。各段階（レイアウト・グループ機能・チェインバグ）ともユーザー自身の実機確認・スクリーンショット提供を受けて次の修正に進む反復的な進め方で実施した。
+
+**How to apply**: 「◯◯機能では動くのに△△機能では動かない」という報告があった場合、両者の実行経路が本当に同じか（今回はLabがAPI形式を直接操作するのに対しVideoはUI形式から`convertUiToApi()`を経由する、という違い）を疑うと真因に早く到達できる。ComfyUIフロントエンドの`convertUiToApi()`のようなCOMBO値検証は「無警告でのフォールバック」を行う設計になっている場合があるため、実行時に動的アップロードした値をCOMBO項目に書き込む機能（画像チェイン等）を追加する際は、そのCOMBOの選択肢キャッシュが最新かどうかを必ず確認する必要がある。StabilityMatrixのような複数ComfyUIインスタンスでモデル/出力フォルダを共有するツールはジャンクション/シンボリックリンクを使うため、`Path.resolve()`をパスキーの一部に使うコードとファイルシステムスキャンで得たパスとの間に「解決する/しない」の不一致が生まれやすい — 同じ画像を指すパス文字列の保存/検索が全経路で一貫した規約（このプロジェクトでは「常にresolve()後の文字列で統一」）に従っているか、新しい書き込み経路を追加するたびに確認する価値がある。複数のタブ切替グループが同じCSSクラス/data属性を共有する実装は、後から片方だけ物理的に別の場所へ移動すると意図せず連動してしまうため、独立させたいグループは早い段階でクラス名やquerySelectorAllのスコープを分けておくとよい。
+
+関連: [[project_v050_video_tab]], [[project_dev_deploy_sync]]
+
+---
+
 ## v0.5.4
 
 ### 機能追加: Video/GenerateUIタブのLTX-2.5・Wan2.2対応拡大 + AI Assistant設定のUnsloth対応・独立モーダル化・モデルアンロード機能

@@ -46,6 +46,16 @@ const API = {
 };
 
 export const FEEDER_GROUP = "__Feeder__";
+export const VIDEO_GROUP = "__VideoAssets__";
+// Video Planを名前を付けて保存していない状態で生成した動画の一時置き場。
+// __VideoAssets__(ユーザーが手動でキュレーションする素材グループ)とは異なり、
+// 未保存Planの生成物置き場として自動的に追加される作業用グループ。
+export const VTEMP_GROUP = "__vtemp__";
+
+const _RESERVED_GROUPS = [FEEDER_GROUP, VIDEO_GROUP, VTEMP_GROUP];
+function _isReservedGroup(name) {
+    return _RESERVED_GROUPS.includes(name);
+}
 
 // 拡張子から動画ファイル（mp4）かどうかを判定する。
 // 一覧アイテムは path/filename、詳細メタ(get_image_metadata)は ext フィールドを持つため両対応。
@@ -499,8 +509,14 @@ async function loadImages() {
     if (state.favoriteOnly) params.favorite = "true";
     if (state.tagFilter) params.tag = state.tagFilter;
 
-    // グループフィルタはサーバーサイドで処理
-    if (state.groupFilter) params.group = state.groupFilter;
+    // グループフィルタはサーバーサイドで処理。グループのメンバーは現在のフォルダの
+    // サブフォルダに散らばっている可能性がある(例: 動画は"video"サブフォルダ配下)ため、
+    // 通常のフォルダ単位ブラウズ(非再帰)とは異なり、フィルタ時はフォルダ配下を再帰的に
+    // 検索する。
+    if (state.groupFilter) {
+        params.group = state.groupFilter;
+        params.recursive = "true";
+    }
 
     try {
         const images = (await apiFetch(API.images(params))).images || [];
@@ -1149,6 +1165,19 @@ async function clearFeederGroup() {
     }
 }
 
+/** __vtemp__グループ内の全画像を除外する（詳細パネルのVtCボタン） */
+async function clearVtempGroup() {
+    try {
+        await fetch(API.groupClear(VTEMP_GROUP), { method: "POST" });
+        showToast(t("vtempGroupCleared"), "success");
+        if (state.groupFilter === VTEMP_GROUP) {
+            await loadImages();
+        }
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+    }
+}
+
 /** ツールバーのグループフィルタと一括バーのセレクトを更新 */
 function _updateGroupSelects() {
     // ツールバー: グループフィルタ
@@ -1228,15 +1257,16 @@ function renderDetailGroup(img) {
                         ${allGroups.length === 0
                             ? `<option value="">${t("modelsNoGroupAvailable")}</option>`
                             : allGroups.map(g => {
-                                const label = g === FEEDER_GROUP ? `🔒 ${escapeHtml(g)}` : escapeHtml(g);
+                                const label = _isReservedGroup(g) ? `🔒 ${escapeHtml(g)}` : escapeHtml(g);
                                 return `<option value="${escapeHtml(g)}">${label}</option>`;
                             }).join("")}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-gallery-grp-rename-btn"
-                        ${allGroups.length === 0 || allGroups[0] === FEEDER_GROUP ? "disabled" : ""} title="${t("modelsRename")}">&#9998;</button>
+                        ${allGroups.length === 0 || _isReservedGroup(allGroups[0]) ? "disabled" : ""} title="${t("modelsRename")}">&#9998;</button>
                     <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-gallery-grp-delete-btn"
-                        ${allGroups.length === 0 || allGroups[0] === FEEDER_GROUP ? "disabled" : ""} title="${t("modelsDelete")}">&times;</button>
+                        ${allGroups.length === 0 || _isReservedGroup(allGroups[0]) ? "disabled" : ""} title="${t("modelsDelete")}">&times;</button>
                 </div>
+                <button class="wfm-btn wfm-btn-sm" id="wfm-gallery-vtemp-clear-btn" style="width:100%;margin-top:6px;" title="Clear the __vtemp__ group (auto-populated by unsaved Video Plan runs)">VtC — Clear __vtemp__</button>
             </div>
         </div>
     `;
@@ -1315,14 +1345,17 @@ function renderDetailGroup(img) {
         }
     });
 
-    // 管理セレクト変更時: __Feeder__ は rename/delete を無効化
+    // 管理セレクト変更時: 予約グループ(__Feeder__/__VideoAssets__/__vtemp__)は rename/delete を無効化
     el.querySelector("#wfm-gallery-grp-manage-sel")?.addEventListener("change", (e) => {
-        const isReserved = e.target.value === FEEDER_GROUP;
+        const isReserved = _isReservedGroup(e.target.value);
         const renameBtn = el.querySelector("#wfm-gallery-grp-rename-btn");
         const deleteBtn = el.querySelector("#wfm-gallery-grp-delete-btn");
         if (renameBtn) renameBtn.disabled = isReserved;
         if (deleteBtn) deleteBtn.disabled = isReserved;
     });
+
+    // VtC ボタン: __vtemp__ グループをクリア(未保存Video Planの生成物置き場)
+    el.querySelector("#wfm-gallery-vtemp-clear-btn")?.addEventListener("click", clearVtempGroup);
 
     // グループ名変更
     el.querySelector("#wfm-gallery-grp-rename-btn")?.addEventListener("click", async () => {

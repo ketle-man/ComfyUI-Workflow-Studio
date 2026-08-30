@@ -4,7 +4,7 @@ import jinja2
 from aiohttp import web
 from pathlib import Path
 
-from .config import TEMPLATES_DIR, STATIC_DIR, DATA_DIR, WORKFLOWS_DIR, LAB_PLAN_DIR
+from .config import TEMPLATES_DIR, STATIC_DIR, DATA_DIR, WORKFLOWS_DIR, LAB_PLAN_DIR, VIDEO_PLAN_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,22 @@ async def serve_lab_plan_file(request: web.Request) -> web.Response:
     })
 
 
+async def serve_video_plan_file(request: web.Request) -> web.Response:
+    """Serve files (index thumbnails) from the Video plan directory."""
+    filename = request.match_info.get("filename", "")
+    if not filename or ".." in filename or "/" in filename or "\\" in filename:
+        return web.Response(status=404)
+
+    file_path = VIDEO_PLAN_DIR / filename
+    if not file_path.is_file():
+        return web.Response(status=404)
+
+    content_type, _ = mimetypes.guess_type(str(file_path))
+    return web.FileResponse(file_path, headers={
+        "Content-Type": content_type or "application/octet-stream",
+    })
+
+
 class WorkflowStudio:
     """Main entry point for Workflow Studio plugin."""
 
@@ -75,6 +91,9 @@ class WorkflowStudio:
 
         # Dynamic Lab plan file serving (index thumbnails)
         app.router.add_get("/wfm_data/lab_plan/{filename}", serve_lab_plan_file)
+
+        # Dynamic Video plan file serving (index thumbnails)
+        app.router.add_get("/wfm_data/video_plan/{filename}", serve_video_plan_file)
 
         # Main page
         app.router.add_get("/wfm", serve_index_page)

@@ -1,6 +1,7 @@
 /* =============================================
-   Video Tab (MiniMax H3専用・GenerateUIタブとは独立)
-   3ペイン構成: 左=フォーム / 中央=プレビュー+編集 / 右=プロパティ
+   Video Tab (MiniMax H3 / LTX-2.5 / Wan2.2対応・GenerateUIタブとは独立)
+   3ペイン構成: 左=Plan/Asset/Editサブタブ / 中央=プレビュー+Video Source / 右=プロパティ
+   中央・右ペインは左のサブタブ切替と無関係に常時表示される。
    各ペインは独立したカラムとして高さ100%を占め、内部でスクロールする。
    中央ペインのコンテンツ量(生成結果の有無・動画の縦横比)が変わっても
    左右のペインの位置が動かないよう、意図的に高さを共有させない構造にしている。
@@ -37,31 +38,9 @@
     margin-bottom: 4px;
 }
 
-.wfm-video-header {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 4px;
-}
-
-.wfm-video-header h3 {
-    margin: 0;
-}
-
 .wfm-video-wf-name {
     color: var(--wfm-text-secondary);
     font-size: 13px;
-}
-
-.wfm-video-frame-slots {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.wfm-video-frame-slot {
-    display: flex;
-    flex-direction: column;
 }
 
 .wfm-video-resolution-row {
@@ -75,6 +54,279 @@
     display: flex;
     align-items: center;
     padding-bottom: 6px;
+}
+
+/* ── Plan/Asset/Edit サブタブナビ（Lab/Galleryと同型） ── */
+.wfm-video-subtab-nav {
+    display: flex;
+    border-bottom: 1px solid var(--wfm-border);
+    flex-shrink: 0;
+    margin: -16px -16px 12px;
+    padding: 0 16px;
+}
+
+.wfm-video-subtab-btn {
+    padding: 6px 16px;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s;
+}
+
+.wfm-video-subtab-btn:hover { color: var(--wfm-text-primary); }
+.wfm-video-subtab-btn.active { color: var(--wfm-primary); border-bottom-color: var(--wfm-primary); }
+
+/* 中央ペイン用のタブナビ: プレビュー行の"下"に来るため、サイドバー版と違って
+   上マージンは潰さない(プレビュー行と重ならないようにする)。左右のみ潰して
+   center-panelのpadding分フルブリードにする。 */
+.wfm-video-center-subtab-nav {
+    margin: 0 -16px 12px;
+}
+
+.wfm-video-subtab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── Plan: タイムライン（各ブロックのdurationに応じてflex-growで幅配分） ── */
+.wfm-video-timeline-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.wfm-video-timeline-track {
+    display: flex;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--wfm-border);
+}
+
+.wfm-video-timeline-block {
+    flex-basis: 0;
+    min-width: 24px;
+    cursor: pointer;
+    border-right: 1px solid rgba(0, 0, 0, 0.3);
+    transition: outline 0.1s;
+}
+
+.wfm-video-timeline-block:last-child { border-right: none; }
+.wfm-video-timeline-block.selected { outline: 2px solid var(--wfm-primary); outline-offset: -2px; }
+
+.wfm-video-timeline-toolbar {
+    display: flex;
+    gap: 6px;
+}
+
+/* ── Plan: 中央下部に配置されるコンテンツ全体（Planサブタブ選択時のみ表示） ── */
+.wfm-video-plan-topbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wfm-video-plan-basesettings {
+    display: grid;
+    grid-template-columns: repeat(3, 160px);
+    gap: 10px;
+}
+
+.wfm-video-plan-basesettings label {
+    display: block;
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+    margin-bottom: 4px;
+}
+
+/* タイムラインの下: ブロックエディタ(左、横並びの4カラム) + Run/Planタブ(右) */
+.wfm-video-plan-main-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+/* ── Plan: ブロックエディタ（選択中ブロックのFirst/Last Image・Prompt・Duration。
+   中央の広いエリアに配置されるため横並びの4カラムで表示する） ── */
+.wfm-video-block-editor {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 16px;
+}
+
+.wfm-video-block-col label {
+    display: block;
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+    margin-bottom: 4px;
+}
+
+.wfm-video-block-first-col,
+.wfm-video-block-last-col,
+.wfm-video-block-duration-col {
+    width: 190px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.wfm-video-block-prompt-col {
+    flex: 1;
+    min-width: 220px;
+    display: flex;
+    flex-direction: column;
+}
+
+.wfm-video-block-prompt-col textarea {
+    flex: 1;
+    resize: none;
+}
+
+.wfm-video-block-color-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+    margin-bottom: 6px;
+}
+
+.wfm-video-color-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid var(--wfm-border);
+}
+
+/* ── Plan: Run/Planタブ(実行系・プラン管理系を切替表示するコンパクトなウィジェット) ── */
+.wfm-video-runplan-panel {
+    width: 260px;
+    flex: none;
+}
+
+.wfm-video-runplan-tabnav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--wfm-border);
+}
+
+.wfm-video-runplan-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 6px 4px;
+    cursor: pointer;
+    color: var(--wfm-text-secondary);
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+}
+
+.wfm-video-runplan-tab.active {
+    color: var(--wfm-text);
+    border-bottom-color: var(--wfm-primary);
+}
+
+.wfm-video-runplan-content {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Asset: 素材グリッド・詳細パネル ── */
+.wfm-video-asset-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.wfm-video-asset-card {
+    cursor: pointer;
+    border: 1px solid var(--wfm-border);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: outline 0.1s;
+}
+
+.wfm-video-asset-card.selected { outline: 2px solid var(--wfm-primary); outline-offset: -2px; }
+
+.wfm-video-asset-card-img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+    background: var(--wfm-bg-hover, #111);
+}
+
+.wfm-video-asset-card-name {
+    font-size: 10px;
+    padding: 2px 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--wfm-text-secondary);
+}
+
+.wfm-video-asset-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid var(--wfm-border);
+    padding-top: 10px;
+}
+
+.wfm-video-asset-detail label {
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+}
+
+.wfm-video-asset-preview {
+    width: 100%;
+    max-height: 200px;
+    border-radius: 4px;
+    background: #000;
+}
+
+.wfm-video-asset-name {
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wfm-video-asset-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.wfm-video-asset-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--wfm-bg-secondary);
+    border: 1px solid var(--wfm-border);
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+}
+
+.wfm-video-asset-tag button {
+    background: none;
+    border: none;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    padding: 0;
+    font-size: 11px;
 }
 
 /* ── 中央ペイン: プレビュー + 編集 ── */

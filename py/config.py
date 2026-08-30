@@ -71,6 +71,7 @@ MODEL_METADATA_FILE = DATA_DIR / "model_metadata.json"
 WILDCARD_DIR = DATA_DIR / "wildcard"
 AI_SKILLS_DIR = DATA_DIR / "ai_skills"
 LAB_PLAN_DIR = DATA_DIR / "lab_plan"
+VIDEO_PLAN_DIR = DATA_DIR / "video_plan"
 
 # Tagger
 TAGGER_DB_FILE = DATA_DIR / "tagger.db"

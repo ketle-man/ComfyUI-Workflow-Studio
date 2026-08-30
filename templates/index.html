@@ -2685,93 +2685,30 @@
             </div>
         </section>
 
-        <!-- Video Tab (MiniMax H3 / LTX-2.5対応・GenerateUIタブとは独立) -->
+        <!-- Video Tab (Plan[バッチ動画生成]/Asset[素材管理]/Edit[将来機能]の3サブタブ。
+             中央のプレビュー+右のFrame/GIFプロパティパネルはサブタブ切替と独立した常時表示) -->
         <section id="wfm-tab-video" class="wfm-tab-content">
             <div class="wfm-video-layout">
                 <div class="wfm-video-form-panel">
-                    <div class="wfm-video-header">
-                        <h3 id="wfm-video-title-label">Video</h3>
-                        <span id="wfm-video-wf-name" class="wfm-video-wf-name">No workflow loaded</span>
+                    <div class="wfm-video-subtab-nav">
+                        <button type="button" class="wfm-video-subtab-btn" data-video-subtab="asset">Asset</button>
                     </div>
 
-                    <div class="wfm-video-frame-slots">
-                        <div class="wfm-video-frame-slot">
-                            <label id="wfm-video-first-frame-label">First Frame (optional)</label>
-                            <div class="wfm-i2i-preview-wrap" id="wfm-video-first-frame-wrap" style="display:none;">
-                                <img class="wfm-i2i-preview-img" id="wfm-video-first-frame-preview">
-                            </div>
-                            <div class="wfm-i2i-drop-zone" id="wfm-video-first-frame-drop">
-                                <label class="wfm-i2i-drop-label">
-                                    <span id="wfm-video-first-frame-drop-label">Drop image or click to select</span>
-                                    <input type="file" accept="image/*" id="wfm-video-first-frame-file" style="display:none;">
-                                </label>
-                            </div>
-                            <div style="display:flex;gap:6px;align-items:center;">
-                                <span class="wfm-i2i-status" id="wfm-video-first-frame-status" style="flex:1;"></span>
-                                <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-first-frame-clear">Clear</button>
-                            </div>
+                    <!-- Asset: このPlanが生成した動画の素材管理(Galleryのグループ機能を再利用) -->
+                    <div id="wfm-video-subtab-asset" class="wfm-video-subtab-panel" data-video-subtab-panel="asset" style="display:none;">
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <select id="wfm-video-asset-group" class="wfm-input" style="flex:1;"></select>
+                            <button type="button" id="wfm-video-asset-refresh" class="wfm-btn wfm-btn-sm" title="Refresh">↻</button>
                         </div>
-                        <div class="wfm-video-frame-slot">
-                            <label id="wfm-video-last-frame-label">Last Frame (optional)</label>
-                            <div class="wfm-i2i-preview-wrap" id="wfm-video-last-frame-wrap" style="display:none;">
-                                <img class="wfm-i2i-preview-img" id="wfm-video-last-frame-preview">
-                            </div>
-                            <div class="wfm-i2i-drop-zone" id="wfm-video-last-frame-drop">
-                                <label class="wfm-i2i-drop-label">
-                                    <span id="wfm-video-last-frame-drop-label">Drop image or click to select</span>
-                                    <input type="file" accept="image/*" id="wfm-video-last-frame-file" style="display:none;">
-                                </label>
-                            </div>
-                            <div style="display:flex;gap:6px;align-items:center;">
-                                <span class="wfm-i2i-status" id="wfm-video-last-frame-status" style="flex:1;"></span>
-                                <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-last-frame-clear">Clear</button>
-                            </div>
+                        <span id="wfm-video-asset-status" class="wfm-i2i-status"></span>
+                        <div class="wfm-video-asset-grid" id="wfm-video-asset-grid"></div>
+                        <div class="wfm-video-asset-detail" id="wfm-video-asset-detail">
+                            <span class="wfm-placeholder">Select a video</span>
                         </div>
-                    </div>
-
-                    <label for="wfm-video-prompt" id="wfm-video-prompt-label">Prompt</label>
-                    <textarea id="wfm-video-prompt" class="wfm-textarea" rows="6"></textarea>
-
-                    <div class="wfm-video-resolution-row">
-                        <div>
-                            <label for="wfm-video-aspect-ratio" id="wfm-video-aspect-ratio-label">Aspect Ratio</label>
-                            <select id="wfm-video-aspect-ratio" class="wfm-input"></select>
-                        </div>
-                        <div>
-                            <label for="wfm-video-megapixels" id="wfm-video-megapixels-label">Megapixels</label>
-                            <input type="number" id="wfm-video-megapixels" class="wfm-input" step="0.01" min="0.01" value="0.2">
-                        </div>
-                        <div>
-                            <label for="wfm-video-multiple" id="wfm-video-multiple-label">Multiple</label>
-                            <input type="number" id="wfm-video-multiple" class="wfm-input" step="8" min="8" value="32">
-                        </div>
-                    </div>
-
-                    <div class="wfm-video-resolution-row">
-                        <div>
-                            <label for="wfm-video-duration" id="wfm-video-duration-label">Duration (seconds)</label>
-                            <input type="number" id="wfm-video-duration" class="wfm-input" step="0.5" min="0.5" value="2">
-                        </div>
-                        <div>
-                            <label for="wfm-video-noise-seed" id="wfm-video-noise-seed-label">Noise Seed</label>
-                            <input type="number" id="wfm-video-noise-seed" class="wfm-input" value="0">
-                        </div>
-                        <div class="wfm-video-seed-randomize-wrap">
-                            <label><input type="checkbox" id="wfm-video-seed-randomize" checked> <span id="wfm-video-randomize-label">Randomize</span></label>
-                        </div>
-                    </div>
-
-                    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
-                        <button id="wfm-video-generate-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Generate</button>
-                    </div>
-                    <div class="wfm-gen-progress-container">
-                        <div class="wfm-gen-progress-track">
-                            <div id="wfm-video-progress-bar" class="wfm-gen-progress-bar"></div>
-                        </div>
-                        <span id="wfm-video-progress-text" class="wfm-gen-progress-text">Ready</span>
                     </div>
                 </div>
-                <!-- 中央ペイン: プレビュー(生成結果 or ドロップされた任意の動画) + 編集(将来機能用プレースホルダー) -->
+                <!-- 中央ペイン: プレビュー(常時表示) + Plan/Editタブ(バッチ生成編集・将来の動画編集機能)。
+                     左のAssetサブタブ切替とは独立して常に表示される -->
                 <div class="wfm-video-center-panel">
                     <div class="wfm-video-preview-row">
                         <div class="wfm-video-preview-frame" id="wfm-video-preview-frame">
@@ -2793,11 +2730,104 @@
                             </div>
                         </div>
                     </div>
-                    <div class="wfm-video-edit-panel">
+
+                    <div class="wfm-video-subtab-nav wfm-video-center-subtab-nav">
+                        <button type="button" class="wfm-video-subtab-btn active" data-video-subtab="plan">Plan</button>
+                        <button type="button" class="wfm-video-subtab-btn" data-video-subtab="edit">Edit</button>
+                    </div>
+
+                    <!-- Plan: バッチ動画生成のタイムライン編集・実行(中央下部、Planタブ選択時のみ表示) -->
+                    <div id="wfm-video-plan-content" class="wfm-video-subtab-panel wfm-video-plan-content" data-video-subtab-panel="plan">
+                        <div class="wfm-video-plan-topbar">
+                            <span id="wfm-video-wf-name" class="wfm-video-wf-name">No workflow loaded</span>
+                            <div class="wfm-lab-plan-workflow-row" id="wfm-video-plan-workflow-row" style="display:none;">
+                                <span id="wfm-video-plan-workflow-name" class="wfm-lab-plan-workflow-name"></span>
+                                <button type="button" id="wfm-video-plan-workflow-load-btn" class="wfm-btn wfm-btn-xs" title="Load this plan's recorded workflow">Open Workflow</button>
+                            </div>
+                            <div class="wfm-video-plan-basesettings">
+                                <div>
+                                    <label for="wfm-video-plan-aspect-ratio">Aspect Ratio</label>
+                                    <select id="wfm-video-plan-aspect-ratio" class="wfm-input"></select>
+                                </div>
+                                <div>
+                                    <label for="wfm-video-plan-megapixels">Megapixels</label>
+                                    <input type="number" id="wfm-video-plan-megapixels" class="wfm-input" step="0.01" min="0.01" value="0.2">
+                                </div>
+                                <div>
+                                    <label for="wfm-video-plan-multiple">Multiple</label>
+                                    <input type="number" id="wfm-video-plan-multiple" class="wfm-input" step="8" min="8" value="32">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wfm-video-timeline-wrap">
+                            <div class="wfm-video-timeline-track" id="wfm-video-timeline-track"></div>
+                            <div class="wfm-video-timeline-toolbar">
+                                <button type="button" id="wfm-video-block-split-btn" class="wfm-btn wfm-btn-xs">＋ Split</button>
+                                <button type="button" id="wfm-video-block-add-btn" class="wfm-btn wfm-btn-xs">＋ Block</button>
+                                <button type="button" id="wfm-video-block-delete-btn" class="wfm-btn wfm-btn-xs">Delete</button>
+                            </div>
+                        </div>
+
+                        <div class="wfm-video-plan-main-row">
+                            <div class="wfm-video-block-editor" id="wfm-video-block-editor"></div>
+
+                            <div class="wfm-video-runplan-panel">
+                                <div class="wfm-video-runplan-tabnav">
+                                    <button type="button" class="wfm-video-runplan-tab active" data-runplan-tab="run">Run</button>
+                                    <button type="button" class="wfm-video-runplan-tab" data-runplan-tab="plan">Plan</button>
+                                </div>
+
+                                <div id="wfm-video-runplan-run" class="wfm-video-runplan-content active">
+                                    <div style="display:flex;gap:6px;">
+                                        <button id="wfm-video-plan-run-btn" class="wfm-btn wfm-btn-primary" style="flex:1;">Run</button>
+                                        <button id="wfm-video-plan-cancel-btn" class="wfm-btn wfm-btn-danger" style="display:none;">Cancel</button>
+                                    </div>
+                                    <button id="wfm-video-plan-pause-btn" class="wfm-btn" style="width:100%;margin-top:6px;" disabled>Pause</button>
+
+                                    <div class="wfm-gen-progress-container" style="margin-top:8px;">
+                                        <div class="wfm-gen-progress-track">
+                                            <div id="wfm-video-plan-progress-bar" class="wfm-gen-progress-bar"></div>
+                                        </div>
+                                        <span id="wfm-video-plan-progress-text" class="wfm-gen-progress-text">Ready</span>
+                                    </div>
+
+                                    <div class="wfm-video-resolution-row" style="grid-template-columns:1fr 1fr;margin-top:8px;">
+                                        <div>
+                                            <label for="wfm-video-plan-seed-value">Noise Seed</label>
+                                            <input type="number" id="wfm-video-plan-seed-value" class="wfm-input" value="0">
+                                        </div>
+                                        <div class="wfm-video-seed-randomize-wrap">
+                                            <label><input type="checkbox" id="wfm-video-plan-seed-randomize" checked> Randomize</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="wfm-video-runplan-plan" class="wfm-video-runplan-content" style="display:none;">
+                                    <label>Note</label>
+                                    <textarea id="wfm-video-plan-note" class="wfm-input wfm-lab-note" rows="3"></textarea>
+
+                                    <button id="wfm-video-plan-save-btn" class="wfm-btn wfm-btn-primary" style="width:100%;margin-top:8px;">Plan Save</button>
+                                    <button id="wfm-video-plan-saveas-btn" class="wfm-btn" style="width:100%;margin-top:6px;">Save As</button>
+                                    <button id="wfm-video-plan-clear-btn" class="wfm-btn" style="width:100%;margin-top:6px;">Plan Clear</button>
+
+                                    <div class="wfm-i2i-drop-zone" id="wfm-video-plan-drop-zone" style="margin-top:10px;">
+                                        <label class="wfm-i2i-drop-label">
+                                            <input type="file" id="wfm-video-plan-file-input" accept="application/json,.json,image/png,.png" style="display:none;">
+                                            Drop plan (.json/.png) here or click to select
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit: 将来の動画編集機能用プレースホルダー -->
+                    <div id="wfm-video-subtab-edit" class="wfm-video-subtab-panel wfm-video-edit-panel" data-video-subtab-panel="edit" style="display:none;">
                         <span id="wfm-video-edit-placeholder-label" class="wfm-placeholder">Editing tools coming soon</span>
                     </div>
                 </div>
-                <!-- 右ペイン: プロパティ(Frame抽出 / GIF変換の2タブ) -->
+                <!-- 右ペイン: プロパティ(Frame抽出 / GIF変換の2タブ)。中央ペインと同様に常時表示 -->
                 <div class="wfm-video-properties-panel">
                     <div class="wfm-video-prop-tabnav">
                         <button type="button" class="wfm-video-prop-tab active" data-prop-tab="frame" id="wfm-video-prop-tab-frame">Frame</button>

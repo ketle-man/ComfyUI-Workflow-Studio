@@ -616,6 +616,18 @@ export const comfyWorkflow = {
         return _lastMutedNodes;
     },
 
+    // Forces the next convertUiToApi() call to refetch /object_info instead of
+    // reusing the cached snapshot. Needed whenever a file gets uploaded mid-session
+    // after the cache was already populated (e.g. Video Plan's block-chaining
+    // uploads an extracted frame between batch iterations) — a stale cache's
+    // LoadImage "image" COMBO choices wouldn't include the just-uploaded filename
+    // yet, so the COMBO-mismatch fallback a few lines below (silently substituting
+    // choices[0] when a value isn't in the known list — see the file-level comment
+    // at the top) would replace it with an unrelated pre-existing file instead.
+    invalidateObjectInfoCache() {
+        _objectInfoCache = null;
+    },
+
     async convertUiToApi(workflow) {
         _lastCheckpointSubstitutions = [];
         _lastBypassedNodes = [];

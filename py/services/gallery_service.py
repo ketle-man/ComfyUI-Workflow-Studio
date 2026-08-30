@@ -811,21 +811,27 @@ class GalleryService:
         return self.metadata_store.save(str(resolved), data)
 
     def toggle_favorite(self, image_path: str) -> bool:
-        if not self._check_path_allowed(Path(image_path).resolve()):
+        resolved = Path(image_path).resolve()
+        if not self._check_path_allowed(resolved):
             return False
-        meta = self.metadata_store.get(image_path)
+        # get_image_metadata()/list_images() 側はresolve()済みパスをキーにして取得する
+        # ため、ここでも統一する(save_image_metaと同じ理由。キー不一致による
+        # 「保存はできるが表示されない」というサイレントな食い違いを防ぐ)。
+        resolved_str = str(resolved)
+        meta = self.metadata_store.get(resolved_str)
         new_val = not meta.get("favorite", False)
-        self.metadata_store.save(image_path, {"favorite": new_val})
+        self.metadata_store.save(resolved_str, {"favorite": new_val})
         return new_val
 
     def bulk_set_favorite(self, paths: list[str], value: bool) -> dict:
         """複数画像のお気に入りを一括設定する"""
         ok = fail = 0
         for p in paths:
-            if not self._check_path_allowed(Path(p).resolve()):
+            resolved = Path(p).resolve()
+            if not self._check_path_allowed(resolved):
                 fail += 1
                 continue
-            if self.metadata_store.save(p, {"favorite": value}):
+            if self.metadata_store.save(str(resolved), {"favorite": value}):
                 ok += 1
             else:
                 fail += 1
@@ -859,21 +865,28 @@ class GalleryService:
         return self.metadata_store.delete_group(name)
 
     def add_to_group(self, image_path: str, group_name: str) -> bool:
-        if not self._check_path_allowed(Path(image_path).resolve()):
+        resolved = Path(image_path).resolve()
+        if not self._check_path_allowed(resolved):
             return False
-        meta = self.metadata_store.get(image_path)
+        # get_image_metadata()/list_images() 側はresolve()済みパスをキーにして取得する
+        # ため、ここでも統一する(save_image_metaと同じ理由。キー不一致による
+        # 「グループに追加はできるが一覧に反映されない」というサイレントな食い違いを防ぐ)。
+        resolved_str = str(resolved)
+        meta = self.metadata_store.get(resolved_str)
         groups = meta.get("groups", [])
         if group_name not in groups:
             groups.append(group_name)
-            return self.metadata_store.save(image_path, {"groups": groups})
+            return self.metadata_store.save(resolved_str, {"groups": groups})
         return True
 
     def remove_from_group(self, image_path: str, group_name: str) -> bool:
-        if not self._check_path_allowed(Path(image_path).resolve()):
+        resolved = Path(image_path).resolve()
+        if not self._check_path_allowed(resolved):
             return False
-        meta = self.metadata_store.get(image_path)
+        resolved_str = str(resolved)
+        meta = self.metadata_store.get(resolved_str)
         groups = [g for g in meta.get("groups", []) if g != group_name]
-        return self.metadata_store.save(image_path, {"groups": groups})
+        return self.metadata_store.save(resolved_str, {"groups": groups})
 
     def list_images_in_group(self, group_name: str) -> list[str]:
         all_paths = self.metadata_store.list_images_in_group(group_name)

@@ -405,7 +405,7 @@ async def create_group(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
-_RESERVED_GROUPS = {"__Feeder__"}
+_RESERVED_GROUPS = {"__Feeder__", "__VideoAssets__", "__vtemp__"}
 
 
 async def rename_group(request: web.Request) -> web.Response:
