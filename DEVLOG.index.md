@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.5.6** — バグ修正: WD Taggerで不正確なタグが生成される問題を修正(GitHub Issue #1)
 - **v0.5.5** — Videoタブ全面刷新: Plan/Asset/Editバッチ生成 + Projectサブタブ + プレビュー2ペイン化 + Video Assets/Video Temp運用整理 + Galleryメタデータ消失バグ根本修正
 - **v0.5.4** — 機能追加: Video/GenerateUIタブのLTX-2.5・Wan2.2対応拡大 + AI Assistant設定のUnsloth対応・独立モーダル化・モデルアンロード機能
 - **v0.5.3** — バグ修正: Labタブのワークフロー切替時に前の内容が残留 + Galleryタブの読み込み高速化・root自動展開 + READMEスクリーンショット刷新

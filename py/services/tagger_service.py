@@ -187,19 +187,33 @@ class TaggerService:
     def _predict_onnx(self, img: Image.Image, data: dict, thr: float, char_thr: float) -> list:
         shape = data["input_shape"]
         fmt = "NHWC"
-        size = (224, 224)
+        size = 224
         if len(shape) == 4:
             if shape[1] == 3 and isinstance(shape[2], int) and shape[2] > 0:
                 fmt = "NCHW"
-                size = (int(shape[3]), int(shape[2]))
+                size = int(shape[2])
             elif shape[3] == 3 and isinstance(shape[1], int) and shape[1] > 0:
                 fmt = "NHWC"
-                size = (int(shape[2]), int(shape[1]))
+                size = int(shape[1])
 
         img = ImageOps.exif_transpose(img)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        arr = np.array(img.resize(size, Image.Resampling.LANCZOS), dtype=np.float32) / 255.0
+        # WD Tagger系標準の前処理: 透過は白背景で合成 → アスペクト比を維持したまま
+        # 白背景で正方形にパディング → リサイズ → RGB→BGR → 0-255のfloat32のまま(NHWC)
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        canvas = Image.new("RGBA", img.size, (255, 255, 255))
+        canvas.paste(img, mask=img)
+        img = canvas.convert("RGB")
+
+        w, h = img.size
+        max_dim = max(w, h)
+        padded = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
+        padded.paste(img, ((max_dim - w) // 2, (max_dim - h) // 2))
+        if max_dim != size:
+            padded = padded.resize((size, size), Image.Resampling.BICUBIC)
+
+        arr = np.array(padded, dtype=np.float32)
+        arr = np.ascontiguousarray(arr[:, :, ::-1])  # RGB -> BGR
         if fmt == "NCHW":
             arr = arr.transpose((2, 0, 1))
         arr = np.expand_dims(arr, 0)

@@ -2,6 +2,14 @@
 
 ---
 
+## v0.5.6
+
+### バグ修正: WD Taggerで不正確なタグが生成される問題を修正(GitHub Issue #1)
+
+ユーザー(censor-ed氏)からのIssue報告: `wd-swinv2-tagger-v3`でタグ付けすると画像内容と一致しない不自然なタグが出力される。調査依頼者自身が原因を特定しており、`tagger_service.py`のONNX推論前処理がWD Tagger系モデルの学習時前処理と異なっていた(単純リサイズ+RGBのまま0.0〜1.0正規化)のに対し、WD Tagger系標準の前処理は「透過は白背景で合成→アスペクト比を維持したまま白背景で正方形にパディング→BICUBICリサイズ→RGB→BGR→0〜255のfloat32のまま(正規化なし)」であるとの具体的な指摘だった。`_predict_onnx()`をこの標準前処理に修正(本プラグインがサポートするONNXタガーはREADME記載の通りWD Tagger系のみのためパス全体を統一。DeepDanbooru用`_predict_dd()`は元々正しい前処理のため変更なし)。実機で`wd-eva02-large-tagger-v3`を使い、くまの着ぐるみパペットを持つ緑髪キャラクターのアニメ調画像でタグ付けを検証したところ、修正前は前処理が公式実装と異なる状態だったのに対し、修正後は`green_hair, bear_ears, bear_costume, paw_gloves, hoodie, animal_hood, animal_costume`など画像内容と高精度に一致する自然なタグが生成されることを確認した。
+
+---
+
 ## v0.5.5
 
 ### Videoタブ全面刷新: Plan/Asset/Editバッチ生成 + Projectサブタブ + プレビュー2ペイン化 + Video Assets/Video Temp運用整理 + Galleryメタデータ消失バグ根本修正
