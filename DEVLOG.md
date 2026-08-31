@@ -2,6 +2,34 @@
 
 ---
 
+## v0.5.7
+
+### 設定エクスポート/フルバックアップのドキュメント修正: v0.5.5のVideo Plan機能追加分の言及漏れ
+
+「Videoプランの追加で設定のエクスポート、バックアップ機能の更新が必要では」との確認依頼を受けて調査。v0.5.5で追加された`video_plan/`ディレクトリ（Plan JSON＋インデックスPNG、`lab_plan/`と同構造）が、フルバックアップZIP機能の説明文言から漏れていないか確認した。実装（`_build_full_backup_zip`）自体は`DATA_DIR`配下のトップレベルエントリを汎用的に走査する設計（除外リスト`_FULL_BACKUP_EXCLUDE_NAMES`は`gmic_temp`/`thumb_cache`/`wildcard`の3つのみ）のため、`video_plan/`は既存コードの変更なしに自動的にバックアップ対象へ含まれていた——つまり機能的な欠陥は無かった。一方、ユーザー向け説明文（`fullBackupHint`/`helpSettings15`のi18n.js3言語、README.mdのFull Backup説明、`settings_routes.py`のコード内コメント）は「AI Skills、Lab Plans、Style presets」という列挙のままVideo Plan機能追加時に更新されておらず、実際にバックアップされるデータの説明として不正確になっていた。該当6箇所＋READMEを「Video Plans」を含む形に修正。
+
+### Video Plan (Planサブタブ) 中央パネルの設定項目レイアウト刷新 + MiniMax H3 Turbo/LTX-2.5 Prompt Enhance/Wan2.2 Turbo対応
+
+「Duration・Noise SeedをMultipleの右隣に移動し、その下に新しい行でWidth/Height/MiniMaxのturbo_mode/strength/steps・LTX-2.5のprompt_enhance・Wan2.2のenable_turbo_mode（MiniMaxのturbo_modeと兼用）を追加したい」との要望。着手前にComfyUI_5環境の直近保存ワークフロー（`minimax_turbo.json`、LTX-2.5の`ltx_25_test`/`test2`/`test3`、Wan2.2の`wan22_test`/`test2`/`test3_i`）を実際にPythonでパースしてサブグラフの公開入力を調査し、対応可否を事前検証してから実装した。
+
+調査で判明した構造: MiniMax H3は`turbo_mode`（BOOLEAN）/`turbo_model_strength`（FLOAT、LoRA強度）/`turbo_steps`（INT）をサブグラフの直接ウィジェットとして公開しており、これらがユーザーの言う「strength」「steps」に対応する。LTX-2.5は3バリアントとも`prompt_enhance`（BOOLEAN）を公開。Wan2.2は`enable_turbo_mode`（BOOLEAN）を公開しており、MiniMaxの`turbo_mode`と意味的に同一のためUI上は1つの「Turbo Mode」欄として兼用する設計にした。width/heightはMiniMax・LTX-2.5のText/Image版ではResolutionSelector経由（サブグラフ入力がリンク接続されている）だが、LTX-2.5のFirst & Last Frame版とWan2.2は全バリアントでResolutionSelectorを持たずサブグラフの直接ウィジェット値のまま——既存コードのコメント通りの構造を実データで確認できた。noise_seedは全ファミリーで`name="noise_seed"`に統一されている（LTX-2.5のText to Videoのみ`label="seed"`を持つため、ラベルではなくname直接一致で検索するヘルパーを新設）が、**Wan2.2のText to Videoだけサブグラフの公開入力に`noise_seed`が存在しない**（Image to Videoにはある）という非対称性を発見した。
+
+実装は`video-workflow.js`の`locateVideoModelNodes()`を拡張し、上記7項目（width/height直接指定用インデックス、noise_seed、turbo_mode、turbo_strength、turbo_steps、prompt_enhance）のインデックスを検出して返すようにした（対応する入力が無ければ-1を返し、呼び出し側で無効化・非ハイライトの判断に使う）。既存のAspect Ratio/Megapixels/Multipleと全く同じ「ワークフローが対応する場合のみ入力可能＋ラベルハイライト」の仕組みで新規7項目も統一し、新しい選択UIを作らず既存の`wfm-model-label-active`パターンを再利用した。noise_seedについては値の書き込みロジックをあえて追加しなかった——`comfyUI.generate()`がAPI変換後のワークフロー全体から`noise_seed`/`seed`キーを持つ全ノードを一括で上書きする既存の`applySeedToWorkflow()`が必ず後から実行されるため、`applyBlockToWorkflow()`側で書いても意味がなく、Plan全体のシード管理は引き続きそちらに一任する設計とした。
+
+UI面ではDuration（元々ブロックごとの独立値）とNoise Seed（Plan全体で共有）を、機能的な性質は変えずにDOM位置だけtopbarのbasesettings行へ移動した。Durationはブロックエディタの`innerHTML`再生成に巻き込まれない固定要素にする必要があったため、change時のリスナー登録をブロック切替のたびに再アタッチする方式から、初期化時に一度だけ登録し値の同期のみブロック切替時に行う方式（`_initDurationControl()`新設）に変更した。新規7項目は`_plan.base_settings`に追加しPlan保存/読込（`_buildPlanData`/`_applyPlanData`）にも対応させた——Aspect Ratio等と同様Plan全体で共有する値とし、ブロックごとには持たせない設計とした。
+
+実機検証はComfyUI_5（ユーザーが起動中のポート8189、8188に誤って重複起動してしまった分は作業後に停止）上でKaptureブラウザ操作により実施。MiniMax H3ワークフローで`Turbo Mode`/`Strength`/`Steps`が正しくハイライト・値反映され`Width`/`Height`は無効化されること、LTX-2.5 First & Last Frame版で`Width`/`Height`が有効化・ハイライトされること、Wan2.2 Text to Videoで`Noise Seed`のみ非ハイライト（disabled）になり`Turbo Mode`はハイライトされること、ブロック追加後にDurationがブロックごとに独立して保持される（1つ目=5秒のまま、2つ目=7秒に変更後も1つ目に戻ると5秒を維持）ことを、DOM要素のクラス・disabled状態を直接読み取って確認した。
+
+ヘルプ文言は`helpVideo1`/`helpVideo2`/`helpVideo10`をindex.html・i18n.js（英日中3言語）・app.jsの`helpIdMap`の3点セットで更新——`helpIdMap`自体は既存のキーマッピングをそのまま流用でき変更不要だったが、`applyI18nToHtml`が起動時にi18n.jsの内容でDOM要素を上書きする一方でindex.html側の静的テキストが更新漏れになっていたため、ソース整合性のため合わせて修正した。README.mdのVideo Tabセクション（Plan/Edit subtabsの基本設定説明、Field highlight colorの対象フィールド一覧）も新規7項目を反映して更新した。
+
+**検証**: `node --check`で変更した全JSファイルの構文確認。実機（ComfyUI_5、ポート8189）でMiniMax H3/LTX-2.5（First & Last Frame版）/Wan2.2（Text to Video版）の3ワークフローをKapture経由で実際にロードし、ハイライト・disabled状態・値反映・ブロックごとのDuration独立性をDOM評価で確認。開発元gitリポジトリと実行時`custom_nodes`フォルダは別実体のため（[[project_dev_deploy_sync]]参照）、変更ファイル（`video-workflow.js`/`video-plan-tab.js`/`i18n.js`/`index.html`/`video-tab.css`）を都度両フォルダへ同期し`diff`で完全一致を確認。
+
+**How to apply**: UIに新しい項目を追加する際、「ワークフローによって対応する場合のみ有効化・ハイライトする」という既存パターンが確立している画面では、新規に選択UIやトグルを作らず既存の仕組み（本プロジェクトでは`wfm-model-label-active`クラス＋ラベルID登録）にそのまま乗せるのが一貫性を保ちやすい（[[feedback_reuse_existing_ui_before_building_new]]）。同系統に見えるモデルファミリー間でも、実際のワークフローJSONをパースして公開入力の有無を確認しないと「あるはず」の項目が無い非対称性（今回のWan2.2 Text to VideoのNoise Seed欠如）を見落とす——README/ヘルプ文言に「ワークフローXにはYが無い」という例外を書く前に、必ず実データで裏取りする。UI上は1つのフィールドとして統一表示しつつ、内部的には複数のワークフローファミリーそれぞれの異なる入力名（`turbo_mode`と`enable_turbo_mode`）にマッピングする「兼用フィールド」パターンは、意味が同じであることをコメントで明記した上でフォールバック演算子（`||`）で検出すればよく、UI側の分岐は不要になる。生成時に上流のAPI変換・送信処理（今回の`applySeedToWorkflow`）が特定のキーを一括で上書きする既存の仕組みがある場合、新規追加するフィールドの値が同じキーに書き込まれるなら、二重に値を設定するコードを書かず上流の処理に委ねる方が正確（後から上書きされる無駄なコードパスを残さない）。
+
+関連: [[project_video_plan_asset_tab]], [[project_dev_deploy_sync]], [[feedback_reuse_existing_ui_before_building_new]]
+
+---
+
 ## v0.5.6
 
 ### バグ修正: WD Taggerで不正確なタグが生成される問題を修正(GitHub Issue #1)

@@ -255,8 +255,8 @@ async def handle_import(request: web.Request) -> web.Response:
 
 
 # Full-backup (ZIP) export/import: unlike the flat _DATA_FILES JSON bundle above, this
-# covers the whole DATA_DIR — directory-shaped data (ai_skills/, lab_plan/, style/) and
-# the SQLite tagger.db that the JSON bundle can't represent. Excludes transient/cache
+# covers the whole DATA_DIR — directory-shaped data (ai_skills/, lab_plan/, video_plan/,
+# style/) and the SQLite tagger.db that the JSON bundle can't represent. Excludes transient/cache
 # dirs, and wildcard/ specifically because it's typically a symlink into a *different*
 # custom_node's folder (comfyui-impact-pack) rather than this plugin's own data.
 _FULL_BACKUP_EXCLUDE_NAMES = {"gmic_temp", "thumb_cache", "wildcard"}

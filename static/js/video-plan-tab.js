@@ -43,12 +43,21 @@ function _emptyBlock(colorIdx) {
     };
 }
 
+// width/height/turbo_mode/turbo_strength/turbo_steps/prompt_enhanceは、Aspect Ratio/
+// Megapixels/Multipleと同様にPlan全体で共有する値（モデル・LoRA・サンプラー設定に近く、
+// ブロックごとに変える性質のものではない）。ワークフローが対応する項目を持たない場合は
+// UI側で無効化・非ハイライトになるだけで、この既定値はそのまま保持される。
 function _emptyPlanState() {
     return {
         planFilename: null,
         note: "",
         workflowFilename: null,
-        base_settings: { aspect_ratio: "", megapixels: 0.2, multiple: 32 },
+        base_settings: {
+            aspect_ratio: "", megapixels: 0.2, multiple: 32,
+            width: 1280, height: 720,
+            turbo_mode: false, turbo_strength: 1, turbo_steps: 8,
+            prompt_enhance: false,
+        },
         seed_mode: "random",
         seed_value: 0,
         blocks: [_emptyBlock(0)],
@@ -155,19 +164,44 @@ const _FIELD_LABEL_IDS = [
     "wfm-video-plan-aspect-ratio-label",
     "wfm-video-plan-megapixels-label",
     "wfm-video-plan-multiple-label",
+    "wfm-video-plan-seed-value-label",
+    "wfm-video-plan-width-label",
+    "wfm-video-plan-height-label",
+    "wfm-video-plan-turbo-mode-label",
+    "wfm-video-plan-turbo-strength-label",
+    "wfm-video-plan-turbo-steps-label",
+    "wfm-video-plan-prompt-enhance-label",
 ];
 
 function _setFieldActive(id, active) {
     document.getElementById(id)?.classList.toggle("wfm-model-label-active", !!active);
 }
 
+// active=falseの項目は入力欄自体も無効化する。ワークフローが対応しない値を編集させても
+// 実際の生成には反映されない(width/heightはResolutionSelector経由の場合、instanceNode側の
+// widgetを直接書いても実行時に上書きされる。他も対応する入力が無ければ書き込み先が無い)ため。
+function _setFieldEnabled(inputId, active) {
+    const el = document.getElementById(inputId);
+    if (el) el.disabled = !active;
+}
+
 function _updateFieldHighlights() {
     const nodes = _templateWorkflow ? locateVideoModelNodes(_templateWorkflow) : null;
     if (!nodes) {
         _FIELD_LABEL_IDS.forEach((id) => _setFieldActive(id, false));
+        ["wfm-video-plan-width", "wfm-video-plan-height", "wfm-video-plan-turbo-mode",
+            "wfm-video-plan-turbo-strength", "wfm-video-plan-turbo-steps", "wfm-video-plan-prompt-enhance"]
+            .forEach((id) => _setFieldEnabled(id, false));
         return;
     }
     const hasResolution = !!nodes.resolutionNode;
+    const hasDirectResolution = nodes.widthIdx !== -1 && nodes.heightIdx !== -1;
+    const hasNoiseSeed = nodes.noiseSeedIdx !== -1;
+    const hasTurboMode = nodes.turboModeIdx !== -1;
+    const hasTurboStrength = nodes.turboStrengthIdx !== -1;
+    const hasTurboSteps = nodes.turboStepsIdx !== -1;
+    const hasPromptEnhance = nodes.promptEnhanceIdx !== -1;
+
     _setFieldActive("wfm-video-block-prompt-label", true);
     _setFieldActive("wfm-video-block-duration-label", true);
     _setFieldActive("wfm-video-block-first-label", nodes.firstFrameSlot !== -1);
@@ -175,6 +209,20 @@ function _updateFieldHighlights() {
     _setFieldActive("wfm-video-plan-aspect-ratio-label", hasResolution);
     _setFieldActive("wfm-video-plan-megapixels-label", hasResolution);
     _setFieldActive("wfm-video-plan-multiple-label", hasResolution);
+    _setFieldActive("wfm-video-plan-seed-value-label", hasNoiseSeed);
+    _setFieldActive("wfm-video-plan-width-label", hasDirectResolution);
+    _setFieldActive("wfm-video-plan-height-label", hasDirectResolution);
+    _setFieldActive("wfm-video-plan-turbo-mode-label", hasTurboMode);
+    _setFieldActive("wfm-video-plan-turbo-strength-label", hasTurboStrength);
+    _setFieldActive("wfm-video-plan-turbo-steps-label", hasTurboSteps);
+    _setFieldActive("wfm-video-plan-prompt-enhance-label", hasPromptEnhance);
+
+    _setFieldEnabled("wfm-video-plan-width", hasDirectResolution);
+    _setFieldEnabled("wfm-video-plan-height", hasDirectResolution);
+    _setFieldEnabled("wfm-video-plan-turbo-mode", hasTurboMode);
+    _setFieldEnabled("wfm-video-plan-turbo-strength", hasTurboStrength);
+    _setFieldEnabled("wfm-video-plan-turbo-steps", hasTurboSteps);
+    _setFieldEnabled("wfm-video-plan-prompt-enhance", hasPromptEnhance);
 }
 
 function _frameFieldHtml(which, filename) {
@@ -217,17 +265,12 @@ function _blockEditorHtml(block, isFirstBlock) {
         </div>
 
         <div class="wfm-video-block-col wfm-video-block-prompt-col">
-            <label id="wfm-video-block-prompt-label">Prompt</label>
-            <textarea id="wfm-video-block-prompt" class="wfm-textarea" rows="8">${escapeHtml(block.prompt || "")}</textarea>
-        </div>
-
-        <div class="wfm-video-block-col wfm-video-block-duration-col">
             <div class="wfm-video-block-color-row">
                 <span class="wfm-video-color-swatch" style="background:${escapeHtml(block.color)}"></span>
                 <span>color</span>
             </div>
-            <label id="wfm-video-block-duration-label">Duration (seconds)</label>
-            <input type="number" id="wfm-video-block-duration" class="wfm-input" step="0.5" min="0.5" value="${block.duration}">
+            <label id="wfm-video-block-prompt-label">Prompt</label>
+            <textarea id="wfm-video-block-prompt" class="wfm-textarea" rows="8">${escapeHtml(block.prompt || "")}</textarea>
         </div>
     `;
 }
@@ -302,14 +345,25 @@ function _renderBlockEditor() {
     document.getElementById("wfm-video-block-last-clear")?.addEventListener("click", () => _clearBlockImage("last"));
 
     document.getElementById("wfm-video-block-prompt")?.addEventListener("input", (e) => { block.prompt = e.target.value; });
+
+    // Durationの入力欄はtopbarのbasesettings行に固定配置されている（ブロックエディタの
+    // innerHTMLと違って再生成されない）ため、ここでは現在選択中ブロックの値を反映するだけ。
+    // change時のリスナーは_initDurationControlで一度だけ登録済み。
+    const durationEl = document.getElementById("wfm-video-block-duration");
+    if (durationEl) durationEl.value = block.duration;
+
+    _updateFieldHighlights();
+}
+
+function _initDurationControl() {
     document.getElementById("wfm-video-block-duration")?.addEventListener("change", (e) => {
+        const block = _plan.blocks.find((b) => b.id === _selectedBlockId);
+        if (!block) return;
         const v = Number(e.target.value);
         block.duration = (isNaN(v) || v <= 0) ? 0.5 : v;
         e.target.value = block.duration;
         _renderTimeline();
     });
-
-    _updateFieldHighlights();
 }
 
 // ============================================
@@ -326,15 +380,45 @@ function _initBaseSettings() {
     document.getElementById("wfm-video-plan-multiple")?.addEventListener("change", (e) => {
         _plan.base_settings.multiple = Number(e.target.value) || 32;
     });
+    document.getElementById("wfm-video-plan-width")?.addEventListener("change", (e) => {
+        _plan.base_settings.width = Number(e.target.value) || 1280;
+    });
+    document.getElementById("wfm-video-plan-height")?.addEventListener("change", (e) => {
+        _plan.base_settings.height = Number(e.target.value) || 720;
+    });
+    document.getElementById("wfm-video-plan-turbo-mode")?.addEventListener("change", (e) => {
+        _plan.base_settings.turbo_mode = e.target.checked;
+    });
+    document.getElementById("wfm-video-plan-turbo-strength")?.addEventListener("change", (e) => {
+        _plan.base_settings.turbo_strength = Number(e.target.value) || 0;
+    });
+    document.getElementById("wfm-video-plan-turbo-steps")?.addEventListener("change", (e) => {
+        _plan.base_settings.turbo_steps = Number(e.target.value) || 1;
+    });
+    document.getElementById("wfm-video-plan-prompt-enhance")?.addEventListener("change", (e) => {
+        _plan.base_settings.prompt_enhance = e.target.checked;
+    });
 }
 
 function _applyBaseSettingsToUI() {
     const aspectEl = document.getElementById("wfm-video-plan-aspect-ratio");
     const mpEl = document.getElementById("wfm-video-plan-megapixels");
     const multEl = document.getElementById("wfm-video-plan-multiple");
+    const widthEl = document.getElementById("wfm-video-plan-width");
+    const heightEl = document.getElementById("wfm-video-plan-height");
+    const turboModeEl = document.getElementById("wfm-video-plan-turbo-mode");
+    const turboStrengthEl = document.getElementById("wfm-video-plan-turbo-strength");
+    const turboStepsEl = document.getElementById("wfm-video-plan-turbo-steps");
+    const promptEnhanceEl = document.getElementById("wfm-video-plan-prompt-enhance");
     if (aspectEl && _plan.base_settings.aspect_ratio) aspectEl.value = _plan.base_settings.aspect_ratio;
     if (mpEl) mpEl.value = _plan.base_settings.megapixels;
     if (multEl) multEl.value = _plan.base_settings.multiple;
+    if (widthEl) widthEl.value = _plan.base_settings.width;
+    if (heightEl) heightEl.value = _plan.base_settings.height;
+    if (turboModeEl) turboModeEl.checked = !!_plan.base_settings.turbo_mode;
+    if (turboStrengthEl) turboStrengthEl.value = _plan.base_settings.turbo_strength;
+    if (turboStepsEl) turboStepsEl.value = _plan.base_settings.turbo_steps;
+    if (promptEnhanceEl) promptEnhanceEl.checked = !!_plan.base_settings.prompt_enhance;
 }
 
 async function _populateAspectRatioOptions() {
@@ -383,6 +467,12 @@ export async function loadWorkflowIntoVideoEditor(workflow, filename) {
     _plan.base_settings.aspect_ratio = defaults.aspectRatio || "";
     if (defaults.megapixels != null) _plan.base_settings.megapixels = defaults.megapixels;
     if (defaults.multiple != null) _plan.base_settings.multiple = defaults.multiple;
+    if (defaults.width != null) _plan.base_settings.width = defaults.width;
+    if (defaults.height != null) _plan.base_settings.height = defaults.height;
+    if (defaults.turboMode != null) _plan.base_settings.turbo_mode = defaults.turboMode;
+    if (defaults.turboStrength != null) _plan.base_settings.turbo_strength = defaults.turboStrength;
+    if (defaults.turboSteps != null) _plan.base_settings.turbo_steps = defaults.turboSteps;
+    if (defaults.promptEnhance != null) _plan.base_settings.prompt_enhance = defaults.promptEnhance;
 
     const block = _plan.blocks[0];
     block.prompt = defaults.prompt;
@@ -602,6 +692,12 @@ async function _runVideoPlanBatch() {
                 aspectRatio: _plan.base_settings.aspect_ratio,
                 megapixels: _plan.base_settings.megapixels,
                 multiple: _plan.base_settings.multiple,
+                width: _plan.base_settings.width,
+                height: _plan.base_settings.height,
+                turboMode: _plan.base_settings.turbo_mode,
+                turboStrength: _plan.base_settings.turbo_strength,
+                turboSteps: _plan.base_settings.turbo_steps,
+                promptEnhance: _plan.base_settings.prompt_enhance,
                 firstImageFilename,
                 lastImageFilename: block.last_image_filename || null,
             });
@@ -831,6 +927,12 @@ function _applyPlanData(filename, data) {
         aspect_ratio: data.base_settings?.aspect_ratio || "",
         megapixels: data.base_settings?.megapixels ?? 0.2,
         multiple: data.base_settings?.multiple ?? 32,
+        width: data.base_settings?.width ?? 1280,
+        height: data.base_settings?.height ?? 720,
+        turbo_mode: data.base_settings?.turbo_mode ?? false,
+        turbo_strength: data.base_settings?.turbo_strength ?? 1,
+        turbo_steps: data.base_settings?.turbo_steps ?? 8,
+        prompt_enhance: data.base_settings?.prompt_enhance ?? false,
     };
     _plan.seed_mode = data.seed_mode || "random";
     _plan.seed_value = data.seed_value ?? 0;
@@ -964,6 +1066,7 @@ function _initRunPlanTabToggle() {
 export function initVideoPlanTab() {
     _initPlanDropZone();
     _initBaseSettings();
+    _initDurationControl();
     _populateAspectRatioOptions();
     _initTimelineControls();
     _initRunPlanTabToggle();

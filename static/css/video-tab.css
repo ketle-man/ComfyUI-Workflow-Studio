@@ -43,19 +43,6 @@
     font-size: 13px;
 }
 
-.wfm-video-resolution-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-    align-items: end;
-}
-
-.wfm-video-seed-randomize-wrap {
-    display: flex;
-    align-items: center;
-    padding-bottom: 6px;
-}
-
 /* ── Plan/Asset/Edit サブタブナビ（Lab/Galleryと同型） ── */
 .wfm-video-subtab-nav {
     display: flex;
@@ -144,26 +131,65 @@
 
 .wfm-video-plan-basesettings {
     display: grid;
-    grid-template-columns: repeat(3, 160px);
+    grid-template-columns: repeat(5, 150px);
     gap: 10px;
 }
 
-.wfm-video-plan-basesettings label {
+/* ── Plan: 2行目の追加設定(Width/Height/Turbo Mode/Strength/Steps/Prompt Enhance)。
+   basesettingsと同じ見た目だが、ワークフローによって対応する項目が変わる可変集合の
+   ため別クラスに分けている ── */
+.wfm-video-plan-extrasettings {
+    display: grid;
+    grid-template-columns: repeat(6, 130px);
+    gap: 10px;
+}
+
+.wfm-video-plan-basesettings label,
+.wfm-video-plan-extrasettings label {
     display: block;
     font-size: 12px;
     color: var(--wfm-text-secondary);
     margin-bottom: 4px;
 }
 
-/* タイムラインの下: ブロックエディタ(左、横並びの4カラム) + Run/Planタブ(右) */
+/* Noise Seed欄: 数値入力とRandomizeチェックボックスを1セル内で横並びにする */
+.wfm-video-seed-inline {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.wfm-video-seed-inline .wfm-input { flex: 1; min-width: 0; }
+
+.wfm-video-seed-randomize-inline {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    white-space: nowrap;
+    margin-bottom: 0;
+}
+
+/* Turbo Mode / Prompt Enhance欄: ラベル行の下にチェックボックスを1つだけ置く
+   (他のnumber/select欄と縦位置を揃えるため、input要素の高さを合わせる) */
+.wfm-video-checkbox-inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    font-size: 12px;
+    margin-bottom: 0;
+}
+
+/* タイムラインの下: ブロックエディタ(左、横並びの3カラム) + Run/Planタブ(右) */
 .wfm-video-plan-main-row {
     display: flex;
     gap: 16px;
     align-items: flex-start;
 }
 
-/* ── Plan: ブロックエディタ（選択中ブロックのFirst/Last Image・Prompt・Duration。
-   中央の広いエリアに配置されるため横並びの4カラムで表示する） ── */
+/* ── Plan: ブロックエディタ（選択中ブロックのFirst/Last Image・Prompt。Durationはtopbarの
+   basesettings行に移動済み。中央の広いエリアに配置されるため横並びの3カラムで表示する） ── */
 .wfm-video-block-editor {
     flex: 1;
     min-width: 0;
@@ -179,8 +205,7 @@
 }
 
 .wfm-video-block-first-col,
-.wfm-video-block-last-col,
-.wfm-video-block-duration-col {
+.wfm-video-block-last-col {
     width: 190px;
     flex: none;
     display: flex;

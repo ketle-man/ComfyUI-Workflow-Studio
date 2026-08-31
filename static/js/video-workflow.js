@@ -37,6 +37,12 @@ function _findInputByLabel(node, label) {
     return (node?.inputs || []).find((inp) => (inp.label || inp.name) === label) || null;
 }
 
+// noise_seedはLTX-2.5のText to Videoバリアントだけlabel="seed"を持つ(他は無label)ため、
+// 意味的ラベルではなくname自体（全バリアントで"noise_seed"に統一）で検索する。
+function _findInputByName(node, name) {
+    return (node?.inputs || []).find((inp) => inp.name === name) || null;
+}
+
 function _detectVideoSubgraph(workflow) {
     if (!Array.isArray(workflow?.nodes) || !Array.isArray(workflow?.links)) return null;
     const subgraphs = workflow.definitions?.subgraphs || [];
@@ -81,6 +87,22 @@ export function locateVideoModelNodes(workflow) {
 
     const widthSlot = instanceNode.inputs.indexOf(widthInput);
 
+    // ワークフローにより有無・意味が異なる任意項目。見つからなければ全て-1を返し、
+    // 呼び出し側(UI)はその項目を無効化・非ハイライトにする。
+    const heightInput = _findInputByLabel(instanceNode, "height");
+    const noiseSeedInput = _findInputByName(instanceNode, "noise_seed");
+    // MiniMax H3は"turbo_mode"、Wan2.2は"enable_turbo_mode" — 同じ意味のトグルをUI上は
+    // 1つのフィールドとして兼用するため、どちらか見つかった方を使う。
+    const turboModeInput = _findInputByLabel(instanceNode, "turbo_mode") || _findInputByLabel(instanceNode, "enable_turbo_mode");
+    const turboStrengthInput = _findInputByLabel(instanceNode, "turbo_model_strength");
+    const turboStepsInput = _findInputByLabel(instanceNode, "turbo_steps");
+    const promptEnhanceInput = _findInputByLabel(instanceNode, "prompt_enhance");
+    const noiseSeedIdx = _widgetIndexOf(instanceNode, noiseSeedInput);
+    const turboModeIdx = _widgetIndexOf(instanceNode, turboModeInput);
+    const turboStrengthIdx = _widgetIndexOf(instanceNode, turboStrengthInput);
+    const turboStepsIdx = _widgetIndexOf(instanceNode, turboStepsInput);
+    const promptEnhanceIdx = _widgetIndexOf(instanceNode, promptEnhanceInput);
+
     const findLinkedNode = (targetSlot) => {
         if (targetSlot === -1) return null;
         const link = workflow.links.find((l) => l[3] === instanceNode.id && l[4] === targetSlot);
@@ -108,9 +130,17 @@ export function locateVideoModelNodes(workflow) {
     const rawLastLoadImageNode = findLinkedNode(lastFrameSlot);
     const lastLoadImageNode = (rawLastLoadImageNode && rawLastLoadImageNode.type === "LoadImage") ? rawLastLoadImageNode : null;
 
+    // width/heightはResolutionSelectorがあればその出力に接続されており(widthSlotの
+    // link経由)、その場合は直接ウィジェット値を書き換えても実行時にリンク元の出力で
+    // 上書きされ意味がない。resolutionNodeがnullのワークフロー(LTX-2.5 First&Last-Frame,
+    // Wan2.2全種)でのみ、instanceNode自身のwidth/heightウィジェットを直接編集できる。
+    const widthIdx = resolutionNode ? -1 : _widgetIndexOf(instanceNode, widthInput);
+    const heightIdx = resolutionNode ? -1 : _widgetIndexOf(instanceNode, heightInput);
+
     return {
         family, sgDef, instanceNode, loadImageNode, lastLoadImageNode, resolutionNode,
         firstFrameSlot, lastFrameSlot, promptIdx, durationIdx,
+        widthIdx, heightIdx, noiseSeedIdx, turboModeIdx, turboStrengthIdx, turboStepsIdx, promptEnhanceIdx,
     };
 }
 
@@ -118,7 +148,10 @@ export function locateVideoModelNodes(workflow) {
 // (the Plan tab's first block, previously the single-shot form) can seed its
 // fields from whatever the workflow file already had.
 export function readTemplateDefaults(nodes) {
-    const { instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx } = nodes;
+    const {
+        instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx,
+        widthIdx, heightIdx, noiseSeedIdx, turboModeIdx, turboStrengthIdx, turboStepsIdx, promptEnhanceIdx,
+    } = nodes;
     const arIdx = widgetIndex(resolutionNode, "aspect_ratio");
     const mpIdx = widgetIndex(resolutionNode, "megapixels");
     const multIdx = widgetIndex(resolutionNode, "multiple");
@@ -133,6 +166,21 @@ export function readTemplateDefaults(nodes) {
         multiple: (resolutionNode && multIdx !== -1) ? resolutionNode.widgets_values[multIdx] : null,
         firstImageFilename: (loadImageNode && fnIdx !== -1) ? loadImageNode.widgets_values[fnIdx] : null,
         lastImageFilename: (lastLoadImageNode && lastFnIdx !== -1) ? lastLoadImageNode.widgets_values[lastFnIdx] : null,
+        // width/heightは resolutionNode がある場合は widthIdx/heightIdx が -1 になる
+        // (locateVideoModelNodes参照) ため、常にnullが返り直接入力欄は無効化される。
+        hasDirectResolution: widthIdx !== -1 && heightIdx !== -1,
+        width: widthIdx !== -1 ? instanceNode.widgets_values[widthIdx] : null,
+        height: heightIdx !== -1 ? instanceNode.widgets_values[heightIdx] : null,
+        hasNoiseSeed: noiseSeedIdx !== -1,
+        noiseSeed: noiseSeedIdx !== -1 ? instanceNode.widgets_values[noiseSeedIdx] : null,
+        hasTurboMode: turboModeIdx !== -1,
+        turboMode: turboModeIdx !== -1 ? instanceNode.widgets_values[turboModeIdx] : null,
+        hasTurboStrength: turboStrengthIdx !== -1,
+        turboStrength: turboStrengthIdx !== -1 ? instanceNode.widgets_values[turboStrengthIdx] : null,
+        hasTurboSteps: turboStepsIdx !== -1,
+        turboSteps: turboStepsIdx !== -1 ? instanceNode.widgets_values[turboStepsIdx] : null,
+        hasPromptEnhance: promptEnhanceIdx !== -1,
+        promptEnhance: promptEnhanceIdx !== -1 ? instanceNode.widgets_values[promptEnhanceIdx] : null,
     };
 }
 
@@ -182,7 +230,10 @@ export function injectFrameNode(clone, instanceNode, targetSlot, filename) {
 // both unset keeps the slot disconnected (bypassed) exactly like the
 // template's own clean state.
 export function applyBlockToWorkflow(clone, nodes, params) {
-    const { instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx, firstFrameSlot, lastFrameSlot } = nodes;
+    const {
+        instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx, firstFrameSlot, lastFrameSlot,
+        widthIdx, heightIdx, turboModeIdx, turboStrengthIdx, turboStepsIdx, promptEnhanceIdx,
+    } = nodes;
 
     instanceNode.widgets_values[promptIdx] = params.prompt || "";
     instanceNode.widgets_values[durationIdx] = params.duration;
@@ -193,6 +244,18 @@ export function applyBlockToWorkflow(clone, nodes, params) {
     if (arIdx !== -1) resolutionNode.widgets_values[arIdx] = params.aspectRatio;
     if (mpIdx !== -1) resolutionNode.widgets_values[mpIdx] = params.megapixels;
     if (multIdx !== -1) resolutionNode.widgets_values[multIdx] = params.multiple;
+
+    // widthIdx/heightIdxはresolutionNodeがあるワークフローでは-1固定(locateVideoModelNodes
+    // 参照)なので、そちらはaspect_ratio/megapixels/multiple経由の計算値のまま変更しない。
+    if (widthIdx !== -1 && params.width != null) instanceNode.widgets_values[widthIdx] = params.width;
+    if (heightIdx !== -1 && params.height != null) instanceNode.widgets_values[heightIdx] = params.height;
+    // noise_seedはここでは書かない — comfyUI.generate()がAPI変換後のワークフロー全体から
+    // "noise_seed"/"seed"キーを持つ全ノードを一括で上書きする(applySeedToWorkflow)ため、
+    // ここで書いてもその後必ず上書きされる。Plan全体のシード管理は引き続きそちら任せでよい。
+    if (turboModeIdx !== -1 && params.turboMode != null) instanceNode.widgets_values[turboModeIdx] = params.turboMode;
+    if (turboStrengthIdx !== -1 && params.turboStrength != null) instanceNode.widgets_values[turboStrengthIdx] = params.turboStrength;
+    if (turboStepsIdx !== -1 && params.turboSteps != null) instanceNode.widgets_values[turboStepsIdx] = params.turboSteps;
+    if (promptEnhanceIdx !== -1 && params.promptEnhance != null) instanceNode.widgets_values[promptEnhanceIdx] = params.promptEnhance;
 
     if (params.firstImageFilename) {
         if (loadImageNode) {
