@@ -2090,17 +2090,19 @@
 
                     <div class="wfm-help-page" id="wfm-help-page-video">
                         <h2 id="wfm-help-video-title">Video Tab</h2>
-                        <p id="wfm-help-video-desc">A dedicated video generation tab for MiniMax H3 (Image to Video), LTX-2.5 (Text / Image / First & Last Frame to Video), and Wan2.2 (Text to Video) workflows, independent of the GenerateUI tab.</p>
+                        <p id="wfm-help-video-desc">A dedicated video generation tab for MiniMax H3 (Image to Video), LTX-2.5 (Text / Image / First & Last Frame to Video), and Wan2.2 (Text to Video) workflows, independent of the GenerateUI tab. The center panel's Plan / Edit subtabs handle batch generation and (future) editing; the sidebar's Asset / Project subtabs handle browsing generated videos and saved plans.</p>
                         <div class="wfm-help-card">
                             <ul>
-                                <li id="wfm-help-video-1">Set first_frame (optional) / last_frame (optional) images, prompt, aspect_ratio / megapixels / multiple (resolution), duration (seconds), and noise_seed, then click Generate. Leaving first_frame empty runs the workflow text-only (bypassed), and workflows with no LoadImage node at all are also supported.</li>
-                                <li id="wfm-help-video-2">Model selection (UNet / CLIP / VAE / Audio VAE) is fixed to the loaded workflow's defaults and cannot be changed from this tab. For workflows with no ResolutionSelector node (e.g. Wan2.2), resolution also stays fixed to the loaded workflow's defaults and the Aspect Ratio / Megapixels / Multiple fields are disabled.</li>
-                                <li id="wfm-help-video-3">Use the "Load in Video" button in the Workflow tab's detail modal to load a workflow containing a MiniMax H3 Image-to-Video node, an LTX-2.5 Text/Image/First&Last-Frame-to-Video node, or a Wan2.2 Text-to-Video node. Unsupported workflows show an error instead.</li>
-                                <li id="wfm-help-video-4">Generated videos (mp4) can also be browsed and played back in the Gallery tab.</li>
-                                <li id="wfm-help-video-5">The Video Source panel next to the preview lets you drop or pick any local video (not just a generated one) to use the Frame/GIF tools below without running the loaded video workflow first; Clear resets it back to empty.</li>
+                                <li id="wfm-help-video-1">Plan subtab: set Aspect Ratio / Megapixels / Multiple as this plan's base settings, then split the timeline into blocks with the ＋ Split / ＋ Block / Delete buttons. Each block has its own Prompt, Duration (seconds), and First/Last Image — First Image can be None, an explicit image, or "use previous block's last frame" (an explicit Last Image on the previous block always wins over extracting one from its generated video). Click Run to generate every block in order; Pause/Cancel work mid-run.</li>
+                                <li id="wfm-help-video-2">A plan with a single block behaves exactly like the old one-shot form. Model selection (UNet / CLIP / VAE / Audio VAE) is fixed to the loaded workflow's defaults. For workflows with no ResolutionSelector node (e.g. Wan2.2), the workflow's own resolution is used as-is and the Aspect Ratio / Megapixels / Multiple fields are disabled.</li>
+                                <li id="wfm-help-video-3">Use the "Load in Video" button in the Workflow tab's detail modal to load a workflow containing a MiniMax H3 Image-to-Video node, an LTX-2.5 Text/Image/First&Last-Frame-to-Video node, or a Wan2.2 Text-to-Video node — this starts a fresh single-block plan seeded from the workflow's own current values. Unsupported workflows show an error instead.</li>
+                                <li id="wfm-help-video-4">Generated videos (mp4) automatically appear in the Asset subtab's Video Temp group, and can also be browsed and played back in the Gallery tab. Organizing keepers into Video Assets is entirely up to you, on your own schedule.</li>
+                                <li id="wfm-help-video-5">The center panel shows two previews: the left one shows either the video you select in the Asset subtab or whatever you drop/pick in the Video Source panel on its left (Clear resets it to empty), letting you use the Frame/GIF tools without running the loaded video workflow first; the right one always shows the most recently generated clip.</li>
                                 <li id="wfm-help-video-6">Frame tab (right panel): play/seek the preview video to the position you want, click Capture Frame to grab that frame client-side, then Save to Output to write it as a PNG into ComfyUI's output folder.</li>
                                 <li id="wfm-help-video-7">GIF tab (right panel): set Start/End (seconds), FPS, and an optional Max Width, then Convert to GIF — the server decodes the video and encodes an animated GIF into ComfyUI's output folder.</li>
-                                <li id="wfm-help-video-8">Highlight color: the Prompt / Duration / First Frame / Last Frame / Aspect Ratio / Megapixels / Multiple labels turn the same highlight color as the GenerateUI Model tab (customizable in the Settings tab) when the loaded workflow actually supports that field — e.g. for a Wan2.2 workflow (no ResolutionSelector node), the Aspect Ratio / Megapixels / Multiple labels stay unhighlighted since those fields are disabled.</li>
+                                <li id="wfm-help-video-8">Chaining: setting a block's First Image to "use previous block's last frame" continues smoothly from the previous clip — if that previous block has its own explicit Last Image, that image is used directly; otherwise the actual last frame of its generated video is extracted automatically.</li>
+                                <li id="wfm-help-video-9">Project tab (sidebar, next to Asset): browse every saved plan file (thumbnail, block count, last updated), click one to load it into the Plan editor, or delete it with the × button; clicking the same tab again collapses the panel.</li>
+                                <li id="wfm-help-video-10">Highlight color: the Prompt / Duration / First Image / Last Image / Aspect Ratio / Megapixels / Multiple labels turn the same highlight color as the GenerateUI Model tab (customizable in the Settings tab) when the loaded workflow actually supports that field — e.g. for a Wan2.2 workflow (no ResolutionSelector node), the Aspect Ratio / Megapixels / Multiple labels stay unhighlighted since those fields are disabled.</li>
                             </ul>
                         </div>
                         <button class="wfm-help-jump-btn wfm-btn wfm-btn-sm" data-jump-tab="video">Go to Video Tab</button>
@@ -2691,7 +2693,8 @@
             <div class="wfm-video-layout">
                 <div class="wfm-video-form-panel">
                     <div class="wfm-video-subtab-nav">
-                        <button type="button" class="wfm-video-subtab-btn" data-video-subtab="asset">Asset</button>
+                        <button type="button" class="wfm-video-subtab-btn" data-video-subtab="asset" id="wfm-video-subtab-btn-asset">Asset</button>
+                        <button type="button" class="wfm-video-subtab-btn" data-video-subtab="project" id="wfm-video-subtab-btn-project">Project</button>
                     </div>
 
                     <!-- Asset: このPlanが生成した動画の素材管理(Galleryのグループ機能を再利用) -->
@@ -2706,15 +2709,20 @@
                             <span class="wfm-placeholder">Select a video</span>
                         </div>
                     </div>
+
+                    <!-- Project: 保存済みVideo Plan一覧（クリックでPlanエディタへ読み込み） -->
+                    <div id="wfm-video-subtab-project" class="wfm-video-subtab-panel" data-video-subtab-panel="project" style="display:none;">
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <p class="wfm-video-prop-hint" id="wfm-video-project-hint" style="flex:1;margin:0;">Saved plans</p>
+                            <button type="button" id="wfm-video-project-refresh" class="wfm-btn wfm-btn-sm" title="Refresh">↻</button>
+                        </div>
+                        <div class="wfm-video-project-list" id="wfm-video-project-list"></div>
+                    </div>
                 </div>
                 <!-- 中央ペイン: プレビュー(常時表示) + Plan/Editタブ(バッチ生成編集・将来の動画編集機能)。
                      左のAssetサブタブ切替とは独立して常に表示される -->
                 <div class="wfm-video-center-panel">
                     <div class="wfm-video-preview-row">
-                        <div class="wfm-video-preview-frame" id="wfm-video-preview-frame">
-                            <span class="wfm-placeholder" id="wfm-video-preview-placeholder">No video</span>
-                            <video id="wfm-video-preview-video" class="wfm-video-preview-el" controls style="display:none;"></video>
-                        </div>
                         <div class="wfm-video-source-panel">
                             <div class="wfm-video-pane-header" id="wfm-video-source-label">Video Source</div>
                             <p class="wfm-video-prop-hint" id="wfm-video-source-hint">Load any video here to use Frame/GIF tools without generating one.</p>
@@ -2729,6 +2737,14 @@
                                 <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-source-clear">Clear</button>
                             </div>
                         </div>
+                        <div class="wfm-video-preview-frame" id="wfm-video-source-preview-frame">
+                            <span class="wfm-placeholder" id="wfm-video-source-preview-placeholder">Asset / Source Preview</span>
+                            <video id="wfm-video-source-preview-video" class="wfm-video-preview-el" controls style="display:none;"></video>
+                        </div>
+                        <div class="wfm-video-preview-frame" id="wfm-video-preview-frame">
+                            <span class="wfm-placeholder" id="wfm-video-preview-placeholder">Generated Video Preview</span>
+                            <video id="wfm-video-preview-video" class="wfm-video-preview-el" controls style="display:none;"></video>
+                        </div>
                     </div>
 
                     <div class="wfm-video-subtab-nav wfm-video-center-subtab-nav">
@@ -2739,22 +2755,24 @@
                     <!-- Plan: バッチ動画生成のタイムライン編集・実行(中央下部、Planタブ選択時のみ表示) -->
                     <div id="wfm-video-plan-content" class="wfm-video-subtab-panel wfm-video-plan-content" data-video-subtab-panel="plan">
                         <div class="wfm-video-plan-topbar">
-                            <span id="wfm-video-wf-name" class="wfm-video-wf-name">No workflow loaded</span>
-                            <div class="wfm-lab-plan-workflow-row" id="wfm-video-plan-workflow-row" style="display:none;">
-                                <span id="wfm-video-plan-workflow-name" class="wfm-lab-plan-workflow-name"></span>
-                                <button type="button" id="wfm-video-plan-workflow-load-btn" class="wfm-btn wfm-btn-xs" title="Load this plan's recorded workflow">Open Workflow</button>
+                            <div class="wfm-video-wf-row">
+                                <span id="wfm-video-wf-name" class="wfm-video-wf-name">No workflow loaded</span>
+                                <div class="wfm-lab-plan-workflow-row" id="wfm-video-plan-workflow-row" style="display:none;">
+                                    <span id="wfm-video-plan-workflow-name" class="wfm-lab-plan-workflow-name"></span>
+                                    <button type="button" id="wfm-video-plan-workflow-load-btn" class="wfm-btn wfm-btn-xs" title="Load this plan's recorded workflow">Open Workflow</button>
+                                </div>
                             </div>
                             <div class="wfm-video-plan-basesettings">
                                 <div>
-                                    <label for="wfm-video-plan-aspect-ratio">Aspect Ratio</label>
+                                    <label for="wfm-video-plan-aspect-ratio" id="wfm-video-plan-aspect-ratio-label">Aspect Ratio</label>
                                     <select id="wfm-video-plan-aspect-ratio" class="wfm-input"></select>
                                 </div>
                                 <div>
-                                    <label for="wfm-video-plan-megapixels">Megapixels</label>
+                                    <label for="wfm-video-plan-megapixels" id="wfm-video-plan-megapixels-label">Megapixels</label>
                                     <input type="number" id="wfm-video-plan-megapixels" class="wfm-input" step="0.01" min="0.01" value="0.2">
                                 </div>
                                 <div>
-                                    <label for="wfm-video-plan-multiple">Multiple</label>
+                                    <label for="wfm-video-plan-multiple" id="wfm-video-plan-multiple-label">Multiple</label>
                                     <input type="number" id="wfm-video-plan-multiple" class="wfm-input" step="8" min="8" value="32">
                                 </div>
                             </div>

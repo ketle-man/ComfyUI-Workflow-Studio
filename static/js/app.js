@@ -736,6 +736,7 @@ function applyI18nToHtml() {
         "wfm-help-video-3": "helpVideo3", "wfm-help-video-4": "helpVideo4",
         "wfm-help-video-5": "helpVideo5", "wfm-help-video-6": "helpVideo6",
         "wfm-help-video-7": "helpVideo7", "wfm-help-video-8": "helpVideo8",
+        "wfm-help-video-9": "helpVideo9", "wfm-help-video-10": "helpVideo10",
     };
     for (const [id, key] of Object.entries(helpIdMap)) {
         const el = document.getElementById(id);

@@ -16,25 +16,22 @@ import { comfyUI } from "./comfyui-client.js";
 import { applyStoredVideoVolume } from "./settings-tab.js";
 import { initVideoPlanTab, loadWorkflowIntoVideoEditor } from "./video-plan-tab.js";
 import { initVideoAssetTab, refreshVideoAssetTab } from "./video-asset-tab.js";
+import { initVideoProjectTab, refreshVideoProjectTab } from "./video-project-tab.js";
+import {
+    setSourcePreview, getActivePreviewSource, updateActivePreviewSourceRef,
+    getActivePreviewVideoElement, getAllPreviewVideoElements,
+} from "./video-preview.js";
 
 export { loadWorkflowIntoVideoEditor };
 
-const state = {
-    // Whatever's currently shown in the center preview frame — a just-generated
-    // result, or a video dropped/picked in the Video Source panel. Used by the
-    // Frame/GIF property tabs so they work on any video, not just generated ones.
-    // { kind: "output"|"input", filename, subfolder, type } for anything already on
-    // the server, or { kind: "local", file } for a picked file not yet uploaded.
-    previewSource: null,
-};
-
 // ============================================
 // Subtab switching — two INDEPENDENT groups sharing the same .wfm-video-subtab-*
-// look, kept deliberately uncoupled: the sidebar's lone Asset button just
-// shows/hides its own panel, while the center Plan/Edit pair is its own
-// exclusive 2-way tab. Querying each scoped to its own container (rather than
-// one global querySelectorAll) is what keeps clicking one from affecting the
-// other.
+// look, kept deliberately uncoupled: the sidebar's Asset/Project pair collapses
+// entirely when re-clicked (nothing needs to always be visible there — Video
+// Source covers the "load something to work with" case), while the center
+// Plan/Edit pair is a "always exactly one visible" 2-way tab. Querying each
+// scoped to its own container (rather than one global querySelectorAll) is
+// what keeps clicking one from affecting the other.
 // ============================================
 
 function _initCenterSubtabToggle() {
@@ -52,19 +49,27 @@ function _initCenterSubtabToggle() {
     });
 }
 
-// The sidebar currently holds only "Asset" (Plan/Edit moved to the center
-// panel — see above), so it behaves as a simple show/hide toggle rather than
-// an N-way exclusive tab: there's nothing else in its group to switch to.
-function _initAssetToggle() {
+// Sidebar Asset/Project pair: clicking a button shows its panel and hides the
+// other; clicking the already-active button collapses it (both panels hidden),
+// letting the video preview reclaim the sidebar's width when neither is needed.
+function _initSidebarSubtabToggle() {
     const sidebar = document.querySelector(".wfm-video-form-panel");
-    const btn = sidebar?.querySelector(".wfm-video-subtab-btn");
-    const panel = document.getElementById("wfm-video-subtab-asset");
-    if (!btn || !panel) return;
-    btn.addEventListener("click", () => {
-        const willShow = panel.style.display === "none";
-        panel.style.display = willShow ? "" : "none";
-        btn.classList.toggle("active", willShow);
-        if (willShow) refreshVideoAssetTab();
+    if (!sidebar) return;
+    const buttons = sidebar.querySelectorAll(".wfm-video-subtab-btn");
+    buttons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const target = btn.dataset.videoSubtab;
+            const panel = document.getElementById(`wfm-video-subtab-${target}`);
+            const willShow = !!panel && panel.style.display === "none";
+            buttons.forEach((b) => b.classList.remove("active"));
+            sidebar.querySelectorAll(".wfm-video-subtab-panel").forEach((p) => { p.style.display = "none"; });
+            if (willShow) {
+                btn.classList.add("active");
+                panel.style.display = "";
+                if (target === "asset") refreshVideoAssetTab();
+                else if (target === "project") refreshVideoProjectTab();
+            }
+        });
     });
 }
 
@@ -90,41 +95,6 @@ function _wireDropZone(dropZoneId, fileInputId, onFile) {
 }
 
 // ============================================
-// 結果表示
-// ============================================
-
-// Sets (or clears) the center preview frame's video and records where it came from —
-// `source` is what the Frame/GIF property tabs act on (see state.previewSource above).
-// Revokes the previous blob: URL (if any) so picking a series of local files doesn't
-// leak memory.
-let _previewObjectUrl = null;
-
-function _setPreviewMedia(url, source) {
-    state.previewSource = source;
-    const video = document.getElementById("wfm-video-preview-video");
-    const placeholder = document.getElementById("wfm-video-preview-placeholder");
-    if (!video || !placeholder) return;
-
-    if (_previewObjectUrl) {
-        URL.revokeObjectURL(_previewObjectUrl);
-        _previewObjectUrl = null;
-    }
-    if (url && url.startsWith("blob:")) _previewObjectUrl = url;
-
-    if (url) {
-        video.src = url;
-        video.style.display = "block";
-        placeholder.style.display = "none";
-    } else {
-        video.pause();
-        video.removeAttribute("src");
-        video.load();
-        video.style.display = "none";
-        placeholder.style.display = "";
-    }
-}
-
-// ============================================
 // i18nの適用（app.jsのapplyI18nToHtml()と同じ「個別要素にt()を適用」方式）
 // ============================================
 
@@ -138,9 +108,12 @@ function _applyVideoI18n() {
     setText("wfm-video-source-hint", "videoSourceHint");
     setText("wfm-video-source-drop-label", "videoSourceDropLabel");
     setText("wfm-video-source-clear", "clear");
-    setText("wfm-video-preview-placeholder", "videoNoVideo");
+    setText("wfm-video-source-preview-placeholder", "videoSourcePreviewPlaceholder");
+    setText("wfm-video-preview-placeholder", "videoResultPreviewPlaceholder");
     setText("wfm-video-prop-tab-frame", "videoPropFrame");
     setText("wfm-video-prop-tab-gif", "videoPropGif");
+    setText("wfm-video-subtab-btn-project", "videoPropProject");
+    setText("wfm-video-project-hint", "videoProjectHint");
     setText("wfm-video-frame-hint", "videoFrameHint");
     setText("wfm-video-frame-capture-btn", "videoCaptureFrame");
     setText("wfm-video-frame-save-btn", "videoSaveToOutput");
@@ -160,12 +133,12 @@ function _wireVideoSourcePanel() {
     _wireDropZone("wfm-video-source-drop", "wfm-video-source-file", (file) => {
         if (!file.type.startsWith("video/")) return;
         const statusEl = document.getElementById("wfm-video-source-status");
-        _setPreviewMedia(URL.createObjectURL(file), { kind: "local", file });
+        setSourcePreview(URL.createObjectURL(file), { kind: "local", file });
         if (statusEl) { statusEl.textContent = file.name; statusEl.style.color = ""; }
     });
 
     document.getElementById("wfm-video-source-clear")?.addEventListener("click", () => {
-        _setPreviewMedia(null, null);
+        setSourcePreview(null, null);
         const statusEl = document.getElementById("wfm-video-source-status");
         if (statusEl) statusEl.textContent = "";
         const fileInput = document.getElementById("wfm-video-source-file");
@@ -215,7 +188,7 @@ function _initFrameTab() {
     const statusEl = document.getElementById("wfm-video-frame-status");
 
     captureBtn?.addEventListener("click", () => {
-        const video = document.getElementById("wfm-video-preview-video");
+        const video = getActivePreviewVideoElement();
         if (!video || video.style.display === "none" || !video.videoWidth) {
             showToast(t("videoNoSourceLoaded"), "error");
             return;
@@ -277,7 +250,7 @@ function _initGifTab() {
     const statusEl = document.getElementById("wfm-video-gif-status");
 
     convertBtn?.addEventListener("click", async () => {
-        if (!state.previewSource) {
+        if (!getActivePreviewSource()) {
             showToast(t("videoNoSourceLoaded"), "error");
             return;
         }
@@ -287,12 +260,12 @@ function _initGifTab() {
         if (progressText) progressText.textContent = "Uploading...";
 
         try {
-            let ref = state.previewSource;
+            let ref = getActivePreviewSource();
             if (ref.kind === "local") {
                 const result = await comfyUI.uploadImage(ref.file, ref.file.name);
                 ref = { kind: "input", filename: result.name, subfolder: result.subfolder || "", type: "input" };
                 // Cache the uploaded reference so a repeat conversion doesn't re-upload.
-                state.previewSource = ref;
+                updateActivePreviewSourceRef(ref);
             }
 
             const start = Number(document.getElementById("wfm-video-gif-start")?.value) || 0;
@@ -344,9 +317,10 @@ function _initGifTab() {
 export function initVideoTab() {
     _applyVideoI18n();
     _initCenterSubtabToggle();
-    _initAssetToggle();
+    _initSidebarSubtabToggle();
     initVideoPlanTab();
     initVideoAssetTab();
+    initVideoProjectTab();
 
     _wireVideoSourcePanel();
     _initPropTabs();
@@ -354,6 +328,7 @@ export function initVideoTab() {
     _initGifTab();
 
     // 保存済みの音量を適用し、以降ユーザーがネイティブコントロールで変更した音量も
-    // 自動保存する（要素自体は永続的なので初期化時に一度呼べば十分）。
-    applyStoredVideoVolume(document.getElementById("wfm-video-preview-video"));
+    // 自動保存する（要素自体は永続的なので初期化時に一度呼べば十分）。両方のプレビュー
+    // ペイン(Asset/Source用・生成結果用)の<video>要素に適用する。
+    getAllPreviewVideoElements().forEach((video) => applyStoredVideoVolume(video));
 }

@@ -46,11 +46,11 @@ const API = {
 };
 
 export const FEEDER_GROUP = "__Feeder__";
-export const VIDEO_GROUP = "__VideoAssets__";
-// Video Planを名前を付けて保存していない状態で生成した動画の一時置き場。
-// __VideoAssets__(ユーザーが手動でキュレーションする素材グループ)とは異なり、
-// 未保存Planの生成物置き場として自動的に追加される作業用グループ。
-export const VTEMP_GROUP = "__vtemp__";
+export const VIDEO_GROUP = "__Video Assets__";
+// Video Planを実行するたびに生成された動画が自動的に追加される作業用グループ
+// （Plan保存の有無に関わらず常にここへ入る）。__Video Assets__（ユーザーが手動で
+// キュレーションする素材グループ）への整理はユーザー任意のタイミングで行う。
+export const VTEMP_GROUP = "__Video Temp__";
 
 const _RESERVED_GROUPS = [FEEDER_GROUP, VIDEO_GROUP, VTEMP_GROUP];
 function _isReservedGroup(name) {
@@ -1151,17 +1151,26 @@ export async function ensureFeederGroup() {
     }
 }
 
-/** __VideoAssets__グループが存在しない場合に作成する。add_to_groupは対象グループが
- * レジストリに登録されているかを確認せず画像側にグループ名を書き込むだけのため、
- * 一度レジストリから消える(例: 予約保護が効く前の版で削除された)と、以後の手動追加は
+/** __Video Assets__ と __Video Temp__ の両方が存在しない場合に作成する。add_to_groupは
+ * 対象グループがレジストリに登録されているかを確認せず画像側にグループ名を書き込むだけの
+ * ため、一度レジストリから消える(例: 予約保護が効く前の版で削除された)と、以後の手動追加は
  * 画像には記録されてもグループ一覧・フィルタには一切出てこなくなる。VideoタブのAsset
- * タブ初期化時に呼び、レジストリを確実に存在させる。 */
+ * タブ初期化時に呼び、レジストリを確実に存在させる。
+ * （__Video Temp__側もここでensureする — 以前はensureVideoGroupがVIDEO_GROUPしか
+ * 保証しておらず、__Video Temp__のレジストリが何らかの理由で消えると誰も復活させられない
+ * バグがあった。バッチRun開始時のensure（video-plan-tab.jsの_ensureVideoAssetGroups）は
+ * Runするまで呼ばれないため、それだけでは不十分。） */
 export async function ensureVideoGroup() {
     try {
         await fetch(API.groupEnsure, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: VIDEO_GROUP }),
+        });
+        await fetch(API.groupEnsure, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: VTEMP_GROUP }),
         });
         await loadGroups();
     } catch (e) {
@@ -1183,7 +1192,7 @@ async function clearFeederGroup() {
     }
 }
 
-/** __vtemp__グループ内の全画像を除外する（詳細パネルのVtCボタン） */
+/** __Video Temp__グループ内の全画像を除外する（詳細パネルの「Clear __Video Temp__」ボタン） */
 async function clearVtempGroup() {
     try {
         await fetch(API.groupClear(VTEMP_GROUP), { method: "POST" });
@@ -1284,7 +1293,7 @@ function renderDetailGroup(img) {
                     <button class="wfm-btn wfm-btn-sm wfm-btn-danger" id="wfm-gallery-grp-delete-btn"
                         ${allGroups.length === 0 || _isReservedGroup(allGroups[0]) ? "disabled" : ""} title="${t("modelsDelete")}">&times;</button>
                 </div>
-                <button class="wfm-btn wfm-btn-sm" id="wfm-gallery-vtemp-clear-btn" style="width:100%;margin-top:6px;" title="Clear the __vtemp__ group (auto-populated by unsaved Video Plan runs)">VtC — Clear __vtemp__</button>
+                <button class="wfm-btn wfm-btn-sm" id="wfm-gallery-vtemp-clear-btn" style="width:100%;margin-top:6px;" title="${t("vtempClearBtnTitle")}">${t("vtempClearBtnLabel")}</button>
             </div>
         </div>
     `;
@@ -1363,7 +1372,7 @@ function renderDetailGroup(img) {
         }
     });
 
-    // 管理セレクト変更時: 予約グループ(__Feeder__/__VideoAssets__/__vtemp__)は rename/delete を無効化
+    // 管理セレクト変更時: 予約グループ(__Feeder__/__Video Assets__/__Video Temp__)は rename/delete を無効化
     el.querySelector("#wfm-gallery-grp-manage-sel")?.addEventListener("change", (e) => {
         const isReserved = _isReservedGroup(e.target.value);
         const renameBtn = el.querySelector("#wfm-gallery-grp-rename-btn");
@@ -1372,7 +1381,7 @@ function renderDetailGroup(img) {
         if (deleteBtn) deleteBtn.disabled = isReserved;
     });
 
-    // VtC ボタン: __vtemp__ グループをクリア(未保存Video Planの生成物置き場)
+    // Clear __Video Temp__ ボタン: __Video Temp__ グループをクリア(Video Plan実行時に自動登録される生成物置き場)
     el.querySelector("#wfm-gallery-vtemp-clear-btn")?.addEventListener("click", clearVtempGroup);
 
     // グループ名変更

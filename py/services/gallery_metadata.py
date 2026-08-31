@@ -53,13 +53,35 @@ class GalleryMetadataStore:
                 }
             except Exception as e:
                 logger.warning("GalleryMetadataStore: load error: %s", e)
+                # 破損ファイルをリネームしてバックアップしておく。ここでリネームせずに
+                # 空の self._data のまま次の save() が走ると、破損直前までの全メタデータ
+                # (タグ/メモ/グループ登録)が跡形もなく上書きされ、二度と復元できなくなる
+                # (実際に発生した不具合: _save_to_disk が非アトミック書き込みだったため、
+                # 大量画像フォルダのBGインデックス処理中の頻繁な保存とComfyUIの終了タイミング
+                # が重なるとファイルが不完全な状態のまま残ることがあった — _save_to_disk側は
+                # os.replace()によるアトミック書き込みに修正済みだが、過去に壊れたファイルや
+                # 他要因による破損に備えてここでも保護しておく)。
+                try:
+                    backup_path = self.file_path.with_name(self.file_path.name + ".corrupt")
+                    self.file_path.replace(backup_path)
+                    logger.warning("GalleryMetadataStore: corrupt file backed up to %s", backup_path)
+                except Exception as backup_err:
+                    logger.warning("GalleryMetadataStore: failed to back up corrupt file: %s", backup_err)
 
     def _save_to_disk(self):
-        # 呼び出し元（save/create_group等）が既にself._lockを保持している前提の内部メソッド
+        # 呼び出し元（save/create_group等）が既にself._lockを保持している前提の内部メソッド。
+        # 一時ファイルに書き出してから置き換える(os.replace相当のPath.replace)ことで書き込みを
+        # アトミックにする。素朴な open(path, "w") での直接上書きだと、書き込み完了前に他プロセス
+        # が読むと不完全なJSONを掴む(torn read)うえ、書き込み中にComfyUIプロセスが終了すると
+        # ファイルが壊れたまま残る — 大量画像フォルダのBGインデックス処理(10枚ごとに保存)で
+        # 書き込み頻度が高い環境ほど発生しやすく、次回起動時のロード失敗→空データでの
+        # 全上書きという形でユーザーの登録済みグループ/タグ/メモが消失する原因になっていた。
         try:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.file_path, "w", encoding="utf-8") as f:
+            tmp_path = self.file_path.with_name(self.file_path.name + ".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, ensure_ascii=False, indent=2)
+            tmp_path.replace(self.file_path)
             return True
         except Exception as e:
             logger.error("GalleryMetadataStore: save error: %s", e)

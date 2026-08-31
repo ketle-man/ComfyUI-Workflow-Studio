@@ -26,7 +26,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.5.4-green)
+![Version](https://img.shields.io/badge/version-0.5.5-green)
 
 ## Features (tab -> feature names)
 
@@ -75,8 +75,8 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 ### Image Edit Tab (v0.3.65)
 Layer-based image editor, Loading images, New button, Tools, Layer panel, Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
 
-### Video Tab (v0.5.0 – v0.5.4)
-Dedicated video generation UI, independent of GenerateUI, 3-pane layout, First Frame / Last Frame are both optional, Semantic node lookup, not hardcoded IDs, Field highlight color, Load in Video, Preview frame + Video Source panel, Frame tab, GIF tab, Playback volume
+### Video Tab (v0.5.0 – v0.5.5)
+Dedicated video generation UI, independent of GenerateUI, Plan / Edit subtabs, Asset / Project subtabs, Two center previews, First Frame / Last Frame are both optional, Semantic node lookup, not hardcoded IDs, Field highlight color, Load in Video, Frame tab, GIF tab, Playback volume
 
 ### AI TOOL Tab (v0.3.14)
 4-pane layout, Translation pane, Chat pane, Chat pane — image generation via Tool Calling, Chat pane — generate_image extra parameters, TOOLS pane (VLM), TOOLS pane — shared Chat attachment, TOOLS pane (Wildcards), Chat pane — image-to-image (I2I), Chat pane — SVG generation, no ComfyUI workflow involved, Chat pane — Skills, Settings pane, Unsloth backend, Settings pane — Chat Image Generation, Settings pane — Chat I2I Generation, Settings pane — Generation, Model unload, Settings shared, Backend support, URL security, Lemonade's other endpoints (not integrated)

@@ -131,6 +131,17 @@
     gap: 8px;
 }
 
+/* 現在ロード中のワークフロー名 + Planに記録されたワークフローのOpen Workflow行を
+   同じ1行にまとめる（以前は縦に2行だった）。 */
+.wfm-video-wf-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.wfm-video-wf-row .wfm-lab-plan-workflow-row { margin-top: 0; }
+
 .wfm-video-plan-basesettings {
     display: grid;
     grid-template-columns: repeat(3, 160px);
@@ -288,13 +299,6 @@
     color: var(--wfm-text-secondary);
 }
 
-.wfm-video-asset-preview {
-    width: 100%;
-    max-height: 200px;
-    border-radius: 4px;
-    background: #000;
-}
-
 .wfm-video-asset-name {
     font-size: 12px;
     font-weight: 600;
@@ -341,8 +345,9 @@
     border-right: 1px solid var(--wfm-border);
 }
 
-/* 生成結果 or ソース選択エリアで読み込んだ動画を横並びで表示する行。
-   プレビュー枠が主役、ソースパネルは選択UIのみの固定幅。 */
+/* 3カラム構成: 左=Video Source選択UI(固定幅) / 中央=Asset選択・Sourceドロップ兼用
+   プレビュー / 右=生成結果専用プレビュー。.wfm-video-preview-frameは共通クラスなので
+   両プレビュー枠とも自動的にflex:1で均等幅になる。 */
 .wfm-video-preview-row {
     flex: none;
     display: flex;
@@ -360,6 +365,7 @@
     border: 1px dashed var(--wfm-border);
     border-radius: 6px;
     background: var(--wfm-bg-hover, #111);
+    text-align: center;
 }
 
 .wfm-video-preview-el {
@@ -435,3 +441,70 @@
     flex-direction: column;
     gap: 6px;
 }
+
+/* ── 左ペイン Project サブタブ: 保存済みPlan一覧 ── */
+.wfm-video-project-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.wfm-video-project-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    border: 1px solid var(--wfm-border);
+    border-radius: 4px;
+    padding: 6px;
+    cursor: pointer;
+}
+
+.wfm-video-project-item:hover { border-color: var(--wfm-primary); }
+.wfm-video-project-item.active { outline: 2px solid var(--wfm-primary); outline-offset: -2px; }
+
+.wfm-video-project-item-thumb {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    object-fit: cover;
+    border-radius: 3px;
+    background: var(--wfm-bg-hover, #111);
+}
+
+.wfm-video-project-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.wfm-video-project-item-name {
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wfm-video-project-item-meta {
+    font-size: 10px;
+    color: var(--wfm-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wfm-video-project-item-delete {
+    flex: none;
+    background: none;
+    border: none;
+    color: var(--wfm-text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+}
+
+.wfm-video-project-item-delete:hover { color: var(--wfm-danger); }

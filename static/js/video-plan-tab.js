@@ -24,6 +24,7 @@ import { readAllPNGTextChunks } from "./metadata-tab.js";
 import { isVideoFilename, extractLastFrameBlob } from "./video-utils.js";
 import { locateVideoModelNodes, readTemplateDefaults, applyBlockToWorkflow } from "./video-workflow.js";
 import { VTEMP_GROUP } from "./gallery-tab.js";
+import { setResultPreview } from "./video-preview.js";
 
 const VIDEO_BLOCK_COLORS = ["#4caf7d", "#3b4b8a", "#8e5cd9", "#e0c341", "#4ac0d9", "#9ad14b", "#e08a3c", "#d9527a"];
 const VIDEO_PLAN_PREFIX = "ws_videoplan_";
@@ -140,6 +141,42 @@ function _initTimelineControls() {
 // Block editor (First/Last image, Prompt, Duration, color)
 // ============================================
 
+// Mirrors the "field matches the loaded workflow" highlight GenerateUI's Model tab
+// uses (wfm-model-label-active, color customizable in Settings) — carried over from
+// the pre-Plan/Asset/Edit single-shot form, where it lived directly in video-tab.js.
+// First/Last Image/Prompt/Duration labels get re-created every block switch
+// (_renderBlockEditor rebuilds the whole editor's innerHTML), so this must be
+// re-applied there too, not just once on workflow load.
+const _FIELD_LABEL_IDS = [
+    "wfm-video-block-prompt-label",
+    "wfm-video-block-duration-label",
+    "wfm-video-block-first-label",
+    "wfm-video-block-last-label",
+    "wfm-video-plan-aspect-ratio-label",
+    "wfm-video-plan-megapixels-label",
+    "wfm-video-plan-multiple-label",
+];
+
+function _setFieldActive(id, active) {
+    document.getElementById(id)?.classList.toggle("wfm-model-label-active", !!active);
+}
+
+function _updateFieldHighlights() {
+    const nodes = _templateWorkflow ? locateVideoModelNodes(_templateWorkflow) : null;
+    if (!nodes) {
+        _FIELD_LABEL_IDS.forEach((id) => _setFieldActive(id, false));
+        return;
+    }
+    const hasResolution = !!nodes.resolutionNode;
+    _setFieldActive("wfm-video-block-prompt-label", true);
+    _setFieldActive("wfm-video-block-duration-label", true);
+    _setFieldActive("wfm-video-block-first-label", nodes.firstFrameSlot !== -1);
+    _setFieldActive("wfm-video-block-last-label", nodes.lastFrameSlot !== -1);
+    _setFieldActive("wfm-video-plan-aspect-ratio-label", hasResolution);
+    _setFieldActive("wfm-video-plan-megapixels-label", hasResolution);
+    _setFieldActive("wfm-video-plan-multiple-label", hasResolution);
+}
+
 function _frameFieldHtml(which, filename) {
     const previewStyle = filename ? "" : "display:none;";
     const previewSrc = filename ? `${comfyUI.baseUrl}/view?filename=${encodeURIComponent(filename)}&type=input` : "";
@@ -163,7 +200,7 @@ function _frameFieldHtml(which, filename) {
 function _blockEditorHtml(block, isFirstBlock) {
     return `
         <div class="wfm-video-block-col wfm-video-block-first-col">
-            <label>First Image</label>
+            <label id="wfm-video-block-first-label">First Image</label>
             <select id="wfm-video-block-first-mode" class="wfm-input">
                 <option value="none" ${block.first_image_mode === "none" ? "selected" : ""}>None</option>
                 <option value="explicit" ${block.first_image_mode === "explicit" ? "selected" : ""}>Specify image</option>
@@ -175,12 +212,12 @@ function _blockEditorHtml(block, isFirstBlock) {
         </div>
 
         <div class="wfm-video-block-col wfm-video-block-last-col">
-            <label>Last Image (optional)</label>
+            <label id="wfm-video-block-last-label">Last Image (optional)</label>
             ${_frameFieldHtml("last", block.last_image_filename)}
         </div>
 
         <div class="wfm-video-block-col wfm-video-block-prompt-col">
-            <label>Prompt</label>
+            <label id="wfm-video-block-prompt-label">Prompt</label>
             <textarea id="wfm-video-block-prompt" class="wfm-textarea" rows="8">${escapeHtml(block.prompt || "")}</textarea>
         </div>
 
@@ -189,7 +226,7 @@ function _blockEditorHtml(block, isFirstBlock) {
                 <span class="wfm-video-color-swatch" style="background:${escapeHtml(block.color)}"></span>
                 <span>color</span>
             </div>
-            <label>Duration (seconds)</label>
+            <label id="wfm-video-block-duration-label">Duration (seconds)</label>
             <input type="number" id="wfm-video-block-duration" class="wfm-input" step="0.5" min="0.5" value="${block.duration}">
         </div>
     `;
@@ -271,6 +308,8 @@ function _renderBlockEditor() {
         e.target.value = block.duration;
         _renderTimeline();
     });
+
+    _updateFieldHighlights();
 }
 
 // ============================================
@@ -396,6 +435,7 @@ async function _loadPlanWorkflow() {
         _templateFilename = filename;
         const nameEl = document.getElementById("wfm-video-wf-name");
         if (nameEl) nameEl.textContent = filename;
+        _updateFieldHighlights();
         showToast(t("videoWorkflowLoaded", filename), "success");
     } catch (err) {
         showToast(`${t("videoWorkflowLoadFailed")}: ${err.message}`, "error");
@@ -416,31 +456,24 @@ async function _fetchOutputDir() {
     } catch { /* non-critical */ }
 }
 
-function _currentPlanName() {
-    return _plan.planFilename ? _stripVideoPlanPrefix(_plan.planFilename.replace(/\.json$/i, "")) : "";
-}
-
-// __VideoAssets__ is a manually-curated group (users add things to it via
-// Gallery themselves) — a batch run never writes to it directly. What a run's
-// own output lands in instead: the plan's own VideoPlan:<name> group once the
-// plan has been saved, or __vtemp__ (a reserved, auto-managed scratch group,
-// cleared via the "VtC" button in Gallery's detail pane) while it hasn't.
-function _targetGroupName() {
-    const planName = _currentPlanName();
-    return planName ? `VideoPlan:${planName}` : VTEMP_GROUP;
-}
-
+// __Video Assets__ is a manually-curated group (users add things to it via
+// Gallery themselves) — a batch run never writes to it directly. Every run's
+// own output lands in __Video Temp__ instead (a reserved, auto-managed scratch
+// group, cleared via the "Clear __Video Temp__" button in Gallery's detail
+// pane), regardless of whether the plan itself has been saved — organizing a
+// run's output into __Video Assets__ is left entirely to the user, on their
+// own schedule (previously this auto-filed into a per-plan "VideoPlan:<name>"
+// group instead, which was removed since users found manual curation simpler).
 async function _ensureVideoAssetGroups() {
-    const group = _targetGroupName();
     try {
         const res = await fetch("/wfm/gallery/groups/ensure", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: group }),
+            body: JSON.stringify({ name: VTEMP_GROUP }),
         });
-        if (!res.ok) console.warn(`[VideoPlan] ensure group "${group}" failed: HTTP ${res.status}`);
+        if (!res.ok) console.warn(`[VideoPlan] ensure group "${VTEMP_GROUP}" failed: HTTP ${res.status}`);
     } catch (err) {
-        console.warn(`[VideoPlan] ensure group "${group}" error:`, err);
+        console.warn(`[VideoPlan] ensure group "${VTEMP_GROUP}" error:`, err);
     }
 }
 
@@ -450,7 +483,6 @@ async function _addOutputsToVideoGroups(images) {
         console.warn("[VideoPlan] output dir unknown — skipping group tagging for", images);
         return;
     }
-    const group = _targetGroupName();
     for (const img of images) {
         if (img.type !== "output") continue;
         const parts = [_outputDir];
@@ -458,12 +490,12 @@ async function _addOutputsToVideoGroups(images) {
         parts.push(img.filename);
         const path = parts.join("/");
         try {
-            const res = await fetch(`/wfm/gallery/groups/${encodeURIComponent(group)}/add`, {
+            const res = await fetch(`/wfm/gallery/groups/${encodeURIComponent(VTEMP_GROUP)}/add`, {
                 method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }),
             });
-            if (!res.ok) console.warn(`[VideoPlan] add "${path}" to "${group}" failed: HTTP ${res.status}`);
+            if (!res.ok) console.warn(`[VideoPlan] add "${path}" to "${VTEMP_GROUP}" failed: HTTP ${res.status}`);
         } catch (err) {
-            console.warn(`[VideoPlan] add "${path}" to "${group}" error:`, err);
+            console.warn(`[VideoPlan] add "${path}" to "${VTEMP_GROUP}" error:`, err);
         }
     }
 }
@@ -590,6 +622,15 @@ async function _runVideoPlanBatch() {
 
                 await _addOutputsToVideoGroups(outputMedia);
                 await _saveGeneratedVideoMeta(outputMedia, apiWorkflow);
+
+                // Show this block's clip in the center panel's result pane as soon as
+                // it finishes, independent of whether chain_previous below needs it too.
+                const resultVid = outputMedia.find((m) => isVideoFilename(m.filename));
+                if (resultVid) {
+                    setResultPreview(_resultMediaUrl(resultVid), {
+                        kind: "output", filename: resultVid.filename, subfolder: resultVid.subfolder || "", type: resultVid.type || "output",
+                    });
+                }
 
                 // Only needed as a fallback for the NEXT block's "chain_previous" —
                 // skip the extraction entirely when this block already has its own
@@ -840,6 +881,15 @@ async function _loadPlanFromServer(filename) {
     } catch (err) {
         showToast(`${t("videoPlanLoadFailed")}: ${err.message}`, "error");
     }
+}
+
+// Entry point for the Project panel's saved-plan list (video-project-tab.js) —
+// loads a plan by filename the same way drag&drop does, then jumps to the Plan
+// subtab so the freshly-loaded editor is actually visible (mirrors
+// loadWorkflowIntoVideoEditor above).
+export async function openSavedVideoPlan(filename) {
+    await _loadPlanFromServer(filename);
+    document.querySelector('.wfm-video-subtab-btn[data-video-subtab="plan"]')?.click();
 }
 
 function _clearPlan() {

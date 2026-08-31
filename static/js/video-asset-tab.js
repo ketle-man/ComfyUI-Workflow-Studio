@@ -9,16 +9,21 @@
  */
 
 import { VIDEO_GROUP, VTEMP_GROUP, ensureVideoGroup } from "./gallery-tab.js";
+import { setSourcePreview } from "./video-preview.js";
 
 // Sentinel for the "All Video Assets" option — not a real backend group, since
 // Gallery's group filter only ever matches one group at a time. Selecting it
 // fetches VIDEO_GROUP and VTEMP_GROUP separately and merges them (see _loadImages).
 const ALL_GROUPS_VALUE = "__video_asset_all__";
 
+// Display names are now identical to the underlying group names (minus the
+// "__...__" wrapping) — no more per-plan "VideoPlan:<name>" sub-groups, so the
+// dropdown is always exactly these three fixed entries.
+const _GROUPS = [ALL_GROUPS_VALUE, VIDEO_GROUP, VTEMP_GROUP];
+
 const _s = {
     outputDir: "",
     group: ALL_GROUPS_VALUE,
-    groups: [ALL_GROUPS_VALUE, VIDEO_GROUP, VTEMP_GROUP], // + any "VideoPlan:<name>" sub-groups
     images: [],
     selectedPath: null,
     loaded: false, // becomes true once the Asset subtab has been shown at least once
@@ -35,32 +40,17 @@ async function _fetchOutputDir() {
     } catch { /* non-critical */ }
 }
 
-async function _loadGroups() {
-    try {
-        const res = await fetch("/wfm/gallery/groups");
-        if (!res.ok) throw new Error(res.status);
-        const data = await res.json();
-        const names = (data.groups || []).map((g) => g.name);
-        const planGroups = names.filter((n) => n.startsWith("VideoPlan:"));
-        _s.groups = [ALL_GROUPS_VALUE, VIDEO_GROUP, VTEMP_GROUP, ...planGroups];
-        if (!_s.groups.includes(_s.group)) _s.group = ALL_GROUPS_VALUE;
-    } catch (err) {
-        console.warn("[VideoAsset] loadGroups failed:", err);
-    }
-    _renderGroupSelect();
-}
-
 function _groupLabel(g) {
     if (g === ALL_GROUPS_VALUE) return "All Video Assets";
     if (g === VIDEO_GROUP) return "Video Assets";
-    if (g === VTEMP_GROUP) return "Temporary (unsaved runs)";
-    return g.replace(/^VideoPlan:/, "Plan: ");
+    if (g === VTEMP_GROUP) return "Video Temp";
+    return g;
 }
 
 function _renderGroupSelect() {
     const sel = document.getElementById("wfm-video-asset-group");
     if (!sel) return;
-    sel.innerHTML = _s.groups
+    sel.innerHTML = _GROUPS
         .map((g) => `<option value="${g}"${g === _s.group ? " selected" : ""}>${_groupLabel(g)}</option>`)
         .join("");
 }
@@ -86,9 +76,11 @@ async function _loadImages() {
     try {
         let images;
         if (_s.group === ALL_GROUPS_VALUE) {
-            // "All Video Assets" = the union of the curated __VideoAssets__
-            // group and __vtemp__ (auto-populated by not-yet-saved plan runs) —
-            // not a single backend group filter, so fetch both and merge.
+            // "All Video Assets" = the union of the curated __Video Assets__
+            // group and __Video Temp__ (auto-populated by every plan run,
+            // organized into __Video Assets__ by the user on their own
+            // schedule) — not a single backend group filter, so fetch both
+            // and merge.
             const [curated, temp] = await Promise.all([
                 _fetchGroupImages(VIDEO_GROUP),
                 _fetchGroupImages(VTEMP_GROUP),
@@ -147,6 +139,26 @@ function _selectImage(img) {
         c.classList.toggle("selected", c.dataset.path === img.path);
     });
     _renderDetail(img);
+    _loadIntoSourcePreview(img);
+}
+
+// Feeds the selected asset's video into the center panel's Asset/Source preview
+// pane (see video-preview.js) so it's visible without switching tabs, and so the
+// Frame/GIF property tools can operate on it just like a Video Source drop.
+// Fetched as a Blob and wrapped as a "local" source rather than trying to map
+// Gallery's arbitrary absolute path onto ComfyUI's filename/subfolder/type
+// triple — that keeps the GIF tool's existing upload-on-first-use path working
+// unchanged for both cases.
+async function _loadIntoSourcePreview(img) {
+    try {
+        const res = await fetch(`/wfm/gallery/image/serve?path=${encodeURIComponent(img.path)}`);
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        const file = new File([blob], img.filename, { type: blob.type || "video/mp4" });
+        setSourcePreview(URL.createObjectURL(file), { kind: "local", file });
+    } catch (err) {
+        console.warn("[VideoAsset] failed to load preview:", err);
+    }
 }
 
 function _renderDetail(img) {
@@ -156,7 +168,6 @@ function _renderDetail(img) {
     // markup skeleton is static, and those two values are assigned afterward
     // via textContent/.value, never interpolated into the HTML string itself.
     panel.innerHTML = `
-        <video src="/wfm/gallery/image/serve?path=${encodeURIComponent(img.path)}" controls class="wfm-video-asset-preview"></video>
         <div class="wfm-video-asset-name" id="wfm-video-asset-name"></div>
         <label>Tags</label>
         <div class="wfm-video-asset-tags" id="wfm-video-asset-tags"></div>
@@ -258,7 +269,7 @@ async function _saveMeta(path, data) {
 // generated videos show up as soon as the user switches over to look.
 export async function refreshVideoAssetTab() {
     if (!_s.loaded) {
-        await _loadGroups();
+        _renderGroupSelect();
         _s.loaded = true;
     }
     await _loadImages();
@@ -274,10 +285,12 @@ export function initVideoAssetTab() {
     });
     document.getElementById("wfm-video-asset-refresh")?.addEventListener("click", () => _loadImages());
 
-    // __VideoAssets__ is never auto-created by a batch run (see video-plan-tab.js —
-    // only VideoPlan:<name>/__vtemp__ are ensured there), so a fresh install or a
-    // group deleted via Gallery's Manage Groups would otherwise never come back on
+    // Neither reserved group is ever auto-created by a batch run itself (see
+    // video-plan-tab.js's _ensureVideoAssetGroups, which only ensures
+    // __Video Temp__ right before a run starts), so a fresh install or a group
+    // deleted via Gallery's Manage Groups would otherwise never come back on
     // its own — add_to_group() happily records membership on individual images
-    // without ever re-registering the group itself.
+    // without ever re-registering the group itself. ensureVideoGroup() ensures
+    // both __Video Assets__ and __Video Temp__ every time the Asset subtab inits.
     ensureVideoGroup();
 }
