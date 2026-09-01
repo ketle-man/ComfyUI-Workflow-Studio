@@ -110,6 +110,7 @@ function _applyI18n() {
         "wfm-tagger-db-edit-vlm-label": "taggerDbVlm",
         "wfm-tagger-db-save-btn": "taggerDbSave",
         "wfm-tagger-db-delete-btn": "taggerDbDelete",
+        "wfm-tagger-db-delete-selected-btn": "taggerDbDelete"
     };
     for (const [id, key] of Object.entries(map)) {
         const el = document.getElementById(id);
@@ -514,6 +515,8 @@ function _setupDbActions() {
     });
     document.getElementById("wfm-tagger-db-save-btn")?.addEventListener("click", _dbSave);
     document.getElementById("wfm-tagger-db-delete-btn")?.addEventListener("click", _dbDelete);
+    document.getElementById("wfm-tagger-db-select").addEventListener("click", _dbToggleSelection);
+    document.getElementById("wfm-tagger-db-delete-selected-btn").addEventListener("click", _dbDeleteSelected);
 }
 
 async function _dbLoad() {
@@ -541,12 +544,20 @@ async function _dbSearch() {
 function _renderDbTable(rows) {
     const tbody = document.getElementById("wfm-tagger-db-tbody");
     if (!tbody) return;
+
     if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--wfm-text-secondary)">${t("taggerDbEmpty")}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--wfm-text-secondary)">${t("taggerDbEmpty")}</td></tr>`;
         return;
     }
+
     tbody.innerHTML = rows.map(row => `
         <tr data-id="${row.id}" title="${_esc(row.all_tags)}">
+            <td class="wfm-tagger-db-select">
+                <input
+                    type="checkbox"
+                    data-id="${row.id}"
+                >
+            </td>
             <td>${row.id}</td>
             <td>${_esc(row.filename)}</td>
             <td>${_esc(_truncate(row.interrogator_tags, 60))}</td>
@@ -556,9 +567,13 @@ function _renderDbTable(rows) {
     `).join("");
 
     tbody.querySelectorAll("tr").forEach(tr => {
-        tr.addEventListener("click", () => {
+        tr.addEventListener("click", e => {
+            // チェックボックスをクリックした場合は行選択を発生させない
+            if (e.target.closest(".wfm-tagger-db-select")) return;
+
             tbody.querySelectorAll("tr").forEach(r => r.classList.remove("selected"));
             tr.classList.add("selected");
+
             const row = rows.find(r => r.id === parseInt(tr.dataset.id));
             if (row) _openDbEdit(row);
         });
@@ -618,6 +633,55 @@ function _dbExport() {
     a.href = "/wfm/tagger/db/export";
     a.download = "tagger_tags.csv";
     a.click();
+}
+
+async function _dbDeleteSelected() {
+    const ids = _getSelectedDbIds();
+
+    if (!ids.length) {
+        showToast(t("taggerDbNoSelection"), "warning");
+        return;
+    }
+
+    if (!confirm(t("taggerDbDeleteConfirm", ids.length))) {
+        return;
+    }
+
+    try {
+        const res = await fetch("/wfm/tagger/db", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids }),
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        showToast(t("taggerDbDeletedCount", data.count), "success");
+        _dbLoad();
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+
+function _getSelectedDbIds() {
+    return [...document.querySelectorAll(".wfm-tagger-db-select input:checked")]
+        .map(el => parseInt(el.dataset.id))
+        .filter(Number.isInteger);
+}
+
+function _dbToggleSelection(e) {
+    const checked = e.target.checked;
+    const checkboxes = document.querySelectorAll(
+        '#wfm-tagger-db-tbody input[type="checkbox"]'
+    );
+
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = checked;
+    });
 }
 
 // ── ユーティリティ ───────────────────────────────────────────────

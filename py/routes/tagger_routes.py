@@ -27,6 +27,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/tagger/db/search", handle_db_search)
     app.router.add_put("/wfm/tagger/db/{id}", handle_db_update)
     app.router.add_delete("/wfm/tagger/db/{id}", handle_db_delete)
+    app.router.add_delete("/wfm/tagger/db", handle_db_delete_bulk)
     app.router.add_get("/wfm/tagger/db/export", handle_db_export)
     app.router.add_post("/wfm/tagger/db/save", handle_db_save)
     app.router.add_post("/wfm/tagger/write_meta", handle_write_meta)
@@ -168,6 +169,27 @@ async def handle_db_delete(request: web.Request) -> web.Response:
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
+async def handle_db_delete_bulk(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+        ids = data.get("ids", [])
+
+        if not ids:
+            return web.json_response(
+                {"error": "No IDs specified"},
+                status=400,
+            )
+
+        ids = [int(row_id) for row_id in ids]
+
+        deleted_count = await asyncio.to_thread(_db.delete_bulk, ids)
+
+        return web.json_response({
+            "ok": True,
+            "count": deleted_count,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 async def handle_db_export(request: web.Request) -> web.Response:
     try:
