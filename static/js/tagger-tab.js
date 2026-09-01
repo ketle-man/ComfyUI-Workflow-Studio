@@ -664,7 +664,7 @@ async function _dbDeleteSelected() {
         _dbLoad();
     } catch (e) {
         showToast(e.message, "error");
-    }    
+    }
 }
 
 function _getSelectedDbIds() {
@@ -673,13 +673,14 @@ function _getSelectedDbIds() {
         .filter(Number.isInteger);
 }
 
-function _dbToggleSelection() {
+function _dbToggleSelection(e) {
+    const checked = e.target.checked;
     const checkboxes = document.querySelectorAll(
         '#wfm-tagger-db-tbody input[type="checkbox"]'
     );
 
     checkboxes.forEach(checkbox => {
-        checkbox.checked = !checkbox.checked;
+        checkbox.checked = checked;
     });
 }
 

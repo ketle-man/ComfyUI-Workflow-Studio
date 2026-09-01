@@ -182,11 +182,11 @@ async def handle_db_delete_bulk(request: web.Request) -> web.Response:
 
         ids = [int(row_id) for row_id in ids]
 
-        await asyncio.to_thread(_db.delete_bulk, ids)
+        deleted_count = await asyncio.to_thread(_db.delete_bulk, ids)
 
         return web.json_response({
             "ok": True,
-            "count": len(ids),
+            "count": deleted_count,
         })
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
