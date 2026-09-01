@@ -691,6 +691,9 @@ const LANGUAGES = {
         taggerWrittenToFile: "Written to file",
         taggerSavedToDB: "Saved to DB",
         taggerSelectGalleryImage: "Select an image in the Gallery tab",
+        taggerDbNoSelection: "Please select rows to delete",
+        taggerDbDeleteConfirm: (count) => `Delete ${count} database records?`,
+        taggerDbDeletedCount: (count) => `${count} database records deleted`,
 
         // -- AI Tab --
         aiSubTabTranslate: "Translate",
@@ -2073,6 +2076,9 @@ const LANGUAGES = {
         taggerWrittenToFile: "ファイルに書き込みました",
         taggerSavedToDB: "DBに保存しました",
         taggerSelectGalleryImage: "Galleryタブで画像を選択してください",
+        taggerDbNoSelection: "削除する行を選択してください",
+        taggerDbDeleteConfirm: (count) => `${count}件のDBレコードを削除しますか？`,
+        taggerDbDeletedCount: (count) => `${count}件のDBレコードを削除しました`,
 
         // -- AI Tab --
         aiSubTabTranslate: "翻訳",
@@ -3453,6 +3459,9 @@ const LANGUAGES = {
         taggerWrittenToFile: "已写入文件",
         taggerSavedToDB: "已保存到DB",
         taggerSelectGalleryImage: "请在图库标签中选择图像",
+        taggerDbNoSelection: "请选择要删除的行",
+        taggerDbDeleteConfirm: (count) => `确定要删除 ${count} 条数据库记录吗？`,
+        taggerDbDeletedCount: (count) => `已删除 ${count} 条数据库记录`,
 
         // -- AI Tab --
         aiSubTabTranslate: "翻译",

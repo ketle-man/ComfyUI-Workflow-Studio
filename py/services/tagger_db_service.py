@@ -5,6 +5,7 @@ import io
 import logging
 import sqlite3
 from pathlib import Path
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,20 @@ class TaggerDbService:
         with self._conn() as conn:
             conn.execute("DELETE FROM images WHERE id=?", (row_id,))
             conn.commit()
+
+    def delete_bulk(self, row_ids: List[int]) -> int:
+        if not row_ids:
+            return 0
+
+        placeholders = ",".join("?" for _ in row_ids)
+
+        with self._conn() as conn:
+            cur = conn.execute(
+                f"DELETE FROM images WHERE id IN ({placeholders})",
+                row_ids,
+            )
+            conn.commit()
+            return cur.rowcount
 
     def export_csv(self) -> str:
         with self._conn() as conn:

@@ -250,6 +250,14 @@
     z-index: 1;
 }
 
+#wfm-tagger-db-th-select, td.wfm-tagger-db-select {
+    text-align: center;
+}
+
+#wfm-tagger-db-th-select input, .wfm-tagger-db-select input {
+    vertical-align: middle;
+}
+
 .wfm-tagger-db-table tbody tr {
     cursor: pointer;
     transition: background 0.1s;
