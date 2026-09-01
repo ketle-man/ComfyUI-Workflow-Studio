@@ -2,6 +2,26 @@
 
 ---
 
+## v0.5.8
+
+### Tagger DBタブに一括削除機能を追加（外部コントリビューターPRのレビュー・検証・修正・マージ）
+
+GitHub上の外部コントリビューター（`censor-ed`氏、fork経由）からPR #2「Tagger DBの複数選択削除を追加」が届いたため、内容確認・実機検証・マージまで一貫して対応した。PRの変更内容はバックエンド（`tagger_routes.py`に`DELETE /wfm/tagger/db`エンドポイントを新設、`tagger_db_service.py`に`delete_bulk()`をプレースホルダ経由のSQLite `DELETE ... WHERE id IN (...)`で実装）とフロントエンド（DBテーブルの各行にチェックボックス、ヘッダーに全選択チェックボックス、既存の単一削除`_dbDelete`と同じ`confirm()`パターンを踏襲した確認ダイアログ、英日中3言語のi18n）。
+
+コードレビューでは危険な処理（外部送信・eval・shell実行等）は無く、SQLインジェクション対策も適切と判断。ただし2点の懸念を指摘した：(1) 一括削除の`count`がAPIレスポンスで返る削除件数の妥当性、(2) 全選択チェックボックス`_dbToggleSelection`が単純トグル（クリックのたびに全チェックボックスの状態を反転）方式になっており、一部だけ選択済みの状態でクリックすると直感に反する（選択済み行が外れ未選択行が入る）挙動になる懸念。
+
+実機検証はKapture経由でComfyUI_5（ポート8189）に実際に接続して実施。データベースには実データ（既存のタグ付け済み画像）しか存在しないため、削除操作自体は実行せず安全に検証する方針を取った：一括削除APIは`curl`で存在しないID（999999）を渡して直接叩き、`ids`未指定時の400エラー・不正な値混入時の500エラーハンドリングを確認。UI側はKaptureで実際にチェックボックスを操作し、行クリックとチェックボックスクリックが正しく分離されていること、未選択で削除ボタンを押すと警告トーストが出ること、削除ボタンで`confirm()`ダイアログ（日本語i18n表示）が開くことを確認した上で`mcp__kapture__dialog`の`accept:false`でキャンセルし、実データには一切触れずに検証を完了した。この過程で指摘(2)の懸念が実機で再現することを確認——ID66のみ選択した状態で全選択チェックボックスをクリックすると、ID66のチェックが外れ他の全行がチェックされるという実際の誤動作を確認した。またAPIレベルの検証で指摘(1)も実バグと確定：存在しないID 1件を渡しても`{"ok": true, "count": 1}`が返っていた。原因は`handle_db_delete_bulk`が`delete_bulk()`の戻り値（実際の削除件数＝`cur.rowcount`）を使わず、渡された`ids`の件数（`len(ids)`）をそのまま返していたため。
+
+この検証プロセス中に、ComfyUIの「再起動」がユーザー申告だけでは信頼できないケースに遭遇した。Pythonファイル（`tagger_routes.py`）をコピーしてComfyUI再起動を依頼したところ、依頼直後は新エンドポイントへの`DELETE`が405 Method Not Allowed（`Allow: GET,HEAD`のみ）を返し続けた。原因調査でComfyUI起動ログ（`user/comfyui_8189.log`）や`app.router`のルート登録順序（ComfyUIコア自身のSPAフォールバック用static routeとの競合の可能性）を疑ったが、最終的にはPowerShellの`Get-CimInstance Win32_Process`でプロセスの実際の`CreationDate`を確認し、動いているComfyUIプロセスの起動時刻がコードをコピーした時刻より前であることを突き止めた——つまりユーザーが「再起動しました」と報告した操作は、ブラウザページのリロード等では反映されず、プロセス自体は起動されたままだった。ユーザーに再度プロセスの完全停止・起動を依頼し、新しいプロセス起動時刻（コピー時刻より後）を確認してから再テストしたところ405エラーは解消した。
+
+2点のバグ修正（`handle_db_delete_bulk`が`delete_bulk()`の戻り値を`count`として返すよう変更、`_dbToggleSelection`をクリックされたヘッダーチェックボックス自身の新しい状態（`e.target.checked`）に全行を揃える一般的な「全選択」挙動に変更）をコミットし、`maintainerCanModify`権限を使ってPR元のフォークブランチ（`censor-ed/ComfyUI-Workflow-Studio`の`feature/tagger-bulk-delete`）に直接pushしてPRへ反映、`gh pr merge`でGitHub上のPR #2を正式にマージした（マージコミット`e067f34`）。ローカル`main`をfast-forward更新し、実行時`custom_nodes`フォルダへ最終版を再同期して`diff --strip-trailing-cr`で完全一致を確認した上で、最後にもう一度ComfyUI再起動→APIレスポンス確認まで実施した。
+
+**検証**: バックエンドAPI（`curl`直叩き、正常系・異常系）とフロントエンドUI（Kaptureブラウザ操作、チェックボックス・確認ダイアログ・トースト）の両方を実機で確認。修正コミット後も同様に再検証し、`count`が正しい値（0）を返すこと・全選択チェックボックスが選択済み行を含めて正しく全ON/全OFFされることを確認した。実データは一度も削除していない。
+
+**How to apply**: 外部コントリビューターのPRを取り込む際は、まず実行時`custom_nodes`フォルダと開発リポジトリの現在のブランチが完全一致していること（改行コード差分のみ）を確認してから安全にファイルを上書きする（[[project_dev_deploy_sync]]）。DBやファイルシステムなど実データを持つ機能のUIテストでは、可能な限り「削除・変更操作自体は実行せず、確認ダイアログの表示とキャンセル」「存在しないIDでのAPI直接テスト」など非破壊的な手段で検証を組み立てる。Pythonファイル変更後のComfyUI再起動は、ユーザーの「再起動しました」という申告だけでなく、`Get-CimInstance Win32_Process`等でプロセスの実際の起動時刻を確認し、コード変更時刻より後であることを検証してから動作確認に進む——ブラウザのページリロードやタブの再接続だけでは、バックエンドのPythonプロセス自体は再起動されていない場合がある。APIレスポンスの件数系フィールド（`count`等）は、渡された引数の長さではなく実際の処理結果（DBの`rowcount`等）を返すべきというありがちなバグパターンに注意する。「全選択」チェックボックスは常時トグルではなく、クリックされた自身の新しい状態を全体に適用する実装が直感に合う。
+
+関連: [[project_dev_deploy_sync]], [[feedback_comfyui_running_check_before_launch]], [[feedback_realtime_debug_logs_and_kapture]]
+
 ## v0.5.7
 
 ### 設定エクスポート/フルバックアップのドキュメント修正: v0.5.5のVideo Plan機能追加分の言及漏れ
@@ -97,9 +117,10 @@ UI面ではDuration（元々ブロックごとの独立値）とNoise Seed（Pla
 **3. 動画再生ボリュームの保存設定**: 動画を切り替えるたびに音量が最大へ戻ってしまう問題を解消するため、設定タブに音量設定を追加しVideo/Galleryタブの全プレーヤー間で保存・共有されるようにした。
 
 **4. GenerateUIタブ: LTX-2.5 / Wan2.2対応（プロンプト検出・Latent Image・タイムアウト）**: Videoタブとは独立した解析経路（`analyzeWorkflow()`、フラット化済みAPI形式ワークフローを解析）側でも同じ2ファミリーの通常ワークフロー読み込みに対応させる作業。実機確認したところ、Model タブ（Checkpoint/VAE/Diffusion Model/Text Encoder/LoRA）は既存の`UNETLoader`/`CLIPLoader`/`VAELoader`ベースの汎用検出でWan2.2/LTX-2.5とも既に問題なく動作していたが、次の2点に不備を発見した。
-  - **Positive/Negative Prompt検出（LTX-2.5）**: LTX-2.5は`LTXVDualCFGGuider`（positive/negativeが同一の`LTXVConditioning`ノードの別出力スロットを指す）+ `LTXVConditioning`（自身のpositive/negative入力を介して実際のプロンプトソースへ分岐）という専用ノード構成を使うため、既存の`CFGGuider`/`InstructPixToPixConditioning`向けロール伝播ロジックでは拾えず、Positive/Negative Promptが空欄のままSaveVideoノードへのフォールバック表示になっていた。`LTXVDualCFGGuider`をロール伝播の起点に、`LTXVConditioning`を`InstructPixToPixConditioning`と同型の分岐伝播ノードとして追加し解決した。
-  - **Latent Image検出（Wan2.2・LTX-2.5共通）**: SettingsタブのLatent Imageセクションが`EmptyLatentImage`/`EmptySD3LatentImage`/`EmptyFlux2LatentImage`のみ対応しており、Wan2.2の`EmptyHunyuanLatentVideo`とLTX-2.5の`EmptyLTXVLatentVideo`が未対応で「No EmptyLatentImage node found」表示になっていた。両ノード型を追加し、動画特有の`length`（フレーム数）入力を編集するフィールドも新設した（Duration×FPSの数式ノードにリンクされ非リテラルなことが多いため、Width/Height同様「linked」表示にフォールバックする）。
-  - あわせて`isVideoWorkflow()`（生成タイムアウトを30分に延長する判定）を、`SaveVideo`/`CreateVideo`ノードや動画用latentノードの存在でも判定できるよう拡張した。従来はMiniMax H3のようなオールインワン`*ToVideo`ノードの有無でしか判定できず、LTX-2.5/Wan2.2は通常の静止画と同じ短いタイムアウトで打ち切られる恐れがあった。
+
+- **Positive/Negative Prompt検出（LTX-2.5）**: LTX-2.5は`LTXVDualCFGGuider`（positive/negativeが同一の`LTXVConditioning`ノードの別出力スロットを指す）+ `LTXVConditioning`（自身のpositive/negative入力を介して実際のプロンプトソースへ分岐）という専用ノード構成を使うため、既存の`CFGGuider`/`InstructPixToPixConditioning`向けロール伝播ロジックでは拾えず、Positive/Negative Promptが空欄のままSaveVideoノードへのフォールバック表示になっていた。`LTXVDualCFGGuider`をロール伝播の起点に、`LTXVConditioning`を`InstructPixToPixConditioning`と同型の分岐伝播ノードとして追加し解決した。
+- **Latent Image検出（Wan2.2・LTX-2.5共通）**: SettingsタブのLatent Imageセクションが`EmptyLatentImage`/`EmptySD3LatentImage`/`EmptyFlux2LatentImage`のみ対応しており、Wan2.2の`EmptyHunyuanLatentVideo`とLTX-2.5の`EmptyLTXVLatentVideo`が未対応で「No EmptyLatentImage node found」表示になっていた。両ノード型を追加し、動画特有の`length`（フレーム数）入力を編集するフィールドも新設した（Duration×FPSの数式ノードにリンクされ非リテラルなことが多いため、Width/Height同様「linked」表示にフォールバックする）。
+- あわせて`isVideoWorkflow()`（生成タイムアウトを30分に延長する判定）を、`SaveVideo`/`CreateVideo`ノードや動画用latentノードの存在でも判定できるよう拡張した。従来はMiniMax H3のようなオールインワン`*ToVideo`ノードの有無でしか判定できず、LTX-2.5/Wan2.2は通常の静止画と同じ短いタイムアウトで打ち切られる恐れがあった。
 
 **5. Videoタブ左パネルのハイライト表示**: GenerateUIのModelタブが持つ「ワークフローに実際に該当する項目のラベルをハイライト」する仕組み（`wfm-model-label-active`クラス、設定タブでカスタマイズ可能な共通色）をVideoタブの左パネルにも適用した。Prompt/Durationは常時、First Frame/Last Frameはサブグラフがそのスロットを公開している場合のみ、Aspect Ratio/Megapixels/MultipleはResolutionSelectorノードが存在する場合のみハイライトする — Wan2.2のように該当ノードがなく操作不可（disabled）な項目は、既存の無効化表示と矛盾しないよう非ハイライトのままにした。
 
@@ -154,10 +175,12 @@ v0.5.0/v0.5.1で専用Videoタブを整備したMiniMax H3動画生成ワーク�
 **3. バグ修正: LabタブKsampler列が動画ワークフローでも表示される**: 「Model同様に該当ノードがなければ非表示にしたい」との要望に対し当初`sampler_nodes.length > 0`で判定したが、実機確認で「まだ表示される」との報告。原因はMiniMax H3のサブグラフ内部に実際に`SamplerCustomAdvanced`が配線されており（内部プリセットの一部で、ユーザーが調整すべきものではない）、単純な有無判定では引っかからなかったこと。判定を`comfyWorkflow.isVideoWorkflow(analysis)`ベースに切り替え、動画ワークフロー全体ではKsampler列自体を常に非表示にするよう修正した。
 
 **4. Videoタブ拡張: Frame抽出 / アニメーションGIF変換**: Eagleプラグイン（video-to-frame, video2gif）を参考に要望された2機能。Eagle版はNode.js+ffmpegバイナリ直接呼び出しの実装だったため、ComfyUI-Workflow-Studioの構成（Python/aiohttpバックエンド）に合わせて設計し直した。フレーム抽出は`<video>`+`<canvas>`でブラウザ完結（サーバー往復・追加依存なし）。GIF変換はユーザー確認の上サーバー側実装を選択：PyAV（デコード）+ Pillow（GIFエンコード）— どちらもComfyUI本体が既に要求している依存のため、ffmpegバイナリや新規ライブラリの追加インストールは不要。`py/services/video_service.py` / `py/routes/video_routes.py`を新規追加し、`folder_paths.get_save_image_path()`でComfyUI標準の自動採番保存パターンをそのまま踏襲。合成テスト動画（PyAVで生成）を使いvenv環境でデコード→GIFエンコードの実処理を検証済み。
-  - あわせてVideoタブの中央パネルを再設計：「結果」見出し/「まだ結果がありません」表示を廃止し、生成結果とドロップされた任意のローカル動画を同じプレビュー枠に統合、横に**Video Source**ドロップ/クリック選択エリア（Clearボタン付き）を新設。右パネルの「Properties」プレースホルダーを**Frame**/**GIF**の2タブに置き換え。生成結果に限らず任意の動画に対してFrame/GIF機能が使える設計にした。
+
+- あわせてVideoタブの中央パネルを再設計：「結果」見出し/「まだ結果がありません」表示を廃止し、生成結果とドロップされた任意のローカル動画を同じプレビュー枠に統合、横に**Video Source**ドロップ/クリック選択エリア（Clearボタン付き）を新設。右パネルの「Properties」プレースホルダーを**Frame**/**GIF**の2タブに置き換え。生成結果に限らず任意の動画に対してFrame/GIF機能が使える設計にした。
 
 **5. データ管理の監査とZIPフルバックアップ機能の新規実装**: 「設定のデータ管理を現在のバージョンで対応できているか確認してほしい」との依頼を受け、既存の`_DATA_FILES`（単一JSONバンドル方式）と実際のデータディレクトリを突き合わせ監査。**`civitai_cache.json`（3.6MB、CivitAI連携キャッシュ）がエクスポート対象から漏れていた**ことを発見し即修正。また、ヘルプが謳う「export all plugin data」に反し、フォルダ形式のデータ（`ai_skills/`、`lab_plan/`、`style/`）とSQLite DB（`tagger.db`）が単一JSONバンドル方式では原理的に扱えず完全に対象外になっていた点をユーザーに報告、ZIP形式のフルバックアップ機能を新規実装する方針で合意。`DATA_DIR`配下を丸ごとZIP化する`GET /api/wfm/settings/export-full`/`POST /api/wfm/settings/import-full`を追加（一時ファイル系`gmic_temp`/`thumb_cache`と、他custom_node（comfyui-impact-pack）へのシンボリックリンクである`wildcard/`のみ除外、`settings.json`はAPIキーを除外してから含める）。復元側はZip Slip対策（`../`等でDATA_DIR外に書き込もうとするエントリは`relative_to()`チェックでスキップ）を実装し、悪意あるZIPでの検証済み。
-  - 追加要望「デフォルトワークフローフォルダー（`user/default/workflows`）とwildcardフォルダー（`comfyui-impact-pack/wildcards`）もオプションでバックアップに含めたいが、インポートは除外し手動対応としたい」に対応：エクスポート画面にオプトインのチェックボックスを2つ追加、有効時はZIP内に`_external/`プレフィックスで格納し、復元処理は`_external/`配下のエントリを常にスキップする実装にした（他プラグイン/ComfyUI本体が管理する領域を自動上書きしないため）。実データ（ワークフロー535件・wildcard 34件）で検証済み。
+
+- 追加要望「デフォルトワークフローフォルダー（`user/default/workflows`）とwildcardフォルダー（`comfyui-impact-pack/wildcards`）もオプションでバックアップに含めたいが、インポートは除外し手動対応としたい」に対応：エクスポート画面にオプトインのチェックボックスを2つ追加、有効時はZIP内に`_external/`プレフィックスで格納し、復元処理は`_external/`配下のエントリを常にスキップする実装にした（他プラグイン/ComfyUI本体が管理する領域を自動上書きしないため）。実データ（ワークフロー535件・wildcard 34件）で検証済み。
 
 **6. Send to LI node機能をGalleryタブにも追加 + ボタン名統一**: Image Editタブに既にあった「選択画像をComfyUIキャンバス上の選択中ノードのimageウィジェットへ送る」機能（`window.opener.wfmSendImageToSelectedNode`、`node_sets_menu.js`で定義されたクロスウィンドウ橋渡し）を、Galleryタブの選択画像にも使えるよう追加。Galleryの画像は任意のフォルダにあり得るため、既存の「Send GenUI Image」と異なりLoadImageノードの有無に依存せず、`/upload/image`でinputフォルダへアップロードしてからファイル名を書き込む方式にした。あわせてImage Edit側の既存ボタン名「Send to Workflow」を「Send to LI node」に統一（トースト文言・コメント・ヘルプも合わせて更新）。
 
@@ -212,7 +235,8 @@ v0.5.0で追加したmp4 Gallery対応（一覧・サムネイル・再生のみ
 **4. First Frame/Last Frameを両方optionalに、LoadImageノードが無いワークフローにも対応**: 「First Frameなしでも動作させたい（ノードをバイパスで処理）。またノードのないワークフローにも対応させたい」との要望。`minimax_test1.json`（first_frame/last_frame双方とも未接続、対応するLoadImageノードがトップレベルに存在しない構成）を新たに確認し、`locateMiniMaxNodes()`のLoadImageノード必須チェックを撤廃。first_frame未指定時はリンクなしのまま実行（バイパス）し、画像が指定された場合のみその場でLoadImageノードを動的に注入する設計に変更（ノードID/リンクIDはclone内の実際の最大値+1で採番するため重複の心配がない）。first_frameスロットにもlast_frameと同様のClearボタンを追加した。
 
 **5. バグ修正: mp4のタグ/メモがComfyUI再起動後に消える**: 「タグ、メモadd、保存操作はできるが記録されていない。画像ファイルもできていない。エラー表示はなし、ブラウザもなし」との報告を受け、`comfyui_8189.log`を直接確認したところ`Cleaned up 189 stale metadata entries from ...\Text2Img`という決定的なログを発見。**根本原因**: `cleanup_stale_images()`は「現在表示中のフォルダ配下」のメタデータキーを全階層（サブフォルダ含む）対象にstale判定するが、Galleryがルートフォルダを非再帰スキャンした場合、`existing_paths`（現在のファイル一覧）にはルート直下のファイルしか含まれない。Videoタブで生成した動画は`SaveVideo`の`filename_prefix`設定で`video/MiniMax_H3/`というサブフォルダに保存されるため、ルートフォルダを開くたびに「サブフォルダ内ファイルは非再帰スキャンには映らない→存在しないと誤判定→メタデータ削除」が発生し、189件ものタグ/メモ/お気に入り情報が消えていた。`cleanup_stale_images()`に`recursive`引数を追加し、非再帰スキャン時はfolder_path直下のみを対象にするよう修正（`gallery_service.py`の`list_images()`から`recursive`をそのまま伝播）。既に削除済みのデータはバックアップが無く復元不可能だった旨をユーザーに伝えた。
-  - 副次的に発見したフロントエンドのバグも合わせて修正: `saveMetaField()`がサーバーのレスポンス（`{"ok": bool}`）を一切チェックせず常に成功したかのようにローカル状態を楽観的更新していたため、サーバー側で保存が拒否されてもUI上はエラーなく成功したように見えてしまう作りになっていた。レスポンスの`ok`フィールドを検証し失敗時は例外を投げるよう変更、`addTag`/`removeTag`/メモ保存ハンドラは戻り値を見て成功時のみローカル状態を更新するよう修正した。保険的措置として`save_image_meta`（バックエンド）の保存キーも`get_image_metadata`と同じ`resolve()`後のパスに統一した。
+
+- 副次的に発見したフロントエンドのバグも合わせて修正: `saveMetaField()`がサーバーのレスポンス（`{"ok": bool}`）を一切チェックせず常に成功したかのようにローカル状態を楽観的更新していたため、サーバー側で保存が拒否されてもUI上はエラーなく成功したように見えてしまう作りになっていた。レスポンスの`ok`フィールドを検証し失敗時は例外を投げるよう変更、`addTag`/`removeTag`/メモ保存ハンドラは戻り値を見て成功時のみローカル状態を更新するよう修正した。保険的措置として`save_image_meta`（バックエンド）の保存キーも`get_image_metadata`と同じ`resolve()`後のパスに統一した。
 
 **ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、新規Video Tabヘルプページを追加。README.mdはバージョンバッジ更新、Workflow Tab（サイドパネルツールバーの3ボタン構成）、Gallery Tab（Downloadボタンの新配置・mp4対応・GenUIボタンへの改名）、新規Video Tabセクション（3ペイン構成・optional First/Last Frame・ノードなしワークフロー対応）を追加した。
 
@@ -263,7 +287,8 @@ v0.5.0で追加したmp4 Gallery対応（一覧・サムネイル・再生のみ
 **4. yamlワイルドカードを使うサンプルワークフロー**: 「yamlファイルのワイルドカードを使用するワークフローを作成してもらうことはできますか」との依頼。調査の結果、このプラグイン自体のワイルドカード展開（SPA側の`_expandWildcardsInWorkflow`）は`.txt`拡張子固定でyaml非対応であり、yaml形式は`ImpactWildcardEncode`/`ImpactWildcardProcessor`ノード（Impact Pack、サーバー側処理）でのみ解決できることが判明。プラグインのwildcardディレクトリはjunction経由でImpact Packの`wildcards/`フォルダへ直結しているため、通常のWildcard File Manager経由で保存したyamlファイルがそのままImpactWildcardEncodeから参照可能。サンプルyamlワイルドカードファイル（`ws_sample_season_lighting.yaml`）とImpactWildcardEncodeノードを使うサンプルワークフロー（`ws_yaml_wildcard_sample.json`）を作成し、実際にComfyUIで生成→出力PNGのメタデータで`populated_text`が階層キー参照から正しく展開されていることを確認した。
 
 **5. Galleryタブ詳細パネルに「Prompt」タブ新設**: 「メタデータでも確認できるが頻度を考えるとマウス操作が多いため、プロンプトだけはこちらでも表示としたい。ボタンは右端でデフォルトで選択状態としたい」との要望。当初は単純な全文連結表示で実装したが、「メタデータタブの表示の様に複数プロンプトがあるケースも考慮したい」とのフィードバックを受け、Metadataタブの`extractPrompts`/`buildPromptItem`をexportし、完全に同じPOS/NEGバッジ付きリスト→クリックで全文表示のUIに作り直した。
-  - さらに実機確認の中で、同一画像でもMetadataタブとGalleryタブでpositive数が食い違うケース（`Krea2_turbo_00133_.png`、Metadataでは2件のPositiveが見える）を発見。原因は埋め込みデータの優先順位の違い — Metadataタブは`prompt`（API形式、サブグラフ展開済みでフラット）を優先するのに対し、Gallery側サーバーAPIは`workflow`（UI形式、ノード位置等を保持）を優先していた。トップレベルとサブグラフに独立した2系統のサンプリングを持つワークフローでは、UI形式のトップレベルnodes配列に一方の系統しか含まれず、`extractPromptsLiteGraph`の早期returnロジックがその系統しか拾えないため。既存のLoad GenUI/JSON表示/Copy & Send Canvas等には一切影響しないよう、`gallery_service.py`に優先順位を選べる`_extract_embedded_workflow`ヘルパーを追加し、新規`extract_prompt_workflow_from_metadata`（API形式優先）を`/wfm/gallery/image/workflow`のレスポンスへ`prompt_workflow`として追加、Galleryの Promptタブの抽出だけこちらを使うようにした。Python側の変更を反映するため、ユーザー自身の手でComfyUIを再起動していただいた。
+
+- さらに実機確認の中で、同一画像でもMetadataタブとGalleryタブでpositive数が食い違うケース（`Krea2_turbo_00133_.png`、Metadataでは2件のPositiveが見える）を発見。原因は埋め込みデータの優先順位の違い — Metadataタブは`prompt`（API形式、サブグラフ展開済みでフラット）を優先するのに対し、Gallery側サーバーAPIは`workflow`（UI形式、ノード位置等を保持）を優先していた。トップレベルとサブグラフに独立した2系統のサンプリングを持つワークフローでは、UI形式のトップレベルnodes配列に一方の系統しか含まれず、`extractPromptsLiteGraph`の早期returnロジックがその系統しか拾えないため。既存のLoad GenUI/JSON表示/Copy & Send Canvas等には一切影響しないよう、`gallery_service.py`に優先順位を選べる`_extract_embedded_workflow`ヘルパーを追加し、新規`extract_prompt_workflow_from_metadata`（API形式優先）を`/wfm/gallery/image/workflow`のレスポンスへ`prompt_workflow`として追加、Galleryの Promptタブの抽出だけこちらを使うようにした。Python側の変更を反映するため、ユーザー自身の手でComfyUIを再起動していただいた。
 
 **6. Send to Canvasのフォールバック方式を刷新**: 「このワークフローを生成UIタブに読み込むと...またキャンバスへ送るでAPI形式のためタイトルをキャンバスへドラッグのメッセージが表示されますがこの動作を変更したい...UI形式のサムネイルがないパターンのワークフローも同様にしたい」との要望。`window.opener`経由の直接ロードに失敗した場合の従来のフォールバック（`localStorage`+パネルタイトルのドラッグ、API形式のワークフローはそもそも非対応でエラーのみ）を、Workflow Studio LibraryのW（Workflows）タブを該当ワークフローで絞り込み表示する方式に統一した。`node_sets_menu.js`に`showWorkflowInLibrary()`をexportし、`top_menu_extension.js`が新規localStorageキー`wfm_library_filter_request`への`storage`イベントを監視して呼び出す（同一オリジンの別タブでのみ発火する仕様を利用）。フォーマット（UI形式・API形式）を問わず同じ導線になり、サムネイル付きの実物のワークフローカードからユーザー自身がドラッグできるようになった。Galleryタブの「Copy & Send Canvas」（画像埋め込みのその場限りのワークフローが対象で、そもそもLibrary一覧＝保存済みファイルには存在しない）は今回のスコープ外として変更していない。
 
@@ -290,14 +315,15 @@ v0.5.0で追加したmp4 Gallery対応（一覧・サムネイル・再生のみ
 **2. GenerateUIタブ: Save ボタンをBatch/Labサブタブで非表示化**: 「ワークフローのSaveボタンをBatch、Labサブタブ選択時、非表示にしたい」との要望。両サブタブは現在ロード中のワークフロー本体ではなく、ワークフローの複製やLab独自のPlanファイルを操作するため、Saveボタンが誤解を招く（クリックしても実際に触っているワークフローとは別物が保存される）ことへの対処。サブタブ切替ハンドラ（`generate-tab.js`）にワンライナーの表示切替を追加。
 
 **3. Promptタブに「Table」表示を新設**: 「現在のプロンプトタブをタブ化してテーブルタブを追加したい（既存はフォームタブとする）。テーブルタブではプロンプトのプリセット、ワイルドカード、スタイルがそれぞれ表形式で一覧表示、編集可能としたい」との要望を起点に、複数回のフィードバックを経て以下の形に発展した:
-  - 既存の3カラムレイアウト（AI Assistant / Presets・Preset Manager / Wildcard・Style）をまるごと「Form」パネルとしてラップし、新設の「Table」パネルと上部のトップレベルタブで切り替える構成にした。
-  - Tableパネル内にPresets・Wildcards・Styleの3つの編集可能テーブルを新設（`prompt-table.js`新規ファイル）。既存の`prompt-tab.js`が保持するAPIヘルパー（`fetchPresets`/`apiUpdatePreset`/`wcSaveFile`/`styleApiUpdate`等）とリフレッシュ関数を`export`して再利用し、Table側での編集は即座にForm側にも反映されるようにした。
-  - **「Presets右隣にPresets Groupを追加したい」**: グループ管理専用の4つ目のサブタブを新設。グループの作成・リネーム・削除・メンバー一覧（バッジ表示・×で削除）に対応。
-  - **「共通で左端に番号（自動）列を追加したい。個別の削除ボタンは誤操作が予想されるため上部にボタンを設置し番号列で該当番号選択、削除という手順にしたい」**: 4テーブル共通で自動採番の`#`列を新設し、番号クリックで行選択（複数可・赤ハイライト）→ツールバーの「Delete」ボタンで一括削除、という手順に統一。個別の行削除ボタンは全廃した。新規行追加時は番号セルの代わりに小さな✓（Add）／✕（Cancel）アイコンを表示する設計にした。
-  - **「バッチグループの登録方法を変更したい」**: PresetsテーブルにForm側と同じ仕組みの「B」列（クリックでグレー⇔黄色にトグルしBatchグループへ登録/解除）と、Batchグループを一括クリアする「BC」ボタンをツールバー上部に追加。Presets Groupテーブルからは予約グループ「Batch」を非表示にし、Batch管理をPresetsテーブル側のB列/BCボタンへ一本化した。
-  - **「PresetsのコピーボタンとグループドロップダウンをテーブルのPresetsタブに配置したい。これによりPresets GroupタブのAdd Presetsをなくしたい（プリセットが多くなった際に選択が困難なため）」**: Presets Groupテーブルの「Add Preset」列（プリセットが多いと使いづらい長大なドロップダウン）を廃止。代わりにPresetsテーブルのツールバーに「PP Copy」「NP Copy」（選択中1件のPositive/Negativeをクリップボードへコピー）と、グループ選択＋「Add to Group」（選択中の複数プリセットを一括で選んだグループへ追加）を新設した。プリセット側を検索・選択してから短いグループ一覧から選ぶ流れにしたことで、プリセット数が多くても操作しやすい設計になった。
-  - **「選択クリアボタンも追加したい」**: 4テーブル共通で「Deselect」ボタンをツールバーへ追加し、選択状態を一括解除できるようにした。
-  - **「プリセット、ワイルドカード、スタイルで番号をWクリックでモーダルでプロンプトの表示、編集したい」**: `#`列のダブルクリックで、既存の共有モーダル基盤（`app.js`の`openModal`/`closeModal`）を再利用したプロンプト編集モーダルを開くようにした。Presets/Styleは正負プロンプト切り替えボタン＋共有の大型テキストエリア（切り替えても両方の編集内容を保持）、Wildcardsはファイル内容のみのテキストエリアで、Save/Closeボタンを備える。
+
+- 既存の3カラムレイアウト（AI Assistant / Presets・Preset Manager / Wildcard・Style）をまるごと「Form」パネルとしてラップし、新設の「Table」パネルと上部のトップレベルタブで切り替える構成にした。
+- Tableパネル内にPresets・Wildcards・Styleの3つの編集可能テーブルを新設（`prompt-table.js`新規ファイル）。既存の`prompt-tab.js`が保持するAPIヘルパー（`fetchPresets`/`apiUpdatePreset`/`wcSaveFile`/`styleApiUpdate`等）とリフレッシュ関数を`export`して再利用し、Table側での編集は即座にForm側にも反映されるようにした。
+- **「Presets右隣にPresets Groupを追加したい」**: グループ管理専用の4つ目のサブタブを新設。グループの作成・リネーム・削除・メンバー一覧（バッジ表示・×で削除）に対応。
+- **「共通で左端に番号（自動）列を追加したい。個別の削除ボタンは誤操作が予想されるため上部にボタンを設置し番号列で該当番号選択、削除という手順にしたい」**: 4テーブル共通で自動採番の`#`列を新設し、番号クリックで行選択（複数可・赤ハイライト）→ツールバーの「Delete」ボタンで一括削除、という手順に統一。個別の行削除ボタンは全廃した。新規行追加時は番号セルの代わりに小さな✓（Add）／✕（Cancel）アイコンを表示する設計にした。
+- **「バッチグループの登録方法を変更したい」**: PresetsテーブルにForm側と同じ仕組みの「B」列（クリックでグレー⇔黄色にトグルしBatchグループへ登録/解除）と、Batchグループを一括クリアする「BC」ボタンをツールバー上部に追加。Presets Groupテーブルからは予約グループ「Batch」を非表示にし、Batch管理をPresetsテーブル側のB列/BCボタンへ一本化した。
+- **「PresetsのコピーボタンとグループドロップダウンをテーブルのPresetsタブに配置したい。これによりPresets GroupタブのAdd Presetsをなくしたい（プリセットが多くなった際に選択が困難なため）」**: Presets Groupテーブルの「Add Preset」列（プリセットが多いと使いづらい長大なドロップダウン）を廃止。代わりにPresetsテーブルのツールバーに「PP Copy」「NP Copy」（選択中1件のPositive/Negativeをクリップボードへコピー）と、グループ選択＋「Add to Group」（選択中の複数プリセットを一括で選んだグループへ追加）を新設した。プリセット側を検索・選択してから短いグループ一覧から選ぶ流れにしたことで、プリセット数が多くても操作しやすい設計になった。
+- **「選択クリアボタンも追加したい」**: 4テーブル共通で「Deselect」ボタンをツールバーへ追加し、選択状態を一括解除できるようにした。
+- **「プリセット、ワイルドカード、スタイルで番号をWクリックでモーダルでプロンプトの表示、編集したい」**: `#`列のダブルクリックで、既存の共有モーダル基盤（`app.js`の`openModal`/`closeModal`）を再利用したプロンプト編集モーダルを開くようにした。Presets/Styleは正負プロンプト切り替えボタン＋共有の大型テキストエリア（切り替えても両方の編集内容を保持）、Wildcardsはファイル内容のみのテキストエリアで、Save/Closeボタンを備える。
 
 **ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、GenerateUI Tab（Saveボタン非表示の説明）・Prompt Tab（新規カード「Form / Table」「Table View」10項目）・Gallery Tab（Metadataサブタブの説明）・Metadata Tab（Galleryタブ内へ移動した旨の注記、`metadata-tab.js`側の独自i18n適用ロジックへ追加）を更新。README.mdはGenerateUI TabのSaveボタン説明を拡張、Prompt Tabセクションに新規ブロックを追加、「Metadata Tab」セクションをGalleryタブの4番目のサブタブとして「Metadata Gallery subtab」に改称の上、Style_Catalog Gallery subtabの直後へ移設した。
 
@@ -320,10 +346,11 @@ v0.5.0で追加したmp4 Gallery対応（一覧・サムネイル・再生のみ
 ユーザーから「トップバーで保存した2つのワークフロー（I2I_rmbg.json/I2I_rmbg_2.json）を生成UIタブで読み込んで生成するとRemove Background（RMBG）ノードが機能せず透過画像が作成されない。ComfyUIのExport(API)で保存した3つ目のファイルは正しく動く」との報告を受けて調査した一連のセッション。
 
 **1. ワークフロー解析の調査**: RMBGノードは`background_color`という「ウィジェットを持たない特殊な入力（COLORCODE型、`model`より前の位置）」を持つ特徴的な構造で、UI形式→API形式変換時に`widgets_values`の対応がずれる可能性を最初に疑った。`comfyui-workflow.js`の`convertUiToApi()`を段階的に検証:
-  - `/object_info/RMBG`を実機から取得し、`_getWidgetInputNames()`が`forceInput`相当（widgetキーを持たない入力）を正しく除外し、`background_color`がウィジェット名リストから漏れることを確認。
-  - ユーザー提供の`I2I_rmbg_2.json`をブラウザ内(Playwright MCP)で実際に`convertUiToApi()`にかけ、変換結果を確認 — `model`/`sensitivity`/`background`など全フィールドが正しくマッピングされていた。
-  - その変換結果を実際に`/prompt`へキューイングして実行、さらにGenerateUIタブの本物のGenerateボタンをクリックする経路でも実行 — いずれも出力PNGはRGBA・アルファチャンネル0〜255の**正しい透過画像**だった。
-  - 結論: 現在デプロイされているv0.4.3のワークフロー解析ロジックに該当バグは再現せず、コード変更は行わなかった。報告時点でより古いバージョンを使っていた可能性が高いと判断し、ユーザーに調査結果と再検証手順を報告した。
+
+- `/object_info/RMBG`を実機から取得し、`_getWidgetInputNames()`が`forceInput`相当（widgetキーを持たない入力）を正しく除外し、`background_color`がウィジェット名リストから漏れることを確認。
+- ユーザー提供の`I2I_rmbg_2.json`をブラウザ内(Playwright MCP)で実際に`convertUiToApi()`にかけ、変換結果を確認 — `model`/`sensitivity`/`background`など全フィールドが正しくマッピングされていた。
+- その変換結果を実際に`/prompt`へキューイングして実行、さらにGenerateUIタブの本物のGenerateボタンをクリックする経路でも実行 — いずれも出力PNGはRGBA・アルファチャンネル0〜255の**正しい透過画像**だった。
+- 結論: 現在デプロイされているv0.4.3のワークフロー解析ロジックに該当バグは再現せず、コード変更は行わなかった。報告時点でより古いバージョンを使っていた可能性が高いと判断し、ユーザーに調査結果と再検証手順を報告した。
 
 **2. Labタブ: モデルの無いワークフローで無意味なキーフレームが作成される問題**: 調査の副産物として、RMBGのみ（Checkpoint/LoRA/VAEいずれのノードも無い）ワークフローをLabタブで開くと、Model列に「1: （ワークフローの設定のまま）」という空のキーフレーム行が常に表示されてしまうことを実機で発見。ユーザーから「不要なため作成しない形にしたい」との要望を受けて修正。`_buildWorkflowForIteration()`は対象ノードIDが存在しない場合、書き込みを黙ってスキップするだけ（`write()`の`wf[nodeId]`ガード）なので、この行はRun時に何の効果も持たない死んだコントロールだった。`_hasNodeForColumn(col)`を新設し、`_renderColumn()`と`_initColumnButtons()`の＋ボタンで判定 — 対応ノードが無い列は「このワークフローに該当ノードがありません」というプレースホルダーを表示し、キーフレーム追加もブロックする。VAEだけは特殊扱いで、専用VAELoaderが無くてもCheckpointノードが存在すれば内蔵VAEの上書き注入が意味を持つため（既存の`_buildWorkflowForIteration`のVAELoader自動注入ロジック）、Checkpoint存在時はVAE列も通常表示のままにした。
 
@@ -348,6 +375,7 @@ v0.5.0で追加したmp4 Gallery対応（一覧・サムネイル・再生のみ
 ユーザーから「生成UIタブのLab機能のLora、ModelタブのLoraのLoraノード自体をバイパスする機能を追加したい。Lab機能ではキーフレームごとに切り替え対応可能としたい」との要望を受けて着手。同じセッション内で続けて「Lab機能のLoraにLora syntax、Trigger wordsの適用を可能にしたい」「AI TOOLタブのCHATの画像生成でチャットによる設定項目を増やしたい」という要望にも順次対応した一連のセッション。
 
 **1. LoRAノードのバイパス機能**: 実装方針の分岐点（ComfyUI本来のBypass(mode:4)相当の配線迂回か、strength=0にする簡易実装か）をAskUserQuestionでユーザーに確認し、簡易実装（strength=0）を選択。理由は、Lab/GenerateUIが扱う`workflow`は既に`comfyui-workflow.js`の`convertUiToApi()`でAPI形式に変換済みで`mode`の概念自体が失われており、`mode:4`を書き込んでも実行エンジンには一切効果がないため——本物のBypass相当の配線再接続を自前実装するのは過剰投資と判断した。
+
 - **GenerateUI Model タブ**: LoRA列ヘッダーの「Refresh Stack group」ボタン左に⛔トグルボタンを追加（`comfyui-editor.js`の`toggleLoraNodeBypass()`/`_loraNodeBypass`/`_loraBypassSnapshot`）。対象ノードのstrength値をゼロ化し、退避したスナップショットから復元をトグルする。Lora Managerノードの場合はLoRAリスト自体（複数エントリ）は差し替えず維持したまま各エントリのstrength/clipStrengthだけを0にする。Single/Stack Applyボタンを押すとバイパス状態は自動クリアされ、あとから無言で再適用されることはない。
 - **Lab機能**: 既存の行単位「bypassed」（キーフレーム自体を無視するスキップ機能）とは独立した、LoRA列専用の`nodeBypass`フィールドをキーフレームの値に追加。編集モーダルに「LoRAノードをバイパス（強度を0にする）」チェックボックスを新設。`_applyLabLoraToWorkflow()`で`nodeBypass`時はstrength/active/textを0/false/空に強制する。
 
@@ -356,9 +384,10 @@ v0.5.0で追加したmp4 Gallery対応（一覧・サムネイル・再生のみ
 **3. AI TOOL Chat: generate_imageツールのパラメータ拡張**: AskUserQuestionで追加したい項目をユーザーに確認し、KSampler系（steps/cfg/sampler_name/scheduler/denoise/seed）・画像サイズ（width/height）・生成枚数（batch_size）を選択。`comfyui-editor.js`に`setGenerationParams()`を新設し、Lab機能の`_buildWorkflowForIteration`と同じ`sampler_nodes`のstepsNodeId/cfgNodeId等のノードID間接参照パターンを再利用することで、Advanced Samplingワークフロー（Flux.1/2、SD3.5等でKSamplerが複数ノードに分割される構成）にも対応した。seedは`window._wfmGenerateTab.generate()`（実体は`handleGenerate`）へのオプション引数として渡すよう、`generate-tab.js`の`handleGenerate`/`_coreGenerate`にgenOptions引数を追加（既存の呼び出し元との後方互換は維持）。batch_size>1時は複数画像がチャットバブルに表示されるよう`appendChatBubble`に`imageUrls`（複数URL）対応を追加した。実機のOllama（ornith-1.5:9b）でツール呼び出しから画像生成までEnd-to-Endで検証し、指定した各パラメータが正しく反映されることを確認した。
 
 **4. Resolution Selectorノード対応**: ユーザーから実際のワークフロー画像（aspect_ratio COMBO・megapixels・multipleウィジェットを持つ「Resolution Selector」ノード）を見せられ、「3:2などで指定可能か」と問われて調査。`/object_info/ResolutionSelector`で確認したところComfyUI本体組み込みノード（`comfy_extras.nodes_resolution`）で、aspect_ratioは`"3:2 (Photo)"`のような固定ラベル付きCOMBO値と判明した。当初のwidth/height直接指定実装ではこの手のノードに非対応だったため、追加で以下を実装:
-  - `comfyui-workflow.js`の`analyzeWorkflow()`に`resolution_selector_nodes`カテゴリを新設。
-  - `comfyui-editor.js`に`resolveAspectRatioOption(nodeType, requested)`を新設。LLMが渡す短い`"3:2"`形式を、`/object_info`から取得した実際のCOMBO選択肢と前方一致でマッチさせ`"3:2 (Photo)"`のような完全な文字列に解決する（未知の比率はそのままフォールバックし、ComfyUI側の検証エラーに委ねる）。
-  - `setGenerationParams()`にResolution Selector優先ロジックを追加：aspect_ratio指定時はEmptyLatentImageへのwidth/height直接書き込みをスキップし、ResolutionSelectorノードのaspect_ratioだけを書き換える——EmptyLatentImageのwidth/heightがResolutionSelectorの出力へのリンクになっている場合、直接数値を書き込むとそのリンクを上書きしてしまい、意図した比率指定が無視されてしまうため。
+
+- `comfyui-workflow.js`の`analyzeWorkflow()`に`resolution_selector_nodes`カテゴリを新設。
+- `comfyui-editor.js`に`resolveAspectRatioOption(nodeType, requested)`を新設。LLMが渡す短い`"3:2"`形式を、`/object_info`から取得した実際のCOMBO選択肢と前方一致でマッチさせ`"3:2 (Photo)"`のような完全な文字列に解決する（未知の比率はそのままフォールバックし、ComfyUI側の検証エラーに委ねる）。
+- `setGenerationParams()`にResolution Selector優先ロジックを追加：aspect_ratio指定時はEmptyLatentImageへのwidth/height直接書き込みをスキップし、ResolutionSelectorノードのaspect_ratioだけを書き換える——EmptyLatentImageのwidth/heightがResolutionSelectorの出力へのリンクになっている場合、直接数値を書き込むとそのリンクを上書きしてしまい、意図した比率指定が無視されてしまうため。
 
 **ヘルプ・README更新**: `project_v0336_conventions`の慣習（index.html + i18n.js 3言語 + app.jsのhelpIdMapの3点セット）に従い、`helpLab16`/`helpLab17`（Lab LoRAバイパス・プロンプト適用）、`helpGen29`（GenerateUI Model LoRAバイパスボタン）を新規追加し、`helpAi3`（AI TOOL Chatの説明）を拡張パラメータの説明を含めて更新した。README.mdのGenerateUI Tab／Lab subtab／AI TOOL Tabの各セクションも同内容で更新した。
 
@@ -5420,8 +5449,7 @@ SPA および Workflow Studio Library サイドパネルの両方に AI タブ�
 **`applyTextareaFontSize(size)` 追加（export）**
 
 - `<style id="wfm-ta-font-size-style">` を `<head>` に注入
-- 対象セレクタ（対象を 8 箇所に一括適用）:
-  | 対象                                     | ID                         |
+- 対象セレクタ（対象を 8 箇所に一括適用）:| 対象                                     | ID                         |
   | ---------------------------------------- | -------------------------- |
   | Generate UI — Positive Prompt           | `#wfm-prompt-pos-text`   |
   | Generate UI — Negative Prompt           | `#wfm-prompt-neg-text`   |
@@ -6705,6 +6733,7 @@ Feeder 専用スタイルを末尾に追加:
 
 - **型バッジの削除:** ThumbView・CardView・SidePanelの `renderSideInfo` から `typeBadge = badgeHtml(typeLabel)` を削除。ユーザー定義バッジのみ表示
 - **`GENUI_TYPE_MAP` 追加:**
+
   ```javascript
   const GENUI_TYPE_MAP = {
       checkpoint:  { key: "checkpoints",     inputKey: "ckpt_name" },
@@ -6718,6 +6747,7 @@ Feeder 専用スタイルを末尾に追加:
 
   hypernetwork / embedding は対象外
 - **`applyToGenUI(modelName, modelType)`** 追加:
+
   - `comfyUI.currentWorkflow` からターゲット `inputKey` を持つノードを検索
   - `node.inputs[inputKey] = modelName` で直接セット
   - `<select id="wfm-model-${key}">` の表示値も同期
