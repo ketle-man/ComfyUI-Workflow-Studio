@@ -9,6 +9,8 @@ import urllib.error
 
 from aiohttp import web
 
+from ..services.url_guard import require_backend_url, urlopen as _guarded_urlopen
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,7 +94,7 @@ def _eagle_add_from_path(eagle_url, file_path, name, tags):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with _guarded_urlopen(req, timeout=10) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -127,7 +129,7 @@ def _eagle_add(eagle_url, image_url, name, tags):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with _guarded_urlopen(req, timeout=10) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -138,7 +140,7 @@ def _eagle_test(eagle_url):
         f"{eagle_url}/api/application/info",
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=5) as resp:
+    with _guarded_urlopen(req, timeout=5) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -146,7 +148,7 @@ async def handle_add(request: web.Request) -> web.Response:
     """POST /api/wfm/eagle/add - Add image to Eagle."""
     try:
         body = await request.json()
-        eagle_url = body.get("eagleUrl", "http://localhost:41595")
+        eagle_url = require_backend_url(body.get("eagleUrl", "http://localhost:41595"))
         image_url = body.get("url", "")
         name = body.get("name", "image.png")
         tags = body.get("tags", [])
@@ -193,7 +195,7 @@ async def handle_test(request: web.Request) -> web.Response:
     """POST /api/wfm/eagle/test - Test Eagle connection."""
     try:
         body = await request.json()
-        eagle_url = body.get("eagleUrl", "http://localhost:41595")
+        eagle_url = require_backend_url(body.get("eagleUrl", "http://localhost:41595"))
         result = await asyncio.to_thread(_eagle_test, eagle_url)
         return web.json_response({
             "status": "success",

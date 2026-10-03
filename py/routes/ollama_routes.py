@@ -7,6 +7,7 @@ import urllib.request
 from aiohttp import web
 
 from ..services.settings_service import SettingsService
+from ..services.url_guard import require_backend_url, urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,12 @@ async def handle_models(request: web.Request) -> web.Response:
     import asyncio
     try:
         cfg = _get_ollama_config()
+        base_url = require_backend_url(cfg["url"])
 
         def _fetch():
-            url = f"{cfg['url']}/api/tags"
+            url = f"{base_url}/api/tags"
             req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urlopen(req, timeout=5) as resp:
                 return json.loads(resp.read().decode("utf-8"))
 
         data = await asyncio.to_thread(_fetch)
@@ -61,11 +63,12 @@ async def handle_test(request: web.Request) -> web.Response:
     import asyncio
     try:
         cfg = _get_ollama_config()
+        base_url = require_backend_url(cfg["url"])
 
         def _test():
-            url = f"{cfg['url']}/api/tags"
+            url = f"{base_url}/api/tags"
             req = urllib.request.Request(url, method="GET")
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urlopen(req, timeout=5) as resp:
                 return resp.status == 200
 
         ok = await asyncio.to_thread(_test)
@@ -83,7 +86,7 @@ async def handle_chat(request: web.Request) -> web.Response:
         body = await request.json()
         cfg = _get_ollama_config()
         model = body.get("model") or cfg["model"]
-        base_url = (body.get("url") or cfg["url"]).rstrip("/")
+        base_url = require_backend_url(body.get("url") or cfg["url"])
         messages = body.get("messages", [])
 
         def _chat():
@@ -100,7 +103,7 @@ async def handle_chat(request: web.Request) -> web.Response:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urlopen(req, timeout=120) as resp:
                 return json.loads(resp.read().decode("utf-8"))
 
         resp_data = await asyncio.to_thread(_chat)

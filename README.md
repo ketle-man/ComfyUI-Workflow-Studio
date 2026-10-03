@@ -22,7 +22,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.7.11-green)
+![Version](https://img.shields.io/badge/version-0.7.12-green)
 
 ## Screenshots
 
@@ -583,6 +583,10 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **[Eagle](https://eagle.cool/)** — for auto-saving generated images with metadata
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one) (v0.1.9+)** — enables BiRefNet background removal, SAM3 text-prompt segmentation, and ABR stamp-brush library in the Image Edit Mask tool; `birefnet.safetensors` must be placed in `ComfyUI/models/background_removal/` for BiRefNet
 - **[psd-tools](https://pypi.org/project/psd-tools/)** (v0.6.0) — enables all PSD (Photoshop) features: Gallery bulk "Create PSD" export, Gallery browsing/thumbnails for `.psd` files, and Image Edit's Save PSD / Open PSD buttons; `pip install -r requirements.txt` (ships prebuilt wheels, no C compiler required); without it, PSD-related actions show an error toast with the install command instead of failing silently
+
+#### Backend connection security (v0.7.12)
+
+Server-side proxies for Ollama, LM Studio, Lemonade, Unsloth, the Tagger VLM and Eagle only connect to **localhost / 127.0.0.1 / ::1** (any port); `http(s)` only, no credentials in the URL, and redirects are never followed. To use a backend on another machine (e.g. an Ollama server on your LAN), list it in the `WFS_ALLOWED_BACKEND_HOSTS` environment variable (comma-separated `host` or `host:port`, e.g. `192.168.1.20:11434,gpu-box`) and restart ComfyUI. If you start ComfyUI with `--listen`, anyone who can reach it can use these routes, so only do that on a trusted network.
 
 ---
 

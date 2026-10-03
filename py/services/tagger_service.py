@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from .url_guard import HINT as _URL_HINT, is_allowed_backend_url, urlopen as _guarded_urlopen
 
 import numpy as np
 from PIL import Image, ImageOps, PngImagePlugin
@@ -22,19 +22,9 @@ logger = logging.getLogger(__name__)
 
 _model_lock = threading.Lock()
 
-# Unsloth requires an Authorization: Bearer <UNSLOTH_API_KEY> header even for
-# local access. api_url is client-supplied per request, so without a host
-# check a client could point it at an arbitrary server and exfiltrate the key
-# (SSRF). Mirrors unsloth_routes.py's _is_allowed_base_url/_ALLOWED_HOSTS.
-_UNSLOTH_ALLOWED_HOSTS = {"localhost", "127.0.0.1", "::1"}
-
-
-def _is_allowed_unsloth_url(api_url: str) -> bool:
-    try:
-        parsed = urlparse(api_url)
-        return parsed.scheme in ("http", "https") and parsed.hostname in _UNSLOTH_ALLOWED_HOSTS
-    except Exception:
-        return False
+# api_url is client-supplied per request, so every backend (Ollama / OpenAI-compatible / Unsloth)
+# goes through url_guard: loopback or WFS_ALLOWED_BACKEND_HOSTS only, no redirects. This also
+# stops the Unsloth API key (Authorization header) from being sent to an arbitrary server.
 
 
 class TaggerService:
@@ -279,22 +269,22 @@ class TaggerService:
     def vlm_models(self, backend: str, api_url: str) -> list:
         backend = (backend or "ollama").lower()
         try:
+            if not is_allowed_backend_url(api_url):
+                logger.error("vlm_models: %s", _URL_HINT)
+                return []
             if backend == "ollama":
                 req = urllib.request.Request(api_url.rstrip("/") + "/api/tags")
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with _guarded_urlopen(req, timeout=5) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                 return sorted(m["name"] for m in data.get("models", []))
 
             headers = {}
             if backend == "unsloth":
-                if not _is_allowed_unsloth_url(api_url):
-                    logger.error("vlm_models: Unsloth backend URL must point to localhost/127.0.0.1/::1")
-                    return []
                 key = self._unsloth_api_key()
                 if key:
                     headers["Authorization"] = f"Bearer {key}"
             req = urllib.request.Request(api_url.rstrip("/") + "/v1/models", headers=headers)
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with _guarded_urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             return sorted(m["id"] for m in data.get("data", []))
         except Exception as e:
@@ -309,6 +299,8 @@ class TaggerService:
                      thinking_mode: bool = False, max_tokens: int = 0) -> dict:
         backend = (backend or "ollama").lower()
         try:
+            if not is_allowed_backend_url(api_url):
+                return {"error": _URL_HINT}
             if backend == "ollama":
                 body = {
                     "model": model,
@@ -326,14 +318,12 @@ class TaggerService:
                     headers={"Content-Type": "application/json"},
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=180) as resp:
+                with _guarded_urlopen(req, timeout=180) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                 content = data.get("message", {}).get("content", "")
             else:
                 headers = {"Content-Type": "application/json"}
                 if backend == "unsloth":
-                    if not _is_allowed_unsloth_url(api_url):
-                        return {"error": "Unsloth backend URL must point to localhost/127.0.0.1/::1"}
                     key = self._unsloth_api_key()
                     if key:
                         headers["Authorization"] = f"Bearer {key}"
@@ -354,7 +344,7 @@ class TaggerService:
                     headers=headers,
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=180) as resp:
+                with _guarded_urlopen(req, timeout=180) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                 message = data.get("choices", [{}])[0].get("message", {})
                 content = message.get("content", "")

@@ -2,6 +2,20 @@
 
 ---
 
+## v0.7.12（2026-10-04）
+
+### セキュリティ: バックエンド接続先をブラウザから任意指定できた問題（SSRF）を修正
+
+ComfyUI-Manager登録PR（LiveChatStream、Comfy-Org/ComfyUI-Manager#3340）のレビューで指摘された「リクエストから接続先URLを受け取り、サーバーが接続する」問題が、WFSにも同じ構造で存在していたため修正。
+
+- 対象: `POST /api/wfm/ollama/chat`（bodyの `url`。従来は**検証なし**で、任意ホスト・クラウドメタデータ・`file://` に接続できた）、Tagger VLM（`/wfm/tagger/vlm/models`・`vlm/predict`・`batch/start` の `api_url`。Unslothのみ制限されていた）、Eagle（`/api/wfm/eagle/add`・`/test` の `eagleUrl`）、Unslothプロキシ（`baseUrl`）。
+- 新規 `py/services/url_guard.py` に共通化。許可は **loopback（localhost / 127.0.0.1 / ::1、ポート自由）** と、運用者が環境変数 `WFS_ALLOWED_BACKEND_HOSTS`（`host` または `host:port` のカンマ区切り）で指定したホストのみ。`http(s)` 以外（`file://` 等）、URL内の認証情報、`localhost.evil.com` のような偽装ホストは拒否。**リダイレクトは追従しない**（302は接続せずエラー）。
+- **挙動変更**: LAN上の別マシンのOllama/Eagle等を使っている場合は `WFS_ALLOWED_BACKEND_HOSTS` の設定が必要（拒否時のエラーメッセージに案内を表示）。
+- 実機（ComfyUI_5、ポート8189）で、メタデータIP・`file://`・公開IPの拒否、loopbackのOllama chat/Tagger一覧/Eagle test/Unsloth Decision APIの正常動作を確認。
+- 注意: ComfyUIを `--listen` で公開すると、到達できる相手は引き続きこれらのルートを使える（接続先を変えられないだけ）。信頼できるネットワークでのみ使うこと。
+
+---
+
 ## v0.7.11（2026-10-02）
 
 ### セキュリティ: CivitAI情報の説明文のHTML無害化（保存型XSS対策）

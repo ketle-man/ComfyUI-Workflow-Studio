@@ -19,19 +19,19 @@ import logging
 import os
 import urllib.request
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
 
 from aiohttp import web
+
+from ..services.url_guard import HINT as _URL_HINT, is_allowed_backend_url, urlopen as _guarded_urlopen
 
 logger = logging.getLogger(__name__)
 
 UNSLOTH_DEFAULT_URL = "http://localhost:8888"
 _ALLOWED_PATHS = {"/v1/models", "/v1/chat/completions", "/v1/systemone"}
 # baseUrl is client-supplied (so a custom Unsloth port works), but the
-# Authorization header carries a real secret — restrict the host to loopback
-# so this proxy can't be used to exfiltrate UNSLOTH_API_KEY to an arbitrary
-# server (SSRF). Port is unrestricted.
-_ALLOWED_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# Authorization header carries a real secret — restrict the host (loopback, or
+# WFS_ALLOWED_BACKEND_HOSTS set by the operator) so this proxy can't be used to
+# exfiltrate UNSLOTH_API_KEY to an arbitrary server (SSRF). Redirects are not followed.
 
 
 def _get_api_key():
@@ -45,15 +45,6 @@ KEYLESS_REJECTED_MESSAGE = (
     "in the plugin's .env (copy .env.example) and restart ComfyUI, or turn on Keyless API "
     "access -> \"Chat and inference\" in Unsloth Desktop's Settings -> API."
 )
-
-
-def _is_allowed_base_url(base_url):
-    """Only relay (and attach the API key) to a loopback host."""
-    try:
-        parsed = urlparse(base_url)
-        return parsed.scheme in ("http", "https") and parsed.hostname in _ALLOWED_HOSTS
-    except Exception:
-        return False
 
 
 def setup_routes(app: web.Application):
@@ -78,10 +69,8 @@ async def handle_proxy(request: web.Request) -> web.Response:
         if path not in _ALLOWED_PATHS or method not in ("GET", "POST"):
             return web.json_response({"message": "Unsupported proxy target"}, status=400)
 
-        if not _is_allowed_base_url(base_url):
-            return web.json_response({
-                "message": "Unsloth backend URL must point to localhost/127.0.0.1/::1",
-            }, status=400)
+        if not is_allowed_backend_url(base_url):
+            return web.json_response({"message": _URL_HINT}, status=400)
 
         # No key → relay without Authorization (Unsloth's Keyless API access); if Unsloth
         # still demands one, the 401 below explains both ways to fix it.
@@ -93,7 +82,7 @@ async def handle_proxy(request: web.Request) -> web.Response:
             if data is not None:
                 headers["Content-Type"] = "application/json"
             req = urllib.request.Request(f"{base_url}{path}", data=data, headers=headers, method=method)
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with _guarded_urlopen(req, timeout=120) as resp:
                 return json.loads(resp.read().decode("utf-8"))
 
         data = await asyncio.to_thread(_fetch)
