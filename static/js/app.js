@@ -557,7 +557,7 @@ function applyI18nToHtml() {
         "wfm-help-settings-18": "helpSettings18", "wfm-help-settings-19": "helpSettings19",
         "wfm-help-settings-20": "helpSettings20", "wfm-help-settings-21": "helpSettings21",
         "wfm-help-settings-22": "helpSettings22",
-        "wfm-help-settings-23": "helpSettings23", "wfm-help-settings-24": "helpSettings24",
+        "wfm-help-settings-23": "helpSettings23", "wfm-help-settings-24": "helpSettings24", "wfm-help-settings-25": "helpSettings25",
         "wfm-help-nodes-1": "helpNodes1", "wfm-help-nodes-2": "helpNodes2",
         "wfm-help-nodes-3": "helpNodes3", "wfm-help-nodes-4": "helpNodes4",
         "wfm-help-nodes-5": "helpNodes5", "wfm-help-nodes-6": "helpNodes6",

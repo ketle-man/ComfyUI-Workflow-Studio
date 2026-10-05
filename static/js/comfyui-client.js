@@ -3,6 +3,8 @@
  * Handles communication with ComfyUI server (same origin)
  */
 
+import { prepareVramForGeneration } from "./vram-prepare.js";
+
 function _uuid() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
         const r = (Math.random() * 16) | 0;
@@ -194,6 +196,8 @@ export const comfyUI = {
 
     // Generation
     async queuePrompt(workflow, extraData = null) {
+        // Settings tab "VRAM Management": unload Ollama models to free VRAM (no-op when off, never throws)
+        await prepareVramForGeneration();
         const body = {
             prompt: workflow,
             client_id: this.clientId,

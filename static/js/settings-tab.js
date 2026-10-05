@@ -8,6 +8,7 @@ import { t, getLang, getSummaryLang, setLang, setSummaryLang, getLanguageOptions
 
 import { getSettings, readJsonStorage, escapeHtml } from "./util.js";
 import { DECISION_BACKENDS, getDecisionSettings, saveDecisionSettings, testDecisionConnection, listDecisionModels } from "./decision-client.js";
+import { initVramSettings } from "./vram-prepare.js";
 
 const SETTINGS_KEY = "wfm_settings";
 
@@ -880,6 +881,30 @@ export async function initSettingsTab() {
             <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-decision-save">${t("save")}</button>
         </details>
 
+        <!-- VRAM Management (Ollama) — unload Ollama models before every generation (vram-prepare.js) -->
+        <details class="wfm-settings-section">
+            <summary class="wfm-settings-summary">${t("vramSection")}</summary>
+            <small style="color:var(--wfm-text-secondary);font-size:11px;display:block;margin-bottom:8px;">
+                ${t("vramHint")}
+            </small>
+            <div class="wfm-form-group">
+                <label for="wfm-settings-vram-mode">${t("vramModeLabel")}</label>
+                <select class="wfm-select" id="wfm-settings-vram-mode">
+                    <option value="off">${t("vramModeOff")}</option>
+                    <option value="auto">${t("vramModeAuto")}</option>
+                    <option value="all">${t("vramModeAll")}</option>
+                </select>
+            </div>
+            <div class="wfm-form-group">
+                <label for="wfm-settings-vram-target">${t("vramTargetLabel")}</label>
+                <input type="number" class="wfm-input" id="wfm-settings-vram-target" min="0" max="64" step="0.5" value="8" style="width:100px;">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="wfm-btn wfm-btn-sm" id="wfm-settings-vram-unload">${t("vramUnloadNow")}</button>
+                <span id="wfm-settings-vram-status" style="font-size:12px;color:var(--wfm-text-secondary);"></span>
+            </div>
+        </details>
+
         <!-- G'MIC Integration -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">G'MIC-Qt Integration</summary>
@@ -1400,6 +1425,7 @@ export async function initSettingsTab() {
         if (hint) hint.textContent = hintText;
     };
     refreshDecisionModels(decisionSettings.model);
+    initVramSettings();
     document.getElementById("wfm-settings-decision-refresh")?.addEventListener("click", () => refreshDecisionModels());
     document.getElementById("wfm-settings-decision-backend")?.addEventListener("change", (e) => {
         const urlInput = document.getElementById("wfm-settings-decision-url");

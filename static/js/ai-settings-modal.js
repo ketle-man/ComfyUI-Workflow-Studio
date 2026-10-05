@@ -7,6 +7,7 @@
 import { openModal, closeModal, showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { readJsonStorage, getAiBackendDefaultUrl, unslothProxy, unloadAiModel } from "./util.js";
+import { unloadAllOllamaModels } from "./vram-prepare.js";
 
 function loadCfg(storageKey) {
     return readJsonStorage(storageKey);
@@ -176,6 +177,8 @@ export function openAiBackendSettingsModal(storageKey, title, onSaved) {
     document.getElementById("wfm-aism-unload-btn")?.addEventListener("click", async () => {
         const url = urlInput.value.trim();
         const model = modelSelect.value;
+        // Ollama: unload every loaded model incl. decision models (same server step as Settings → VRAM Management)
+        if (currentBackend() === "ollama") { await unloadAllOllamaModels(url); return; }
         if (!model) { showToast(t("aiUnloadNoModel"), "error"); return; }
         try {
             await unloadAiModel(url, currentBackend(), model);

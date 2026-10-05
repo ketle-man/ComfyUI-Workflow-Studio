@@ -6,6 +6,7 @@
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { readJsonStorage, getAiBackendDefaultUrl, escapeHtml, unloadAiModel } from "./util.js";
+import { unloadAllOllamaModels } from "./vram-prepare.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
@@ -461,6 +462,8 @@ function initSettingsTab() {
         const backend = document.querySelector("input[name='wfm-ai-backend']:checked")?.value || "ollama";
         const url = urlInput?.value?.trim() || "";
         const model = document.getElementById("wfm-ai-model-select")?.value || "";
+        // Ollama: unload every loaded model incl. decision models (same server step as Settings → VRAM Management)
+        if (backend === "ollama") { await unloadAllOllamaModels(url); return; }
         if (!model) { showToast(t("aiUnloadNoModel"), "error"); return; }
         try {
             await unloadAiModel(url, backend, model);
