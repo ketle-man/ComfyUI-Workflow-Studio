@@ -6081,3 +6081,79 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
+
+/* Workflow detail modal — GenerateUI compatibility check row */
+.wfm-compat-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.wfm-compat-result {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--wfm-text-secondary);
+}
+.wfm-compat-badge {
+    position: relative;
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    border: 1px solid var(--wfm-border);
+    background: var(--wfm-bg);
+    color: var(--wfm-text);
+    cursor: help;
+}
+.wfm-compat-ok { border-color: #3a8a3a; }
+.wfm-compat-warn { border-color: #c08a20; }
+.wfm-compat-error { border-color: var(--wfm-danger, #c04040); }
+.wfm-compat-skip { opacity: 0.6; }
+.wfm-compat-badge:hover::after,
+.wfm-compat-badge:focus::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 4px);
+    z-index: 1000;
+    width: max-content;
+    max-width: min(520px, 80vw);
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--wfm-border);
+    background: var(--wfm-bg-secondary, var(--wfm-bg));
+    color: var(--wfm-text);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-line;
+    text-align: left;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+}
+
+/* Side panel — format + GenerateUI compatibility badges row (below the title) */
+.wfm-side-compat-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 4px 10px 6px;
+    min-height: 26px;
+    flex-shrink: 0;
+}
+.wfm-side-compat-row .wfm-format-badge:empty { display: none; }
+/* The side panel clips overflow, so anchor tips to the whole row and span the panel width */
+.wfm-side-compat-row { position: relative; }
+.wfm-compat-result--right .wfm-compat-badge { position: static; }
+.wfm-compat-result--right .wfm-compat-badge:hover::after,
+.wfm-compat-result--right .wfm-compat-badge:focus::after {
+    left: 6px;
+    right: 6px;
+    top: 100%;
+    width: auto;
+    max-width: none;
+}
+.wfm-compat-row .wfm-format-badge:empty { display: none; }

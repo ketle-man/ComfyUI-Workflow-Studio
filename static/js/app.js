@@ -472,7 +472,7 @@ function applyI18nToHtml() {
         "wfm-help-about-1": "helpAbout1", "wfm-help-about-2": "helpAbout2",
         "wfm-help-wf-1": "helpWf1", "wfm-help-wf-2": "helpWf2", "wfm-help-wf-3": "helpWf3",
         "wfm-help-wf-4": "helpWf4", "wfm-help-wf-5": "helpWf5", "wfm-help-wf-6": "helpWf6",
-        "wfm-help-wf-7": "helpWf7",
+        "wfm-help-wf-7": "helpWf7", "wfm-help-wf-8": "helpWf8",
         "wfm-help-gen-1": "helpGen1", "wfm-help-gen-2": "helpGen2",
         "wfm-help-gen-3": "helpGen3", "wfm-help-gen-4": "helpGen4",
         "wfm-help-gen-5": "helpGen5", "wfm-help-gen-6": "helpGen6", "wfm-help-gen-7": "helpGen7",

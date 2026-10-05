@@ -12,6 +12,7 @@ import { t, getSummaryPrompt } from "./i18n.js";
 import { highlightJSON } from "./json-highlight.js";
 import { openBadgeEditModal } from "./models-tab.js";
 import { escapeHtml, getSettings, readJsonStorage, setupSearchClearBtn } from "./util.js";
+import { checkWorkflowCompat, getCachedCompat, compatBadgeHtml } from "./workflow-compat-check.js";
 
 // ============================================
 // Constants
@@ -623,6 +624,21 @@ async function toggleFavorite(wf, btnEl) {
 // Side Panel
 // ============================================
 
+// Format badge (UI / API / App) — JSON tab, side panel compat row and detail modal share it
+function setFormatBadge(el, fmt) {
+    if (!el) return;
+    const formatLabels = { ui: t("uiFormat"), api: t("apiFormat"), app: t("appFormat") };
+    el.textContent = fmt ? (formatLabels[fmt] || fmt) : "";
+    el.className = "wfm-format-badge" + (fmt ? " wfm-format-badge--" + fmt : "");
+}
+
+function renderCompatBadges(el, r) {
+    if (!el) return;
+    el.innerHTML = r
+        ? compatBadgeHtml(t("compatConversion"), r.conversion, escapeHtml) + compatBadgeHtml(t("compatOperability"), r.operability, escapeHtml)
+        : "";
+}
+
 async function showSidePanel(wf, cardEl) {
     const panel = document.getElementById("wfm-side-panel");
     const titleEl = document.getElementById("wfm-side-panel-title");
@@ -655,23 +671,29 @@ async function showSidePanel(wf, cardEl) {
     renderSideGroup(wf);
 
     const badgeEl = document.getElementById("wfm-json-format-badge");
+    const sideFormatEl = document.getElementById("wfm-side-format-badge");
+    const sideCompatEl = document.getElementById("wfm-side-compat-result");
+    setFormatBadge(sideFormatEl, null);
+    if (sideCompatEl) sideCompatEl.textContent = "";
     try {
         const data = await getRawWorkflow(wf.filename);
-        if (badgeEl) {
-            const fmt = comfyWorkflow.detectFormat(data, wf.filename);
-            const formatLabels = { ui: t("uiFormat"), api: t("apiFormat"), app: t("appFormat") };
-            badgeEl.textContent = formatLabels[fmt] || fmt;
-            badgeEl.className = "wfm-format-badge wfm-format-badge--" + fmt;
-        }
+        const fmt = comfyWorkflow.detectFormat(data, wf.filename);
+        setFormatBadge(badgeEl, fmt);
+        setFormatBadge(sideFormatEl, fmt);
         const jsonStr = JSON.stringify(data, null, 2);
         contentEl.innerHTML = highlightJSON(jsonStr);
         contentEl.dataset.rawJson = jsonStr;
+        // GenerateUI compatibility badges (results only). The check takes ~20 ms once /object_info
+        // is cached, so it runs on every selection; skip the result if another card got selected.
+        if (sideCompatEl) {
+            sideCompatEl.textContent = t("compatChecking");
+            const r = await checkWorkflowCompat(data, wf.filename);
+            if (state.selectedWf === wf) renderCompatBadges(sideCompatEl, r);
+        }
     } catch (err) {
         contentEl.textContent = "Error: " + err.message;
-        if (badgeEl) {
-            badgeEl.textContent = "";
-            badgeEl.className = "wfm-format-badge";
-        }
+        setFormatBadge(badgeEl, null);
+        if (sideCompatEl) sideCompatEl.textContent = "";
     }
 }
 
@@ -682,6 +704,9 @@ function closeSidePanel() {
     state.selectedWf = null;
     const titleEl = document.getElementById("wfm-side-panel-title");
     if (titleEl) titleEl.textContent = "";
+    setFormatBadge(document.getElementById("wfm-side-format-badge"), null);
+    const sideCompatEl = document.getElementById("wfm-side-compat-result");
+    if (sideCompatEl) sideCompatEl.textContent = "";
     const listLoadBtn = document.getElementById("wfm-list-load-btn");
     if (listLoadBtn) { listLoadBtn.disabled = true; listLoadBtn.title = t("selectCardFirst"); }
     const listLoadVideoBtn = document.getElementById("wfm-list-load-video-btn");
@@ -960,6 +985,11 @@ function openDetailModal(wf) {
 
     const thumbSrc = wf.thumbnail || "";
     const html = `
+        <div class="wfm-compat-row">
+            <span id="wfm-detail-format-badge" class="wfm-format-badge"></span>
+            <button class="wfm-btn wfm-btn-sm" id="wfm-detail-compat-check" title="${t("compatCheckHint")}">${t("compatCheck")}</button>
+            <span id="wfm-detail-compat-result" class="wfm-compat-result"></span>
+        </div>
         <div class="wfm-modal-thumb-section">
             ${thumbSrc
                 ? `<img src="${thumbSrc}" class="wfm-modal-thumb-img" />`
@@ -1073,6 +1103,30 @@ function openDetailModal(wf) {
             }
         });
     }
+
+    // GenerateUI compatibility check (on demand; results kept in memory for this session only)
+    const renderCompat = (r) => renderCompatBadges(document.getElementById("wfm-detail-compat-result"), r);
+    renderCompat(getCachedCompat(wf.filename));
+    getRawWorkflow(wf.filename)
+        .then((raw) => setFormatBadge(document.getElementById("wfm-detail-format-badge"), comfyWorkflow.detectFormat(raw, wf.filename)))
+        .catch(() => {});
+    // Warm the /object_info cache (large; ~10 s on first fetch) so the check button answers quickly
+    comfyWorkflow.getObjectInfo();
+    document.getElementById("wfm-detail-compat-check")?.addEventListener("click", async () => {
+        const btn = document.getElementById("wfm-detail-compat-check");
+        const el = document.getElementById("wfm-detail-compat-result");
+        btn.disabled = true;
+        if (el) el.textContent = t("compatChecking");
+        try {
+            const raw = await getRawWorkflow(wf.filename);
+            const r = await checkWorkflowCompat(raw, wf.filename);
+            renderCompat(r);
+        } catch (err) {
+            if (el) el.textContent = t("errorWithMsg", err.message);
+        } finally {
+            btn.disabled = false;
+        }
+    });
 
     // Auto-save tags/memo/summary on blur
     ["wfm-detail-tags", "wfm-detail-memo", "wfm-detail-summary"].forEach((id) => {
