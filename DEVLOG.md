@@ -2,6 +2,35 @@
 
 ---
 
+## v0.7.13（2026-10-06）
+
+### VRAM調整（Ollama）— Comic Creatorから移植
+
+画像生成の直前にOllamaでロード中のモデルをアンロードし、ComfyUIの空きVRAMを確保する機能をComfyUI Comic Creator（`/api/ccc/vram/prepare`）から移植。
+
+- 設定タブに「VRAM調整（Ollama）」セクションを新設。生成前の動作は「何もしない」（既定）／「空きが目標未満のときだけ必要な分をアンロード」／「毎回すべてアンロード」、目標の空き（GB）、「今すぐすべてアンロード」ボタン。設定はブラウザの `wfm_vram_settings`。
+- フックは `comfyUI.queuePrompt()` の直前（`static/js/vram-prepare.js` の `prepareVramForGeneration()`）。GenerateUI・Lab・バッチ・Video・AI TOOLのChat生成など、Workflow Studio経由の生成すべてに効く。失敗しても生成は止めず、アンロード時・目標未達・失敗時のみトーストで通知（連続生成で同じ目標未達の警告は繰り返さない）。ComfyUIのキャンバスから直接実行する生成は対象外。
+- サーバー: 新規 `py/routes/vram_routes.py`（`POST /api/wfm/vram/prepare`、Content-Typeは `application/json` のみ＝他サイトからの単純リクエストでモデルを外されないため）。空きVRAMは **nvidia-smiの実測＋ComfyUI自身のtorch未使用キャッシュ**（ComfyUIの `get_free_memory` はOllamaのロード/アンロードに反応しないことがあるため）。取れなければComfyUIの値。autoは `size_vram` が実際に空く量より小さいため、大きいモデルから1台ずつアンロードしてそのつど実測で止める。アンロードは `keep_alive:0` の `/api/generate`、受け付けない意思決定モデルは `/api/chat` で再試行し、最後に `/api/ps` で確認。同時実行はロックで409。
+- 対象のOllama: 既定の `127.0.0.1:11434`（常に追加）＋OllamaのときのAI TOOL・Prompt・TaggerのAI設定と意思決定モデル。接続先は v0.7.12 の `url_guard`（loopback＋`WFS_ALLOWED_BACKEND_HOSTS`）を通し、許可外のURLはリクエスト全体を拒否せずそのURLだけ飛ばす。
+- 「モデルをアンロード」ボタン（AI TOOLタブ、Prompt/Taggerの⚙設定モーダル）は、Ollamaのとき意思決定モデルを含む全モデルをアンロードするよう変更（同じサーバー処理）。サイドパネルAタブの Settings にも「VRAM (Ollama) → Unload all now」を追加（サイドパネルからはSPAの `vram-prepare.js` を import できないため、同じlocalStorageキーから接続先を集める小関数を `node_sets_menu.js` に内蔵）。
+- 実機（ComfyUI_5、ポート8189、RTX 12GB）で確認: qwen3.5:9b＋tev1:0.8bをロードし空き1.5GBの状態から、auto（目標4GB）はqwen3.5:9bのみアンロードして空き1.7→9.1GB・tev1は残る、allはtev1も外す（各約1.1秒）。415/400の入力検証、許可外URLのスキップ、設定タブUI、`queuePrompt()` 経由のフック（`/prompt` 送信のみ差し止めて確認）、各アンロードボタンを確認。
+
+### Workflowタブ: GenerateUIチェック（変換・操作性バッジ）
+
+ワークフローをGenerateUIに読み込む前に、動くかどうかを確認できるようにした。
+
+- 詳細モーダル（ダブルクリック）のタイトル下に、形式バッジ（UI/API/App形式）・「GenerateUIチェック」ボタン・✅⚠❌ の結果バッジ2つ。サイドの詳細ペインにも名前の下に形式バッジと結果バッジ（選択時に自動チェック、結果のみ）。バッジにマウスを乗せると理由をCSSチップで表示（詳細ペインはペイン幅いっぱいに表示）。
+- **変換**: GenerateUIと同じ `convertUiToApi()` で変換。未対応形式・変換エラー・このComfyUIに無いノード型は ❌、この環境に無いCOMBO値（モデル・LoRA・画像など）は ⚠。UI形式は変換時に先頭の選択肢へ無警告で差し替わる（全COMBOの差し替えを記録する `getLastComboSubstitutions()` を追加。GenerateUIの挙動は不変）。API形式は変換しないため値を直接照合し、「そのまま送るとComfyUIの検証エラー（Value not in list）」と案内。
+- **操作性**: 設定を持つノードのうち、`analyzeWorkflow()` でGenerateUIに表示されるノードの割合（✅80%以上／⚠50%以上／❌それ未満）。チップにプロンプト欄・サンプラー数と、ノードグラフで変更が必要なノードを列挙。
+- 当初は意思決定モデル（Unsloth laya）のscoreで操作性を評価する設計だったが、実測で区別できなかった（全ノード非表示の状態2.54 > 全表示2.35、状態を単純化しても2.24対1.87、yes確率0.41対0.44、choiceはどちらも同じ選択肢）ためルール判定に変更。
+- 結果は保存せずセッション中のメモリのみ。チェックは約20ms。`/object_info` の初回取得（約10秒）を避けるため、モーダルを開いた時点で先読み。
+
+### ヘルプ
+
+設定タブ（VRAM調整）、Workflowタブ（サイドパネル・GenerateUIチェック）、Prompt/Taggerタブ（アンロード）、AI TOOLタブ、サイドパネルAタブの記述を3言語で更新。
+
+---
+
 ## v0.7.12（2026-10-04）
 
 ### セキュリティ: バックエンド接続先をブラウザから任意指定できた問題（SSRF）を修正

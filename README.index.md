@@ -26,12 +26,12 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.7.12-green)
+![Version](https://img.shields.io/badge/version-0.7.13-green)
 
 ## Features (tab -> feature names)
 
 ### Workflow Tab
-Thumbnail / Table views, Thumbnail side panel, Badge filtering, Search, Side panel tabs, Badge management, AI summary, Import / Export, Side panel toolbar buttons, Default view setting, Search clear (✕), Clear all filters (✕ Clear), Sort
+Thumbnail / Table views, Thumbnail side panel, Badge filtering, Search, Side panel tabs, Badge management, AI summary, Import / Export, Side panel toolbar buttons, Default view setting, Search clear (✕), Clear all filters (✕ Clear), Sort, GenerateUI Check
 
 ### Canvas Snapshot (v0.1.2)
 One-click capture, Auto-save as thumbnail, Embedded workflow metadata, Auto-import
@@ -49,7 +49,7 @@ Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column —
 3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager, Form / Table toggle, Table view — Presets / Presets Group / Wildcards / Style
 
 ### Settings Tab
-2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, Video Playback Volume, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
+2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, VRAM Management (Ollama), Video Playback Volume, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
 
 ### Gallery Tab (v0.3.44)
 Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, PSD file support, Performance

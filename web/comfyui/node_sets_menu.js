@@ -3923,6 +3923,44 @@ function isValidAiUrl(url) {
     }
 }
 
+// "Unload all now" (VRAM): same server step as Workflow Studio's Settings → VRAM Management
+// (/api/wfm/vram/prepare, py/routes/vram_routes.py). static/js/vram-prepare.js can't be imported
+// here (it pulls in the SPA's app.js), so the Ollama URLs are collected from the same localStorage
+// keys directly — the SPA is served from this origin. The server always adds 127.0.0.1:11434.
+function _aiVramOllamaUrls(extraUrl) {
+    const urls = [];
+    for (const key of ["wfm_ai_settings", "wfm_prompt_ai_settings", "wfm_tagger_ai_settings"]) {
+        try {
+            const s = JSON.parse(localStorage.getItem(key) || "{}");
+            if ((s.backend || "ollama") === "ollama") urls.push(s.backendUrl || getAiBackendDefaultUrl("ollama"));
+        } catch {}
+    }
+    try {
+        const d = JSON.parse(localStorage.getItem("wfm_decision_settings") || "{}");
+        if (d.backend === "ollama" && d.baseUrl) urls.push(d.baseUrl);
+    } catch {}
+    if (extraUrl) urls.push(extraUrl);
+    return [...new Set(urls)];
+}
+
+async function aiVramUnloadAll(extraUrl) {
+    const r = await fetch("/api/wfm/vram/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "all", urls: _aiVramOllamaUrls(extraUrl) }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.status !== "ok") throw new Error(d.message || `HTTP ${r.status}`);
+    const gb = (mb) => (mb / 1024).toFixed(1);
+    let text;
+    if (d.unloaded.length) text = `Unloaded ${d.unloaded.map((u) => u.name).join(", ")} — free ${gb(d.free_before_mb)} → ${gb(d.free_after_mb)} GB`;
+    else if (d.failed.length) text = "";
+    else if (d.unreachable?.length) text = `Cannot reach Ollama: ${d.unreachable.map((u) => u.url).join(", ")}`;
+    else text = `No Ollama models are loaded (free ${gb(d.free_after_mb)} GB)`;
+    if (d.failed.length) text += (text ? " / " : "") + `Could not unload: ${d.failed.join(", ")}`;
+    return { text, ok: !d.failed.length && !(d.unreachable?.length && !d.unloaded.length) };
+}
+
 function loadAiCfg() {
     try { return JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || "{}"); } catch { return {}; }
 }
@@ -4280,6 +4318,13 @@ const renderAiTab = (container) => {
                         </div>
                     </div>
                     <div class="wfm-nlp-ai-sec">
+                        <div class="wfm-nlp-ai-sec-title">VRAM (Ollama)</div>
+                        <div class="wfm-nlp-ai-row">
+                            <button id="wfm-nlp-ai-vram-unload" class="wfm-nlp-ai-btn" title="Unload every model loaded in Ollama on localhost (decision models included) — same as Settings → VRAM Management in Workflow Studio">Unload all now</button>
+                        </div>
+                        <span id="wfm-nlp-ai-vram-status" class="wfm-nlp-ai-status"></span>
+                    </div>
+                    <div class="wfm-nlp-ai-sec">
                         <button id="wfm-nlp-ai-save" class="wfm-nlp-ai-btn wfm-nlp-ai-btn-primary" style="width:100%;">Save</button>
                     </div>
                 </div>
@@ -4442,6 +4487,27 @@ const setupAiHandlers = (container) => {
             resultEl.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
         } finally {
             testBtn.disabled = false;
+        }
+    });
+
+    // VRAM: unload every loaded Ollama model (includes the URL typed in Connection when backend is Ollama)
+    container.querySelector("#wfm-nlp-ai-vram-unload")?.addEventListener("click", async () => {
+        const btn = container.querySelector("#wfm-nlp-ai-vram-unload");
+        const statusEl = container.querySelector("#wfm-nlp-ai-vram-status");
+        const backend = container.querySelector("input[name='wfm-nlp-ai-backend']:checked")?.value || "ollama";
+        const url = container.querySelector("#wfm-nlp-ai-url")?.value?.trim() || "";
+        btn.disabled = true;
+        statusEl.textContent = "Unloading...";
+        statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-working";
+        try {
+            const res = await aiVramUnloadAll(backend === "ollama" && isValidAiUrl(url) ? url : "");
+            statusEl.textContent = res.text;
+            statusEl.className = "wfm-nlp-ai-status " + (res.ok ? "wfm-nlp-ai-ok" : "wfm-nlp-ai-err");
+        } catch (err) {
+            statusEl.textContent = `Failed: ${err.message}`;
+            statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-err";
+        } finally {
+            btn.disabled = false;
         }
     });
 

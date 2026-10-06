@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.7.13（2026-10-06）** — VRAM調整（Ollama）— Comic Creatorから移植
 - **v0.7.12（2026-10-04）** — セキュリティ: バックエンド接続先をブラウザから任意指定できた問題（SSRF）を修正
 - **v0.7.11（2026-10-02）** — セキュリティ: CivitAI情報の説明文のHTML無害化（保存型XSS対策）
 - **v0.7.10（2026-10-02）** — Windows: ComfyUIが固まる問題の原因特定と対策（Selectorイベントループ）

@@ -1397,9 +1397,9 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-wf-card-panel-title">Side Panel &amp; Detail Modal</h3>
                             <ul>
-                                <li id="wfm-help-wf-5">Side panel: thumbnail, JSON viewer (format badge: UI/API/App), clipboard copy, group management</li>
+                                <li id="wfm-help-wf-5">Side panel: below the workflow name, the format badge (UI / API / App) and the GenerateUI Check result badges (checked automatically on selection, results only — hover for the reasons); tabs for thumbnail, JSON viewer (format badge: UI/API/App), clipboard copy, group management</li>
                                 <li id="wfm-help-wf-6">Detail modal: rename, favorite, thumbnail change, badge assignment, tags, memo, AI summary, send to canvas, load in GenerateUI, set as default, delete</li>
-                                <li id="wfm-help-wf-8">GenerateUI Check (detail modal, below the title): on-demand check, not saved &mdash; a Conversion badge (same conversion as GenerateUI; missing node types / values not available here) and an Operability score (share of nodes with settings that GenerateUI shows); hover a ✅ / ⚠ / ❌ badge for the reasons</li>
+                                <li id="wfm-help-wf-8">GenerateUI Check: in the detail modal, the row below the title shows the format badge (UI / API / App) at the left, then the GenerateUI Check button and two result badges; the side panel shows the same format and result badges automatically. Nothing is saved (results stay in memory until the page is reloaded); the check takes about 20 ms (the first one after opening the page waits for ComfyUI's node list, about 10 s). Hover a ✅ / ⚠ / ❌ badge for the reasons. Conversion: converts the workflow with the same logic as GenerateUI; ❌ for unsupported formats, conversion errors or node types not installed in this ComfyUI, ⚠ for values not available here (models, LoRAs, images…) — UI-format workflows have them silently replaced with the first choice, while API-format workflows are sent as-is and rejected by ComfyUI ("Value not in list") unless you pick another value in GenerateUI (a checkpoint is replaced if "Force default checkpoint on workflow load" is on). Operability: how much of the workflow GenerateUI's fields alone can operate — the share of nodes with settings that GenerateUI shows (✅ 80%+, ⚠ 50%+, ❌ below); the tip lists the prompt/sampler fields found and the nodes whose settings must be changed in the node graph</li>
                             </ul>
                         </div>
                     </div>
@@ -1582,7 +1582,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-prompt-card-ai-title">AI Assistant &amp; Translation</h3>
                             <ul>
-                                <li id="wfm-help-prompt-1">AI assistant (Ollama / LM Studio / Lemonade / Unsloth): chat for prompt consultation, image attachment (vision models); click the &#9881; Settings button to choose backend, connection URL, model, Thinking mode, Max tokens, and unload the loaded model &mdash; settings are independent from the AI TOOL and Tagger tabs</li>
+                                <li id="wfm-help-prompt-1">AI assistant (Ollama / LM Studio / Lemonade / Unsloth): chat for prompt consultation, image attachment (vision models); click the ⚙ Settings button to choose backend, connection URL, model, Thinking mode, Max tokens, and unload the loaded model (with Ollama, every model loaded in Ollama on localhost is unloaded, decision models included — the same as Settings → VRAM Management) — settings are independent from the AI TOOL and Tagger tabs</li>
                                 <li id="wfm-help-prompt-2">Apply AI responses to GenerateUI prompts</li>
                                 <li id="wfm-help-prompt-3">Translation: JA&#8596;EN, ZH&#8596;EN</li>
                             </ul>
@@ -1681,7 +1681,7 @@
                                 <li id="wfm-help-settings-7">Eagle integration URL and auto-save toggle</li>
                                 <li id="wfm-help-settings-22">G'MIC-Qt Integration: path to the G'MIC-Qt executable (gmic_qt.exe) used by the Image Edit tab's G'MIC filter (Edit with G'MIC); Save stores it — see the Image Edit help for installing G'MIC-Qt</li>
                                 <li id="wfm-help-settings-17">Decision Model: its own section, independent of the AI TOOL / Tagger LLM/VLM backends so it can be used alongside them — backend, URL, model and a default probability threshold (answers below it are treated as suggestions to confirm). Unsloth: Laya models (laya / laya-multilingual / laya-english / laya-typed-decisions); requires Settings → API → Decision API → Serve requests in Unsloth Desktop (otherwise HTTP 404 "The Decision API is off") and either UNSLOTH_API_KEY in .env or Keyless API access → "Chat and inference". Ollama (0.35+): lists installed models whose capabilities include "decision" (tev1, tev1:0.8b, nimble — ollama pull first; ↻ refreshes the list); no key needed. Test sends one yes/no question with the unsaved form values; the first request loads the model.</li>
-                                <li id="wfm-help-settings-25">VRAM Management (Ollama): right before every image generation from Workflow Studio, unload the models Ollama has loaded to free VRAM (off / only as much as needed to reach a target free VRAM / everything every time); free VRAM is measured with nvidia-smi; &quot;Unload all now&quot; unloads them immediately</li>
+                                <li id="wfm-help-settings-25">VRAM Management (Ollama): right before every image generation from Workflow Studio, unload the models Ollama has loaded to free VRAM (off / only as much as needed to reach a target free VRAM / everything every time); free VRAM is measured with nvidia-smi; &quot;Unload all now&quot; unloads them immediately; the same "Unload all now" is also in the sidepanel A tab → Settings → VRAM (Ollama). Running a workflow from the ComfyUI canvas itself is not covered</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1898,7 +1898,7 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-sidepanel-card-ai-title">AI TOOL tab</h3>
                             <ul>
-                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, Lemonade, or Unsloth; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage</li>
+                                <li id="wfm-help-sidepanel-16">AI TOOL tab: Translation, Chat, TOOLS, and Settings sub-tabs powered by Ollama, LM Studio, Lemonade, or Unsloth; Chat supports multi-turn conversations; TOOLS includes VLM image analysis and wildcard generation; settings shared with the SPA AI TOOL tab via localStorage; the Settings sub-tab&#39;s VRAM (Ollama) &rarr; &quot;Unload all now&quot; unloads every model loaded in Ollama on localhost, decision models included</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1967,7 +1967,7 @@
                             <ul>
                                 <li id="wfm-help-tagger-3">Single tab: drag &amp; drop an image onto the preview area, or click Upload to pick a file; the Tagger button in the Gallery detail panel opens the selected image directly here</li>
                                 <li id="wfm-help-tagger-4">Threshold slider: minimum confidence score for general tags (default 0.35); Character Threshold: separate threshold for character: prefix tags (default 0.85)</li>
-                                <li id="wfm-help-tagger-5">VLM Tagging: enable the checkbox to run a vision model alongside WD Tagger; click the &#9881; Settings button to choose backend (Ollama / LM Studio / Lemonade / Unsloth), URL, model, Thinking mode, Max tokens, and unload the model &mdash; independent from the Prompt tab's own AI settings; customize the prompt and Max Tags inline; results from both models are merged</li>
+                                <li id="wfm-help-tagger-5">VLM Tagging: enable the checkbox to run a vision model alongside WD Tagger; click the ⚙ Settings button to choose backend (Ollama / LM Studio / Lemonade / Unsloth), URL, model, Thinking mode, Max tokens, and unload the model (with Ollama, every model loaded in Ollama on localhost is unloaded, decision models included) — independent from the Prompt tab's own AI settings; customize the prompt and Max Tags inline; results from both models are merged</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
