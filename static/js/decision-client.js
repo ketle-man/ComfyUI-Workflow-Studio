@@ -1,10 +1,15 @@
 /**
- * Decision model client (Unsloth Decision API / Laya, Ollama 0.35+ / tev1・nimble).
+ * Decision model client (Unsloth Decision API / Laya, Ollama 0.35+ / tev1・nimble・clef).
  *
  * Laya is a *decision* model, not a generator: it takes a state (text or any JSON) plus typed
  * questions and returns calibrated probabilities in one forward pass — no free-form output, so no
- * format hallucination, and results can be thresholded directly. Text only (no image input):
- * image-based judgments must first be turned into text (Tagger tags / VLM caption).
+ * format hallucination, and results can be thresholded directly. Most decision models are text-only
+ * (image-based judgments must first be turned into text — Tagger tags / VLM caption), but Ollama's
+ * "clef" models accept images directly (decide()'s `images` param — base64, no `data:` prefix; use
+ * supportsDecisionVision() first since a non-vision model errors out on an images payload). This
+ * file is ComfyUI-Comic-Creator's decision-client.js origin (CC ported it 2026-09-30) and CC later
+ * added vision support (2026-10, based on ComfyUI-LiveChatStream's judgeImage pattern) which is
+ * ported back here — keep the two in sync going forward.
  *
  * Both backends speak the same TypeSafe-compatible POST /v1/systemone. Unsloth needs an API key
  * even on localhost (unless Keyless API access is on), so its requests go through the same
@@ -36,7 +41,8 @@ export const DECISION_LIMITS = { maxQuestions: 64, maxChoiceOptions: 255, maxSco
 // as JSON records — e.g. workflow node summaries).
 // Ollama: decision models are ordinary pulled models whose /api/tags capabilities include
 // "decision" — listed live by listDecisionModels(); `models` below are only pull suggestions
-// (tev1 = 4B / 4.5 GB, tev1:0.8b = 812 MB, nimble = 9B / 9.5 GB).
+// (tev1 = 4B / 4.5 GB, tev1:0.8b = 812 MB, nimble = 9B / 9.5 GB, clef = 27B / ~18GB vision-capable —
+// needs Ollama 0.35.1+, clef-flash(9B) is unreliable as of Ollama 0.40.1, see ollama/ollama#18769).
 export const DECISION_BACKENDS = {
     unsloth: {
         label: "Unsloth",
@@ -47,7 +53,7 @@ export const DECISION_BACKENDS = {
     ollama: {
         label: "Ollama",
         defaultUrl: "http://localhost:11434",
-        models: ["tev1", "tev1:0.8b", "nimble"],
+        models: ["tev1", "tev1:0.8b", "nimble", "clef"],
         defaultModel: "tev1",
     },
 };
@@ -153,13 +159,17 @@ function _validateQuestions(questions) {
  * @param {string|object} state  Text or any JSON (e.g. { prompt, tags, model }).
  * @param {object} questions     { key: noul(...) | choice(...) | score(...) }, max 64.
  * @param {object} [opts]        { backend, model, baseUrl } — override the saved Decision Model settings.
+ * @param {string[]} [images]    Base64 image data (no `data:` prefix), shared by all questions.
+ *                               Vision-capable Ollama models only (e.g. clef) — check with
+ *                               supportsDecisionVision() first; a non-vision model errors out.
  */
-export async function decide(state, questions, opts = {}) {
+export async function decide(state, questions, opts = {}, images = []) {
     _validateQuestions(questions);
     const settings = getDecisionSettings();
     const backend = opts.backend || settings.backend;
     const baseUrl = (opts.baseUrl || settings.baseUrl).replace(/\/+$/, "");
     const payload = { model: opts.model || settings.model, state, questions };
+    if (images?.length) payload.images = images;
     let data;
     if (backend === "ollama") {
         const res = await fetch(`${baseUrl}/v1/systemone`, {
@@ -175,6 +185,45 @@ export async function decide(state, questions, opts = {}) {
     }
     if (!data || typeof data.answers !== "object") throw new Error(data?.error || "Decision API returned no answers");
     return data.answers;
+}
+
+/** Blob / data URL / image URL → base64 (no `data:` prefix), for decide()'s `images` param. */
+export async function imageToBase64(src) {
+    const blob = src instanceof Blob ? src : await (await fetch(src)).blob();
+    return await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(",")[1] || "");
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(blob);
+    });
+}
+
+/**
+ * Whether the configured decision model accepts images. Ollama only — decision models' /api/show
+ * capabilities list only "decision" (not "vision") on some Ollama builds, so this also checks for an
+ * image encoder (projector_info) as a fallback. Unsloth can't be checked this way, so it returns
+ * null (unknown) — callers should try and fall back to text-only on failure. Returns false on error.
+ *
+ * @param {object} [opts]  { backend, model, baseUrl } — same overrides as decide().
+ */
+export async function supportsDecisionVision(opts = {}) {
+    const settings = getDecisionSettings();
+    const backend = opts.backend || settings.backend;
+    if (backend !== "ollama") return null;
+    const baseUrl = (opts.baseUrl || settings.baseUrl).replace(/\/+$/, "");
+    try {
+        const res = await fetch(`${baseUrl}/api/show`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: opts.model || settings.model }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        return (Array.isArray(data.capabilities) && data.capabilities.includes("vision"))
+            || !!(data.projector_info && Object.keys(data.projector_info).length);
+    } catch {
+        return false;
+    }
 }
 
 /**

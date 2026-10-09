@@ -713,6 +713,44 @@ window.wfmSendImageToSelectedNode = (filename) => {
     return true;
 };
 
+// 動画版「Send to LV node」。ネイティブの Load Video ノード(comfy_extras/nodes_video.py の
+// LoadVideo、node type "LoadVideo")の "file" ウィジェットへ書き込む。"image"ウィジェットと違い
+// "file"という名前は他ノードとも衝突しうるため、node.typeを"LoadVideo"に絞って探す。
+function _wfmFindVideoWidget() {
+    const graph = app.graph;
+    if (!graph) return null;
+
+    let selected = [];
+    try {
+        const sel = app.canvas?.selected_nodes;
+        if (sel) selected = Object.values(sel);
+    } catch { /* ignore */ }
+
+    const pools = [selected, graph._nodes || []];
+    for (const pool of pools) {
+        for (const node of pool) {
+            if (node?.type !== "LoadVideo") continue;
+            const widget = node?.widgets?.find((w) => w.name === "file");
+            if (widget) return widget;
+        }
+    }
+    return null;
+}
+
+window.wfmSendVideoToSelectedNode = (filename) => {
+    const widget = _wfmFindVideoWidget();
+    if (!widget) {
+        throw new Error("No video widget found (select a native Load Video node)");
+    }
+    if (widget.options?.values && !widget.options.values.includes(filename)) {
+        widget.options.values.unshift(filename);
+    }
+    widget.value = filename;
+    widget.callback?.(widget.value);
+    app.graph.setDirtyCanvas(true, true);
+    return true;
+};
+
 const loadWorkflowOnCanvas = async (filename) => {
     const displayName = filename.replace(/\.json$/i, "");
     showToast(`Loading "${displayName}"...`, "info");
@@ -3172,6 +3210,9 @@ function _extractLoRAs(wf) {
 function _isTextEncoderNode(ct) { return ct === "CLIPTextEncode" || ct.includes("TextEncode") || ct.includes("TextEncoderSD"); }
 function _isSamplerNode(ct) { return ct === "KSampler" || ct === "KSamplerAdvanced" || ct.includes("KSampler") || ct.includes("Sampler"); }
 function _isPromptStylerNode(ct) { return ct.includes("PromptStyler"); }
+// LiveChatStream(ComfyUI-LiveChatStream)のRETURN_NAMES順 = INPUT_TYPESの対応ウィジェット名
+// (metadata-tab.jsのLIVE_CHAT_STREAM_OUTPUT_KEYSと同一。ported from metadata-tab.js)
+const _LIVE_CHAT_STREAM_OUTPUT_KEYS = ["prompt_text", "negative_text", "response_text", "chat_p_text", "chat_n_text", "thinking_text"];
 
 // CLIPTextEncodeEditPlus (model-and-prompt-from-metadata) の encode() と同じ結合ルール。
 // RAW: text1のみ。EDIT: text_editのみ。front/back: text2(未接続ならtext_edit)をtext1の前/後に結合。
@@ -3366,6 +3407,12 @@ function _resolveLinkedText(wf, srcId, slot, depth = 0) {
     if (!src || typeof src !== "object") return null;
     const ct = src.class_type ?? "";
     if (_isPromptStylerNode(ct)) { const v = slot === 0 ? src.inputs?.text_positive : src.inputs?.text_negative; return (v && typeof v === "string") ? v : null; }
+    // LiveChatStream — 出力は同名+"_text"の非表示ウィジェットの値をそのまま返すだけなので個別対応
+    if (ct === "LiveChatStream") {
+        const key = _LIVE_CHAT_STREAM_OUTPUT_KEYS[slot];
+        const v = key ? src.inputs?.[key] : undefined;
+        return (typeof v === "string" && v) ? v : null;
+    }
     // ComfySwitchNode ("If/Else Switch") — 片方(TextGenerateなどLLMノード)は静的解決不能なため
     // on_false/on_true の両方を試し、リテラルへ解決できた方を採用する。
     if (ct === "ComfySwitchNode") {

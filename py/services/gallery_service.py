@@ -16,9 +16,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# サポートする画像拡張子（.mp4は動画だがGalleryでは静止画と同じ一覧・配信経路を共有する。
+# 動画拡張子（PyAV(av)がコンテナ形式を問わず共通で扱えるため、寸法/再生時間/埋め込み
+# メタデータ読み取り・サムネイル抽出は両形式で同じコードパスを通る）
+VIDEO_EXTENSIONS = {".mp4", ".webm"}
+
+# サポートする画像拡張子（動画はGalleryでは静止画と同じ一覧・配信経路を共有する。
 # .psdはブラウザが直接レンダリングできないため、配信時に合成済みPNGへ変換する）
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".mp4", ".psd"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".psd"} | VIDEO_EXTENSIONS
 
 # Canvas2D の globalCompositeOperation 文字列 -> psd_tools.constants.BlendMode 名
 # (Image Edit タブの Layer.blendMode はCanvas2Dの合成モード文字列をそのまま保持している)
@@ -53,6 +57,10 @@ _SAVE_EXT_BY_MIME = {
     "image/gif": ".gif",
     "image/svg+xml": ".svg",
 }
+
+# Comic Creator (eagle_comic_creator_spa) の nanobananaタブが生成履歴を記録するフォルダ名。
+# 画像と同じフォルダに history.jsonl (1行1リクエスト、filenames配列で画像と対応) が書かれる。
+NANOBANANA_FOLDER_NAME = "cc_nanobanana"
 
 
 def _decode_image_data_url(image_data: str) -> tuple[bytes, str]:
@@ -571,6 +579,32 @@ class GalleryService:
             pass
         return self._read_vault_prompt(image_path)
 
+    def _read_nanobanana_entry(self, image_path: Path) -> dict | None:
+        """画像がcc_nanobananaフォルダ内にあり、同フォルダのhistory.jsonlに対応エントリが
+        あれば返す(1行=1生成リクエストで複数画像filenamesを束ねているため、自分の
+        ファイル名を含む行を新しい方から探す。同名再生成があれば最新を優先する)。"""
+        if image_path.parent.name != NANOBANANA_FOLDER_NAME:
+            return None
+        history_path = image_path.parent / "history.jsonl"
+        if not history_path.is_file():
+            return None
+        try:
+            lines = history_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return None
+        filename = image_path.name
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if filename in (entry.get("filenames") or []):
+                return entry
+        return None
+
     def _find_vault_category_root(self, image_path: Path) -> Path | None:
         """image_path の祖先を辿り、直下に thumbnails(_option2) を持つフォルダ
         (=ponyxlWildcardsVaultのカテゴリルート) を探す。
@@ -659,7 +693,7 @@ class GalleryService:
             embedded = self._read_png_metadata(path)
         elif ext in {".jpg", ".jpeg"}:
             embedded = self._read_jpeg_metadata(path)
-        elif ext == ".mp4":
+        elif ext in VIDEO_EXTENSIONS:
             embedded = self._read_mp4_metadata(path)
 
         dims = self._read_media_dimensions(path, ext)
@@ -689,6 +723,7 @@ class GalleryService:
             "memo": saved.get("memo", ""),
             "groups": saved.get("groups", []),
             "image_prompt": self._read_sidecar_prompt(path),
+            "nanobanana": self._read_nanobanana_entry(path),
         }
 
     def _read_png_metadata(self, path: Path) -> dict:
@@ -781,7 +816,7 @@ class GalleryService:
         """画像は幅高さ、動画は幅高さ+再生時間（秒）を返す。取得できない項目はNone。"""
         info: dict = {"width": None, "height": None, "duration": None}
         try:
-            if ext == ".mp4":
+            if ext in VIDEO_EXTENSIONS:
                 import av
                 with av.open(str(path)) as container:
                     if container.streams.video:
@@ -820,7 +855,7 @@ class GalleryService:
         embedded = None
         if ext == ".png":
             embedded = self._read_png_metadata(path)
-        elif ext == ".mp4":
+        elif ext in VIDEO_EXTENSIONS:
             embedded = self._read_mp4_metadata(path)
 
         if embedded:
@@ -1081,7 +1116,7 @@ class GalleryService:
             p = Path(img_path).resolve()
             if not p.is_file() or p.suffix.lower() not in IMAGE_EXTENSIONS:
                 continue
-            if p.suffix.lower() == ".mp4":
+            if p.suffix.lower() in VIDEO_EXTENSIONS:
                 continue  # 動画はPSDレイヤーにできない
             if not self._check_path_allowed(p):
                 continue
@@ -1346,10 +1381,10 @@ class GalleryService:
         if thumb_path.exists():
             return thumb_path
 
-        # MP4は動画のためPillowで開けない。PyAV(av)で先頭フレームを抽出しJPEGとしてキャッシュする。
-        # avが未導入/デコード失敗の場合、元mp4ファイルは<img>的な経路に渡せないため
+        # 動画(mp4/webm)はPillowで開けない。PyAV(av)で先頭フレームを抽出しJPEGとしてキャッシュする。
+        # avが未導入/デコード失敗の場合、元ファイルは<img>的な経路に渡せないため
         # (GIF/SVGと違い元ファイルへフォールバックできない) Noneを返しプレースホルダー表示に委ねる。
-        if p.suffix.lower() == ".mp4":
+        if p.suffix.lower() in VIDEO_EXTENSIONS:
             try:
                 import av
                 from PIL import Image

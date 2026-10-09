@@ -1647,8 +1647,9 @@
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-metadata-card-extracted-title">Extracted Information</h3>
                             <ul>
-                                <li id="wfm-help-metadata-2">Center column: Checkpoint, VAE, Diffusion Model, and Text Encoder lists extracted from the workflow</li>
-                                <li id="wfm-help-metadata-3">Right column: LoRA list (with strength values) and Prompt list (click to view full text below)</li>
+                                <li id="wfm-help-metadata-2">Center column: Checkpoint, VAE, Diffusion Model, and Text Encoder lists extracted from the workflow, plus (since v0.7.14) the LoRA list and Prompt list that used to be in the right column</li>
+                                <li id="wfm-help-metadata-3">Right column (v0.7.14): <b>Settings</b> — image size (width×height) and, when the workflow has a KSampler-type node, its Seed / Steps / CFG / Sampler / Scheduler / Denoise values</li>
+                                <li id="wfm-help-metadata-7">Right column, <b>Nanobanana</b> section (v0.7.14): shown only for images from ComfyUI Comic Creator's Nanobanana tab opened via the Gallery tab's Metadata button (needs a matching entry in that folder's history.jsonl log) — engine, model, image size, seed, timestamp, and the prompt/negative prompt actually used; replaces what would otherwise be a "no metadata found" error, since these images have no embedded ComfyUI workflow</li>
                                 <li id="wfm-help-metadata-4">Prompt actions — Copy: copy to clipboard; GenUI:P/N: set GenerateUI positive/negative prompt; Prompt:P/N: set Prompt tab preset positive/negative</li>
                             </ul>
                         </div>
@@ -1793,6 +1794,7 @@
                                 <li id="wfm-help-gallery-7">Detail panel — Info tab: filename, size, dimensions (image width×height) or video duration, date, tags (add/remove), memo; <b>download icon</b> (on image hover) to download the single image; "Move To..." moves the image to another folder, "Delete File" removes it permanently</li>
                                 <li id="wfm-help-gallery-8">Detail panel — JSON tab: displays workflow JSON from PNG embedded data (prompt / workflow keys) or from metadata saved by the Generate UI tab; 'Copy &amp; Send Canvas' button copies to clipboard and stores the workflow for title-drag to canvas</li>
                                 <li id="wfm-help-gallery-9">Detail panel — Groups tab: create, assign, remove, rename, and delete groups per image; the <b>__Feeder__</b> group is reserved (shown with 🔒) and cannot be renamed or deleted — rename and delete buttons are disabled when it is selected</li>
+                                <li id="wfm-help-gallery-32">Detail panel — Prompt tab (selected by default): lists positive/negative prompts found in the embedded workflow; hidden for images in a <b>cc_nanobanana</b> folder, since those carry no embedded ComfyUI workflow — a <b>Nanobanana</b> tab (v0.7.14) appears there instead, shown only when that folder's <b>history.jsonl</b> generation log (written by ComfyUI Comic Creator's Nanobanana tab) has a matching entry for the selected image: engine, model, image size, seed, timestamp, and the prompt/negative prompt actually used</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -1804,6 +1806,7 @@
                                 <li id="wfm-help-gallery-16"><b>Image Edit</b> button (toolbar, next to Refresh): sends the currently selected image to the Image Edit tab; if layers already exist the image is added as a new layer scaled to fit the canvas, otherwise it becomes Layer 1; PSD files are fully decomposed into their original layers instead of being flattened into one image</li>
                                 <li id="wfm-help-gallery-17"><b>Send GenUI Image</b> button (toolbar, next to Image Edit): uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded first</li>
                                 <li id="wfm-help-gallery-27"><b>Send to LI node</b> button (toolbar, next to Send GenUI Image): uploads the selected image and writes its filename into the image widget of the currently selected node on the ComfyUI canvas (falling back to the first LoadImage-type node found) — same destination as Image Edit tab's Send to LI node; requires Workflow Studio to have been opened from ComfyUI's top menu button</li>
+                                <li id="wfm-help-gallery-31"><b>Send to LV node</b> button (toolbar, next to Send to LI node): the video equivalent — uploads the selected video and writes its filename into the file widget of the currently selected node, which must be ComfyUI's native <b>Load Video</b> node; only enabled when the selected item is a video (mp4/webm); requires Workflow Studio to have been opened from ComfyUI's top menu button</li>
                                 <li id="wfm-help-gallery-28"><b>Create PSD</b> bulk button: combines all selected images into a single layered PSD file and downloads it — each image becomes its own layer (named after the file), positioned top-left on a canvas sized to the largest selected image; the last selected image ends up on top</li>
                                 <li id="wfm-help-gallery-29"><b>Edit as Layers</b> bulk button: switches to the Image Edit tab and opens all selected images at once, each as an independent layer (video files in the selection are skipped); the last selected image ends up on top</li>
                             </ul>
@@ -1812,7 +1815,7 @@
                             <h3 id="wfm-help-gallery-card-formats-title">Formats &amp; Auto-save</h3>
                             <ul>
                                 <li id="wfm-help-gallery-10">Workflow auto-save: images generated in the Generate UI tab automatically have their workflow saved to gallery metadata and shown in the JSON tab</li>
-                                <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF, MP4, PSD; workflow extraction reads ComfyUI prompt/workflow keys embedded in PNG metadata or in MP4 container tags (as written by SaveVideo, e.g. MiniMax H3 output)</li>
+                                <li id="wfm-help-gallery-11">Supports PNG (tEXt/iTXt), JPEG, WebP, GIF, MP4, WebM, PSD; workflow extraction reads ComfyUI prompt/workflow keys embedded in PNG metadata or in MP4/WebM container tags (as written by SaveVideo, e.g. MiniMax H3 output)</li>
                                 <li id="wfm-help-gallery-30">PSD files: thumbnails and full-size previews show all layers merged together (hidden layers excluded); the underlying PSD file itself is left untouched — only the preview shown in Gallery is a flattened rendering</li>
                             </ul>
                         </div>
@@ -2285,6 +2288,7 @@
                     <button id="wfm-gallery-send-image-edit-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to Image Edit tab">Image Edit</button>
                     <button id="wfm-gallery-send-genui-image-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to GenerateUI Image input">Send GenUI Image</button>
                     <button id="wfm-gallery-send-li-node-btn" class="wfm-btn wfm-btn-sm" title="Upload and write selected image's filename into the selected node's image widget (e.g. LoadImage)">Send to LI node</button>
+                    <button id="wfm-gallery-send-lv-node-btn" class="wfm-btn wfm-btn-sm" title="Upload and write selected video's filename into the selected node's file widget (native Load Video node)">Send to LV node</button>
                     <button id="wfm-gallery-send-cc-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to ComfyUI Comic Creator's selected panel" style="display:none;">Send CC</button>
                 </div>
                 <!-- 複数選択時の一括操作バー -->
@@ -2346,6 +2350,8 @@
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="meta">JSON</button>
                         <button class="wfm-gallery-detail-tab-btn" data-detail-tab="group">Groups</button>
                         <button class="wfm-gallery-detail-tab-btn active" data-detail-tab="prompt">Prompt</button>
+                        <!-- cc_nanobananaフォルダの画像でのみJSから表示する（他フォルダではdisplay:none） -->
+                        <button class="wfm-gallery-detail-tab-btn" data-detail-tab="nanobanana" id="wfm-gallery-detail-tab-nanobanana" style="display:none;">Nanobanana</button>
                     </div>
                     <div class="wfm-gallery-detail-action-row">
                         <button id="wfm-gallery-open-metadata-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-green" title="Open in Metadata tab (or Alt+click image)">Metadata</button>
@@ -2417,6 +2423,27 @@
                                 <div class="wfm-meta-prompt-full-label" id="wfm-gallery-prompt-full-label"></div>
                                 <textarea class="wfm-meta-prompt-full" id="wfm-gallery-prompt-full" readonly placeholder="Select a prompt above to view full text..."></textarea>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Nanobanana タブ（cc_nanobananaフォルダの画像のみ。Comic Creatorのnanobananaタブが
+                         同フォルダに書くhistory.jsonlから、この画像に対応する生成履歴エントリを表示する） -->
+                    <div id="wfm-gallery-detail-nanobanana" class="wfm-gallery-detail-tab-content" style="display:none;">
+                        <div class="wfm-gallery-info-section">
+                            <div class="wfm-gallery-info-row" id="wfm-gallery-nb-engine"></div>
+                            <div class="wfm-gallery-info-row" id="wfm-gallery-nb-model"></div>
+                            <div class="wfm-gallery-info-row" id="wfm-gallery-nb-size"></div>
+                            <div class="wfm-gallery-info-row" id="wfm-gallery-nb-seed"></div>
+                            <div class="wfm-gallery-info-row" id="wfm-gallery-nb-timestamp"></div>
+                        </div>
+                        <hr class="wfm-group-divider">
+                        <div class="wfm-gallery-info-section">
+                            <div class="wfm-gallery-section-title">Prompt</div>
+                            <textarea class="wfm-meta-prompt-full" id="wfm-gallery-nb-prompt" readonly rows="4"></textarea>
+                        </div>
+                        <div class="wfm-gallery-info-section" id="wfm-gallery-nb-negative-section" style="display:none;">
+                            <div class="wfm-gallery-section-title">Negative Prompt</div>
+                            <textarea class="wfm-meta-prompt-full" id="wfm-gallery-nb-negative" readonly rows="4"></textarea>
                         </div>
                     </div>
                 </div>
@@ -2590,7 +2617,7 @@
                         <input type="file" id="wfm-meta-file-input" accept="image/png,image/webp,video/mp4,.mp4,.json,application/json" style="display:none;">
                     </div>
 
-                    <!-- Col2: Model info -->
+                    <!-- Col2: Model info + LoRA + Prompt -->
                     <div class="wfm-metadata-col2">
                         <div class="wfm-meta-section" id="wfm-meta-ckpt-section">
                             <div class="wfm-meta-section-title">Checkpoint</div>
@@ -2608,10 +2635,6 @@
                             <div class="wfm-meta-section-title">Text Encoder</div>
                             <div class="wfm-meta-list" id="wfm-meta-te-list"></div>
                         </div>
-                    </div>
-
-                    <!-- Col3: LoRA + Prompt -->
-                    <div class="wfm-metadata-col3">
                         <div class="wfm-meta-section" id="wfm-meta-lora-section">
                             <div class="wfm-meta-section-title">LoRA</div>
                             <div class="wfm-meta-list" id="wfm-meta-lora-list"></div>
@@ -2629,6 +2652,41 @@
                                     <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-pos-btn">Prompt:P</button>
                                     <button class="wfm-btn wfm-btn-sm" id="wfm-meta-preset-neg-btn">Prompt:N</button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Col3: Settings(画像サイズ・KSampler設定) + Nanobanana履歴 -->
+                    <div class="wfm-metadata-col3">
+                        <div class="wfm-meta-section" id="wfm-meta-settings-section">
+                            <div class="wfm-meta-section-title">Settings</div>
+                            <div class="wfm-gallery-info-section">
+                                <div class="wfm-gallery-info-row" id="wfm-meta-set-size"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-set-seed"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-set-steps"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-set-cfg"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-set-sampler"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-set-scheduler"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-set-denoise"></div>
+                            </div>
+                        </div>
+                        <!-- Comic Creatorのnanobananaタブ(history.jsonl)から来た画像のみ表示 -->
+                        <div class="wfm-meta-section" id="wfm-meta-nb-section">
+                            <div class="wfm-meta-section-title">Nanobanana</div>
+                            <div class="wfm-gallery-info-section">
+                                <div class="wfm-gallery-info-row" id="wfm-meta-nb-engine"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-nb-model"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-nb-size"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-nb-seed"></div>
+                                <div class="wfm-gallery-info-row" id="wfm-meta-nb-timestamp"></div>
+                            </div>
+                            <div class="wfm-gallery-info-section">
+                                <div class="wfm-gallery-section-title">Prompt</div>
+                                <textarea class="wfm-meta-prompt-full" id="wfm-meta-nb-prompt" readonly rows="4"></textarea>
+                            </div>
+                            <div class="wfm-gallery-info-section" id="wfm-meta-nb-negative-section" style="display:none;">
+                                <div class="wfm-gallery-section-title">Negative Prompt</div>
+                                <textarea class="wfm-meta-prompt-full" id="wfm-meta-nb-negative" readonly rows="4"></textarea>
                             </div>
                         </div>
                     </div>

@@ -58,11 +58,12 @@ function _isReservedGroup(name) {
     return _RESERVED_GROUPS.includes(name);
 }
 
-// 拡張子から動画ファイル（mp4）かどうかを判定する。
+// 拡張子から動画ファイル（mp4/webm）かどうかを判定する。
 // 一覧アイテムは path/filename、詳細メタ(get_image_metadata)は ext フィールドを持つため両対応。
+const VIDEO_EXTENSIONS = [".mp4", ".webm"];
 export function isVideoFile(img) {
-    const source = img?.ext || img?.filename || img?.path || "";
-    return source.toLowerCase().endsWith(".mp4");
+    const source = (img?.ext || img?.filename || img?.path || "").toLowerCase();
+    return VIDEO_EXTENSIONS.some(ext => source.endsWith(ext));
 }
 
 // ComfyUI Comic Creater からiframe越しに画像を受け取り、Generate UIのImage入力スロットへ直接セットする（I2I連携）。
@@ -275,6 +276,14 @@ function formatDate(mtime) {
     return new Date(mtime * 1000).toLocaleString();
 }
 
+// cc_nanobananaフォルダの画像はComfyUIワークフローを埋め込んでいないため、Promptタブに
+// 表示する情報が無い(Nanobananaタブのprompt欄と役割が重複する)。フォルダ名そのもので判定する
+// (history.jsonlに対応エントリが無い古い画像でも、フォルダが同じなら同様に隠す)。
+function isNanobananaFolderImage(img) {
+    const parts = (img.path || "").split(/[\\/]/);
+    return parts[parts.length - 2] === "cc_nanobanana";
+}
+
 function formatDuration(seconds) {
     const total = Math.round(seconds);
     const m = Math.floor(total / 60);
@@ -288,7 +297,7 @@ async function openImageInMetadataTab(img) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const file = new File([blob], img.filename, { type: blob.type || "image/png" });
-        await loadFileIntoMetadataTab(file);
+        await loadFileIntoMetadataTab(file, img.path);
     } catch (e) {
         showToast(t("errorWithMsg", e.message), "error");
     }
@@ -998,6 +1007,8 @@ async function loadImageDetail(img) {
     // メモ
     document.getElementById("wfm-gallery-memo").value = img.memo || "";
 
+    updatePromptTabVisibility(isNanobananaFolderImage(img));
+
     // 埋め込みメタデータとworkflow取得
     try {
         const [metaRes, wfRes] = await Promise.all([
@@ -1009,6 +1020,7 @@ async function loadImageDetail(img) {
         _updateCopyCanvasBtn();
         renderImagePromptSection(metaRes.image_prompt);
         renderDimensionInfo(metaRes);
+        renderNanobananaTab(metaRes.nanobanana);
         // Promptタブは prompt_workflow (API形式優先) を使う。トップレベルとサブグラフに
         // 独立した複数系統を持つワークフローでは workflow (UI形式) からの抽出だと
         // トップレベル系統しか拾えないことがあるため（Metadataタブと同じ優先順位に揃える）。
@@ -1018,6 +1030,7 @@ async function loadImageDetail(img) {
         _updateCopyCanvasBtn();
         renderImagePromptSection(null);
         renderDimensionInfo(null);
+        renderNanobananaTab(null);
         renderPromptTab(null);
     }
 
@@ -1032,6 +1045,53 @@ function renderDimensionInfo(metaRes) {
     if (metaRes?.width && metaRes?.height) parts.push(`${metaRes.width}×${metaRes.height}`);
     if (metaRes?.duration) parts.push(formatDuration(metaRes.duration));
     el.textContent = parts.length ? parts.join(" · ") : "";
+}
+
+// cc_nanobananaフォルダの画像はComfyUIワークフローを埋め込んでいないためPromptタブに
+// 表示する情報が無い。隠す際、Promptタブが選択中だったらInfoタブに切り替える。
+function updatePromptTabVisibility(hide) {
+    const promptTabBtn = document.querySelector('.wfm-gallery-detail-tab-btn[data-detail-tab="prompt"]');
+    if (!promptTabBtn) return;
+    promptTabBtn.style.display = hide ? "none" : "";
+    if (hide && promptTabBtn.classList.contains("active")) {
+        promptTabBtn.classList.remove("active");
+        document.querySelector('.wfm-gallery-detail-tab-btn[data-detail-tab="info"]')?.click();
+    }
+}
+
+// cc_nanobananaフォルダの画像のみ、history.jsonlから対応エントリ(server側で検索済み)を
+// タブ内容に反映する。対応エントリが無ければタブ自体を隠す(他フォルダの画像を見た時も同様)。
+function renderNanobananaTab(entry) {
+    const tabBtn = document.getElementById("wfm-gallery-detail-tab-nanobanana");
+    if (!tabBtn) return;
+    if (!entry) {
+        tabBtn.style.display = "none";
+        if (tabBtn.classList.contains("active")) {
+            tabBtn.classList.remove("active");
+            // Promptタブはcc_nanobananaフォルダでは非表示にしているため、代わりにInfoへ戻す
+            document.querySelector('.wfm-gallery-detail-tab-btn[data-detail-tab="info"]')?.click();
+        }
+        return;
+    }
+    tabBtn.style.display = "";
+    const set = (id, label, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value ? `${label}: ${value}` : "";
+    };
+    set("wfm-gallery-nb-engine", "Engine", entry.engine);
+    set("wfm-gallery-nb-model", "Model", entry.model);
+    const size = entry.image_size || (entry.width && entry.height ? `${entry.width}×${entry.height}` : "");
+    set("wfm-gallery-nb-size", "Size", size);
+    set("wfm-gallery-nb-seed", "Seed", entry.seed != null ? String(entry.seed) : "");
+    set("wfm-gallery-nb-timestamp", "Date", entry.timestamp);
+    const promptEl = document.getElementById("wfm-gallery-nb-prompt");
+    if (promptEl) promptEl.value = entry.prompt || "";
+    const negSection = document.getElementById("wfm-gallery-nb-negative-section");
+    const negEl = document.getElementById("wfm-gallery-nb-negative");
+    if (negSection && negEl) {
+        if (entry.negative_prompt) { negEl.value = entry.negative_prompt; negSection.style.display = ""; }
+        else { negEl.value = ""; negSection.style.display = "none"; }
+    }
 }
 
 function renderImagePromptSection(imagePrompt) {
@@ -1968,6 +2028,37 @@ function bindEvents() {
         }
     });
 
+    // 選択動画をComfyUIキャンバス上で選択中のノード（ネイティブLoad Video）のfileウィジェットへ送信。
+    // Send to LI nodeの動画版(window.opener.wfmSendVideoToSelectedNode、node_sets_menu.js側で定義)。
+    // /upload/imageは拡張子を問わず任意バイナリをinputフォルダへ保存するエンドポイントなので、
+    // 動画ファイルもそのままアップロードできる。
+    document.getElementById("wfm-gallery-send-lv-node-btn")?.addEventListener("click", async () => {
+        if (!state.selectedImage) {
+            showToast(t("gallerySelectImageFirst"), "info");
+            return;
+        }
+        if (!isVideoFile(state.selectedImage)) {
+            showToast(t("sendToLvNodeNotVideo"), "info");
+            return;
+        }
+        if (!window.opener || typeof window.opener.wfmSendVideoToSelectedNode !== "function") {
+            showToast(t("sendToLiNodeNoOpener"), "error");
+            return;
+        }
+        try {
+            const res = await fetch(API.serveImage(state.selectedImage.path));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            const file = new File([blob], state.selectedImage.filename || "gallery-video.mp4", { type: blob.type || "video/mp4" });
+            const result = await comfyUI.uploadImage(file, file.name);
+            const filename = result.subfolder ? `${result.subfolder}/${result.name}` : result.name;
+            window.opener.wfmSendVideoToSelectedNode(filename);
+            showToast(t("sendToLvNodeSuccess", filename), "success");
+        } catch (e) {
+            showToast(t("errorWithMsg", e.message), "error");
+        }
+    });
+
     // 選択画像を ComfyUI Comic Creator の選択コマ／オーバーレイへ送信
     // （ComfyUI Comic CreaterからこのGalleryタブがiframe埋め込みされている場合のみ表示・動作する）
     const sendCcBtn = document.getElementById("wfm-gallery-send-cc-btn");
@@ -2228,7 +2319,7 @@ function bindEvents() {
         if (!window._wfmImageEditTab) return;
 
         const allPaths = [...state.selectedImages];
-        const paths    = allPaths.filter(p => !/\.mp4$/i.test(p));
+        const paths    = allPaths.filter(p => !/\.(mp4|webm)$/i.test(p));
         if (paths.length === 0) {
             showToast(t("editLayersNoImages"), "error");
             return;

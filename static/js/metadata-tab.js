@@ -259,9 +259,33 @@ function extractLoRAs(wf) {
     return results;
 }
 
+// LiveChatStream(ComfyUI-LiveChatStream)のRETURN_NAMES順 = INPUT_TYPESの対応ウィジェット名
+// (positive→prompt_text, negative→negative_text, response→response_text, ...)。nodes.pyの
+// INPUT_TYPES/RETURN_TYPESコメント通り、ウィジェット・出力スロットとも末尾追加のみで位置互換。
+const LIVE_CHAT_STREAM_OUTPUT_KEYS = ["prompt_text", "negative_text", "response_text", "chat_p_text", "chat_n_text", "thinking_text"];
+
 function isTextEncoderNode(ct) { return ct === "CLIPTextEncode" || ct.includes("TextEncode") || ct.includes("TextEncoderSD"); }
 function isSamplerNode(ct) { return ct === "KSampler" || ct === "KSamplerAdvanced" || ct.includes("KSampler") || ct.includes("Sampler"); }
 function isPromptStylerNode(ct) { return ct.includes("PromptStyler"); }
+
+// サンプラーノードの設定値(seed/steps/cfg/sampler_name/scheduler/denoise)をAPI形式の
+// 名前付きinputsから読む。ノードタイプごとにwidgets_valuesの並びが異なる(KSampler/
+// KSamplerAdvanced等)ため、UI形式(LiteGraph)はconvertUiToApi()を経由した後に呼ぶ想定。
+const SAMPLER_SETTING_KEYS = ["seed", "noise_seed", "steps", "cfg", "sampler_name", "scheduler", "denoise"];
+function extractSamplerSettings(apiWf) {
+    if (!apiWf || typeof apiWf !== "object" || Array.isArray(apiWf.nodes)) return null;
+    for (const n of Object.values(apiWf)) {
+        if (!n || typeof n !== "object" || !isSamplerNode(n.class_type ?? "")) continue;
+        const inputs = n.inputs ?? {};
+        const settings = {};
+        for (const key of SAMPLER_SETTING_KEYS) {
+            const v = inputs[key];
+            if (v !== undefined && !Array.isArray(v)) settings[key] = v;
+        }
+        if (Object.keys(settings).length > 0) return settings;
+    }
+    return null;
+}
 
 // CLIPTextEncodeEditPlus (model-and-prompt-from-metadata) の encode() と同じ結合ルール。
 // RAW: text1のみ。EDIT: text_editのみ。front/back: text2(未接続ならtext_edit)をtext1の前/後に結合。
@@ -482,6 +506,15 @@ function resolveLinkedText(wf, srcId, slot, depth = 0) {
         const v = slot === 0 ? src.inputs?.text_positive : src.inputs?.text_negative;
         return (v && typeof v === "string") ? v : null;
     }
+    // LiveChatStream (ComfyUI-LiveChatStream) — 出力(positive/negative/response/chat_p/
+    // chat_n/thinking)は同名+"_text"の非表示ウィジェットの値をそのまま返すだけのノード。
+    // 下の汎用キー探索には引っかからない(prompt_text等は"prompt"等と一致しない)ため個別対応する。
+    // response(LLM応答全文)は数千〜数万文字になり得るが、文字列を返すだけなので問題なく解決できる。
+    if (ct === "LiveChatStream") {
+        const key = LIVE_CHAT_STREAM_OUTPUT_KEYS[slot];
+        const v = key ? src.inputs?.[key] : undefined;
+        return (typeof v === "string" && v) ? v : null;
+    }
     // ComfySwitchNode ("If/Else Switch", on_false/on_true/switch) — Ernie Imageのプロンプト強化
     // トグルなどで使われる。片方(TextGenerateなどLLMノード)は静的解決不能なため両方試し、
     // リテラルへ解決できた方を採用する。
@@ -699,17 +732,21 @@ export async function extractAllMetadata(file) {
 
     async function fromWorkflow(originalWf, source) {
         let wf = originalWf;
+        let apiWf = Array.isArray(wf?.nodes) ? null : wf;
         // サブグラフを持つワークフローは、外側のサブグラフノードに実際に設定された値
         // (ユーザーが見ている値)が内部ノードのwidgets_valuesへ反映されていないことがある
         // (テンプレートの古いデフォルト値のまま)。convertUiToApi() はこの注入も含めて
         // 正しく解決するため、そちらを経由してから抽出する。通常のワークフローには影響しない。
-        if (Array.isArray(wf?.nodes) && wf.definitions?.subgraphs?.length > 0) {
+        if (Array.isArray(wf?.nodes)) {
             try {
-                const apiWf = await comfyWorkflow.convertUiToApi(wf);
-                if (apiWf && Object.keys(apiWf).length > 0) wf = apiWf;
+                const converted = await comfyWorkflow.convertUiToApi(wf);
+                if (converted && Object.keys(converted).length > 0) {
+                    apiWf = converted;
+                    if (wf.definitions?.subgraphs?.length > 0) wf = converted;
+                }
             } catch { /* 変換失敗時は元のUI形式のまま抽出（既存ロジックにフォールバック） */ }
         }
-        const base = { source, checkpoints: extractCheckpoints(wf), vaes: extractVAEs(wf), diffusionModels: extractDiffusionModels(wf), textEncoders: extractTextEncoders(wf), loras: extractLoRAs(wf), ...extractPrompts(wf) };
+        const base = { source, checkpoints: extractCheckpoints(wf), vaes: extractVAEs(wf), diffusionModels: extractDiffusionModels(wf), textEncoders: extractTextEncoders(wf), loras: extractLoRAs(wf), samplerSettings: extractSamplerSettings(apiWf), ...extractPrompts(wf) };
         // MarkdownNote からモデル情報を補完（subgraph形式の flux/qwen/z-image など）。
         // API変換後は nodes 情報が失われるため、常に元のUI形式ワークフローから抽出する。
         const mdm = extractMarkdownNoteModels(originalWf);
@@ -822,11 +859,13 @@ function renderSection(sectionEl, listEl, items, buildFn) {
 // ── External API ──────────────────────────────────────────────
 let _externalHandleFile = null;
 
-export async function loadFileIntoMetadataTab(file) {
+// path: Gallery上のサーバーファイルパス(任意)。渡された場合、/wfm/gallery/image/meta から
+// 幅・高さやnanobanana履歴(cc_nanobananaフォルダの画像のみ)を補って表示する。
+export async function loadFileIntoMetadataTab(file, path) {
     document.querySelector('.wfm-tab[data-tab="gallery"]')?.click();
     document.querySelector('.wfm-gallery-subtab-btn[data-gallery-subtab="metadata"]')?.click();
     await new Promise(r => setTimeout(r, 0));
-    if (_externalHandleFile) await _externalHandleFile(file);
+    if (_externalHandleFile) await _externalHandleFile(file, path);
 }
 
 // ── Tab initialization ────────────────────────────────────────
@@ -853,6 +892,26 @@ export function initMetadataTab() {
     const promptFull = document.getElementById("wfm-meta-prompt-full");
     const promptFullLabel = document.getElementById("wfm-meta-prompt-full-label");
 
+    // Settings (画像サイズ・KSampler設定値) / Nanobanana履歴
+    const settingsSection = document.getElementById("wfm-meta-settings-section");
+    const setSize = document.getElementById("wfm-meta-set-size");
+    const setSeed = document.getElementById("wfm-meta-set-seed");
+    const setSteps = document.getElementById("wfm-meta-set-steps");
+    const setCfg = document.getElementById("wfm-meta-set-cfg");
+    const setSampler = document.getElementById("wfm-meta-set-sampler");
+    const setScheduler = document.getElementById("wfm-meta-set-scheduler");
+    const setDenoise = document.getElementById("wfm-meta-set-denoise");
+
+    const nbSection = document.getElementById("wfm-meta-nb-section");
+    const nbEngine = document.getElementById("wfm-meta-nb-engine");
+    const nbModel = document.getElementById("wfm-meta-nb-model");
+    const nbSize = document.getElementById("wfm-meta-nb-size");
+    const nbSeed = document.getElementById("wfm-meta-nb-seed");
+    const nbTimestamp = document.getElementById("wfm-meta-nb-timestamp");
+    const nbPrompt = document.getElementById("wfm-meta-nb-prompt");
+    const nbNegSection = document.getElementById("wfm-meta-nb-negative-section");
+    const nbNegative = document.getElementById("wfm-meta-nb-negative");
+
     if (!dropZone) return;
 
     // Apply i18n to section titles
@@ -863,6 +922,8 @@ export function initMetadataTab() {
         "wfm-meta-te-section": "metaSectionTe",
         "wfm-meta-lora-section": "metaSectionLora",
         "wfm-meta-prompt-section": "metaSectionPrompt",
+        "wfm-meta-settings-section": "metaSectionSettings",
+        "wfm-meta-nb-section": "metaSectionNanobanana",
     };
     for (const [id, key] of Object.entries(titleMap)) {
         const title = document.querySelector(`#${id} .wfm-meta-section-title`);
@@ -892,6 +953,7 @@ export function initMetadataTab() {
         "wfm-help-metadata-4": "helpMetadata4",
         "wfm-help-metadata-5": "helpMetadata5",
         "wfm-help-metadata-6": "helpMetadata6",
+        "wfm-help-metadata-7": "helpMetadata7",
     };
     for (const [id, key] of Object.entries(helpIds)) {
         const el = document.getElementById(id);
@@ -903,9 +965,66 @@ export function initMetadataTab() {
         [ckptSection, vaeSection, diffSection, teSection, loraSection, promptSection].forEach(s => { if (s) s.classList.add("wfm-meta-section-empty"); });
         if (promptFull) promptFull.value = "";
         if (promptFullLabel) promptFullLabel.textContent = "";
+        renderSettings(null, null);
+        renderNanobanana(null);
     }
 
-    async function handleFile(file) {
+    // ── Settings (画像サイズ・KSampler設定) ─────────────────────
+    function setRow(el, label, value) {
+        if (!el) return;
+        el.textContent = (value !== undefined && value !== null && value !== "") ? `${label}: ${value}` : "";
+    }
+
+    function renderSettings(samplerSettings, dims) {
+        setRow(setSize, t("metaSettingsSize") || "Size", dims?.width && dims?.height ? `${dims.width}×${dims.height}` : "");
+        const s = samplerSettings ?? {};
+        setRow(setSeed, t("metaSettingsSeed") || "Seed", s.seed ?? s.noise_seed);
+        setRow(setSteps, t("metaSettingsSteps") || "Steps", s.steps);
+        setRow(setCfg, t("metaSettingsCfg") || "CFG", s.cfg);
+        setRow(setSampler, t("metaSettingsSampler") || "Sampler", s.sampler_name);
+        setRow(setScheduler, t("metaSettingsScheduler") || "Scheduler", s.scheduler);
+        setRow(setDenoise, t("metaSettingsDenoise") || "Denoise", s.denoise);
+        const hasAny = (dims?.width && dims?.height) || Object.keys(s).length > 0;
+        if (settingsSection) settingsSection.style.display = hasAny ? "" : "none";
+    }
+
+    // ── Nanobanana履歴(cc_nanobananaフォルダの画像のみ、Galleryから開いた場合に表示) ──
+    function renderNanobanana(entry) {
+        if (!nbSection) return;
+        if (!entry) {
+            nbSection.style.display = "none";
+            return;
+        }
+        nbSection.style.display = "";
+        setRow(nbEngine, t("metaNbEngine") || "Engine", entry.engine);
+        setRow(nbModel, t("metaNbModel") || "Model", entry.model);
+        const size = entry.image_size || (entry.width && entry.height ? `${entry.width}×${entry.height}` : "");
+        setRow(nbSize, t("metaNbSize") || "Size", size);
+        setRow(nbSeed, t("metaNbSeed") || "Seed", entry.seed != null ? String(entry.seed) : "");
+        setRow(nbTimestamp, t("metaNbTimestamp") || "Date", entry.timestamp);
+        if (nbPrompt) nbPrompt.value = entry.prompt || "";
+        if (nbNegSection && nbNegative) {
+            if (entry.negative_prompt) { nbNegative.value = entry.negative_prompt; nbNegSection.style.display = ""; }
+            else { nbNegative.value = ""; nbNegSection.style.display = "none"; }
+        }
+    }
+
+    // path指定時、サーバーの /wfm/gallery/image/meta から幅・高さとnanobanana履歴を取得する
+    // (Galleryタブから「Metadata」ボタンで開いた場合のみ渡される。ドラッグ&ドロップされた
+    // 任意ファイルはブラウザ上のFileオブジェクトのみでサーバーパスを持たないため対象外)。
+    async function fetchServerMeta(path) {
+        if (!path) return null;
+        try {
+            const res = await fetch(`/wfm/gallery/image/meta?path=${encodeURIComponent(path)}`);
+            if (!res.ok) return null;
+            const json = await res.json();
+            return json.error ? null : json;
+        } catch {
+            return null;
+        }
+    }
+
+    async function handleFile(file, path) {
         if (!file) return;
         if (file.size > MAX_FILE_SIZE) {
             fileInfo.textContent = t("metaFileTooLarge");
@@ -917,18 +1036,31 @@ export function initMetadataTab() {
         fileInfo.style.color = "var(--wfm-text-secondary)";
         clearAll();
 
+        const serverMeta = await fetchServerMeta(path);
+
         // Show preview for images
         const isImage = file.type.startsWith("image/") || file.name.toLowerCase().match(/\.(png|webp|jpg|jpeg)$/);
+        let naturalDims = null;
         if (isImage) {
             const url = URL.createObjectURL(file);
             previewImg.src = url;
             previewImg.style.display = "block";
             dropLabel.style.display = "none";
-            previewImg.onload = () => URL.revokeObjectURL(url);
+            await new Promise(resolve => {
+                previewImg.onload = () => {
+                    naturalDims = { width: previewImg.naturalWidth, height: previewImg.naturalHeight };
+                    URL.revokeObjectURL(url);
+                    resolve();
+                };
+                previewImg.onerror = resolve;
+            });
         } else {
             previewImg.style.display = "none";
             dropLabel.style.display = "flex";
         }
+
+        const dims = (serverMeta?.width && serverMeta?.height) ? serverMeta : naturalDims;
+        renderNanobanana(serverMeta?.nanobanana ?? null);
 
         let meta;
         try {
@@ -937,12 +1069,23 @@ export function initMetadataTab() {
             console.error("[MetadataTab]", err);
             fileInfo.textContent = t("metaParseError");
             fileInfo.style.color = "var(--wfm-danger)";
+            renderSettings(null, dims);
             return;
         }
 
         if (!meta) {
-            fileInfo.textContent = t("metaNoMetadata");
-            fileInfo.style.color = "var(--wfm-warning)";
+            // nanobanana(Gemini API経由)の画像はComfyUIワークフローを埋め込んでいないため
+            // extractAllMetadataはnullを返す。その場合でもnanobanana履歴があれば
+            // 「メタデータ無し」エラーにせず、画像サイズのみSettingsに表示する。
+            if (serverMeta?.nanobanana) {
+                const sizeKB = (file.size / 1024).toFixed(1);
+                fileInfo.textContent = `${file.name}  (${sizeKB} KB · Nanobanana)`;
+                fileInfo.style.color = "var(--wfm-text-secondary)";
+            } else {
+                fileInfo.textContent = t("metaNoMetadata");
+                fileInfo.style.color = "var(--wfm-warning)";
+            }
+            renderSettings(null, dims);
             return;
         }
 
@@ -956,6 +1099,7 @@ export function initMetadataTab() {
         renderSection(diffSection, diffList, meta.diffusionModels, n => buildModelItem(n));
         renderSection(teSection, teList, meta.textEncoders, n => buildModelItem(n));
         renderSection(loraSection, loraList, meta.loras, l => buildLoRAItem(l));
+        renderSettings(meta.samplerSettings, dims);
 
         // Prompts
         promptList.innerHTML = "";

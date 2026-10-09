@@ -2,6 +2,59 @@
 
 ---
 
+## v0.7.14（2026-10-09）
+
+### Comic Creator連携: nanobananaタブの生成履歴をGallery/Metadataタブに表示
+
+Comic Creator（`eagle_comic_creator_spa`）のnanobananaタブが`cc_nanobanana`フォルダに書く生成履歴`history.jsonl`（1行=1生成リクエスト、`filenames`配列で画像ファイルと対応、prompt/negative_prompt/engine/model/image_size/seed/timestampを記録）を、WFS側のGallery/Metadataタブから閲覧できるようにした。
+
+- `gallery_service.py`に`_read_nanobanana_entry()`を追加。画像の親フォルダ名が`cc_nanobanana`の場合のみ同フォルダの`history.jsonl`を新しい行から探索し、自分のファイル名を含むエントリを返す（既存の`get_image_metadata()`レスポンスに`nanobanana`フィールドとして追加、新規エンドポイントは不要）。
+- Gallery詳細パネルに「Nanobanana」タブを新設。`cc_nanobanana`フォルダの画像のみタブボタンを表示し、engine/model/size/seed/timestamp/prompt/negative promptを表示。
+- Metadataタブ右ペインにも同内容の「Nanobanana」セクションを追加。Galleryの「Metadata」ボタンから開いた場合は画像パスも渡されるようになり（`loadFileIntoMetadataTab(file, path)`）、サーバーの`/wfm/gallery/image/meta`から画像サイズとnanobanana履歴を補完する。nanobanana画像はComfyUIワークフローを埋め込んでいないため、従来は「メタデータなし」エラーになっていたが、nanobanana履歴があればエラーにせずNanobananaセクションのみ表示するようにした。
+- `cc_nanobanana`フォルダの画像はComfyUIワークフローを埋め込んでおらずPromptタブに表示する情報が無いため、Gallery詳細パネルのPromptタブ自体を非表示化（フォルダ名で判定、history.jsonlに対応エントリが無い古い画像でも同様に隠れる）。
+
+### Metadataタブ: レイアウト再編（LoRA/Promptを中央へ、右ペインをSettings+Nanobananaに）
+
+- 中央ペイン（Col2）: Checkpoint / VAE / Diffusion Model / Text Encoder に加えて LoRA / Prompt もここへ移動。
+- 右ペイン（Col3）: 「Settings」（画像サイズ、Seed、Steps、CFG、Sampler、Scheduler、Denoise）と、上記「Nanobanana」セクション。
+- KSampler系ノードの設定値を抽出する`extractSamplerSettings()`を新規実装。API形式ワークフローの名前付き`inputs`（`seed`/`noise_seed`/`steps`/`cfg`/`sampler_name`/`scheduler`/`denoise`）から読む。UI形式ワークフローは`convertUiToApi()`を経由して同じ抽出を通す（サブグラフの有無に関わらず常に変換を試みるよう変更。既存のCheckpoint/LoRA/Prompt抽出ロジックには影響なし、変換結果はSettings抽出にのみ使う）。
+- 画像サイズは、Galleryから開いた場合はサーバー側の実測値（`/wfm/gallery/image/meta`のwidth/height）、ドラッグ&ドロップされた単体ファイルの場合はプレビュー画像の`naturalWidth`/`naturalHeight`を使う。
+- i18n（en/ja/zh）・ヘルプカードを更新。
+
+### バグ修正: LiveChatStreamなど複数出力テキストノードがAPI形式プロンプト抽出で解決できない不具合
+
+ComfyUI-LiveChatStreamの`response`（LLM応答全文）出力をCLIPTextEncodeに直結した場合にGallery/Metadataタブでプロンプトが表示されない、という報告を調査。
+
+- 原因: PNGの`prompt`（API形式）埋め込みからのプロンプト抽出は`prompt`チャンクを優先して使うが（Metadataタブ・Gallery Promptタブとも）、API形式の`resolveLinkedText()`は接続元ノードの値を決め打ちのキー名リスト（`text_positive`/`text`/`prompt`/`value`等）でしか探しておらず、LiveChatStreamの実際のウィジェット名（`prompt_text`/`negative_text`/`response_text`/`chat_p_text`/`chat_n_text`/`thinking_text`、`nodes.py`の`INPUT_TYPES`で確認）がどれとも一致しないため、**responseだけでなくpositive/negativeも含め、API形式経由では本来解決できていなかった**（UI形式の`workflow`埋め込みは`widgets_values`を出力スロット順でそのまま読むため、たまたま正しく解決できていた＝どちらの埋め込みがPNGにあるかで体感が変わっていたと推測）。
+- `metadata-tab.js`の`resolveLinkedText()`、およびサイドパネルIタブ（`node_sets_menu.js`）の複製ロジック`_resolveLinkedText()`の両方に、`class_type === "LiveChatStream"`の個別対応を追加（`LIVE_CHAT_STREAM_OUTPUT_KEYS`で出力スロット→ウィジェット名を対応付け）。
+- 実機（稼働中のComfyUI_5）の`/wfm_static/js/metadata-tab.js`に対し、約19,000〜40,000文字の長文応答を模したAPI形式ワークフローで検証し、全文正しく（0.4ms程度で）抽出されることを確認。文字数そのものは無関係だった。
+
+### Gallery: Send to LV node ボタン（ネイティブLoad Videoへの送信）
+
+既存の「Send to LI node」（選択画像をComfyUIキャンバス上の選択中ノードの`image`ウィジェットへ送る）の動画版。
+
+- `node_sets_menu.js`に`_wfmFindVideoWidget()`/`window.wfmSendVideoToSelectedNode()`を追加。ネイティブの`LoadVideo`ノード（`comfy_extras/nodes_video.py`、`file`ウィジェット）に絞って探す（`image`と違い`file`という名前は他ノードとも衝突しうるため`node.type === "LoadVideo"`で限定）。
+- Galleryツールバーに「Send to LV node」ボタンを追加。動画以外が選択されている場合はエラートースト。アップロードは既存の`/upload/image`エンドポイント（拡張子を問わず任意バイナリをinputフォルダへ保存できる汎用エンドポイント）をそのまま流用。
+- 実機でLoadVideoノードを作成→選択→送信し、`file`ウィジェットの値が正しく書き換わることを確認（`ComfyUI_00013_.mp4` → `test_video_12345.webm`）。
+
+### Gallery: WebM対応
+
+- `gallery_service.py`の`.mp4`限定だった5箇所（埋め込みメタデータ読み込み・寸法/再生時間取得・サムネイル抽出・PSDレイヤー除外判定・一覧フィルタ）を`VIDEO_EXTENSIONS = {".mp4", ".webm"}`ベースに統一。いずれもPyAV（`av`）経由でコンテナ形式を問わず同じコードパスのため、webm固有の実装追加は不要だった。
+- `gallery-tab.js`の`isVideoFile()`をwebm対応に拡張。一覧表示・プレビュー・ライトボックス・Comic Creator連携・一括レイヤー編集の動画除外フィルタなど、これを参照する全箇所が自動的にwebm対応。
+- ヘルプカード（Gallery/3言語）を更新。
+
+### 意思決定モデルクライアントにvision対応を追加（移植、消費する機能はまだ無い）
+
+Comic Creatorの`decision-client.js`が2026-10に追加したvision対応（Ollamaの`clef`等、画像入力可能な意思決定モデル向け）を、WFS本家の`static/js/decision-client.js`へ移植した。
+
+- `decide(state, questions, opts, images)`に第4引数`images`（base64配列、`data:`プレフィックス無し）を追加。
+- `imageToBase64(src)`（Blob/data URL/画像URL→base64）、`supportsDecisionVision(opts)`（設定中のモデルが画像入力に対応しているかをOllamaの`/api/show`で判定。`capabilities`に`vision`が無いビルドでは`projector_info`の有無でも判定するフォールバック込み）を新規追加。
+- `DECISION_BACKENDS.ollama.models`に`"clef"`を追加（27B・vision対応、Ollama 0.35.1以降が必要。`clef-flash`は2026-10時点でOllama側の不安定挙動があるため含めていない）。
+- 実機（稼働中のOllama、`clef`モデル）で`supportsDecisionVision`→`true`、`imageToBase64`→`decide(images=[...])`の一連の流れを実画像（canvas生成の赤い正方形）で検証し、`red: 0.99` / `blue: 0.009`と正しく判定されることを確認。
+- 既存の呼び出し箇所（`settings-tab.js`、`vram-prepare.js`）は`images`引数を使わないため後方互換。消費する機能（Gallery自動分類等）はまだWFS側に無く、クライアントライブラリの同期のみ。
+
+---
+
 ## v0.7.13（2026-10-06）
 
 ### VRAM調整（Ollama）— Comic Creatorから移植
