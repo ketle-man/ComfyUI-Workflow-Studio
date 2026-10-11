@@ -2,6 +2,50 @@
 
 ---
 
+## v0.8.0（2026-10-11）
+
+### Gallery: 音声ファイル対応（wav / mp3 / ogg / m4a / flac / opus）
+
+ComfyUIの音楽生成の増加に合わせ、Galleryで音声ファイルを画像・動画と同じ一覧で扱えるようにした。
+
+- `gallery_service.py`: `AUDIO_EXTENSIONS` を追加し `IMAGE_EXTENSIONS` に合流。再生時間は`_read_media_dimensions()`（PyAV）、埋め込みタグは`_read_audio_metadata()`で取得（ストリーム側タグも統合し、`prompt`/`workflow`は小文字キーでも引ける）。`_extract_embedded_workflow()`も音声に対応し、Prompt/JSONタブが動く。
+- サムネイルは`_render_audio_waveform()`でPyAVデコード→8kHzモノラル→列ごとの最大振幅を描画してJPEGキャッシュ。拡張子ごとに波形色を変える（`AUDIO_WAVE_COLORS`）。キャッシュキーに版数（`wave2`）、サムネイルURLにも`&v=wave2`を付けブラウザの24hキャッシュを回避。
+- `gallery_routes.py`: Windowsで音声MIMEが返らない/不統一なため`mimetypes.add_type`で明示登録。`FileResponse`のRange対応でシークも可能。
+- `gallery-tab.js`: `isAudioFile()`、♪バッジ、詳細パネル/ライトボックス/Compareで「波形＋`<audio controls>`」を表示（音量は動画と共通設定）。詳細パネルは音声のとき固定高さをやめ、再生メニューが見切れないようにした。PSD書き出し・Edit as Layersでは音声を除外。
+
+### Video: Assetサブタブで音声を素材として利用
+
+- 先に音声を一覧から除外していたのを改め、種別フィルタに「Audio Only」を追加。音声はプレイヤー付きで、「BGMに設定」「サウンドとして追加（Audioトラックの選択クリップ先頭に配置）」ボタンが使える。`video-edit-tab.js`に`addSoundFromFile()`を追加。Editに送る/オーバーレイ/First・Last Imageと、Frame/GIFツールへのSourceプレビュー投入は音声では出さない。
+
+### Gallery: ファイル変換（音声変換 / 動画からの音声抽出）
+
+- 新規`py/services/convert_service.py`（PyAVのみ、システムffmpeg不要）。出力はFLAC / MP3 / Opus / M4A / WAV（Vorbisエンコーダが無いため`.ogg`は入力のみ）。ビットレート・サンプルレート・チャンネル指定可。
+- `GalleryService.convert_file()` + `POST /wfm/gallery/convert`（1ファイルずつ呼ぶ。`run_in_executor`＋同時1本のロック）。同じフォルダに`name.ext`（既存なら`name_converted.ext`、以降連番）で保存し上書きしない。
+- メタデータ: `prompt`/`workflow`と曲情報タグを、タグを持てる形式（FLAC/MP3/Opus/M4A）へ引き継ぐ。WAVは対象外（通知）。お気に入り/タグ/メモ/グループの引き継ぎ、変換成功後の元ファイル削除（確認ダイアログ付き）を選択可。
+- UI: 一括バーに「変換...」ボタン（音声/動画を含む選択時のみ表示）とダイアログ。i18n（en/ja/zh）対応。
+
+### Gallery: メタデータ読み取りの修正（メタデータ抽出 比較レポートA1〜A4）
+
+- A1: PNGの読み取りがIENDで止まっていたため、ComfyUI-Custom-ScriptsがIENDの後ろに追記する`workflow`チャンクを読めなかった（`_read_png_metadata()` / `extract_png_workflow()`）。
+- A2: WebPのEXIFから`workflow:`/`prompt:`を取り出す`_read_webp_metadata()`を追加。
+- A3: ワークフローが無い画像（A1111/Forge/Fooocus）は`parameters`からPromptタブを表示（`extractPromptsFromParameters()`）。
+- A4: API形式の`ImageMetadataLoRALoader`（`lora_N`/`strength_model_N`/`strength_clip_N`）をMetadataタブとサイドパネルIタブで検出。
+
+### Library/Nodes: 表示速度の改善とAlt+クリックお気に入り
+
+- LibraryのNタブ: Alt+クリックでお気に入りをON/OFF。`/object_info`（数MB）の取得を待たずに一覧表示し、Category/Packageは`LiteGraph.registered_node_types[..].nodeData`から取得（無い環境のみ裏で取得）。
+- SPAのNodesタブ: 数千件を一括でDOM生成していたのを分割描画に変更し、検索をデバウンス＋検索文字列の事前計算で軽量化。さらに`/api/wfm/nodes/light`（`INPUT_TYPES`を呼ばず約6ms）で一覧を先に表示し、入力定義を含む`/object_info`（実測で約14秒）は裏で取得して補完する方式にした。
+
+### Gallery: Move Toダイアログにフォルダ絞り込み
+
+- フォルダ名/パスの部分一致（空白区切りAND）で絞り込み、Enterで先頭候補へ移動。音声/動画も移動できるため、文言を「N件移動しました」に変更（`movedNImages`、`moveToFolderTitle`）。
+
+### その他
+
+- ヘルプ（en/ja/zh）とREADMEを更新。READMEのバージョンバッジが0.7.13のままだったのを修正。
+
+---
+
 ## v0.7.14（2026-10-09）
 
 ### Comic Creator連携: nanobananaタブの生成履歴をGallery/Metadataタブに表示
