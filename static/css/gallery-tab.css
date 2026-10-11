@@ -867,6 +867,13 @@
     font-size: 13px;
 }
 
+.wfm-gallery-move-filter {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
 .wfm-gallery-move-modal-footer {
     display: flex;
     gap: 8px;

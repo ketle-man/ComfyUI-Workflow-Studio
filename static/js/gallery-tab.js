@@ -1733,15 +1733,39 @@ function openMoveModal(paths) {
     overlay.innerHTML = `
         <div class="wfm-gallery-move-modal">
             <div class="wfm-gallery-move-modal-title">Move ${paths.length} image(s) to folder:</div>
-            <select id="wfm-gallery-move-dest-sel" class="wfm-select wfm-gallery-move-dest-sel">
-                ${destinations.map(f => `<option value="${escapeHtml(f.abs_path)}">${escapeHtml(f.name)}</option>`).join("")}
-            </select>
+            <input type="text" id="wfm-gallery-move-filter" class="wfm-input wfm-gallery-move-filter" placeholder="${escapeHtml(t("galleryMoveFilterPlaceholder"))}" autocomplete="off">
+            <select id="wfm-gallery-move-dest-sel" class="wfm-select wfm-gallery-move-dest-sel" size="8"></select>
             <div class="wfm-gallery-move-modal-footer">
                 <button id="wfm-gallery-move-confirm" class="wfm-btn wfm-btn-primary">Move</button>
                 <button id="wfm-gallery-move-cancel" class="wfm-btn">Cancel</button>
             </div>
         </div>
     `;
+
+    const destSel = overlay.querySelector("#wfm-gallery-move-dest-sel");
+    const filterInput = overlay.querySelector("#wfm-gallery-move-filter");
+    const confirmBtn = overlay.querySelector("#wfm-gallery-move-confirm");
+    // フォルダ名・パスの部分一致（大文字小文字無視、空白区切りはAND）で絞り込む
+    const renderDestinations = () => {
+        const words = filterInput.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const matched = destinations.filter(f => {
+            const hay = `${f.name} ${f.abs_path}`.toLowerCase();
+            return words.every(w => hay.includes(w));
+        });
+        destSel.innerHTML = matched
+            .map(f => `<option value="${escapeHtml(f.abs_path)}" title="${escapeHtml(f.abs_path)}">${escapeHtml(f.name)}</option>`)
+            .join("");
+        if (matched.length > 0) destSel.selectedIndex = 0;
+        confirmBtn.disabled = matched.length === 0;
+    };
+    filterInput.addEventListener("input", renderDestinations);
+    filterInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); if (!confirmBtn.disabled) confirmBtn.click(); }
+        else if (e.key === "ArrowDown") { e.preventDefault(); destSel.focus(); }
+    });
+    destSel.addEventListener("dblclick", () => { if (!confirmBtn.disabled) confirmBtn.click(); });
+    renderDestinations();
+    setTimeout(() => filterInput.focus(), 0);  // 開いたらすぐ入力できるように
 
     overlay.querySelector("#wfm-gallery-move-cancel").addEventListener("click", () => overlay.remove());
     overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
