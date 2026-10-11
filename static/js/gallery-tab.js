@@ -1010,6 +1010,8 @@ async function loadImageDetail(img) {
     const preview = document.getElementById("wfm-gallery-detail-preview");
     const isVideo = isVideoFile(img);
     const isAudio = isAudioFile(img);
+    // 音声は波形の下にプレイヤーが要るため、固定高さの枠をやめて内容なりの高さにする
+    preview.classList.toggle("wfm-gallery-detail-preview--audio", isAudio);
     preview.innerHTML = `
         <div class="wfm-gallery-preview-wrapper">
             ${mediaElementHtml(img, { imgClass: "wfm-gallery-detail-img", title: "Double-click to enlarge" })}

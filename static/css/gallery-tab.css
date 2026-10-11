@@ -1030,3 +1030,14 @@
     opacity: 0.8;
     margin: 4px 0;
 }
+
+/* 音声: 詳細パネルのプレビュー枠は固定高さ(正方形)をやめ、波形＋プレイヤーを収める */
+.wfm-gallery-detail-preview--audio {
+    aspect-ratio: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 8px;
+}
+.wfm-gallery-detail-preview--audio .wfm-gallery-audio-wave {
+    max-height: 150px;
+}

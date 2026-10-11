@@ -24,6 +24,16 @@ VIDEO_EXTENSIONS = {".mp4", ".webm"}
 # サムネイルは波形画像を生成する。
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".ogg", ".m4a", ".flac", ".opus"}
 
+# 音声サムネイル（波形）の色。拡張子ごとに変えて、一覧で形式を見分けやすくする。
+AUDIO_WAVE_COLORS = {
+    ".mp3": (56, 189, 248),    # blue
+    ".wav": (74, 222, 128),    # green
+    ".flac": (251, 191, 36),   # amber
+    ".ogg": (192, 132, 252),   # purple
+    ".opus": (192, 132, 252),  # purple（Ogg系は同色）
+    ".m4a": (251, 113, 133),   # rose
+}
+
 # サポートする画像拡張子（動画・音声はGalleryでは静止画と同じ一覧・配信経路を共有する。
 # .psdはブラウザが直接レンダリングできないため、配信時に合成済みPNGへ変換する）
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".psd"} | VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
@@ -1525,12 +1535,13 @@ class GalleryService:
         if top > 0:
             peaks = peaks / top
 
+        color = AUDIO_WAVE_COLORS.get(path.suffix.lower(), (56, 189, 248))
         img = Image.new("RGB", (size, size), (24, 28, 38))
         draw = ImageDraw.Draw(img)
         mid = size / 2
         for x, v in enumerate(peaks):
             h = max(1.0, float(v) * (size * 0.42))
-            draw.line([(x, mid - h), (x, mid + h)], fill=(56, 189, 248))
+            draw.line([(x, mid - h), (x, mid + h)], fill=color)
         img.save(out_path, "JPEG", quality=85, optimize=True)
 
     def serve_thumbnail(self, image_path: str, width: int = 256) -> Path | None:
@@ -1565,7 +1576,9 @@ class GalleryService:
         except OSError:
             return None
 
-        cache_key = hashlib.md5(f"{p}:{mtime}:{width}".encode()).hexdigest()
+        # 音声は波形の描画仕様(色)を変えたらキャッシュを作り直せるよう版数をキーに含める
+        wave_ver = ":wave2" if p.suffix.lower() in AUDIO_EXTENSIONS else ""
+        cache_key = hashlib.md5(f"{p}:{mtime}:{width}{wave_ver}".encode()).hexdigest()
         cache_dir = self.data_dir / "thumb_cache"
         cache_dir.mkdir(exist_ok=True)
         thumb_path = cache_dir / f"{cache_key}.jpg"
