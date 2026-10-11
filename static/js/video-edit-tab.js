@@ -2601,6 +2601,14 @@ function _renderSoundList() {
     }
 }
 
+// Entry point for video-asset-tab.js's "Add as Sound" button (an audio asset becomes
+// a timeline sound at the selected clip's start). Resolves once the sound is added.
+export async function addSoundFromFile(file, displayName) {
+    const before = _s.sounds.length;
+    await _addSound(file, displayName);
+    return _s.sounds.length > before;
+}
+
 // Entry point for video-asset-tab.js's "Set as BGM" button (a video asset's
 // audio track becomes the BGM). Returns whether the BGM was actually set.
 export async function setBgmFromFile(file, displayName) {

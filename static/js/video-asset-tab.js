@@ -12,7 +12,7 @@ import { VIDEO_GROUP, VTEMP_GROUP, ensureVideoGroup, isVideoFile, isAudioFile } 
 import { setSourcePreview } from "./video-preview.js";
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { addClipFromFile, setBgmFromFile, addPipFromFile } from "./video-edit-tab.js";
+import { addClipFromFile, setBgmFromFile, addPipFromFile, addSoundFromFile } from "./video-edit-tab.js";
 import { setBlockImageFromFile } from "./video-plan-tab.js";
 
 // Sentinel for the "All Video Assets" option — not a real backend group, since
@@ -33,7 +33,7 @@ const _s = {
     loaded: false, // becomes true once the Asset subtab has been shown at least once
     searchQuery: "",
     viewMode: "grid", // "grid" | "table"
-    kindFilter: "all", // "all" | "video" | "image"
+    kindFilter: "all", // "all" | "video" | "image" | "audio"
 };
 
 function _formatDate(mtime) {
@@ -42,10 +42,10 @@ function _formatDate(mtime) {
 
 function _filteredImages() {
     const q = _s.searchQuery.trim().toLowerCase();
-    // 音声はVideo Plan/Assetの素材対象外（画像・動画のみ扱う）
-    let list = _s.images.filter((img) => !isAudioFile(img));
+    let list = _s.images;
     if (_s.kindFilter === "video") list = list.filter((img) => isVideoFile(img));
-    else if (_s.kindFilter === "image") list = list.filter((img) => !isVideoFile(img));
+    else if (_s.kindFilter === "audio") list = list.filter((img) => isAudioFile(img));
+    else if (_s.kindFilter === "image") list = list.filter((img) => !isVideoFile(img) && !isAudioFile(img));
     if (q) list = list.filter((img) => img.filename.toLowerCase().includes(q));
     return list;
 }
@@ -213,6 +213,7 @@ function _selectImage(img) {
 // videos — anything tagged into it shows up here) preview via the pane's <img>
 // companion element instead of trying to play them as a <video>.
 async function _loadIntoSourcePreview(img) {
+    if (isAudioFile(img)) return; // 音声は映像プレビュー対象外（詳細パネルの<audio>で試聴）
     try {
         const res = await fetch(`/wfm/gallery/image/serve?path=${encodeURIComponent(img.path)}`);
         if (!res.ok) throw new Error(String(res.status));
@@ -233,6 +234,7 @@ function _renderDetail(img) {
     // via textContent/.value, never interpolated into the HTML string itself.
     panel.innerHTML = `
         <div class="wfm-video-asset-name" id="wfm-video-asset-name"></div>
+        ${isAudioFile(img) ? `<audio id="wfm-video-asset-audio" class="wfm-gallery-audio-player" controls src="/wfm/gallery/image/serve?path=${encodeURIComponent(img.path)}" style="width:100%;margin-bottom:8px;"></audio>` : ""}
         <label>Tags</label>
         <div class="wfm-video-asset-tags" id="wfm-video-asset-tags"></div>
         <div style="display:flex;gap:6px;">
@@ -242,10 +244,11 @@ function _renderDetail(img) {
         <label style="margin-top:10px;">Memo</label>
         <textarea id="wfm-video-asset-memo" class="wfm-textarea" rows="3"></textarea>
         <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-memo-save" style="margin-top:6px;">Save Memo</button>
-        <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-send-to-edit" style="width:100%;margin-top:12px;">${t("videoEditSendToEdit")}</button>
-        <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-add-overlay" style="width:100%;margin-top:6px;">${t("videoAssetAddAsOverlay")}</button>
-        <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-bgm" style="width:100%;margin-top:6px;display:${isVideoFile(img) ? "block" : "none"};">${t("videoAssetSetAsBgm")}</button>
-        <div id="wfm-video-asset-set-plan-image-row" style="display:${isVideoFile(img) ? "none" : "flex"};gap:6px;margin-top:6px;">
+        <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-send-to-edit" style="width:100%;margin-top:12px;display:${isAudioFile(img) ? "none" : "block"};">${t("videoEditSendToEdit")}</button>
+        <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-add-overlay" style="width:100%;margin-top:6px;display:${isAudioFile(img) ? "none" : "block"};">${t("videoAssetAddAsOverlay")}</button>
+        <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-bgm" style="width:100%;margin-top:${isAudioFile(img) ? "12" : "6"}px;display:${isVideoFile(img) || isAudioFile(img) ? "block" : "none"};">${t("videoAssetSetAsBgm")}</button>
+        <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-add-sound" style="width:100%;margin-top:6px;display:${isAudioFile(img) ? "block" : "none"};">${t("videoAssetAddAsSound")}</button>
+        <div id="wfm-video-asset-set-plan-image-row" style="display:${isVideoFile(img) || isAudioFile(img) ? "none" : "flex"};gap:6px;margin-top:6px;">
             <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-first" style="flex:1;">${t("videoAssetSetAsFirst")}</button>
             <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-last" style="flex:1;">${t("videoAssetSetAsLast")}</button>
         </div>
@@ -308,17 +311,34 @@ function _renderDetail(img) {
         }
     });
 
-    // Gallery lists no audio files, so a video asset's own audio track is the
-    // Asset-side way to pick a BGM (LoadAudio decodes audio from video files).
+    // BGM source: an audio asset directly, or a video asset's own audio track
+    // (LoadAudio decodes audio from video files).
     panel.querySelector("#wfm-video-asset-set-bgm")?.addEventListener("click", async () => {
         try {
             const res = await fetch(`/wfm/gallery/image/serve?path=${encodeURIComponent(img.path)}`);
             if (!res.ok) throw new Error(String(res.status));
             const blob = await res.blob();
-            const file = new File([blob], img.filename, { type: blob.type || "video/mp4" });
+            const file = new File([blob], img.filename, { type: blob.type || (isAudioFile(img) ? "audio/mpeg" : "video/mp4") });
             if (await setBgmFromFile(file, img.filename)) {
                 document.querySelector('.wfm-video-center-panel .wfm-video-subtab-btn[data-video-subtab="edit"]')?.click();
                 showToast(t("videoAssetSetAsBgmDone", img.filename), "success");
+            }
+        } catch (err) {
+            showToast(t("errorWithMsg", err.message), "error");
+        }
+    });
+
+    // Timeline sound (sound effect / voice): placed at the selected clip's start on the Audio track.
+    panel.querySelector("#wfm-video-asset-add-sound")?.addEventListener("click", async () => {
+        try {
+            const res = await fetch(`/wfm/gallery/image/serve?path=${encodeURIComponent(img.path)}`);
+            if (!res.ok) throw new Error(String(res.status));
+            const blob = await res.blob();
+            const file = new File([blob], img.filename, { type: blob.type || "audio/mpeg" });
+            if (await addSoundFromFile(file, img.filename)) {
+                document.querySelector('.wfm-video-center-panel .wfm-video-subtab-btn[data-video-subtab="edit"]')?.click();
+                document.getElementById("wfm-video-edit-track-audio")?.click();
+                showToast(t("videoAssetAddAsSoundDone", img.filename), "success");
             }
         } catch (err) {
             showToast(t("errorWithMsg", err.message), "error");
