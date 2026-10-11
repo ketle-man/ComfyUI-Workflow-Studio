@@ -27,6 +27,7 @@ const API = {
     thumb:          (path, w = 256) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}`,
     bulkFavorite:   "/wfm/gallery/bulk/favorite",
     bulkGroup:      "/wfm/gallery/bulk/group",
+    convert:        "/wfm/gallery/convert",
     saveImageMeta:              `/wfm/gallery/image/meta`,
     toggleFavorite:             `/wfm/gallery/image/favorite`,
     groups:                     `/wfm/gallery/groups`,
@@ -900,6 +901,12 @@ function updateBulkBar() {
     } else {
         bar.style.display = "none";
     }
+    // Convert ボタンは音声/動画を含む選択時のみ表示
+    const convertBtn = document.getElementById("wfm-gallery-bulk-convert");
+    if (convertBtn) {
+        convertBtn.style.display = count > 0 && convertTargets([...state.selectedImages]).length > 0 ? "" : "none";
+        convertBtn.textContent = t("galleryBulkConvert");
+    }
     // Compare ボタンは 2〜4 枚選択時のみ表示
     const compareBtn = document.getElementById("wfm-gallery-bulk-compare");
     if (compareBtn) {
@@ -1746,6 +1753,132 @@ function openMoveModal(paths) {
     document.body.appendChild(overlay);
 }
 
+// ── 変換（音声変換 / 動画からの音声抽出） ───────────────────────
+
+const CONVERT_FORMATS = {
+    flac: { bitrate: false },
+    mp3: { bitrate: true, bitrates: [320, 256, 192, 128, 96], defaultBitrate: 192 },
+    opus: { bitrate: true, bitrates: [192, 128, 96, 64, 32], defaultBitrate: 128 },
+    m4a: { bitrate: true, bitrates: [256, 192, 160, 128, 96], defaultBitrate: 192 },
+    wav: { bitrate: false },
+};
+
+function convertTargets(paths) {
+    return paths
+        .map(p => state.images.find(i => i.path === p))
+        .filter(img => img && (isAudioFile(img) || isVideoFile(img)));
+}
+
+function openConvertModal(paths) {
+    const targets = convertTargets(paths);
+    if (targets.length === 0) {
+        showToast(t("convertNoTarget"), "info");
+        return;
+    }
+    const hasVideo = targets.some(isVideoFile);
+
+    const overlay = document.createElement("div");
+    overlay.className = "wfm-gallery-lightbox";
+    overlay.innerHTML = `
+        <div class="wfm-gallery-move-modal wfm-gallery-convert-modal">
+            <div class="wfm-gallery-move-modal-title">${escapeHtml(t("convertTitle", targets.length))}</div>
+            ${hasVideo ? `<div class="wfm-gallery-convert-note">${escapeHtml(t("convertVideoNote"))}</div>` : ""}
+            <label class="wfm-gallery-convert-row">${escapeHtml(t("convertFormat"))}
+                <select id="wfm-convert-format" class="wfm-select">
+                    ${Object.keys(CONVERT_FORMATS).map(f => `<option value="${f}">${f.toUpperCase()}</option>`).join("")}
+                </select>
+            </label>
+            <label class="wfm-gallery-convert-row" id="wfm-convert-bitrate-row">${escapeHtml(t("convertBitrate"))}
+                <select id="wfm-convert-bitrate" class="wfm-select"></select>
+            </label>
+            <label class="wfm-gallery-convert-row">${escapeHtml(t("convertSampleRate"))}
+                <select id="wfm-convert-rate" class="wfm-select">
+                    <option value="0">${escapeHtml(t("convertKeep"))}</option>
+                    <option value="44100">44100 Hz</option>
+                    <option value="48000">48000 Hz</option>
+                </select>
+            </label>
+            <label class="wfm-gallery-convert-row">${escapeHtml(t("convertChannels"))}
+                <select id="wfm-convert-channels" class="wfm-select">
+                    <option value="keep">${escapeHtml(t("convertKeep"))}</option>
+                    <option value="mono">${escapeHtml(t("convertMono"))}</option>
+                    <option value="stereo">${escapeHtml(t("convertStereo"))}</option>
+                </select>
+            </label>
+            <label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-inherit" checked> ${escapeHtml(t("convertInherit"))}</label>
+            <label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-copymeta" checked> ${escapeHtml(t("convertCopyMeta"))}</label>
+            <label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-delete"> ${escapeHtml(t("convertDeleteOriginal"))}</label>
+            <div class="wfm-gallery-convert-status" id="wfm-convert-status"></div>
+            <div class="wfm-gallery-move-modal-footer">
+                <button id="wfm-convert-run" class="wfm-btn wfm-btn-primary">${escapeHtml(t("convertRun"))}</button>
+                <button id="wfm-convert-cancel" class="wfm-btn">${escapeHtml(t("convertCancel"))}</button>
+            </div>
+        </div>
+    `;
+
+    const q = (id) => overlay.querySelector(id);
+    const fmtSel = q("#wfm-convert-format");
+    const brSel = q("#wfm-convert-bitrate");
+    const syncFormat = () => {
+        const cfg = CONVERT_FORMATS[fmtSel.value];
+        q("#wfm-convert-bitrate-row").style.display = cfg.bitrate ? "" : "none";
+        if (cfg.bitrate) {
+            brSel.innerHTML = cfg.bitrates
+                .map(b => `<option value="${b}"${b === cfg.defaultBitrate ? " selected" : ""}>${b} kbps</option>`).join("");
+        }
+        // タグを持てない形式ではタグ引き継ぎ指定が無効であることを見せる
+        q("#wfm-convert-inherit").disabled = fmtSel.value === "wav";
+    };
+    fmtSel.addEventListener("change", syncFormat);
+    syncFormat();
+
+    let running = false;
+    q("#wfm-convert-cancel").addEventListener("click", () => { if (!running) overlay.remove(); });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay && !running) overlay.remove(); });
+    q("#wfm-convert-run").addEventListener("click", async () => {
+        const deleteOriginal = q("#wfm-convert-delete").checked;
+        if (deleteOriginal && !window.confirm(t("convertConfirmDelete", targets.length))) return;
+        running = true;
+        q("#wfm-convert-run").disabled = true;
+        q("#wfm-convert-cancel").disabled = true;
+        const opts = {
+            format: fmtSel.value,
+            bitrate: CONVERT_FORMATS[fmtSel.value].bitrate ? Number(brSel.value) : 0,
+            sample_rate: Number(q("#wfm-convert-rate").value),
+            channels: q("#wfm-convert-channels").value,
+            inherit_metadata: q("#wfm-convert-inherit").checked,
+            copy_gallery_meta: q("#wfm-convert-copymeta").checked,
+            delete_original: deleteOriginal,
+        };
+        let ok = 0, fail = 0, tagsSkipped = false;
+        for (let i = 0; i < targets.length; i++) {
+            q("#wfm-convert-status").textContent = t("convertProgress", i + 1, targets.length);
+            try {
+                const res = await fetch(API.convert, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: targets[i].path, ...opts }),
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                ok++;
+                if (data.tags_skipped) tagsSkipped = true;
+                if (data.deleted) state.selectedImages.delete(targets[i].path);
+            } catch (e) {
+                fail++;
+                console.warn("[Gallery] convert failed:", targets[i].filename, e);
+            }
+        }
+        overlay.remove();
+        showToast(t("convertDone", ok, fail), fail ? "error" : "success");
+        if (tagsSkipped && opts.inherit_metadata) showToast(t("convertTagsSkipped"), "info");
+        await loadImages();
+        updateBulkBar();
+    });
+
+    document.body.appendChild(overlay);
+}
+
 // ── 一括操作 ─────────────────────────────────────────────────
 
 async function bulkAddToGroup(groupName) {
@@ -2332,6 +2465,11 @@ function bindEvents() {
     document.getElementById("wfm-gallery-bulk-export")?.addEventListener("click", () => {
         if (state.selectedImages.size === 0) return;
         exportSelectedImagesToZip([...state.selectedImages]);
+    });
+
+    document.getElementById("wfm-gallery-bulk-convert")?.addEventListener("click", () => {
+        if (state.selectedImages.size === 0) return;
+        openConvertModal([...state.selectedImages]);
     });
 
     document.getElementById("wfm-gallery-bulk-psd")?.addEventListener("click", () => {

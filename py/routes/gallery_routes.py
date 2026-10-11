@@ -87,6 +87,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/groups/{name}/images", list_group_images)
     # バルク操作
     app.router.add_post("/wfm/gallery/bulk/favorite", bulk_favorite)
+    app.router.add_post("/wfm/gallery/convert", convert_file_route)
     app.router.add_post("/wfm/gallery/bulk/group", bulk_group)
     # フォルダ・ファイル操作
     app.router.add_post("/wfm/gallery/folder", create_folder_route)
@@ -240,6 +241,21 @@ async def serve_thumb(request: web.Request) -> web.Response:
 # ──────────────────────────────────────────────────────────────
 # バルク操作
 # ──────────────────────────────────────────────────────────────
+
+async def convert_file_route(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/convert — 音声/動画の音声を別形式へ変換（1ファイルずつ呼ぶ）"""
+    try:
+        body = await request.json()
+        path = body.get("path", "")
+        if not path:
+            return web.json_response({"ok": False, "error": "path required"}, status=400)
+        # 変換はCPU負荷が高く同期実行するとイベントループ全体が止まるためexecutorで実行する
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _service.convert_file, path, body)
+        return web.json_response(result, status=200 if result.get("ok") else 400)
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
 
 async def bulk_favorite(request: web.Request) -> web.Response:
     """POST /wfm/gallery/bulk/favorite — 複数画像のお気に入りを一括設定"""

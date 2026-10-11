@@ -1807,7 +1807,7 @@
                                 <li id="wfm-help-gallery-17"><b>Send GenUI Image</b> button (toolbar, next to Image Edit): uploads the selected image to ComfyUI and sets it as the input for the first LoadImage node in the GenerateUI tab; automatically switches to GenerateUI → Input → Image; requires a workflow with at least one LoadImage node to be loaded first</li>
                                 <li id="wfm-help-gallery-27"><b>Send to LI node</b> button (toolbar, next to Send GenUI Image): uploads the selected image and writes its filename into the image widget of the currently selected node on the ComfyUI canvas (falling back to the first LoadImage-type node found) — same destination as Image Edit tab's Send to LI node; requires Workflow Studio to have been opened from ComfyUI's top menu button</li>
                                 <li id="wfm-help-gallery-31"><b>Send to LV node</b> button (toolbar, next to Send to LI node): the video equivalent — uploads the selected video and writes its filename into the file widget of the currently selected node, which must be ComfyUI's native <b>Load Video</b> node; only enabled when the selected item is a video (mp4/webm); requires Workflow Studio to have been opened from ComfyUI's top menu button</li>
-                                <li id="wfm-help-gallery-28"><b>Create PSD</b> bulk button: combines all selected images into a single layered PSD file and downloads it — each image becomes its own layer (named after the file), positioned top-left on a canvas sized to the largest selected image; the last selected image ends up on top</li>
+                                <li id="wfm-help-gallery-28"><b>Create PSD</b> bulk button: combines all selected images into a single layered PSD file and downloads it — each image becomes its own layer (named after the file), positioned top-left on a canvas sized to the largest selected image; the last selected image ends up on top Convert... bulk button (shown when audio/video files are selected): converts audio files — or extracts the audio track of videos — to FLAC / MP3 / Opus / M4A / WAV (bitrate, sample rate, channels selectable) into the same folder as new files; prompt/workflow tags are carried over for formats that can hold them (WAV cannot), favorite/tags/memo/groups can be carried over, and the originals can optionally be deleted afterwards.</li>
                                 <li id="wfm-help-gallery-29"><b>Edit as Layers</b> bulk button: switches to the Image Edit tab and opens all selected images at once, each as an independent layer (video files in the selection are skipped); the last selected image ends up on top</li>
                             </ul>
                         </div>
@@ -2308,6 +2308,7 @@
                     <button id="wfm-gallery-bulk-export" class="wfm-btn wfm-btn-sm"></button>
                     <button id="wfm-gallery-bulk-psd" class="wfm-btn wfm-btn-sm"></button>
                     <button id="wfm-gallery-bulk-edit-layers" class="wfm-btn wfm-btn-sm"></button>
+                    <button id="wfm-gallery-bulk-convert" class="wfm-btn wfm-btn-sm" style="display:none;"></button>
                     <button id="wfm-gallery-bulk-delete" class="wfm-btn wfm-btn-sm wfm-btn-danger"></button>
                 </div>
             </div>

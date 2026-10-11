@@ -1001,3 +1001,32 @@
 .wfm-gallery-audio-player {
     width: 100%;
 }
+
+/* 変換ダイアログ */
+.wfm-gallery-convert-modal {
+    min-width: 360px;
+    max-width: 480px;
+}
+.wfm-gallery-convert-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 8px 0;
+}
+.wfm-gallery-convert-row .wfm-select {
+    min-width: 150px;
+}
+.wfm-gallery-convert-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 6px 0;
+    font-size: 12px;
+}
+.wfm-gallery-convert-note,
+.wfm-gallery-convert-status {
+    font-size: 12px;
+    opacity: 0.8;
+    margin: 4px 0;
+}

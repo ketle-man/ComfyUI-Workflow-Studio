@@ -249,6 +249,8 @@ function applyI18nToHtml() {
     if (galleryBulkPsd) galleryBulkPsd.textContent = t("galleryBulkPsd");
     const galleryBulkEditLayers = document.getElementById("wfm-gallery-bulk-edit-layers");
     if (galleryBulkEditLayers) galleryBulkEditLayers.textContent = t("galleryBulkEditLayers");
+    const galleryBulkConvert = document.getElementById("wfm-gallery-bulk-convert");
+    if (galleryBulkConvert) galleryBulkConvert.textContent = t("galleryBulkConvert");
     const galleryBulkDelete = document.getElementById("wfm-gallery-bulk-delete");
     if (galleryBulkDelete) galleryBulkDelete.textContent = t("galleryBulkDelete");
     const galleryOpenTaggerBtn = document.getElementById("wfm-gallery-open-tagger-btn");

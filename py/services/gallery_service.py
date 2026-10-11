@@ -187,6 +187,8 @@ class _FolderCache:
 
 
 class GalleryService:
+    _convert_lock = threading.Lock()  # 変換は同時に1本だけ実行する
+
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
         self.metadata_store = GalleryMetadataStore(data_dir / "gallery_metadata.json")
@@ -958,6 +960,85 @@ class GalleryService:
     # ──────────────────────────────────────────────────────────────
     # メタデータ保存
     # ──────────────────────────────────────────────────────────────
+
+    # ──────────────────────────────────────────────────────────────
+    # ファイル変換（音声変換 / 動画からの音声抽出）
+    # ──────────────────────────────────────────────────────────────
+
+    def convert_file(self, image_path: str, opts: dict) -> dict:
+        """音声ファイル（または動画の音声トラック）を指定形式へ変換し、同じフォルダに別ファイルとして保存する。
+
+        opts: format(flac/mp3/opus/m4a/wav), bitrate(kbps), sample_rate(0=元のまま), channels(keep/mono/stereo),
+              inherit_metadata(prompt/workflow等のタグ引き継ぎ。タグを持てない形式は対象外),
+              copy_gallery_meta(お気に入り/タグ/メモ/グループの引き継ぎ), delete_original(変換成功後に元を削除)
+        """
+        from .convert_service import OUTPUT_FORMATS, convert_audio, supports_tags
+
+        p = Path(image_path).resolve()
+        if not p.is_file():
+            return {"ok": False, "error": "File not found"}
+        if p.suffix.lower() not in AUDIO_EXTENSIONS | VIDEO_EXTENSIONS:
+            return {"ok": False, "error": "Not an audio/video file"}
+        if not self._check_path_allowed(p):
+            return {"ok": False, "error": "Access denied"}
+        fmt = str(opts.get("format", ""))
+        if fmt not in OUTPUT_FORMATS:
+            return {"ok": False, "error": f"Unsupported format: {fmt}"}
+
+        def _int(key: str, default: int = 0) -> int:
+            try:
+                return max(0, int(opts.get(key) or default))
+            except (TypeError, ValueError):
+                return default
+
+        ext = OUTPUT_FORMATS[fmt]["ext"]
+        dst = p.with_suffix(ext)
+        if dst.exists():  # 同名（同形式への再変換を含む）は上書きせず連番
+            counter = 1
+            while True:
+                dst = p.with_name(f"{p.stem}_converted{'' if counter == 1 else counter}{ext}")
+                if not dst.exists():
+                    break
+                counter += 1
+
+        inherit = bool(opts.get("inherit_metadata", True))
+        try:
+            with self._convert_lock:
+                result = convert_audio(
+                    p, dst, fmt,
+                    bitrate_kbps=_int("bitrate"),
+                    sample_rate=_int("sample_rate"),
+                    channels=str(opts.get("channels", "keep")),
+                    inherit_metadata=inherit,
+                )
+        except Exception as e:
+            logger.warning("convert_file: failed for %s: %s", p, e)
+            try:
+                dst.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return {"ok": False, "error": str(e)}
+
+        dst_str = str(dst.resolve()).replace("\\", "/")
+        if opts.get("copy_gallery_meta", True):
+            saved = self.metadata_store.get(str(p))
+            carry = {k: saved[k] for k in ("favorite", "tags", "memo", "groups") if saved.get(k)}
+            if carry:
+                self.metadata_store.save(str(dst.resolve()), carry)
+        self._folder_cache.invalidate(p.parent)
+
+        deleted = False
+        if opts.get("delete_original"):
+            deleted = bool(self.delete_images([str(p)])["deleted"])
+
+        return {
+            "ok": True,
+            "path": dst_str,
+            "filename": dst.name,
+            "tags_written": result["tags_written"],
+            "tags_skipped": inherit and not supports_tags(fmt),
+            "deleted": deleted,
+        }
 
     def save_image_meta(self, image_path: str, data: dict) -> bool:
         resolved = Path(image_path).resolve()
