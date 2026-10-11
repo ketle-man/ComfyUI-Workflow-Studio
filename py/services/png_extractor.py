@@ -44,8 +44,7 @@ def extract_png_workflow(buf):
                 except Exception:
                     pass
 
+        # IENDで止めない: IENDの後ろに追記されたworkflowチャンクも読む
         pos += length + 12
-        if chunk_type == "IEND":
-            break
 
     return None

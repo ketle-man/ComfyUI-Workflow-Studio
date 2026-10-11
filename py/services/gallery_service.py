@@ -693,6 +693,8 @@ class GalleryService:
             embedded = self._read_png_metadata(path)
         elif ext in {".jpg", ".jpeg"}:
             embedded = self._read_jpeg_metadata(path)
+        elif ext == ".webp":
+            embedded = self._read_webp_metadata(path)
         elif ext in VIDEO_EXTENSIONS:
             embedded = self._read_mp4_metadata(path)
 
@@ -742,8 +744,6 @@ class GalleryService:
                     chunk_type = f.read(4).decode("ascii", errors="ignore")
                     if chunk_len > _PNG_CHUNK_MAX:
                         f.seek(chunk_len + 4, 1)
-                        if chunk_type == "IEND":
-                            break
                         continue
                     chunk_data = f.read(chunk_len)
                     f.read(4)  # CRC
@@ -766,11 +766,47 @@ class GalleryService:
                             result[key] = value
                         except (ValueError, UnicodeDecodeError):
                             pass
-
-                    if chunk_type == "IEND":
-                        break
+                    # IENDで止めない: ComfyUI-Custom-Scripts等はIENDの後ろに
+                    # workflowチャンクを追記するため、ファイル末尾まで読む。
         except Exception as e:
             logger.debug("PNG metadata read error: %s", e)
+        return result
+
+    def _read_webp_metadata(self, path: Path) -> dict:
+        """WebPのRIFF EXIFチャンクから埋め込みworkflow/prompt(JSON文字列)を抽出する。
+        ComfyUIはWebPのEXIFに "workflow:{...}" / "prompt:{...}" 形式で書き込む
+        （static/js/metadata-tab.js の extractWorkflowFromEXIF と同じ処理）。"""
+        result = {}
+        try:
+            with open(path, "rb") as f:
+                head = f.read(12)
+                if len(head) < 12 or head[:4] != b"RIFF" or head[8:12] != b"WEBP":
+                    return result
+                while True:
+                    hdr = f.read(8)
+                    if len(hdr) < 8:
+                        break
+                    fourcc = hdr[:4]
+                    size = struct.unpack("<I", hdr[4:])[0]
+                    if fourcc == b"EXIF":
+                        if size > _PNG_CHUNK_MAX:
+                            break
+                        text = f.read(size).decode("utf-8", errors="replace")
+                        decoder = json.JSONDecoder()
+                        for key in ("workflow", "prompt"):
+                            idx = text.find(key + ":{")
+                            if idx < 0:
+                                continue
+                            start = idx + len(key) + 1
+                            try:
+                                _, end = decoder.raw_decode(text, start)
+                            except json.JSONDecodeError:
+                                continue
+                            result[key] = text[start:end]
+                        break
+                    f.seek(size + (size & 1), 1)
+        except Exception as e:
+            logger.debug("WebP metadata read error: %s", e)
         return result
 
     def _read_jpeg_metadata(self, path: Path) -> dict:
@@ -855,6 +891,8 @@ class GalleryService:
         embedded = None
         if ext == ".png":
             embedded = self._read_png_metadata(path)
+        elif ext == ".webp":
+            embedded = self._read_webp_metadata(path)
         elif ext in VIDEO_EXTENSIONS:
             embedded = self._read_mp4_metadata(path)
 

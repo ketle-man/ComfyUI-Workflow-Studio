@@ -3197,6 +3197,7 @@ function _extractLoRAs(wf) {
             const ct = n.class_type ?? "";
             if (ct === "LoraLoader") add(n.inputs?.lora_name, n.inputs?.strength_model, n.inputs?.strength_clip);
             else if (ct === "LoraLoaderModelOnly") add(n.inputs?.lora_name, n.inputs?.strength, 1.0);
+            else if (ct === "ImageMetadataLoRALoader") { for (let i = 1; i <= 3; i++) add(n.inputs?.[`lora_${i}`], n.inputs?.[`strength_model_${i}`], n.inputs?.[`strength_clip_${i}`]); }
             else if (ct === "Lora Loader (LoraManager)") {
                 const lorasData = n.inputs?.loras;
                 const list = lorasData?.__value__ ?? (Array.isArray(lorasData) ? lorasData : null);

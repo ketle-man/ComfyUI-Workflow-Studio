@@ -249,6 +249,7 @@ function extractLoRAs(wf) {
             const ct = n.class_type ?? "";
             if (ct === "LoraLoader") add(n.inputs?.lora_name, n.inputs?.strength_model, n.inputs?.strength_clip);
             else if (ct === "LoraLoaderModelOnly") add(n.inputs?.lora_name, n.inputs?.strength, 1.0);
+            else if (ct === "ImageMetadataLoRALoader") { for (let i = 1; i <= 3; i++) add(n.inputs?.[`lora_${i}`], n.inputs?.[`strength_model_${i}`], n.inputs?.[`strength_clip_${i}`]); }
             else if (ct === "Lora Loader (LoraManager)") {
                 const lorasData = n.inputs?.loras;
                 const list = lorasData?.__value__ ?? (Array.isArray(lorasData) ? lorasData : null);
@@ -698,7 +699,7 @@ function extractPromptsLiteGraph(wf) {
 }
 
 // ── SD/Fooocus prompt extraction ──────────────────────────────
-function parseSDAParameters(raw) {
+export function parseSDAParameters(raw) {
     const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     const stepsMatch = text.match(/\nSteps:\s+\d/);
     if (!stepsMatch) return null;
@@ -716,11 +717,25 @@ function parseSDAParameters(raw) {
     while ((m = re.exec(paramsLine)) !== null) params[m[1].trim()] = m[2].trim().replace(/^"|"$/g, "");
     return { positive, negative, params };
 }
-function parseFooocusMetadata(raw) {
+export function parseFooocusMetadata(raw) {
     let obj; try { obj = JSON.parse(raw); } catch { return null; }
     if (!obj?.base_model) return null;
     const toArray = v => !v ? [] : Array.isArray(v) ? v.filter(Boolean) : [String(v)];
     return { checkpoint: obj.base_model, vae: (obj.vae && obj.vae !== "Default") ? obj.vae : null, positives: toArray(obj.full_prompt ?? obj.prompt), negatives: toArray(obj.full_negative_prompt ?? obj.negative_prompt) };
+}
+
+// ComfyUIワークフローを持たない画像(A1111/Forge/Fooocus)の埋め込みテキストからプロンプトを取り出す。
+// embedded: PNG tEXt/iTXtのキー→文字列マップ。取り出せなければnull。
+export function extractPromptsFromParameters(embedded) {
+    const raw = embedded?.parameters;
+    if (!raw || typeof raw !== "string") return null;
+    if (embedded.fooocus_scheme === "fooocus") {
+        const f = parseFooocusMetadata(raw);
+        return f ? { positives: f.positives, negatives: f.negatives, texts: [] } : null;
+    }
+    const p = parseSDAParameters(raw);
+    if (!p) return null;
+    return { positives: p.positive ? [p.positive] : [], negatives: p.negative ? [p.negative] : [], texts: [] };
 }
 
 // ── Master extractAllMetadata ─────────────────────────────────

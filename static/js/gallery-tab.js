@@ -5,7 +5,7 @@
 
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
-import { loadFileIntoMetadataTab, extractPrompts, buildPromptItem } from "./metadata-tab.js";
+import { loadFileIntoMetadataTab, extractPrompts, extractPromptsFromParameters, buildPromptItem } from "./metadata-tab.js";
 import { loadWorkflowIntoEditor } from "./generate-tab.js";
 import { escapeHtml, setupSearchClearBtn, getAiBackendDefaultUrl } from "./util.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
@@ -1024,7 +1024,7 @@ async function loadImageDetail(img) {
         // Promptタブは prompt_workflow (API形式優先) を使う。トップレベルとサブグラフに
         // 独立した複数系統を持つワークフローでは workflow (UI形式) からの抽出だと
         // トップレベル系統しか拾えないことがあるため（Metadataタブと同じ優先順位に揃える）。
-        renderPromptTab(wfRes.prompt_workflow ?? state.embeddedWorkflow);
+        renderPromptTab(wfRes.prompt_workflow ?? state.embeddedWorkflow, metaRes.embedded);
     } catch (e) {
         renderWorkflowJson(null);
         _updateCopyCanvasBtn();
@@ -1138,7 +1138,7 @@ function renderWorkflowJson(workflow) {
 // 複数候補があるケース(PromptStyler等で正負が複数生成される場合)に対応するため、
 // Metadataタブと同じ POS/NEGリスト → クリックで全文表示のUI(buildPromptItem)をそのまま
 // 再利用する。選択画像を切り替えるたびにマウス操作無しで読めるよう、先頭項目を自動選択する。
-function renderPromptTab(workflow) {
+function renderPromptTab(workflow, embedded = null) {
     const listEl = document.getElementById("wfm-gallery-prompt-list");
     const fullArea = document.getElementById("wfm-gallery-prompt-full");
     const fullLabel = document.getElementById("wfm-gallery-prompt-full-label");
@@ -1148,12 +1148,14 @@ function renderPromptTab(workflow) {
     fullArea.value = "";
     fullLabel.textContent = "";
 
-    if (!workflow) {
+    // ワークフローが無い画像はA1111/Forge/Fooocusの parameters テキストから抽出する
+    const extracted = workflow ? extractPrompts(workflow) : extractPromptsFromParameters(embedded);
+    if (!extracted) {
         listEl.innerHTML = `<div class="wfm-meta-item" style="opacity:0.6;">No workflow embedded in this image.</div>`;
         return;
     }
 
-    const { positives, negatives, texts } = extractPrompts(workflow);
+    const { positives, negatives, texts } = extracted;
     const allPrompts = [
         ...positives.map(p => ({ type: "positive", text: p })),
         ...negatives.map(p => ({ type: "negative", text: p })),
