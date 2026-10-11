@@ -28,7 +28,34 @@ const state = {
     currentPage: 0,
     selectedNodes: new Set(),
     lastSelectionIndex: -1,
+    renderToken: 0,
 };
+
+// 数千件のカード/行を一度にDOMへ作ると描画が固まるため、先頭だけ同期で作り
+// 残りはフレームごとに分割して追加する。新しい描画が始まったら古い分は打ち切る。
+const RENDER_FIRST_CHUNK = 120;
+const RENDER_CHUNK = 250;
+function appendChunked(items, parent, build) {
+    const token = ++state.renderToken;
+    let i = 0;
+    const step = (size) => {
+        if (token !== state.renderToken) return;
+        const frag = document.createDocumentFragment();
+        const end = Math.min(i + size, items.length);
+        for (; i < end; i++) frag.appendChild(build(items[i]));
+        parent.appendChild(frag);
+        if (i < items.length) requestAnimationFrame(() => step(RENDER_CHUNK));
+    };
+    step(RENDER_FIRST_CHUNK);
+}
+
+function debounce(fn, ms) {
+    let timer = null;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), ms);
+    };
+}
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -74,6 +101,15 @@ async function fetchAllNodes() {
         deprecated: info.deprecated || false,
         experimental: info.experimental || false,
     }));
+}
+
+// 検索用の小文字化済み文字列（タグ以外）を1回だけ作る。キー入力ごとの再計算を避ける。
+function searchBase(node) {
+    if (node._searchBase === undefined) {
+        node._searchBase = [node.name, node.display_name, node.description, ...(node.search_aliases || [])]
+            .join(" ").toLowerCase();
+    }
+    return node._searchBase;
 }
 
 async function fetchNodeMetadata() {
@@ -189,13 +225,10 @@ function filterNodes() {
 
         if (state.searchText) {
             const q = state.searchText.toLowerCase();
-            const meta = state.nodeMetadata[node.name];
-            const searchable = [
-                node.name, node.display_name, node.description,
-                ...(node.search_aliases || []),
-                ...(meta?.tags || []),
-            ].join(" ").toLowerCase();
-            if (!searchable.includes(q)) return false;
+            if (!searchBase(node).includes(q)) {
+                const tags = state.nodeMetadata[node.name]?.tags;
+                if (!tags || !tags.join(" ").toLowerCase().includes(q)) return false;
+            }
         }
 
         return true;
@@ -265,7 +298,7 @@ function renderNodeGrid() {
     }
 
     grid.innerHTML = "";
-    filtered.forEach(node => grid.appendChild(createNodeCard(node)));
+    appendChunked(filtered, grid, createNodeCard);
 }
 
 function createNodeCard(node) {
@@ -341,7 +374,7 @@ function renderNodeTableView(grid, filtered) {
         <th>In</th><th>Out</th>
     </tr></thead>`;
     const tbody = document.createElement("tbody");
-    filtered.forEach(node => {
+    const buildRow = (node) => {
         const meta = state.nodeMetadata[node.name] || {};
         const tr = document.createElement("tr");
         tr.className = "wfm-nodes-table-row";
@@ -390,10 +423,11 @@ function renderNodeTableView(grid, filtered) {
                 showNodeSidePanel(node);
             }
         });
-        tbody.appendChild(tr);
-    });
+        return tr;
+    };
     table.appendChild(tbody);
     grid.appendChild(table);
+    appendChunked(filtered, tbody, buildRow);
 }
 
 // ── Favorite ──────────────────────────────────────────────
@@ -1189,10 +1223,11 @@ export function initNodesTab() {
     // Search
     const searchInput = document.getElementById("wfm-nodes-search");
     if (searchInput) {
+        const rerender = debounce(() => renderNodeGrid(), 150);
         searchInput.addEventListener("input", () => {
             state.searchText = searchInput.value;
             state.currentPage = 0;
-            renderNodeGrid();
+            rerender();
         });
     }
     setupSearchClearBtn("wfm-nodes-search", "wfm-nodes-search-clear-btn", () => {
