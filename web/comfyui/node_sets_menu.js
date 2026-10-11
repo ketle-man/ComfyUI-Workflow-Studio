@@ -96,6 +96,26 @@ const fetchObjectInfo = async () => {
     } catch { return {}; }
 };
 
+const getNodeDef = (nodeType) => {
+    if (state.objectInfo[nodeType]) return state.objectInfo[nodeType];
+    return typeof LiteGraph !== "undefined" ? LiteGraph.registered_node_types[nodeType]?.nodeData : undefined;
+};
+
+let objectInfoPromise = null;
+const ensureObjectInfo = () => {
+    if (objectInfoPromise) return objectInfoPromise;
+    const registered = typeof LiteGraph !== "undefined" ? LiteGraph.registered_node_types : {};
+    if (Object.values(registered).some(d => d?.nodeData?.python_module)) {
+        return (objectInfoPromise = Promise.resolve());
+    }
+    objectInfoPromise = fetchObjectInfo().then((info) => {
+        state.objectInfo = info;
+        // Category/Packageを表示中なら取得完了後に描き直す
+        if (state.topTab === "nodes" && (state.activeTab2 === "category" || state.activeTab2 === "package")) renderContent();
+    });
+    return objectInfoPromise;
+};
+
 const extractPackageName = (pythonModule) => {
     if (!pythonModule || pythonModule === "nodes") return "ComfyUI (Built-in)";
     const parts = pythonModule.split(".");
@@ -104,13 +124,15 @@ const extractPackageName = (pythonModule) => {
 };
 
 const loadData = async () => {
-    const [metadata, nodeSets, groups, objectInfo] = await Promise.all([
-        fetchMetadata(), fetchNodeSets(), fetchGroups(), fetchObjectInfo(),
+    // /object_info は数MBになりNodesタブ表示を待たせるため、ここでは待たない。
+    // Category/Package は LiteGraph の登録済みノード定義(nodeData)から取れるので、
+    // それが無い環境でのみバックグラウンドで取得する（ensureObjectInfo）。
+    const [metadata, nodeSets, groups] = await Promise.all([
+        fetchMetadata(), fetchNodeSets(), fetchGroups(),
     ]);
     state.metadata = metadata;
     state.nodeSets = nodeSets;
     state.groups = groups;
-    state.objectInfo = objectInfo;
 
     // Extract favorites from metadata
     state.favorites = [];
@@ -121,6 +143,7 @@ const loadData = async () => {
         }
     }
     state.loaded = true;
+    ensureObjectInfo();
 };
 
 // ============================================
@@ -2262,7 +2285,7 @@ const renderGroups = (container) => {
 // ============================================
 
 const getNodeCategory = (nodeType) => {
-    const info = state.objectInfo[nodeType];
+    const info = getNodeDef(nodeType);
     if (info?.category) return info.category.split("/")[0] || "uncategorized";
     // Fallback: LiteGraph type string often contains category as prefix
     const def = typeof LiteGraph !== "undefined"
@@ -2273,7 +2296,7 @@ const getNodeCategory = (nodeType) => {
 };
 
 const getNodePackage = (nodeType) => {
-    const info = state.objectInfo[nodeType];
+    const info = getNodeDef(nodeType);
     if (!info) return "ComfyUI (Built-in)";
     return extractPackageName(info.python_module || "");
 };
