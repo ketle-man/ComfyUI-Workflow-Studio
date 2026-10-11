@@ -24,7 +24,8 @@ const API = {
     imageMeta:      (path)     => `/wfm/gallery/image/meta?path=${encodeURIComponent(path)}`,
     imageWorkflow:  (path)     => `/wfm/gallery/image/workflow?path=${encodeURIComponent(path)}`,
     serveImage:     (path)     => `/wfm/gallery/image/serve?path=${encodeURIComponent(path)}`,
-    thumb:          (path, w = 256) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}`,
+    // 音声の波形サムネイルは描画仕様を変えた際にブラウザのHTTPキャッシュ(24h)を回避するため版数を付ける
+    thumb:          (path, w = 256) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}${/\.(wav|mp3|ogg|m4a|flac|opus)$/i.test(path) ? "&v=wave2" : ""}`,
     bulkFavorite:   "/wfm/gallery/bulk/favorite",
     bulkGroup:      "/wfm/gallery/bulk/group",
     convert:        "/wfm/gallery/convert",
@@ -1732,7 +1733,7 @@ function openMoveModal(paths) {
     overlay.className = "wfm-gallery-lightbox";
     overlay.innerHTML = `
         <div class="wfm-gallery-move-modal">
-            <div class="wfm-gallery-move-modal-title">Move ${paths.length} image(s) to folder:</div>
+            <div class="wfm-gallery-move-modal-title">${escapeHtml(t("moveToFolderTitle", paths.length))}</div>
             <input type="text" id="wfm-gallery-move-filter" class="wfm-input wfm-gallery-move-filter" placeholder="${escapeHtml(t("galleryMoveFilterPlaceholder"))}" autocomplete="off">
             <select id="wfm-gallery-move-dest-sel" class="wfm-select wfm-gallery-move-dest-sel" size="8"></select>
             <div class="wfm-gallery-move-modal-footer">
