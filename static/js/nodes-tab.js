@@ -83,6 +83,40 @@ function categoryBadgeHtml(cat) {
 
 // ── API ───────────────────────────────────────────────────
 
+// 軽量一覧（入力定義なし）。/object_info より桁違いに速い。失敗時は null。
+async function fetchLightNodes() {
+    try {
+        const res = await fetch("/api/wfm/nodes/light");
+        if (!res.ok) return null;
+        const list = await res.json();
+        if (!Array.isArray(list)) return null;
+        return list.map(info => ({
+            name: info.name,
+            display_name: info.display_name || info.name,
+            description: info.description || "",
+            category: info.category || "uncategorized",
+            python_module: info.python_module || "",
+            package: extractPackageName(info.python_module),
+            input: null,          // /object_info で後から補完
+            input_order: {},
+            output: info.output || [],
+            output_name: info.output_name || [],
+            output_node: info.output_node || false,
+            search_aliases: info.search_aliases || [],
+            deprecated: info.deprecated || false,
+            experimental: info.experimental || false,
+        }));
+    } catch { return null; }
+}
+
+// 入力定義などを full node (object_info 由来) から既存ノードへ反映する
+function mergeFullNode(target, full) {
+    target.input = full.input;
+    target.input_order = full.input_order;
+    target.output = full.output;
+    target.output_name = full.output_name;
+}
+
 async function fetchAllNodes() {
     const data = await comfyUI.fetchAllObjectInfo();
     return Object.entries(data).map(([name, info]) => ({
@@ -385,15 +419,16 @@ function renderNodeTableView(grid, filtered) {
         if (state.selectedNodes.has(node.name)) {
             tr.classList.add("multi-selected");
         }
-        const inputCount = Object.keys(node.input.required || {}).length +
-                           Object.keys(node.input.optional || {}).length;
+        const inputCount = node.input
+            ? Object.keys(node.input.required || {}).length + Object.keys(node.input.optional || {}).length
+            : "\u2026";
         const outputCount = (node.output || []).length;
         tr.innerHTML = `
             <td><button class="${meta.favorite ? "wfm-fav-btn active" : "wfm-fav-btn"}">${meta.favorite ? "\u2605" : "\u2606"}</button></td>
             <td title="${escapeHtml(node.name)}">${escapeHtml(node.display_name)}</td>
             <td>${packageBadgeHtml(node.package)}</td>
             <td>${escapeHtml(node.category)}</td>
-            <td>${inputCount}</td><td>${outputCount}</td>`;
+            <td class="wfm-nodes-in-count">${inputCount}</td><td>${outputCount}</td>`;
         tr.querySelector(".wfm-fav-btn").addEventListener("click", e => {
             e.stopPropagation();
             toggleFavorite(node.name, e.currentTarget);
@@ -560,6 +595,19 @@ function showNodeSidePanel(node) {
     renderSideDetails(node);
     renderSideIO(node);
     renderSideGroups(node);
+
+    // 入力定義が未取得なら、そのノード分だけ先に取得して差し替える
+    if (!node.input) {
+        comfyUI.fetchObjectInfo(node.name).then(res => {
+            const full = res?.[node.name];
+            if (!full) return;
+            node.input = full.input || {};
+            node.input_order = full.input_order || {};
+            node.output = full.output || node.output;
+            node.output_name = full.output_name || node.output_name;
+            if (state.selectedNode === node) renderSideIO(node);
+        }).catch(() => {});
+    }
 }
 
 function renderSideDetails(node) {
@@ -625,8 +673,8 @@ function renderSideIO(node) {
     const el = document.getElementById("wfm-nodes-side-io");
     if (!el) return;
 
-    const required = node.input.required || {};
-    const optional = node.input.optional || {};
+    const required = node.input?.required || {};
+    const optional = node.input?.optional || {};
 
     let html = `<h4 style="margin:0 0 8px;">${t("nodesInputs")}</h4>`;
     html += `<table class="wfm-node-io-table"><thead><tr><th>Name</th><th>Type</th><th>Details</th></tr></thead><tbody>`;
@@ -1162,6 +1210,30 @@ function showEditSetModal(set) {
 
 // ── Data Loading ──────────────────────────────────────────
 
+async function loadFullNodeDefinitions(nodes) {
+    try {
+        const full = await fetchAllNodes();
+        // 取得中に再読み込みされていたら破棄
+        if (state.allNodes !== nodes) return;
+        const byName = new Map(full.map(n => [n.name, n]));
+        for (const node of nodes) {
+            const f = byName.get(node.name);
+            if (f) mergeFullNode(node, f);
+        }
+        // テーブル表示のIn列を埋める
+        document.querySelectorAll("#wfm-nodes-grid tr.wfm-nodes-table-row").forEach(tr => {
+            const node = byName.get(tr.dataset.nodeName);
+            const cell = tr.querySelector(".wfm-nodes-in-count");
+            if (node && cell) {
+                cell.textContent = Object.keys(node.input.required || {}).length + Object.keys(node.input.optional || {}).length;
+            }
+        });
+        if (state.selectedNode) renderSideIO(state.selectedNode);
+    } catch (err) {
+        console.warn("Failed to load full node definitions:", err);
+    }
+}
+
 async function loadNodesData() {
     const placeholder = document.getElementById("wfm-nodes-placeholder");
     if (placeholder) placeholder.textContent = t("loading");
@@ -1172,11 +1244,13 @@ async function loadNodesData() {
             return;
         }
 
-        const [nodes, metadata, sets] = await Promise.all([
-            fetchAllNodes(),
+        // 一覧は軽量APIで先に表示し、入力定義を含む /object_info は裏で取得する
+        const [lightNodes, metadata, sets] = await Promise.all([
+            fetchLightNodes(),
             fetchNodeMetadata(),
             fetchNodeSets(),
         ]);
+        const nodes = lightNodes ?? await fetchAllNodes();
 
         state.allNodes = nodes;
         state.nodeMetadata = metadata;
@@ -1186,6 +1260,8 @@ async function loadNodesData() {
 
         renderFilters();
         renderNodeGrid();
+
+        if (lightNodes) loadFullNodeDefinitions(nodes);
     } catch (err) {
         console.error("Failed to load nodes:", err);
         if (placeholder) placeholder.textContent = t("nodesConnectToComfyUI");

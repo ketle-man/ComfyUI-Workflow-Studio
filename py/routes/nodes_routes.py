@@ -15,6 +15,7 @@ _service = NodesService()
 def setup_routes(app: web.Application):
     """Register all node management API routes."""
     # Node metadata
+    app.router.add_get("/api/wfm/nodes/light", handle_get_light_nodes)
     app.router.add_get("/api/wfm/nodes/metadata", handle_get_metadata)
     app.router.add_post("/api/wfm/nodes/metadata", handle_save_metadata)
     # Node groups
@@ -26,6 +27,50 @@ def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/node-sets/update", handle_update_set)
     app.router.add_post("/api/wfm/node-sets/delete", handle_delete_set)
     app.router.add_get("/api/wfm/node-sets/export", handle_export_set)
+
+
+# ── Light node list ────────────────────────────────────────
+
+
+def _build_light_node_list() -> list[dict]:
+    """全ノードの軽量情報（INPUT_TYPES を呼ばない）。
+
+    /object_info は各ノードの INPUT_TYPES() を呼ぶため、モデル一覧を走査するノードが
+    多い環境では十数秒かかる。Nodesタブの一覧表示に必要なのはクラス属性だけなので、
+    それらのみを読んで高速に返す（入力定義は呼び出し側が /object_info で後から補う）。
+    """
+    import nodes as comfy_nodes
+
+    result = []
+    for name, cls in list(comfy_nodes.NODE_CLASS_MAPPINGS.items()):
+        try:
+            return_types = getattr(cls, "RETURN_TYPES", ()) or ()
+            result.append({
+                "name": name,
+                "display_name": comfy_nodes.NODE_DISPLAY_NAME_MAPPINGS.get(name, name),
+                "description": getattr(cls, "DESCRIPTION", "") or "",
+                "category": getattr(cls, "CATEGORY", "sd") or "sd",
+                "python_module": getattr(cls, "RELATIVE_PYTHON_MODULE", "nodes") or "nodes",
+                "output": list(return_types),
+                "output_name": list(getattr(cls, "RETURN_NAMES", None) or return_types),
+                "output_node": getattr(cls, "OUTPUT_NODE", False) is True,
+                "search_aliases": list(getattr(cls, "SEARCH_ALIASES", []) or []),
+                "deprecated": bool(getattr(cls, "DEPRECATED", False)),
+                "experimental": bool(getattr(cls, "EXPERIMENTAL", False)),
+            })
+        except Exception as e:
+            logger.debug("light node info failed for %s: %s", name, e)
+    return result
+
+
+async def handle_get_light_nodes(request: web.Request) -> web.Response:
+    """GET /api/wfm/nodes/light"""
+    try:
+        result = await asyncio.to_thread(_build_light_node_list)
+        return web.json_response(result)
+    except Exception as e:
+        logger.error("Error building light node list: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
 
 
 # ── Node Metadata ──────────────────────────────────────────
