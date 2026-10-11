@@ -485,7 +485,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 
 - **Tab layout (W / N / P / M / I / A)** — compact single-letter tabs with full name shown on hover
 - **W — Workflows tab** — browse favorite workflows (All / ★ Favorites / Groups / By Badge sub-tabs), ★ star shown for favorites in All view
-- **N — Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs), ★ star shown for favorites in All view
+- **N — Nodes tab** — browse favorite nodes (All / ★ Favorites / Groups / Sets / 📂 Category / 🧩 Package sub-tabs), ★ star shown for favorites in All view; **Alt+click** a node to add it to (or remove it from) Favorites
   - **Category sub-tab** — dropdown to filter nodes by top-level category
   - **Package sub-tab** — dropdown to filter nodes by custom node package name
 - **M — Models tab** — browse installed models (All / ★ Favorites / Groups / By Type sub-tabs); LoRA groups show an **All N LoRAs** item — drag to canvas to place a `Lora Loader (LoraManager)` node with all LoRAs pre-loaded

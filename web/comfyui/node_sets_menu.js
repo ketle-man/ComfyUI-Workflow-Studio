@@ -2407,7 +2407,49 @@ const createDraggableItem = (label, type, data, subtitle) => {
         el.classList.remove("dragging");
     });
 
+    // Alt+クリックでお気に入りのON/OFF（Nodesサブタブの単体ノード項目のみ）
+    if (type === "single" && data?.classType) {
+        el.addEventListener("click", (e) => {
+            if (!e.altKey) return;
+            e.preventDefault();
+            toggleNodeFavorite(data.classType, el);
+        });
+    }
+
     return el;
+};
+
+const toggleNodeFavorite = async (name, el) => {
+    const prev = !!state.metadata[name]?.favorite;
+    const next = !prev;
+    try {
+        const res = await fetch("/api/wfm/nodes/metadata", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nodeName: name, favorite: next }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+        console.warn("[WFM] failed to toggle node favorite:", err);
+        return;
+    }
+    state.metadata[name] = { ...(state.metadata[name] || {}), favorite: next };
+    state.favorites = state.favorites.filter(n => n.name !== name);
+    if (next) state.favorites.push({ name, display_name: name });
+
+    if (state.topTab === "nodes" && !state.activeTab2 && state.activeTab === "favorites") {
+        renderContent();   // 解除した項目をFavorites一覧から外す
+        return;
+    }
+    // その他のタブはDOMだけ更新（パッケージ選択などの表示状態を保つ）
+    const label = el.querySelector(".wfm-nlp-item-label");
+    label?.querySelector(".wfm-nlp-fav-star")?.remove();
+    if (next && label) {
+        const star = document.createElement("span");
+        star.className = "wfm-nlp-fav-star";
+        star.textContent = "★";
+        label.prepend(star);
+    }
 };
 
 // ============================================
