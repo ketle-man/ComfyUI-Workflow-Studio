@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.8.1（2026-10-11）** — バグ修正
 - **v0.8.0（2026-10-11）** — Gallery: 音声ファイル対応（wav / mp3 / ogg / m4a / flac / opus）
 - **v0.7.14（2026-10-09）** — Comic Creator連携: nanobananaタブの生成履歴をGallery/Metadataタブに表示
 - **v0.7.13（2026-10-06）** — VRAM調整（Ollama）— Comic Creatorから移植

@@ -275,17 +275,44 @@ function isPromptStylerNode(ct) { return ct.includes("PromptStyler"); }
 const SAMPLER_SETTING_KEYS = ["seed", "noise_seed", "steps", "cfg", "sampler_name", "scheduler", "denoise"];
 function extractSamplerSettings(apiWf) {
     if (!apiWf || typeof apiWf !== "object" || Array.isArray(apiWf.nodes)) return null;
-    for (const n of Object.values(apiWf)) {
-        if (!n || typeof n !== "object" || !isSamplerNode(n.class_type ?? "")) continue;
-        const inputs = n.inputs ?? {};
-        const settings = {};
-        for (const key of SAMPLER_SETTING_KEYS) {
-            const v = inputs[key];
-            if (v !== undefined && !Array.isArray(v)) settings[key] = v;
+    const pick = (inputs, keys) => {
+        const out = {};
+        for (const key of keys) {
+            const v = inputs?.[key];
+            if (v !== undefined && !Array.isArray(v)) out[key] = v;
         }
-        if (Object.keys(settings).length > 0) return settings;
+        return out;
+    };
+    // Flux/SD3系はRandomNoise+BasicScheduler+KSamplerSelect+CFGGuider等に設定が分散するため、
+    // 補助ノードから不足分を補う。
+    const AUX = {
+        RandomNoise: ["noise_seed"],
+        BasicScheduler: ["steps", "scheduler", "denoise"],
+        KSamplerSelect: ["sampler_name"],
+        CFGGuider: ["cfg"],
+        DualCFGGuider: ["cfg"],
+    };
+    // 設定キーを最も多く持つサンプラーを主とし、同数なら後ろのノード(hires-fix等の最終パス)を優先する
+    let main = null, mainCount = 0;
+    const aux = {};
+    for (const [id, n] of Object.entries(apiWf)) {
+        if (!n || typeof n !== "object") continue;
+        const ct = n.class_type ?? "";
+        const inputs = n.inputs ?? {};
+        if (AUX[ct]) {
+            const got = pick(inputs, AUX[ct]);
+            for (const [k, v] of Object.entries(got)) if (!(k in aux)) aux[k] = v;
+            continue;
+        }
+        if (!isSamplerNode(ct)) continue;
+        const settings = pick(inputs, SAMPLER_SETTING_KEYS);
+        const count = Object.keys(settings).length;
+        if (count > 0 && count >= mainCount) {
+            main = settings; mainCount = count;
+        }
     }
-    return null;
+    const merged = { ...aux, ...(main ?? {}) };
+    return Object.keys(merged).length > 0 ? merged : null;
 }
 
 // CLIPTextEncodeEditPlus (model-and-prompt-from-metadata) の encode() と同じ結合ルール。
@@ -754,7 +781,7 @@ export async function extractAllMetadata(file) {
         // 正しく解決するため、そちらを経由してから抽出する。通常のワークフローには影響しない。
         if (Array.isArray(wf?.nodes)) {
             try {
-                const converted = await comfyWorkflow.convertUiToApi(wf);
+                const converted = await comfyWorkflow.convertUiToApi(wf, { readOnly: true });
                 if (converted && Object.keys(converted).length > 0) {
                     apiWf = converted;
                     if (wf.definitions?.subgraphs?.length > 0) wf = converted;
@@ -1039,8 +1066,11 @@ export function initMetadataTab() {
         }
     }
 
+    // 連続で画像を開いたとき、先に始めた処理が後から描画して結果が混ざるのを防ぐ
+    let _loadSeq = 0;
     async function handleFile(file, path) {
         if (!file) return;
+        const seq = ++_loadSeq;
         if (file.size > MAX_FILE_SIZE) {
             fileInfo.textContent = t("metaFileTooLarge");
             fileInfo.style.color = "var(--wfm-warning)";
@@ -1052,6 +1082,7 @@ export function initMetadataTab() {
         clearAll();
 
         const serverMeta = await fetchServerMeta(path);
+        if (seq !== _loadSeq) return;
 
         // Show preview for images
         const isImage = file.type.startsWith("image/") || file.name.toLowerCase().match(/\.(png|webp|jpg|jpeg)$/);
@@ -1074,6 +1105,7 @@ export function initMetadataTab() {
             dropLabel.style.display = "flex";
         }
 
+        if (seq !== _loadSeq) return;
         const dims = (serverMeta?.width && serverMeta?.height) ? serverMeta : naturalDims;
         renderNanobanana(serverMeta?.nanobanana ?? null);
 
@@ -1081,6 +1113,7 @@ export function initMetadataTab() {
         try {
             meta = await extractAllMetadata(file);
         } catch (err) {
+            if (seq !== _loadSeq) return;
             console.error("[MetadataTab]", err);
             fileInfo.textContent = t("metaParseError");
             fileInfo.style.color = "var(--wfm-danger)";
@@ -1088,6 +1121,7 @@ export function initMetadataTab() {
             return;
         }
 
+        if (seq !== _loadSeq) return;
         if (!meta) {
             // nanobanana(Gemini API経由)の画像はComfyUIワークフローを埋め込んでいないため
             // extractAllMetadataはnullを返す。その場合でもnanobanana履歴があれば

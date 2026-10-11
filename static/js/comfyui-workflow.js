@@ -649,7 +649,19 @@ export const comfyWorkflow = {
         _objectInfoCache = null;
     },
 
-    async convertUiToApi(workflow) {
+    // opts.readOnly: 表示用の読み取り変換。COMBO値の差し替えを行わず、Workflowタブの互換性
+    // チェックが参照する _last* 記録も変更しない（Metadataタブなど表示目的の呼び出し用）。
+    async convertUiToApi(workflow, opts = {}) {
+        if (!opts.readOnly) return comfyWorkflow._convertUiToApiImpl(workflow, opts);
+        const saved = [_lastCheckpointSubstitutions, _lastComboSubstitutions, _lastBypassedNodes, _lastMutedNodes];
+        try {
+            return await comfyWorkflow._convertUiToApiImpl(workflow, opts);
+        } finally {
+            [_lastCheckpointSubstitutions, _lastComboSubstitutions, _lastBypassedNodes, _lastMutedNodes] = saved;
+        }
+    },
+
+    async _convertUiToApiImpl(workflow, opts = {}) {
         _lastCheckpointSubstitutions = [];
         _lastComboSubstitutions = [];
         _lastBypassedNodes = [];
@@ -807,7 +819,7 @@ export const comfyWorkflow = {
                             const spec = allInputDefs[name];
                             if (spec) {
                                 const choices = Array.isArray(spec[0]) ? spec[0] : null;
-                                if (choices && choices.length > 0 && !choices.includes(val)) {
+                                if (!opts.readOnly && choices && choices.length > 0 && !choices.includes(val)) {
                                     if (name === "ckpt_name") {
                                         _lastCheckpointSubstitutions.push({
                                             nodeId: String(node.id),

@@ -25,7 +25,7 @@ const API = {
     imageWorkflow:  (path)     => `/wfm/gallery/image/workflow?path=${encodeURIComponent(path)}`,
     serveImage:     (path)     => `/wfm/gallery/image/serve?path=${encodeURIComponent(path)}`,
     // 音声の波形サムネイルは描画仕様を変えた際にブラウザのHTTPキャッシュ(24h)を回避するため版数を付ける
-    thumb:          (path, w = 256) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}${/\.(wav|mp3|ogg|m4a|flac|opus)$/i.test(path) ? "&v=wave2" : ""}`,
+    thumb:          (path, w = 256) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}${isAudioFile({ path }) ? `&v=${WAVE_THUMB_VERSION}` : ""}`,
     bulkFavorite:   "/wfm/gallery/bulk/favorite",
     bulkGroup:      "/wfm/gallery/bulk/group",
     convert:        "/wfm/gallery/convert",
@@ -67,6 +67,9 @@ export function isVideoFile(img) {
     const source = (img?.ext || img?.filename || img?.path || "").toLowerCase();
     return VIDEO_EXTENSIONS.some(ext => source.endsWith(ext));
 }
+
+// 音声の波形サムネイルの版数。py/services/gallery_service.py の WAVE_THUMB_VERSION と同じ値にすること。
+const WAVE_THUMB_VERSION = "wave2";
 
 // 音声ファイル（ComfyUIの音楽生成出力）。サムネイルはサーバー生成の波形画像、再生は<audio>。
 const AUDIO_EXTENSIONS = [".wav", ".mp3", ".ogg", ".m4a", ".flac", ".opus"];
@@ -905,7 +908,7 @@ function updateBulkBar() {
     // Convert ボタンは音声/動画を含む選択時のみ表示
     const convertBtn = document.getElementById("wfm-gallery-bulk-convert");
     if (convertBtn) {
-        convertBtn.style.display = count > 0 && convertTargets([...state.selectedImages]).length > 0 ? "" : "none";
+        convertBtn.style.display = count > 0 && [...state.selectedImages].some(p => isConvertible(imageByPath(p))) ? "" : "none";
         convertBtn.textContent = t("galleryBulkConvert");
     }
     // Compare ボタンは 2〜4 枚選択時のみ表示
@@ -1790,10 +1793,24 @@ const CONVERT_FORMATS = {
     wav: { bitrate: false },
 };
 
+// パス→画像のMap。state.imagesは再代入/filterで新しい配列になるため、配列ごとにキャッシュする
+// （選択のたびに O(選択数 × 画像数) の線形探索をしないため）。
+const _imageByPathCache = new WeakMap();
+function imageByPath(path) {
+    let map = _imageByPathCache.get(state.images);
+    if (!map) {
+        map = new Map(state.images.map(i => [i.path, i]));
+        _imageByPathCache.set(state.images, map);
+    }
+    return map.get(path);
+}
+
+function isConvertible(img) {
+    return !!img && (isAudioFile(img) || isVideoFile(img));
+}
+
 function convertTargets(paths) {
-    return paths
-        .map(p => state.images.find(i => i.path === p))
-        .filter(img => img && (isAudioFile(img) || isVideoFile(img)));
+    return paths.map(imageByPath).filter(isConvertible);
 }
 
 function openConvertModal(paths) {
@@ -2509,7 +2526,7 @@ function bindEvents() {
         if (!window._wfmImageEditTab) return;
 
         const allPaths = [...state.selectedImages];
-        const paths    = allPaths.filter(p => !/\.(mp4|webm|wav|mp3|ogg|m4a|flac|opus)$/i.test(p));
+        const paths    = allPaths.filter(p => !isVideoFile({ path: p }) && !isAudioFile({ path: p }));
         if (paths.length === 0) {
             showToast(t("editLayersNoImages"), "error");
             return;

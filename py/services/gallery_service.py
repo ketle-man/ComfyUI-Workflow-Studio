@@ -11,6 +11,7 @@ import re
 import struct
 import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,9 @@ VIDEO_EXTENSIONS = {".mp4", ".webm"}
 # 音声拡張子（ComfyUIの音楽生成出力）。動画と同様にPyAVで再生時間・埋め込みメタデータを読む。
 # サムネイルは波形画像を生成する。
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".ogg", ".m4a", ".flac", ".opus"}
+# 波形サムネイルの版数（描画仕様を変えたら上げる）。static/js/gallery-tab.js の WAVE_THUMB_VERSION と同じ値にすること。
+WAVE_THUMB_VERSION = "wave2"
+_NB_INDEX_CACHE_MAX = 16
 
 # 音声サムネイル（波形）の色。拡張子ごとに変えて、一覧で形式を見分けやすくする。
 AUDIO_WAVE_COLORS = {
@@ -197,6 +201,8 @@ class _FolderCache:
 
 
 class GalleryService:
+    _nb_index_cache: "OrderedDict[str, tuple]" = OrderedDict()  # history.jsonlの索引キャッシュ(上限付き)
+    _nb_index_lock = threading.Lock()
     _convert_lock = threading.Lock()  # 変換は同時に1本だけ実行する
 
     def __init__(self, data_dir: Path):
@@ -602,14 +608,29 @@ class GalleryService:
         if image_path.parent.name != NANOBANANA_FOLDER_NAME:
             return None
         history_path = image_path.parent / "history.jsonl"
-        if not history_path.is_file():
+        index = self._load_nanobanana_index(history_path)
+        return index.get(image_path.name) if index else None
+
+    def _load_nanobanana_index(self, history_path: Path) -> dict | None:
+        """history.jsonl を「ファイル名→エントリ」の辞書にして返す。(mtime, size)をキーに
+        キャッシュし、メタデータ要求のたびの全読み込みを避ける。同名再生成は新しい行を優先する。"""
+        try:
+            st = history_path.stat()
+        except OSError:
             return None
+        key = str(history_path)
+        sig = (st.st_mtime_ns, st.st_size)
+        with self._nb_index_lock:
+            cached = self._nb_index_cache.get(key)
+            if cached and cached[0] == sig:
+                self._nb_index_cache.move_to_end(key)
+                return cached[1]
         try:
             lines = history_path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             return None
-        filename = image_path.name
-        for line in reversed(lines):
+        index: dict = {}
+        for line in reversed(lines):  # 新しい行から。最初に見つかったものを優先
             line = line.strip()
             if not line:
                 continue
@@ -617,9 +638,20 @@ class GalleryService:
                 entry = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if filename in (entry.get("filenames") or []):
-                return entry
-        return None
+            if not isinstance(entry, dict):  # 破損行（[]・数値など）は無視
+                continue
+            filenames = entry.get("filenames")
+            if not isinstance(filenames, list):
+                continue
+            for name in filenames:
+                if isinstance(name, str) and name not in index:
+                    index[name] = entry
+        with self._nb_index_lock:
+            self._nb_index_cache[key] = (sig, index)
+            self._nb_index_cache.move_to_end(key)
+            while len(self._nb_index_cache) > _NB_INDEX_CACHE_MAX:
+                self._nb_index_cache.popitem(last=False)
+        return index
 
     def _find_vault_category_root(self, image_path: Path) -> Path | None:
         """image_path の祖先を辿り、直下に thumbnails(_option2) を持つフォルダ
@@ -781,7 +813,10 @@ class GalleryService:
                                 rest = rest[null_idx2 + 1:]
                                 null_idx3 = rest.index(b"\x00")
                                 value = rest[null_idx3 + 1:].decode("utf-8", errors="replace")
-                            result[key] = value
+                            # 先勝ち: png_extractor.extract_png_workflow(ワークフロー読み込み)と
+                            # 同じチャンクを採用し、Gallery表示との食い違いを防ぐ。
+                            if key not in result:
+                                result[key] = value
                         except (ValueError, UnicodeDecodeError):
                             pass
                     # IENDで止めない: ComfyUI-Custom-Scripts等はIENDの後ろに
@@ -1002,18 +1037,20 @@ class GalleryService:
                 return default
 
         ext = OUTPUT_FORMATS[fmt]["ext"]
-        dst = p.with_suffix(ext)
-        if dst.exists():  # 同名（同形式への再変換を含む）は上書きせず連番
-            counter = 1
-            while True:
-                dst = p.with_name(f"{p.stem}_converted{'' if counter == 1 else counter}{ext}")
-                if not dst.exists():
-                    break
-                counter += 1
-
         inherit = bool(opts.get("inherit_metadata", True))
-        try:
-            with self._convert_lock:
+
+        # 出力名の決定〜変換完了までを同一ロック内で行う（同時リクエストで同じ名前を選んで
+        # 上書きし合うのを防ぐ）。エラー時に消すのは自分が決めたdstだけ。
+        with self._convert_lock:
+            dst = p.with_suffix(ext)
+            if dst.exists():  # 同名（同形式への再変換を含む）は上書きせず連番
+                counter = 1
+                while True:
+                    dst = p.with_name(f"{p.stem}_converted{'' if counter == 1 else counter}{ext}")
+                    if not dst.exists():
+                        break
+                    counter += 1
+            try:
                 result = convert_audio(
                     p, dst, fmt,
                     bitrate_kbps=_int("bitrate"),
@@ -1021,13 +1058,13 @@ class GalleryService:
                     channels=str(opts.get("channels", "keep")),
                     inherit_metadata=inherit,
                 )
-        except Exception as e:
-            logger.warning("convert_file: failed for %s: %s", p, e)
-            try:
-                dst.unlink(missing_ok=True)
-            except OSError:
-                pass
-            return {"ok": False, "error": str(e)}
+            except Exception as e:
+                logger.warning("convert_file: failed for %s: %s", p, e)
+                try:
+                    dst.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                return {"ok": False, "error": str(e)}
 
         dst_str = str(dst.resolve()).replace("\\", "/")
         if opts.get("copy_gallery_meta", True):
@@ -1577,7 +1614,7 @@ class GalleryService:
             return None
 
         # 音声は波形の描画仕様(色)を変えたらキャッシュを作り直せるよう版数をキーに含める
-        wave_ver = ":wave2" if p.suffix.lower() in AUDIO_EXTENSIONS else ""
+        wave_ver = f":{WAVE_THUMB_VERSION}" if p.suffix.lower() in AUDIO_EXTENSIONS else ""
         cache_key = hashlib.md5(f"{p}:{mtime}:{width}{wave_ver}".encode()).hexdigest()
         cache_dir = self.data_dir / "thumb_cache"
         cache_dir.mkdir(exist_ok=True)

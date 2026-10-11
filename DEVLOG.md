@@ -2,6 +2,24 @@
 
 ---
 
+## v0.8.1（2026-10-11）
+
+v0.8.0 のコードレビュー指摘（#1〜#10）への対応。
+
+### バグ修正
+- Nodes: 検索結果が0件のとき `renderToken` を進めておらず、描画途中のカードが「No nodes found」の下に追加され続けていた。
+- Metadata: `convertUiToApi()` に `{ readOnly: true }` を追加。表示用の変換ではCOMBO値の無警告差し替え（サンプラー名の誤表示）を行わず、Workflowタブの互換性チェックが参照する `_last*` 記録も更新しない。
+- Metadata: 画像を連続で開いたとき、先に始めた処理の結果が後から描画されて混ざる問題を、リクエストID（`_loadSeq`）で防止。
+- Metadata: サンプラー設定の抽出を改善。Flux/SD3系（RandomNoise / BasicScheduler / KSamplerSelect / CFGGuider）の設定を統合し、複数KSamplerでは設定が最も多いノード（同数なら後ろ）を採用。
+- Gallery: `history.jsonl` に dict でない行・`filenames` が list でない行があっても、フォルダ内の全画像でメタ取得が失敗しないようにした。
+- Gallery: 同じファイルを同時に変換すると出力名が衝突して上書きされる問題を、出力名の決定を `_convert_lock` 内に移して解消。
+- Gallery: PNGチャンクの読み取りを先勝ちに統一（`png_extractor` と同じ）。ワークフロー読み込みとの食い違いを防止。
+
+### パフォーマンス・保守性
+- Gallery: 一括選択の変換対象判定を O(選択数×画像数) から O(選択数) に（パス→画像Mapのキャッシュ + `some` で打ち切り）。12,780枚の全選択で約33ms。
+- Gallery: `history.jsonl` を `(mtime_ns, size)` キーの索引としてキャッシュ（`OrderedDict`、上限16件）。
+- 音声・動画の拡張子判定を `isAudioFile()` / `isVideoFile()` に統一し、波形サムネイルの版数を `WAVE_THUMB_VERSION` 定数に集約（JS/Python）。
+
 ## v0.8.0（2026-10-11）
 
 ### Gallery: 音声ファイル対応（wav / mp3 / ogg / m4a / flac / opus）

@@ -322,6 +322,7 @@ function renderNodeGrid() {
     if (countEl) countEl.textContent = `${filtered.length} / ${state.allNodes.length}`;
 
     if (filtered.length === 0) {
+        state.renderToken++; // 実行中の分割描画を止める（止めないと古いカードが追加され続ける）
         grid.innerHTML = `<p class="wfm-placeholder">${t("noNodesFound")}</p>`;
         return;
     }
