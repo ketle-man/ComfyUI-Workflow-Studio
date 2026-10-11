@@ -55,6 +55,12 @@ def _init_allowed_root() -> None:
 _init_allowed_root()
 
 
+# Windowsのレジストリ依存で音声のMIMEが返らない/不統一なため明示登録する（<audio>の再生に必要）
+for _ext, _mime in ((".wav", "audio/wav"), (".mp3", "audio/mpeg"), (".ogg", "audio/ogg"),
+                    (".opus", "audio/ogg"), (".m4a", "audio/mp4"), (".flac", "audio/flac")):
+    mimetypes.add_type(_mime, _ext)
+
+
 def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/folders", list_folders)
     app.router.add_get("/wfm/gallery/images", list_images)

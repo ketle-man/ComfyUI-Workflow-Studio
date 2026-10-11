@@ -8,7 +8,7 @@
  * to the real Gallery tab via the "Open in Gallery" button.
  */
 
-import { VIDEO_GROUP, VTEMP_GROUP, ensureVideoGroup, isVideoFile } from "./gallery-tab.js";
+import { VIDEO_GROUP, VTEMP_GROUP, ensureVideoGroup, isVideoFile, isAudioFile } from "./gallery-tab.js";
 import { setSourcePreview } from "./video-preview.js";
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
@@ -42,7 +42,8 @@ function _formatDate(mtime) {
 
 function _filteredImages() {
     const q = _s.searchQuery.trim().toLowerCase();
-    let list = _s.images;
+    // 音声はVideo Plan/Assetの素材対象外（画像・動画のみ扱う）
+    let list = _s.images.filter((img) => !isAudioFile(img));
     if (_s.kindFilter === "video") list = list.filter((img) => isVideoFile(img));
     else if (_s.kindFilter === "image") list = list.filter((img) => !isVideoFile(img));
     if (q) list = list.filter((img) => img.filename.toLowerCase().includes(q));

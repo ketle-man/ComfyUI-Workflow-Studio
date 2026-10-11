@@ -983,3 +983,21 @@
     min-height: 0;
     resize: none;
 }
+
+/* 音声ファイル: 波形画像＋<audio> コントロール */
+.wfm-gallery-audio-box {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+}
+.wfm-gallery-audio-wave {
+    object-fit: contain;
+    max-height: 220px;
+    background: #181c26;
+    border-radius: 6px;
+}
+.wfm-gallery-audio-player {
+    width: 100%;
+}

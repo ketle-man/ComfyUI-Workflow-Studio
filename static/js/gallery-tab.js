@@ -66,6 +66,27 @@ export function isVideoFile(img) {
     return VIDEO_EXTENSIONS.some(ext => source.endsWith(ext));
 }
 
+// 音声ファイル（ComfyUIの音楽生成出力）。サムネイルはサーバー生成の波形画像、再生は<audio>。
+const AUDIO_EXTENSIONS = [".wav", ".mp3", ".ogg", ".m4a", ".flac", ".opus"];
+export function isAudioFile(img) {
+    const source = (img?.ext || img?.filename || img?.path || "").toLowerCase();
+    return AUDIO_EXTENSIONS.some(ext => source.endsWith(ext));
+}
+
+// プレビュー/ライトボックス/比較用のメディア要素HTML。音声は波形画像＋<audio controls>。
+function mediaElementHtml(img, { imgClass, videoAttrs = "controls", audioAttrs = "controls", title = "" }) {
+    const src = API.serveImage(img.path);
+    const titleAttr = title ? ` title="${title}"` : "";
+    if (isVideoFile(img)) return `<video src="${src}" class="${imgClass}" ${videoAttrs}${titleAttr}></video>`;
+    if (isAudioFile(img)) {
+        return `<div class="wfm-gallery-audio-box">
+            <img src="${API.thumb(img.path, 512)}" class="${imgClass} wfm-gallery-audio-wave" alt="${escapeHtml(img.filename)}"${titleAttr}>
+            <audio src="${src}" class="wfm-gallery-audio-player" ${audioAttrs}></audio>
+        </div>`;
+    }
+    return `<img src="${src}" class="${imgClass}" alt="${escapeHtml(img.filename)}"${titleAttr}>`;
+}
+
 // ComfyUI Comic Creater からiframe越しに画像を受け取り、Generate UIのImage入力スロットへ直接セットする（I2I連携）。
 // Comic Creater側の「I2Iへ送る」ボタンから
 // iframe.contentWindow._wfmReceiveImageForI2I(blob, name, workflowData?, workflowFilename?) として呼ばれる。
@@ -672,10 +693,10 @@ function createThumbCard(img) {
     card.appendChild(imgEl);
 
     // 動画ファイルは再生アイコンバッジを重ねて表示（サムネイル自体は先頭フレームのJPEG）
-    if (isVideoFile(img)) {
+    if (isVideoFile(img) || isAudioFile(img)) {
         const playBadge = document.createElement("div");
         playBadge.className = "wfm-gallery-thumb-video-badge";
-        playBadge.textContent = "▶";
+        playBadge.textContent = isAudioFile(img) ? "♪" : "▶";
         card.appendChild(playBadge);
     }
 
@@ -981,17 +1002,16 @@ async function loadImageDetail(img) {
     // プレビュー（mp4は<video controls>、それ以外は<img>）
     const preview = document.getElementById("wfm-gallery-detail-preview");
     const isVideo = isVideoFile(img);
-    const mediaHtml = isVideo
-        ? `<video src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" controls title="Double-click to enlarge"></video>`
-        : `<img src="${API.serveImage(img.path)}" class="wfm-gallery-detail-img" alt="${escapeHtml(img.filename)}" title="Double-click to enlarge">`;
+    const isAudio = isAudioFile(img);
     preview.innerHTML = `
         <div class="wfm-gallery-preview-wrapper">
-            ${mediaHtml}
+            ${mediaElementHtml(img, { imgClass: "wfm-gallery-detail-img", title: "Double-click to enlarge" })}
         </div>
     `;
     const previewMediaEl = preview.querySelector(isVideo ? "video" : "img");
     previewMediaEl.addEventListener("dblclick", () => openLightbox(img));
     if (isVideo) applyStoredVideoVolume(previewMediaEl);
+    if (isAudio) applyStoredVideoVolume(preview.querySelector("audio"));
 
     // ファイル名
     document.getElementById("wfm-gallery-detail-filename").textContent = img.filename;
@@ -1809,9 +1829,9 @@ async function bulkSetFavorite(favoriteValue) {
 function openLightbox(img) {
     const overlay = document.createElement("div");
     overlay.className = "wfm-gallery-lightbox";
-    const mediaHtml = isVideoFile(img)
-        ? `<video src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" controls autoplay></video>`
-        : `<img src="${API.serveImage(img.path)}" class="wfm-gallery-lightbox-img" alt="${escapeHtml(img.filename)}">`;
+    const mediaHtml = mediaElementHtml(img, {
+        imgClass: "wfm-gallery-lightbox-img", videoAttrs: "controls autoplay", audioAttrs: "controls autoplay",
+    });
     overlay.innerHTML = `
         <div class="wfm-gallery-lightbox-inner">
             ${mediaHtml}
@@ -1826,6 +1846,7 @@ function openLightbox(img) {
     });
     document.body.appendChild(overlay);
     if (isVideoFile(img)) applyStoredVideoVolume(overlay.querySelector("video"));
+    if (isAudioFile(img)) applyStoredVideoVolume(overlay.querySelector("audio"));
 }
 
 // ── 画像比較ライトボックス ─────────────────────────────────────
@@ -1838,9 +1859,11 @@ function openCompare(paths) {
     overlay.className = "wfm-gallery-lightbox wfm-lightbox-compare";
 
     const itemsHtml = imgs.map(img => {
-        const mediaHtml = isVideoFile(img)
-            ? `<video src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" controls></video>`
-            : `<img src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" alt="${escapeHtml(img.filename)}" loading="lazy">`;
+        const mediaHtml = isAudioFile(img)
+            ? mediaElementHtml(img, { imgClass: "wfm-lightbox-compare-img" })
+            : isVideoFile(img)
+                ? `<video src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" controls></video>`
+                : `<img src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" alt="${escapeHtml(img.filename)}" loading="lazy">`;
         return `
         <div class="wfm-lightbox-compare-item">
             ${mediaHtml}
@@ -1861,7 +1884,7 @@ function openCompare(paths) {
         }
     });
     document.body.appendChild(overlay);
-    overlay.querySelectorAll("video").forEach(applyStoredVideoVolume);
+    overlay.querySelectorAll("video, audio").forEach(applyStoredVideoVolume);
 }
 
 // ── outputパス取得 ────────────────────────────────────────────
@@ -2321,7 +2344,7 @@ function bindEvents() {
         if (!window._wfmImageEditTab) return;
 
         const allPaths = [...state.selectedImages];
-        const paths    = allPaths.filter(p => !/\.(mp4|webm)$/i.test(p));
+        const paths    = allPaths.filter(p => !/\.(mp4|webm|wav|mp3|ogg|m4a|flac|opus)$/i.test(p));
         if (paths.length === 0) {
             showToast(t("editLayersNoImages"), "error");
             return;

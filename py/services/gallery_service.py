@@ -20,9 +20,13 @@ logger = logging.getLogger(__name__)
 # メタデータ読み取り・サムネイル抽出は両形式で同じコードパスを通る）
 VIDEO_EXTENSIONS = {".mp4", ".webm"}
 
-# サポートする画像拡張子（動画はGalleryでは静止画と同じ一覧・配信経路を共有する。
+# 音声拡張子（ComfyUIの音楽生成出力）。動画と同様にPyAVで再生時間・埋め込みメタデータを読む。
+# サムネイルは波形画像を生成する。
+AUDIO_EXTENSIONS = {".wav", ".mp3", ".ogg", ".m4a", ".flac", ".opus"}
+
+# サポートする画像拡張子（動画・音声はGalleryでは静止画と同じ一覧・配信経路を共有する。
 # .psdはブラウザが直接レンダリングできないため、配信時に合成済みPNGへ変換する）
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".psd"} | VIDEO_EXTENSIONS
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".psd"} | VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
 
 # Canvas2D の globalCompositeOperation 文字列 -> psd_tools.constants.BlendMode 名
 # (Image Edit タブの Layer.blendMode はCanvas2Dの合成モード文字列をそのまま保持している)
@@ -697,6 +701,8 @@ class GalleryService:
             embedded = self._read_webp_metadata(path)
         elif ext in VIDEO_EXTENSIONS:
             embedded = self._read_mp4_metadata(path)
+        elif ext in AUDIO_EXTENSIONS:
+            embedded = self._read_audio_metadata(path)
 
         dims = self._read_media_dimensions(path, ext)
         saved = self.metadata_store.get(str(path))
@@ -848,6 +854,25 @@ class GalleryService:
             logger.debug("MP4 metadata read error: %s", e)
         return result
 
+    def _read_audio_metadata(self, path: Path) -> dict:
+        """音声ファイルのタグ（ComfyUIのSaveAudio系は prompt/workflow をJSON文字列で書き込む）をPyAVで抽出する。
+        FLACのVorbisコメント等はキーの大文字小文字が実装依存のため、prompt/workflowは小文字キーでも引けるようにする。"""
+        result = {}
+        try:
+            import av
+            with av.open(str(path)) as container:
+                tags = dict(container.metadata or {})
+                for stream in container.streams.audio:
+                    for k, v in (stream.metadata or {}).items():
+                        tags.setdefault(k, v)
+                for k, v in tags.items():
+                    result[k] = v
+                    if k.lower() in ("workflow", "prompt"):
+                        result.setdefault(k.lower(), v)
+        except Exception as e:
+            logger.debug("Audio metadata read error: %s", e)
+        return result
+
     def _read_media_dimensions(self, path: Path, ext: str) -> dict:
         """画像は幅高さ、動画は幅高さ+再生時間（秒）を返す。取得できない項目はNone。"""
         info: dict = {"width": None, "height": None, "duration": None}
@@ -859,6 +884,11 @@ class GalleryService:
                         stream = container.streams.video[0]
                         info["width"] = stream.width
                         info["height"] = stream.height
+                    if container.duration:
+                        info["duration"] = container.duration / 1_000_000
+            elif ext in AUDIO_EXTENSIONS:
+                import av
+                with av.open(str(path)) as container:
                     if container.duration:
                         info["duration"] = container.duration / 1_000_000
             elif ext == ".psd":
@@ -895,6 +925,8 @@ class GalleryService:
             embedded = self._read_webp_metadata(path)
         elif ext in VIDEO_EXTENSIONS:
             embedded = self._read_mp4_metadata(path)
+        elif ext in AUDIO_EXTENSIONS:
+            embedded = self._read_audio_metadata(path)
 
         if embedded:
             key_groups = (("workflow", "Workflow"), ("prompt", "Prompt"))
@@ -1154,8 +1186,8 @@ class GalleryService:
             p = Path(img_path).resolve()
             if not p.is_file() or p.suffix.lower() not in IMAGE_EXTENSIONS:
                 continue
-            if p.suffix.lower() in VIDEO_EXTENSIONS:
-                continue  # 動画はPSDレイヤーにできない
+            if p.suffix.lower() in VIDEO_EXTENSIONS | AUDIO_EXTENSIONS:
+                continue  # 動画・音声はPSDレイヤーにできない
             if not self._check_path_allowed(p):
                 continue
             try:
@@ -1379,6 +1411,47 @@ class GalleryService:
             logger.warning("serve_image: psd composite failed for %s: %s", p, e)
             return None
 
+    def _render_audio_waveform(self, path: Path, out_path: Path, size: int) -> None:
+        """音声ファイルの波形を size×size のJPEGとして out_path に書き出す。
+        8kHzモノラルへリサンプルしてから列ごとの最大振幅を描く（長尺でも軽く保つ）。"""
+        import av
+        import numpy as np
+        from PIL import Image, ImageDraw
+
+        max_samples = 8000 * 600  # 先頭10分まで
+        chunks = []
+        total = 0
+        with av.open(str(path)) as container:
+            stream = container.streams.audio[0]
+            resampler = av.AudioResampler(format="flt", layout="mono", rate=8000)
+            for frame in container.decode(stream):
+                for rf in resampler.resample(frame):
+                    arr = rf.to_ndarray().reshape(-1)
+                    chunks.append(arr)
+                    total += arr.size
+                if total >= max_samples:
+                    break
+        data = np.concatenate(chunks) if chunks else np.zeros(1, dtype=np.float32)
+        data = np.abs(data[:max_samples])
+
+        cols = size
+        edges = np.linspace(0, data.size, cols + 1).astype(int)
+        peaks = np.array([
+            data[edges[i]:max(edges[i + 1], edges[i] + 1)].max() if edges[i] < data.size else 0.0
+            for i in range(cols)
+        ])
+        top = float(peaks.max())
+        if top > 0:
+            peaks = peaks / top
+
+        img = Image.new("RGB", (size, size), (24, 28, 38))
+        draw = ImageDraw.Draw(img)
+        mid = size / 2
+        for x, v in enumerate(peaks):
+            h = max(1.0, float(v) * (size * 0.42))
+            draw.line([(x, mid - h), (x, mid + h)], fill=(56, 189, 248))
+        img.save(out_path, "JPEG", quality=85, optimize=True)
+
     def serve_thumbnail(self, image_path: str, width: int = 256) -> Path | None:
         """縮小サムネイルのPathを返す。
         ディスクキャッシュがあればそれを返し、なければPillowで生成して保存する。
@@ -1418,6 +1491,15 @@ class GalleryService:
 
         if thumb_path.exists():
             return thumb_path
+
+        # 音声はPillowで開けない。PyAVでデコードして波形をJPEGに描画しキャッシュする。
+        if p.suffix.lower() in AUDIO_EXTENSIONS:
+            try:
+                self._render_audio_waveform(p, thumb_path, width)
+                return thumb_path
+            except Exception as e:
+                logger.warning("serve_thumbnail: audio waveform failed for %s: %s", p, e)
+                return None
 
         # 動画(mp4/webm)はPillowで開けない。PyAV(av)で先頭フレームを抽出しJPEGとしてキャッシュする。
         # avが未導入/デコード失敗の場合、元ファイルは<img>的な経路に渡せないため
