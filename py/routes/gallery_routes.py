@@ -120,6 +120,20 @@ def _semantic_error(e: SemanticError) -> web.Response:
     return web.json_response({"error": str(e), "code": e.code}, status=400)
 
 
+def _num(body: dict, key: str, default, lo, hi, cast=int):
+    """リクエストの数値パラメータを検証して範囲内に収める。数値でなければ400相当のSemanticErrorにする"""
+    raw = body.get(key, default)
+    if raw is None or raw == "":
+        raw = default
+    try:
+        v = cast(raw)
+    except (TypeError, ValueError, OverflowError):
+        raise SemanticError("bad_param", key)
+    if v != v:   # NaN
+        raise SemanticError("bad_param", key)
+    return max(lo, min(v, hi))
+
+
 async def _json_body(request: web.Request) -> dict:
     try:
         body = await request.json()
@@ -152,7 +166,7 @@ async def semantic_folders(request: web.Request) -> web.Response:
 def _apply_local_options(body: dict) -> None:
     """リクエストに実行デバイス/スレッド数が含まれていれば反映・保存する"""
     if "device" in body:
-        _semantic.set_local_options(str(body.get("device", "auto")), int(body.get("threads", 0) or 0))
+        _semantic.set_local_options(str(body.get("device", "auto")), _num(body, "threads", 0, 0, 256))
 
 
 async def semantic_index(request: web.Request) -> web.Response:
@@ -165,8 +179,8 @@ async def semantic_index(request: web.Request) -> web.Response:
             bool(body.get("recursive", True)),
             "all" if body.get("mode") == "all" else "missing",
             str(body.get("model", SEMANTIC_DEFAULT_MODEL)),
-            int(body.get("dim", DEFAULT_DIM)),
-            int(body.get("soft", 280) or 280),
+            _num(body, "dim", DEFAULT_DIM, 0, 100000),
+            _num(body, "soft", 280, 0, 100000),
         )
         return web.json_response({"ok": True})
     except SemanticError as e:
@@ -183,11 +197,12 @@ async def semantic_cancel(request: web.Request) -> web.Response:
 
 async def semantic_search(request: web.Request) -> web.Response:
     body = await _json_body(request)
-    limit = max(1, min(int(body.get("limit", 200) or 200), 1000))
     try:
+        limit = _num(body, "limit", 200, 1, 1000)
+        min_score = _num(body, "min_score", 0.0, -1.0, 1.0, float)
         images = await asyncio.to_thread(
             _semantic.search_text, str(body.get("query", "")), str(body.get("folder", "")),
-            bool(body.get("recursive", True)), limit,
+            bool(body.get("recursive", True)), limit, min_score,
         )
         return web.json_response({"images": images, "total": len(images)})
     except SemanticError as e:
@@ -199,11 +214,12 @@ async def semantic_search(request: web.Request) -> web.Response:
 
 async def semantic_similar(request: web.Request) -> web.Response:
     body = await _json_body(request)
-    limit = max(1, min(int(body.get("limit", 200) or 200), 1000))
     try:
+        limit = _num(body, "limit", 200, 1, 1000)
+        min_score = _num(body, "min_score", 0.0, -1.0, 1.0, float)
         images = await asyncio.to_thread(
             _semantic.search_similar, str(body.get("path", "")), str(body.get("folder", "")),
-            bool(body.get("recursive", True)), limit,
+            bool(body.get("recursive", True)), limit, min_score,
         )
         return web.json_response({"images": images, "total": len(images)})
     except SemanticError as e:
@@ -225,7 +241,7 @@ async def semantic_test(request: web.Request) -> web.Response:
     body = await _json_body(request)
     try:
         _apply_local_options(body)
-        res = await asyncio.to_thread(_semantic.test_connection, str(body.get("model", SEMANTIC_DEFAULT_MODEL)), int(body.get("dim", DEFAULT_DIM)))
+        res = await asyncio.to_thread(_semantic.test_connection, str(body.get("model", SEMANTIC_DEFAULT_MODEL)), _num(body, "dim", DEFAULT_DIM, 0, 100000))
         return web.json_response({"ok": True, **res})
     except SemanticError as e:
         return _semantic_error(e)

@@ -28,11 +28,15 @@ const LS_SOFT = "wfm_gallery_semantic_soft";
 const GEMINI = "gemini-embedding-2";
 const LOCAL = "embeddinggemma-2";
 const LS_SUB = "wfm_gallery_semantic_recursive";
+const LS_TAB = "wfm_gallery_semantic_tab";
+const LS_TH = "wfm_gallery_semantic_th";
+const LIMITS = [50, 100, 200, 500, 1000];
 
 const sem = {
     on: false,             // Semantic Searchトグル
     anchor: "",            // 類似画像表示中の基準画像パス（空=類似表示OFF）
     anchorName: "",
+    indexModel: GEMINI,    // 現在のインデックスを作ったモデル（しきい値はモデルごとに保存する）
 };
 
 let ctx = null;            // { getSearch, getFolder, getSelected, reload, focusSearch }
@@ -82,19 +86,51 @@ export function isSemanticOn() {
     return sem.on;
 }
 
+/**
+ * 表示条件（類似度のしきい値・最大件数）。スコアの水準はモデルで違うため、モデルごとに保存する。
+ * similar: 類似画像検索の最小スコア / text: 文章検索の最小スコア（0=絞り込みなし）
+ */
+function loadThresholds(model) {
+    let v = {};
+    try { v = JSON.parse(lsGet(LS_TH, "{}"))[model] || {}; } catch { /* 壊れた値は既定に戻す */ }
+    const num = x => { const n = parseFloat(x); return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0; };
+    return { similar: num(v.similar), text: num(v.text), limit: LIMITS.includes(v.limit) ? v.limit : 200 };
+}
+
+function saveThresholds(model, th) {
+    let all = {};
+    try { all = JSON.parse(lsGet(LS_TH, "{}")) || {}; } catch { all = {}; }
+    all[model] = th;
+    lsSet(LS_TH, JSON.stringify(all));
+}
+
+function minScoreFor(mode) {
+    const th = loadThresholds(sem.indexModel);
+    return mode.kind === "similar" ? th.similar : th.text;
+}
+
 /** モードに応じてサーバーから結果（スコア降順・score付き）を取得する */
 export async function fetchSemanticImages(mode, folder) {
+    const th = loadThresholds(sem.indexModel);
+    const common = { folder, recursive: true, limit: th.limit, min_score: minScoreFor(mode) };
     const data = mode.kind === "similar"
-        ? await postJson(API.similar, { path: mode.path, folder, recursive: true })
-        : await postJson(API.search, { query: mode.query, folder, recursive: true });
+        ? await postJson(API.similar, { path: mode.path, ...common })
+        : await postJson(API.search, { query: mode.query, ...common });
     return data.images || [];
+}
+
+/** 2行目の結果件数表示（意味検索/類似表示のときだけ文言を入れる。通常は空） */
+export function setSemanticCountText(text) {
+    const el = document.getElementById("wfm-gallery-sem-count");
+    if (el) el.textContent = text || "";
 }
 
 /** 一覧件数ラベル */
 export function semanticCountLabel(mode, count) {
+    const min = minScoreFor(mode);
     return mode.kind === "similar"
-        ? t("semCountSimilar", count, mode.name)
-        : t("semCountText", count);
+        ? t("semCountSimilar", count, mode.name, min)
+        : t("semCountText", count, min);
 }
 
 let _dotRoot = "";
@@ -143,6 +179,9 @@ export function exitSimilarMode() {
 function updateToggleUi() {
     const btn = document.getElementById("wfm-gallery-semantic-toggle");
     btn?.classList.toggle("active", sem.on);
+    // ON のときだけ2行目（Similar / 更新 / 設定 / 件数）を表示する
+    const row = document.getElementById("wfm-gallery-sem-row");
+    if (row) row.style.display = sem.on ? "flex" : "none";
     const input = document.getElementById("wfm-gallery-search");
     if (input) input.placeholder = sem.on ? t("semSearchPlaceholder") : "Search images...";
 }
@@ -175,16 +214,35 @@ async function applySimilar() {
 // ── インデックス作成モーダル ─────────────────────────────────
 
 function modalHtml() {
-    return `
-    <div class="wfm-sem-modal">
+    const tab = ["index", "model", "search"].includes(lsGet(LS_TAB, "index")) ? lsGet(LS_TAB, "index") : "index";
+    const pane = (id, body) => `<div class="wfm-sem-pane" data-sem-pane="${id}" style="${tab === id ? "" : "display:none;"}">${body}</div>`;
+    const tabBtn = (id, label) =>
+        `<button type="button" class="wfm-sem-tab-btn${tab === id ? " active" : ""}" data-sem-tab="${id}">${escapeHtml(label)}</button>`;
+    const indexPane = `
         <div class="wfm-sem-status" id="wfm-sem-status">${escapeHtml(t("loading"))}</div>
         <div class="wfm-sem-row"><b>${escapeHtml(t("semScope"))}</b>
             <span id="wfm-sem-folder" class="wfm-sem-folder"></span></div>
         <label class="wfm-sem-row"><input type="checkbox" id="wfm-sem-recursive" ${lsGet(LS_SUB, "1") === "1" ? "checked" : ""}>
             ${escapeHtml(t("semIncludeSub"))}</label>
+        <div class="wfm-sem-row"><b>${escapeHtml(t("semMode"))}</b>
+            <label><input type="radio" name="wfm-sem-mode" value="missing" checked> ${escapeHtml(t("semModeMissing"))}</label>
+            <label><input type="radio" name="wfm-sem-mode" value="all"> ${escapeHtml(t("semModeAll"))}</label></div>
+        <div class="wfm-sem-progress" id="wfm-sem-progress" style="display:none;">
+            <div class="wfm-sem-bar"><div class="wfm-sem-bar-fill" id="wfm-sem-bar-fill"></div></div>
+            <div id="wfm-sem-progress-text" class="wfm-sem-hint"></div>
+        </div>
+        <div class="wfm-sem-actions">
+            <button class="wfm-btn wfm-btn-primary" id="wfm-sem-start">${escapeHtml(t("semStart"))}</button>
+            <button class="wfm-btn" id="wfm-sem-cancel" disabled>${escapeHtml(t("semCancelJob"))}</button>
+            <button class="wfm-btn wfm-sem-danger" id="wfm-sem-clear">${escapeHtml(t("semClear"))}</button>
+        </div>`;
+    const modelPane = `
         <div class="wfm-sem-row"><b>${escapeHtml(t("semModel"))}</b>
             <label><input type="radio" name="wfm-sem-model" value="${GEMINI}"> ${escapeHtml(t("semModelGemini"))}</label>
             <label><input type="radio" name="wfm-sem-model" value="${LOCAL}"> ${escapeHtml(t("semModelLocal"))}</label></div>
+        <div class="wfm-sem-row"><b>${escapeHtml(t("semDimension"))}</b>
+            <select id="wfm-sem-dim" class="wfm-select"></select>
+            <span class="wfm-sem-hint">${escapeHtml(t("semDimHint"))}</span></div>
         <div id="wfm-sem-local-opts" class="wfm-sem-local-opts" style="display:none;">
             <div class="wfm-sem-row"><b>${escapeHtml(t("semDevice"))}</b>
                 <select id="wfm-sem-device" class="wfm-select">
@@ -204,25 +262,30 @@ function modalHtml() {
                 </select>
                 <span class="wfm-sem-hint">${escapeHtml(t("semSoftHint"))}</span></div>
         </div>
-        <div class="wfm-sem-row"><b>${escapeHtml(t("semDimension"))}</b>
-            <select id="wfm-sem-dim" class="wfm-select"></select>
-            <span class="wfm-sem-hint">${escapeHtml(t("semDimHint"))}</span></div>
-        <div class="wfm-sem-row"><b>${escapeHtml(t("semMode"))}</b>
-            <label><input type="radio" name="wfm-sem-mode" value="missing" checked> ${escapeHtml(t("semModeMissing"))}</label>
-            <label><input type="radio" name="wfm-sem-mode" value="all"> ${escapeHtml(t("semModeAll"))}</label></div>
-        <div class="wfm-sem-progress" id="wfm-sem-progress" style="display:none;">
-            <div class="wfm-sem-bar"><div class="wfm-sem-bar-fill" id="wfm-sem-bar-fill"></div></div>
-            <div id="wfm-sem-progress-text" class="wfm-sem-hint"></div>
-        </div>
         <div class="wfm-sem-actions">
-            <button class="wfm-btn wfm-btn-primary" id="wfm-sem-start">${escapeHtml(t("semStart"))}</button>
-            <button class="wfm-btn" id="wfm-sem-cancel" disabled>${escapeHtml(t("semCancelJob"))}</button>
             <button class="wfm-btn" id="wfm-sem-test">${escapeHtml(t("semTest"))}</button>
-            <button class="wfm-btn" id="wfm-sem-clear">${escapeHtml(t("semClear"))}</button>
+        </div>
+        <p class="wfm-sem-hint">${escapeHtml(t("semCostNote"))}</p>`;
+    const searchPane = `
+        <div class="wfm-sem-row"><b>${escapeHtml(t("semThTarget"))}</b>
+            <span id="wfm-sem-th-model" class="wfm-sem-folder"></span></div>
+        <div class="wfm-sem-row"><b>${escapeHtml(t("semThSimilar"))}</b>
+            <input type="number" id="wfm-sem-th-similar" class="wfm-input wfm-sem-num" min="0" max="1" step="0.01" placeholder="0">
+            <span class="wfm-sem-hint">${escapeHtml(t("semThSimilarHint"))}</span></div>
+        <div class="wfm-sem-row"><b>${escapeHtml(t("semThText"))}</b>
+            <input type="number" id="wfm-sem-th-text" class="wfm-input wfm-sem-num" min="0" max="1" step="0.01" placeholder="0">
+            <span class="wfm-sem-hint">${escapeHtml(t("semThTextHint"))}</span></div>
+        <div class="wfm-sem-row"><b>${escapeHtml(t("semThLimit"))}</b>
+            <select id="wfm-sem-th-limit" class="wfm-select">${LIMITS.map(n => `<option value="${n}">${n}</option>`).join("")}</select></div>
+        <p class="wfm-sem-hint">${escapeHtml(t("semThNote"))}</p>`;
+    return `
+    <div class="wfm-sem-modal">
+        <div class="wfm-sem-tabs">${tabBtn("index", t("semTabIndex"))}${tabBtn("model", t("semTabModel"))}${tabBtn("search", t("semTabSearch"))}</div>
+        ${pane("index", indexPane)}${pane("model", modelPane)}${pane("search", searchPane)}
+        <div class="wfm-sem-actions wfm-sem-footer">
             <button class="wfm-btn" id="wfm-sem-help" title="${escapeHtml(t("semHelpTitle"))}">?</button>
             <button class="wfm-btn" id="wfm-sem-close">${escapeHtml(t("close"))}</button>
         </div>
-        <p class="wfm-sem-hint">${escapeHtml(t("semCostNote"))}</p>
     </div>`;
 }
 
@@ -252,6 +315,48 @@ function initLocalOpts(st) {
     document.getElementById("wfm-sem-threads").value = String(cur);
     const soft = st.indexed_total && st.index_model === LOCAL ? st.index_soft : parseInt(lsGet(LS_SOFT, String(lo.default_soft || 280)), 10);
     document.getElementById("wfm-sem-soft").value = String([70, 140, 280].includes(soft) ? soft : 280);
+}
+
+/** 検索タブ: しきい値の入力欄にインデックスのモデル用の保存値を入れる（入力中の値は上書きしない） */
+function fillThresholds(st) {
+    const model = st.indexed_total ? st.index_model : selectedModel();
+    const box = document.getElementById("wfm-sem-th-model");
+    if (box) box.textContent = model + (st.indexed_total ? "" : ` ${t("semThNoIndex")}`);
+    const pane = document.getElementById("wfm-sem-th-similar");
+    if (!pane || pane.dataset.model === model) return;
+    const th = loadThresholds(model);
+    pane.value = th.similar || "";
+    document.getElementById("wfm-sem-th-text").value = th.text || "";
+    document.getElementById("wfm-sem-th-limit").value = String(th.limit);
+    pane.dataset.model = model;
+}
+
+/** 検索タブの入力を保存する。一覧が意味検索/類似表示中なら閉じるときに再読込する */
+let _thDirty = false;
+function saveThresholdInputs() {
+    const model = document.getElementById("wfm-sem-th-similar")?.dataset.model;
+    if (!model) return;
+    const clamp = id => {
+        const n = parseFloat(document.getElementById(id).value);
+        return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+    };
+    saveThresholds(model, {
+        similar: clamp("wfm-sem-th-similar"),
+        text: clamp("wfm-sem-th-text"),
+        limit: parseInt(document.getElementById("wfm-sem-th-limit").value, 10) || 200,
+    });
+    _thDirty = true;
+}
+
+/** モーダルを閉じる共通処理 */
+function closeSemanticModal() {
+    clearTimeout(_pollTimer);
+    closeModal();
+    refreshSemanticDots();
+    if (_thDirty) {
+        _thDirty = false;
+        if (getSemanticMode()) ctx.reload();   // 新しいしきい値で一覧を取り直す
+    }
 }
 
 /** 検出した実行デバイスの表示(GPU版onnxruntimeが無いときの案内を含む) */
@@ -295,6 +400,7 @@ async function refreshModal() {
     if (!modalAlive()) return;
     const job = st.job || {};
     _backends = st.backends || {};
+    if (st.indexed_total) sem.indexModel = st.index_model;
     if (!document.getElementById("wfm-sem-dim").dataset.init) {
         // 初回のみ: 既存インデックスのモデル/次元、なければ前回の選択を初期値にする
         const initModel = st.indexed_total ? st.index_model : lsGet(LS_MODEL, GEMINI);
@@ -305,6 +411,7 @@ async function refreshModal() {
         initLocalOpts(st);
         document.getElementById("wfm-sem-dim").dataset.init = "1";
     }
+    fillThresholds(st);
     const model = selectedModel();
     document.getElementById("wfm-sem-local-opts").style.display = model === LOCAL ? "" : "none";
     updateDeviceInfo(st.local);
@@ -353,8 +460,7 @@ async function refreshModal() {
 
 /** ヘルプタブのGallery > セマンティック検索の説明へ飛ぶ */
 function openSemanticHelp() {
-    clearTimeout(_pollTimer);
-    closeModal();
+    closeSemanticModal();
     document.querySelector('.wfm-tab[data-tab="help"]')?.click();
     document.querySelector('.wfm-help-nav-item[data-help-page="gallery"]')?.click();
     const target = document.getElementById("wfm-help-gallery-33");
@@ -387,11 +493,14 @@ function openSemanticModal() {
         lsSet(LS_SUB, e.target.checked ? "1" : "0");
         refreshModal();
     });
-    document.getElementById("wfm-sem-close").addEventListener("click", () => {
-        clearTimeout(_pollTimer);
-        closeModal();
-        refreshSemanticDots();
-    });
+    document.getElementById("wfm-sem-close").addEventListener("click", closeSemanticModal);
+    document.querySelectorAll(".wfm-sem-tab-btn").forEach(btn => btn.addEventListener("click", () => {
+        document.querySelectorAll(".wfm-sem-tab-btn").forEach(b => b.classList.toggle("active", b === btn));
+        document.querySelectorAll(".wfm-sem-pane").forEach(p => { p.style.display = p.dataset.semPane === btn.dataset.semTab ? "" : "none"; });
+        lsSet(LS_TAB, btn.dataset.semTab);
+    }));
+    ["wfm-sem-th-similar", "wfm-sem-th-text"].forEach(id => document.getElementById(id).addEventListener("change", saveThresholdInputs));
+    document.getElementById("wfm-sem-th-limit").addEventListener("change", saveThresholdInputs);
     document.getElementById("wfm-sem-help").addEventListener("click", openSemanticHelp);
     document.getElementById("wfm-sem-start").addEventListener("click", async () => {
         const mode = document.querySelector('input[name="wfm-sem-mode"]:checked')?.value || "missing";
@@ -456,9 +565,15 @@ export function initSemantic(context) {
         sem.on = !sem.on;
         lsSet(LS_ON, sem.on ? "1" : "0");
         updateToggleUi();
+        // OFFにしたら類似表示も解除する（2行目ごと消えるため）
+        const wasSimilar = !!sem.anchor;
+        if (!sem.on) exitSimilarMode();
         // 検索文字列があれば、モード切替後の方式で結果を取り直す
-        if ((ctx.getSearch() || "").trim()) ctx.reload();
+        if (wasSimilar && !sem.on || (ctx.getSearch() || "").trim()) ctx.reload();
     });
+    fetch(API.status("", true)).then(r => r.json()).then(st => {
+        if (st.indexed_total) sem.indexModel = st.index_model;
+    }).catch(() => { /* 取得できなくても既定のモデル扱いで動作する */ });
     document.getElementById("wfm-gallery-semantic-settings-btn")?.addEventListener("click", openSemanticModal);
     document.getElementById("wfm-gallery-similar-btn")?.addEventListener("click", toggleSimilar);
     document.getElementById("wfm-gallery-similar-refresh-btn")?.addEventListener("click", applySimilar);

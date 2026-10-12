@@ -1057,20 +1057,30 @@
     color: #fff;
 }
 
-.wfm-gallery-action-btn-similar,
-.wfm-gallery-action-btn-similar-refresh {
+/* 2行目(Similar / 更新)のボタン: Taggerの紫と区別できるティール */
+.wfm-sem-sim {
     background: #0d9488;
     border-color: #0d9488;
     color: #fff;
 }
-.wfm-gallery-action-btn-similar:hover,
-.wfm-gallery-action-btn-similar-refresh:hover {
+.wfm-sem-sim:hover {
     background: #0f766e;
     border-color: #0f766e;
 }
 /* 類似画像表示中(トグルON)は縁取りで状態を示す */
-.wfm-gallery-action-btn-similar.active {
+#wfm-gallery-similar-btn.active {
     box-shadow: 0 0 0 2px #fff inset, 0 0 0 2px #0d9488;
+}
+
+.wfm-gallery-sem-row {
+    gap: 6px;
+    align-items: center;
+    justify-content: flex-start;
+}
+.wfm-gallery-sem-count {
+    margin-left: 6px;
+    font-size: 12px;
+    opacity: 0.85;
 }
 
 .wfm-gallery-thumb-score {
@@ -1117,3 +1127,30 @@
 }
 
 .wfm-sem-local-opts { display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--wfm-border, #444); border-radius: 6px; }
+
+/* セマンティック検索モーダル: タブ */
+.wfm-sem-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--wfm-border, #444); }
+.wfm-sem-tab-btn {
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    color: var(--wfm-text-secondary, #aaa);
+    cursor: pointer;
+    font-size: 13px;
+}
+.wfm-sem-tab-btn:hover { color: var(--wfm-text, #fff); }
+.wfm-sem-tab-btn.active {
+    color: var(--wfm-text, #fff);
+    background: var(--wfm-bg-secondary, #1a1a2e);
+    border-color: var(--wfm-border, #444);
+    margin-bottom: -1px;
+    border-bottom: 1px solid var(--wfm-bg-secondary, #1a1a2e);
+}
+.wfm-sem-pane { display: flex; flex-direction: column; gap: 10px; min-height: 230px; }
+.wfm-sem-footer { justify-content: flex-end; border-top: 1px solid var(--wfm-border, #444); padding-top: 10px; }
+.wfm-sem-num { width: 80px; }
+.wfm-sem-danger { margin-left: auto; color: #ef4444; }
+
+.wfm-sem-row .wfm-select { width: auto; min-width: 90px; }

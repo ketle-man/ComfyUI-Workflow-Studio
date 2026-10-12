@@ -15,7 +15,7 @@ import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
 import { initImagePromptTab, activateImagePromptTab } from "./image-prompt-tab.js";
 import { initStyleCatalogTab, activateStyleCatalogTab } from "./style-catalog-tab.js";
 import { applyStoredVideoVolume } from "./settings-tab.js";
-import { initSemantic, refreshSemanticDots, getSemanticMode, isSemanticOn, fetchSemanticImages, semanticCountLabel, semanticErrorMessage, exitSimilarMode } from "./gallery-semantic.js";
+import { initSemantic, refreshSemanticDots, getSemanticMode, isSemanticOn, fetchSemanticImages, semanticCountLabel, setSemanticCountText, semanticErrorMessage, exitSimilarMode } from "./gallery-semantic.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -603,7 +603,8 @@ async function loadImages() {
             if (controller.signal.aborted) return;
             state.images = images;
             state.lastSelectionIndex = -1;
-            document.getElementById("wfm-gallery-count").textContent = semanticCountLabel(semMode, images.length);
+            document.getElementById("wfm-gallery-count").textContent = `${images.length} images`;
+            setSemanticCountText(semanticCountLabel(semMode, images.length));
             renderImages();
             return;
         }
@@ -611,6 +612,7 @@ async function loadImages() {
         state.images = images;
         state.lastSelectionIndex = -1;
         document.getElementById("wfm-gallery-count").textContent = `${state.images.length} images`;
+        setSemanticCountText("");
         renderImages();
         updateTagFilter(state.images);
     } catch (e) {
@@ -618,6 +620,7 @@ async function loadImages() {
         if (semMode) {
             state.images = [];
             document.getElementById("wfm-gallery-count").textContent = "";
+            setSemanticCountText("");
             grid.innerHTML = `<p class="wfm-placeholder">${escapeHtml(semanticErrorMessage(e))}</p>`;
             showToast(semanticErrorMessage(e), "error");
             return;

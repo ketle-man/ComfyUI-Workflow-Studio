@@ -29,6 +29,8 @@ _PATCH = 16
 _POOL = 3
 SOFT_TOKENS = (70, 140, 280)            # 画像1枚あたりのソフトトークン数(多いほど高精度・低速)
 DEFAULT_SOFT = 280
+_MAX_TOKENS = 1024        # テキスト入力のトークン数上限(画像用プロンプトは約290トークン)
+_MAX_IMAGE_SIDE = 2048    # 画像の長辺上限(超える場合は縮小してから処理)
 _IMAGE_TOKEN = "<|image|>"
 _BOI = "<|image>"
 _EOI = "<image|>"
@@ -46,7 +48,7 @@ _opts = {"device": "auto", "threads": 0}   # 実行デバイス/CPUスレッド�
 def configure(device: str = "auto", threads: int = 0) -> None:
     """ローカル推論の実行設定。次回のensure_runtimeから反映(device/threads変更時はセッション再作成)。"""
     _opts["device"] = device if device in DEVICES else "auto"
-    _opts["threads"] = max(0, int(threads))
+    _opts["threads"] = max(0, min(int(threads), (os.cpu_count() or 1) * 2))
 
 
 def current_config() -> dict:
@@ -142,7 +144,7 @@ class _Runtime:
         self.tok.no_padding()
 
     def _run_text(self, text: str, image_features: np.ndarray | None) -> np.ndarray:
-        ids = np.asarray([self.tok.encode(text).ids], dtype=np.int64)
+        ids = np.asarray([self.tok.encode(text).ids[:_MAX_TOKENS]], dtype=np.int64)
         feeds = {
             "input_ids": ids,
             "attention_mask": np.ones_like(ids),
@@ -158,6 +160,10 @@ class _Runtime:
     def embed_image(self, image, soft_tokens: int = DEFAULT_SOFT) -> np.ndarray:
         from PIL import Image
         im = image.convert("RGB")
+        if im.width < 1 or im.height < 1:
+            raise ValueError("empty image")
+        if max(im.size) > _MAX_IMAGE_SIDE:   # 巨大画像でメモリを使い切らないよう先に縮小
+            im.thumbnail((_MAX_IMAGE_SIDE, _MAX_IMAGE_SIDE), Image.LANCZOS)
         max_patches = soft_tokens * _POOL ** 2
         th, tw = _target_size(im.height, im.width, max_patches)
         if (th, tw) != (im.height, im.width):

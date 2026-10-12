@@ -34,6 +34,7 @@ VALID_DIMS = (768, 1536, 3072)
 DIMS_BY_MODEL = {MODEL: VALID_DIMS, LOCAL_MODEL: local.LOCAL_DIMS}
 DEFAULT_DIM_BY_MODEL = {MODEL: DEFAULT_DIM, LOCAL_MODEL: local.DEFAULT_LOCAL_DIM}
 IMAGE_MAX_SIZE = 768          # 送信前の長辺リサイズ(px)
+_MAX_QUERY_CHARS = 2000      # 検索文の最大長
 _WORKERS = 4                  # 並列API呼び出し数
 _CHECKPOINT_EVERY = 100       # この件数ごとにディスクへ保存
 _RETRIES = 4
@@ -437,7 +438,8 @@ class SemanticService:
                 self._mat_cache = (paths, mat)
             return self._mat_cache
 
-    def _rank(self, qvec: np.ndarray, folder: str, recursive: bool, limit: int, exclude: str = "") -> list[dict]:
+    def _rank(self, qvec: np.ndarray, folder: str, recursive: bool, limit: int, exclude: str = "",
+              min_score: float = 0.0) -> list[dict]:
         entries = self._scope_entries(folder, recursive)
         info = {ap: (name, sz, mt) for name, ap, sz, mt in entries}
         paths, mat = self._matrix()
@@ -449,6 +451,8 @@ class SemanticService:
         order = np.argsort(-scores)
         out = []
         for i in order:
+            if float(scores[i]) < min_score:
+                break   # スコア降順なので、以降はすべてしきい値未満
             p = paths[i]
             if p == exclude or p not in info:
                 continue
@@ -460,17 +464,17 @@ class SemanticService:
                 break
         return out
 
-    def search_text(self, query: str, folder: str, recursive: bool, limit: int) -> list[dict]:
+    def search_text(self, query: str, folder: str, recursive: bool, limit: int, min_score: float = 0.0) -> list[dict]:
         self._ensure_loaded()
-        query = (query or "").strip()
+        query = (query or "").strip()[:_MAX_QUERY_CHARS]
         if not query:
             return []
         if not self._vecs:
             raise SemanticError("index_empty")
         qvec = self._embed_text(self._model, self._dim, query)
-        return self._rank(qvec, folder, recursive, limit)
+        return self._rank(qvec, folder, recursive, limit, min_score=min_score)
 
-    def search_similar(self, path: str, folder: str, recursive: bool, limit: int) -> list[dict]:
+    def search_similar(self, path: str, folder: str, recursive: bool, limit: int, min_score: float = 0.0) -> list[dict]:
         self._ensure_loaded()
         p = Path(path).resolve()
         if not p.is_file() or not self.gallery._check_path_allowed(p):
@@ -487,7 +491,7 @@ class SemanticService:
             st = p.stat()
             self._put(ap, vec, st.st_size, st.st_mtime)
             self._save()
-        return self._rank(vec, folder, recursive, limit, exclude=ap)
+        return self._rank(vec, folder, recursive, limit, exclude=ap, min_score=min_score)
 
     def clear(self) -> None:
         self._ensure_loaded()
