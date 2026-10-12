@@ -11,6 +11,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Workflow, model, image, and prompt management
 - AI-powered prompt writing assistance, translation, and tag generation
 - File drop & Gallery-linked metadata viewing — inspect and reuse generation settings instantly
+- Semantic image search in the Gallery — find images by describing them, or list images similar to a selected one
 
 **⚡ GenerateUI** — a productivity-focused generation tab connected to every other tab
 
@@ -26,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.8.1-green)
+![Version](https://img.shields.io/badge/version-0.8.2-green)
 
 ## Features (tab -> feature names)
 
@@ -52,7 +53,7 @@ Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column —
 2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, VRAM Management (Ollama), Video Playback Volume, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
 
 ### Gallery Tab (v0.3.44)
-Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, WebM support, Embedded metadata reading fixes, Audio support, File conversion, Move To folder filter, Audio waveform colors, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Nanobanana tab, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send to LV node button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, PSD file support, Performance
+Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, WebM support, Embedded metadata reading fixes, Audio support, File conversion, Move To folder filter, Semantic Search, Audio waveform colors, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Nanobanana tab, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send to LV node button, Send CC button, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, PSD file support, Performance
 
 ### ImagePrompt Gallery subtab (v0.3.94, renamed from Style/Prompt in v0.3.95)
 Visual prompt library, 3-column layout, Prompt builder (right pane), Plain-text prompt storage, ponyxlWildcardsVault format support, Seed data importer
@@ -158,6 +159,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 - **[LM Studio](https://lmstudio.ai/)** — alternative backend for translation and VLM (OpenAI-compatible API)
 - **[Lemonade Server](https://lemonade-server.ai/)** — alternative backend for translation, chat, and VLM (OpenAI-compatible API)
 - **[Unsloth](https://unsloth.ai/)** — alternative backend for translation, chat, and VLM (OpenAI-compatible API); needs an API key set via `UNSLOTH_API_KEY` in a `.env` file, or Unsloth's Keyless API access → "Chat and inference" turned on — `pip install -r requirements.txt` for `python-dotenv`
+- **Gemini API key / EmbeddingGemma 2** (v0.8.2) — only for the Gallery's Semantic Search: either set `GEMINI_API_KEY` in the plugin's `.env` (key from [Google AI Studio](https://aistudio.google.com); free tier available, paid beyond it), or use the local **EmbeddingGemma 2** (no key; `onnxruntime`, `tokenizers` and `huggingface_hub` — normally already present with ComfyUI; the model downloads on first use). `onnxruntime-gpu` makes the local model ≈45× faster on NVIDIA GPUs
 - **[Eagle](https://eagle.cool/)** — for auto-saving generated images with metadata
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one) (v0.1.9+)** — enables BiRefNet background removal, SAM3 text-prompt segmentation, and ABR stamp-brush library in the Image Edit Mask tool; `birefnet.safetensors` must be placed in `ComfyUI/models/background_removal/` for BiRefNet
 - **[psd-tools](https://pypi.org/project/psd-tools/)** (v0.6.0) — enables all PSD (Photoshop) features: Gallery bulk "Create PSD" export, Gallery browsing/thumbnails for `.psd` files, and Image Edit's Save PSD / Open PSD buttons; `pip install -r requirements.txt` (ships prebuilt wheels, no C compiler required); without it, PSD-related actions show an error toast with the install command instead of failing silently

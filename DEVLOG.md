@@ -2,6 +2,39 @@
 
 ---
 
+## v0.8.2（2026-10-12）
+
+### Gallery: セマンティック検索（Gemini Embedding 2 / EmbeddingGemma 2）
+
+画像を文章の意味で探す検索と、選択画像に類似した画像の一覧表示を追加した。
+
+**UI**
+- 検索ボックス横に「S」ボタン。ONで検索ボックスが意味検索になる（Enterで実行、スコア順、サムネイルにスコアバッジ）。OFFは従来のファイル名/タグ/プロンプト検索。
+- Sを入れるとツールバーに2行目が現れ、`Similar`（トグル）・`↻`（更新）・`⚙`（設定）・検索結果件数を左詰めで表示する。Similarは、類似一覧の中で別の画像を選んでも一覧はそのままで、↻でその画像の類似を再表示、Similar再押下で通常表示に戻る。フォルダ切替・フィルタクリア・S OFFでも解除。Similar/↻は当初詳細パネルに置いていたが2行目へ移設（Taggerの紫と区別するためティール）。
+- ⚙のモーダルを3タブ化: インデックス（対象フォルダ・サブフォルダ・新規のみ/全件再作成・進捗・停止・全削除）/ モデル設定（モデルのラジオボタン・次元・ローカルのデバイス/CPUスレッド/画像精度・接続テスト）/ 検索設定（類似画像と文章検索の最小スコア、最大表示件数）。「?」でヘルプの該当項目へジャンプ。
+- 最小スコア（例: 0.6以上）はモデルごとに保存（スコアの水準がモデルで違うため。少数画像の実測では、類似画像はEmbeddingGemma 2で約0.6〜0.8、Geminiで約0.6、文章検索はそれぞれ約0.6〜0.7・約0.3）。
+- フォルダツリーの枚数バッジの右に緑のドット = そのフォルダ直下の画像が全件インデックス済み（`GET /wfm/gallery/semantic/folders`）。インデックスは全フォルダ共通の1つで、フォルダ単位で少しずつ作れる。
+- ヘルプページの幅を760→1076px（上部タブバーのAI TOOLタブの右端に揃える）。
+
+**バックエンド**
+- `py/services/semantic_service.py`: ベクトルを `semantic_index.npz` に保存（パス→正規化ベクトル、サイズ/mtimeで鮮度判定、モデル/次元/画像精度をヘッダに保持）。インデックス作成はバックグラウンドスレッド（進捗ポーリング・停止可）、検索はコサイン類似度（`mat @ q`）、未インデックスの基準画像はその場で1枚だけ埋め込む。動画/PSDはサムネイルから、音声は対象外。
+- Gemini: `gemini-embedding-2`（`x-goog-api-key`ヘッダ、接続先固定、429/5xxは指数バックオフで再試行）。APIキーは `.env` の `GEMINI_API_KEY`（UNSLOTHと同じく settings.json・フロントには出さない）。
+- EmbeddingGemma 2: `py/services/semantic_local.py`。onnx-community/embeddinggemma-2-ONNX を `onnxruntime` + `tokenizers` + `huggingface_hub` だけで実行（`transformers` の対応を待たない）。Transformers.jsの `Gemma4ImageProcessor` / `EmbeddingGemma2Processor` を移植（アスペクト比維持リサイズ → 16pxパッチ化 → vision_encoder → `<|image|>` 位置へ `image_features` を差し込み → `sentence_embedding`）。クエリは `task: search result | query: ` プレフィックス。MRL（128/256/512/768）で切り詰め＋再正規化。
+- 実行デバイス: 自動（CUDAがあればGPU）/ CPU / GPU(CUDA)。CPUスレッド数の既定はコアの半分。設定は `semantic_settings.json` に保存。画像精度はソフトトークン数 280/140/70（高精度/標準/軽量、CPUで約2.5倍/約5倍速）でインデックスに記録し、変えたら全件再作成が必要。インデックス作成後はセッションを解放しVRAM/RAMを画像生成に譲る。
+
+**実測（RTX 4070 / 32コア）**
+- 768×576の画像1枚あたり: CUDA 0.13秒（標準 0.07秒）、CPU 4スレッド 5.8秒（標準 2.3秒、軽量 1.1秒）。CPUとCUDAのベクトルは一致（cos 1.0）。実機で122枚を約20秒で作成。
+- DirectMLはvision_encoderのReshapeノードで実行時エラーとなり非対応（テキストモデルのみ動作）。WindowsMLは未検証。
+- 環境メモ: ComfyUI_5のvenvには `onnxruntime` と `onnxruntime-gpu`（ともに1.30.0）が同居し、CPU版が勝っていたため、両方を削除して `onnxruntime-gpu==1.30.0` のみを入れ直した（`pip check` は `onnxruntime` 名での依存を警告するが動作に影響なし）。
+
+**安全性（セキュリティレビュー指摘への対応）**
+- 数値パラメータ（dim / soft / threads / limit / min_score）を共通関数で範囲内に丸め、数値でない値は500ではなく400（`bad_param`）で返す。スレッド数はコア数の2倍まで。
+- ローカルモデルへの入力を制限: テキスト1024トークン、検索文2000文字、画像は長辺2048pxを超えたら先に縮小。
+
+**その他**
+- `.env.example` に `GEMINI_API_KEY`、`requirements.txt` にGPU用の手順コメントを追加。ヘルプ（3言語）・READMEを更新。
+- Gemini Embedding 2には無料枠があるが、無料枠で送った内容はGoogleの製品改善に使われる場合がある（2026年10月時点の公式料金: 画像1枚あたり約$0.00012）。
+
 ## v0.8.1（2026-10-11）
 
 v0.8.0 のコードレビュー指摘（#1〜#10）への対応。
