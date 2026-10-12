@@ -1059,18 +1059,18 @@
 
 .wfm-gallery-action-btn-similar,
 .wfm-gallery-action-btn-similar-refresh {
-    background: #8b5cf6;
-    border-color: #8b5cf6;
+    background: #0d9488;
+    border-color: #0d9488;
     color: #fff;
 }
 .wfm-gallery-action-btn-similar:hover,
 .wfm-gallery-action-btn-similar-refresh:hover {
-    background: #7c3aed;
-    border-color: #7c3aed;
+    background: #0f766e;
+    border-color: #0f766e;
 }
 /* 類似画像表示中(トグルON)は縁取りで状態を示す */
 .wfm-gallery-action-btn-similar.active {
-    box-shadow: 0 0 0 2px #fff inset, 0 0 0 2px #8b5cf6;
+    box-shadow: 0 0 0 2px #fff inset, 0 0 0 2px #0d9488;
 }
 
 .wfm-gallery-thumb-score {
@@ -1079,7 +1079,7 @@
     bottom: 4px;
     padding: 1px 5px;
     border-radius: 8px;
-    background: rgba(139, 92, 246, 0.85);
+    background: rgba(13, 148, 136, 0.85);
     color: #fff;
     font-size: 10px;
     line-height: 14px;
@@ -1094,7 +1094,7 @@
 .wfm-sem-ng { color: #ef4444; }
 .wfm-sem-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .wfm-sem-bar { height: 8px; border-radius: 4px; background: var(--wfm-border, #444); overflow: hidden; }
-.wfm-sem-bar-fill { height: 100%; width: 0; background: #8b5cf6; transition: width 0.3s; }
+.wfm-sem-bar-fill { height: 100%; width: 0; background: #0d9488; transition: width 0.3s; }
 
 /* フォルダツリー: 直下の画像が全件セマンティック索引済みのフォルダに付くドット */
 .wfm-gallery-tree-sem-dot {
@@ -1112,6 +1112,6 @@
     animation: wfm-help-flash 2.5s ease-out;
 }
 @keyframes wfm-help-flash {
-    0%, 60% { background: rgba(139, 92, 246, 0.35); }
+    0%, 60% { background: rgba(13, 148, 136, 0.35); }
     100% { background: transparent; }
 }
