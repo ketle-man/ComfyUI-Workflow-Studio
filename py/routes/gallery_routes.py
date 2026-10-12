@@ -10,10 +10,12 @@ from aiohttp import web
 
 from ..config import DATA_DIR
 from ..services.gallery_service import GalleryService
+from ..services.semantic_service import SemanticService, SemanticError, DEFAULT_DIM, MODEL as SEMANTIC_DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
 _service = GalleryService(DATA_DIR)
+_semantic = SemanticService(DATA_DIR, _service)
 
 
 def _init_allowed_root() -> None:
@@ -63,6 +65,13 @@ for _ext, _mime in ((".wav", "audio/wav"), (".mp3", "audio/mpeg"), (".ogg", "aud
 
 def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/folders", list_folders)
+    app.router.add_get("/wfm/gallery/semantic/status", semantic_status)
+    app.router.add_post("/wfm/gallery/semantic/index", semantic_index)
+    app.router.add_post("/wfm/gallery/semantic/cancel", semantic_cancel)
+    app.router.add_post("/wfm/gallery/semantic/search", semantic_search)
+    app.router.add_post("/wfm/gallery/semantic/similar", semantic_similar)
+    app.router.add_post("/wfm/gallery/semantic/clear", semantic_clear)
+    app.router.add_post("/wfm/gallery/semantic/test", semantic_test)
     app.router.add_get("/wfm/gallery/images", list_images)
     app.router.add_get("/wfm/gallery/image/meta", get_image_meta)
     app.router.add_get("/wfm/gallery/image/workflow", get_image_workflow)
@@ -99,6 +108,108 @@ def setup_routes(app: web.Application):
     app.router.add_post("/wfm/gallery/image/export-psd-layers", export_psd_from_layers)
     app.router.add_post("/wfm/gallery/image/import-psd-layers", import_psd_layers)
     app.router.add_get("/wfm/gallery/image/psd-layers", get_psd_layers)
+
+
+# ──────────────────────────────────────────────────────────────
+# セマンティック検索 (Gemini Embedding 2)
+# ──────────────────────────────────────────────────────────────
+
+def _semantic_error(e: SemanticError) -> web.Response:
+    # code はフロントのi18n用。message は詳細(APIキー等の秘密は含まない)
+    return web.json_response({"error": str(e), "code": e.code}, status=400)
+
+
+async def _json_body(request: web.Request) -> dict:
+    try:
+        body = await request.json()
+        return body if isinstance(body, dict) else {}
+    except Exception:
+        return {}
+
+
+async def semantic_status(request: web.Request) -> web.Response:
+    folder = request.rel_url.query.get("folder", "")
+    recursive = request.rel_url.query.get("recursive", "true") == "true"
+    try:
+        return web.json_response(await asyncio.to_thread(_semantic.status, folder, recursive))
+    except Exception as e:
+        logger.error("semantic_status error: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def semantic_index(request: web.Request) -> web.Response:
+    body = await _json_body(request)
+    try:
+        await asyncio.to_thread(
+            _semantic.start_index,
+            str(body.get("folder", "")),
+            bool(body.get("recursive", True)),
+            "all" if body.get("mode") == "all" else "missing",
+            str(body.get("model", SEMANTIC_DEFAULT_MODEL)),
+            int(body.get("dim", DEFAULT_DIM)),
+        )
+        return web.json_response({"ok": True})
+    except SemanticError as e:
+        return _semantic_error(e)
+    except Exception as e:
+        logger.error("semantic_index error: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def semantic_cancel(request: web.Request) -> web.Response:
+    _semantic.cancel()
+    return web.json_response({"ok": True})
+
+
+async def semantic_search(request: web.Request) -> web.Response:
+    body = await _json_body(request)
+    limit = max(1, min(int(body.get("limit", 200) or 200), 1000))
+    try:
+        images = await asyncio.to_thread(
+            _semantic.search_text, str(body.get("query", "")), str(body.get("folder", "")),
+            bool(body.get("recursive", True)), limit,
+        )
+        return web.json_response({"images": images, "total": len(images)})
+    except SemanticError as e:
+        return _semantic_error(e)
+    except Exception as e:
+        logger.error("semantic_search error: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def semantic_similar(request: web.Request) -> web.Response:
+    body = await _json_body(request)
+    limit = max(1, min(int(body.get("limit", 200) or 200), 1000))
+    try:
+        images = await asyncio.to_thread(
+            _semantic.search_similar, str(body.get("path", "")), str(body.get("folder", "")),
+            bool(body.get("recursive", True)), limit,
+        )
+        return web.json_response({"images": images, "total": len(images)})
+    except SemanticError as e:
+        return _semantic_error(e)
+    except Exception as e:
+        logger.error("semantic_similar error: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def semantic_clear(request: web.Request) -> web.Response:
+    try:
+        await asyncio.to_thread(_semantic.clear)
+        return web.json_response({"ok": True})
+    except SemanticError as e:
+        return _semantic_error(e)
+
+
+async def semantic_test(request: web.Request) -> web.Response:
+    body = await _json_body(request)
+    try:
+        dims = await asyncio.to_thread(_semantic.test_connection, str(body.get("model", SEMANTIC_DEFAULT_MODEL)), int(body.get("dim", DEFAULT_DIM)))
+        return web.json_response({"ok": True, "dimensions": dims})
+    except SemanticError as e:
+        return _semantic_error(e)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 # ──────────────────────────────────────────────────────────────

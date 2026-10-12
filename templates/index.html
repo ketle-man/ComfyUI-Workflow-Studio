@@ -1809,6 +1809,8 @@
                                 <li id="wfm-help-gallery-31"><b>Send to LV node</b> button (toolbar, next to Send to LI node): the video equivalent — uploads the selected video and writes its filename into the file widget of the currently selected node, which must be ComfyUI's native <b>Load Video</b> node; only enabled when the selected item is a video (mp4/webm); requires Workflow Studio to have been opened from ComfyUI's top menu button</li>
                                 <li id="wfm-help-gallery-28"><b>Create PSD</b> bulk button: combines all selected images into a single layered PSD file and downloads it — each image becomes its own layer (named after the file), positioned top-left on a canvas sized to the largest selected image; the last selected image ends up on top Convert... bulk button (shown when audio/video files are selected): converts audio files — or extracts the audio track of videos — to FLAC / MP3 / Opus / M4A / WAV (bitrate, sample rate, channels selectable) into the same folder as new files; prompt/workflow tags are carried over for formats that can hold them (WAV cannot), favorite/tags/memo/groups can be carried over, and the originals can optionally be deleted afterwards.</li>
                                 <li id="wfm-help-gallery-29"><b>Edit as Layers</b> bulk button: switches to the Image Edit tab and opens all selected images at once, each as an independent layer (video files in the selection are skipped); the last selected image ends up on top</li>
+                                <li id="wfm-help-gallery-33"><b>Semantic Search</b> (v0.8.2): toggle button next to the search box. When ON, the search box finds images by meaning (e.g. 'sunset city street') using Gemini Embedding 2 - press Enter to search; results are ordered by similarity with a score badge. When OFF it is the normal filename/tag/prompt search. Needs an index first: the <b>Semantic&#9881;</b> button (right end of the toolbar) opens a modal to build/update/delete the index for the selected folder (optionally with subfolders); set <b>GEMINI_API_KEY</b> in the plugin's <b>.env</b> and restart ComfyUI. Searches cover the selected folder tree; sort and tag/group filters do not apply to semantic results</li>
+                                <li id="wfm-help-gallery-34"><b>Similar</b> toggle and <b>&#8635;</b> button (detail panel, right of Download): Similar shows images similar to the selected one (an image not yet indexed is embedded on the fly). Selecting another image keeps the list as is; press &#8635; to show images similar to the newly selected one, or press Similar again to return to the normal list. Changing folder or Clear filters also leaves similar mode</li>
                             </ul>
                         </div>
                         <div class="wfm-help-card">
@@ -2265,6 +2267,7 @@
                         <input type="text" id="wfm-gallery-search" class="wfm-search-input" placeholder="Search images...">
                         <button class="wfm-search-clear-btn" id="wfm-gallery-search-clear-btn" title="Clear search">✕</button>
                     </div>
+                    <button id="wfm-gallery-semantic-toggle" class="wfm-btn wfm-btn-sm wfm-gallery-sem-toggle" title="Semantic Search: when ON, the search box finds images by meaning (Gemini Embedding 2). Press Enter to search.">Semantic Search</button>
                     <select id="wfm-gallery-tag-filter" class="wfm-select wfm-toolbar-select">
                         <option value="">All Tags</option>
                     </select>
@@ -2290,6 +2293,7 @@
                     <button id="wfm-gallery-send-li-node-btn" class="wfm-btn wfm-btn-sm" title="Upload and write selected image's filename into the selected node's image widget (e.g. LoadImage)">Send to LI node</button>
                     <button id="wfm-gallery-send-lv-node-btn" class="wfm-btn wfm-btn-sm" title="Upload and write selected video's filename into the selected node's file widget (native Load Video node)">Send to LV node</button>
                     <button id="wfm-gallery-send-cc-btn" class="wfm-btn wfm-btn-sm" title="Send selected image to ComfyUI Comic Creator's selected panel" style="display:none;">Send CC</button>
+                    <button id="wfm-gallery-semantic-settings-btn" class="wfm-btn wfm-btn-sm" style="margin-left:auto;" title="Semantic Search index (build / update / clear)">Semantic&#9881;</button>
                 </div>
                 <!-- 複数選択時の一括操作バー -->
                 <div id="wfm-gallery-bulk-bar" class="wfm-gallery-bulk-bar" style="display:none;">
@@ -2359,6 +2363,8 @@
                         <button id="wfm-gallery-load-genui-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-primary" title="Load workflow into GenerateUI">GenUI</button>
                         <button id="wfm-gallery-open-tagger-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-tagger" title="Open in Tagger"></button>
                         <button id="wfm-gallery-download-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-orange" title="Download">Download</button>
+                        <button id="wfm-gallery-similar-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-similar" title="Show images similar to the selected one (toggle)">Similar</button>
+                        <button id="wfm-gallery-similar-refresh-btn" class="wfm-gallery-action-btn wfm-gallery-action-btn-similar-refresh" title="Update: show images similar to the currently selected image">&#8635;</button>
                     </div>
                     <!-- Info タブ -->
                     <div id="wfm-gallery-detail-info" class="wfm-gallery-detail-tab-content" style="display:none;">

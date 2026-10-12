@@ -1048,3 +1048,50 @@
 .wfm-gallery-detail-preview--audio .wfm-gallery-audio-wave {
     max-height: 150px;
 }
+
+/* ── セマンティック検索 ─────────────────────────────────────── */
+
+.wfm-gallery-sem-toggle.active {
+    background: var(--wfm-primary);
+    border-color: var(--wfm-primary);
+    color: #fff;
+}
+
+.wfm-gallery-action-btn-similar,
+.wfm-gallery-action-btn-similar-refresh {
+    background: #8b5cf6;
+    border-color: #8b5cf6;
+    color: #fff;
+}
+.wfm-gallery-action-btn-similar:hover,
+.wfm-gallery-action-btn-similar-refresh:hover {
+    background: #7c3aed;
+    border-color: #7c3aed;
+}
+/* 類似画像表示中(トグルON)は縁取りで状態を示す */
+.wfm-gallery-action-btn-similar.active {
+    box-shadow: 0 0 0 2px #fff inset, 0 0 0 2px #8b5cf6;
+}
+
+.wfm-gallery-thumb-score {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(139, 92, 246, 0.85);
+    color: #fff;
+    font-size: 10px;
+    line-height: 14px;
+    pointer-events: none;
+}
+
+.wfm-sem-modal { display: flex; flex-direction: column; gap: 10px; min-width: 420px; }
+.wfm-sem-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wfm-sem-folder { font-family: monospace; font-size: 12px; word-break: break-all; opacity: 0.85; }
+.wfm-sem-hint { font-size: 11px; opacity: 0.7; margin: 0; }
+.wfm-sem-ok { color: #22c55e; }
+.wfm-sem-ng { color: #ef4444; }
+.wfm-sem-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.wfm-sem-bar { height: 8px; border-radius: 4px; background: var(--wfm-border, #444); overflow: hidden; }
+.wfm-sem-bar-fill { height: 100%; width: 0; background: #8b5cf6; transition: width 0.3s; }

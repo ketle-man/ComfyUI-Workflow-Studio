@@ -33,3 +33,9 @@ psd-tools>=1.10
 # If missing, mp4 thumbnail generation simply fails and falls back to a placeholder
 # (Gallery itself keeps working). Not pinned here on purpose — see torch note above.
 # av>=17.0.0
+
+# -- Gallery Semantic Search: local EmbeddingGemma 2 (optional) --
+# Uses onnxruntime (above) + tokenizers + huggingface_hub (both normally pre-installed with ComfyUI's
+# transformers). The model (~300 MB, q4) is downloaded to the data folder on first use.
+# tokenizers
+# huggingface_hub
