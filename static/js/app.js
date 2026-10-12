@@ -587,7 +587,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-26": "helpGallery26",
         "wfm-help-gallery-28": "helpGallery28", "wfm-help-gallery-29": "helpGallery29",
         "wfm-help-gallery-30": "helpGallery30", "wfm-help-gallery-31": "helpGallery31",
-        "wfm-help-gallery-32": "helpGallery32",
+        "wfm-help-gallery-32": "helpGallery32", "wfm-help-gallery-33": "helpGallery33", "wfm-help-gallery-34": "helpGallery34", "wfm-help-gallery-35": "helpGallery35", "wfm-help-gallery-36": "helpGallery36",
         "wfm-help-gallery-card-styleprompt-title": "helpGalleryCardStyleprompt",
         "wfm-help-gallery-card-stylecatalog-title": "helpGalleryCardStylecatalog",
         "wfm-help-tagger-title": "helpTaggerTitle",

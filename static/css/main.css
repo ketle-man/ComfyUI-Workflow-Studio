@@ -3491,7 +3491,8 @@ body {
 
 .wfm-help-page {
     display: none;
-    max-width: 760px;
+    /* 上部タブバー(AI TOOLタブの右端)あたりまで広げ、折り返しを減らす。狭い画面では領域幅に収まる */
+    max-width: 1076px;
 }
 
 .wfm-help-page.active {

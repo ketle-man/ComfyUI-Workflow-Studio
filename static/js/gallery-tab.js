@@ -15,6 +15,7 @@ import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
 import { initImagePromptTab, activateImagePromptTab } from "./image-prompt-tab.js";
 import { initStyleCatalogTab, activateStyleCatalogTab } from "./style-catalog-tab.js";
 import { applyStoredVideoVolume } from "./settings-tab.js";
+import { initSemantic, refreshSemanticDots, getSemanticMode, isSemanticOn, fetchSemanticImages, semanticCountLabel, setSemanticCountText, semanticErrorMessage, exitSimilarMode } from "./gallery-semantic.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -453,6 +454,7 @@ async function loadFolderTree() {
         state.folderTree = data;
         tree.innerHTML = "";
         renderTreeNode(data, tree, 0, true);
+        refreshSemanticDots(state.outputRoot);
 
         if (isFirstLoad) {
             // 初回のみ root を自動選択
@@ -508,6 +510,7 @@ function renderTreeNode(node, container, depth, isRoot) {
         state.selectedImages.clear();
         state.lastSelectionIndex = -1;
         updateBulkBar();
+        exitSimilarMode();
         loadImages();
         // Delete Folder ボタン: rootは削除不可
         const delBtn = document.getElementById("wfm-gallery-folder-delete-btn");
@@ -591,15 +594,37 @@ async function loadImages() {
         params.recursive = "true";
     }
 
+    // セマンティック検索/類似画像モード: サーバーがスコア順で返すためソート・各フィルタは適用しない
+    const semMode = getSemanticMode();
+
     try {
+        if (semMode) {
+            const images = await fetchSemanticImages(semMode, state.currentFolder);
+            if (controller.signal.aborted) return;
+            state.images = images;
+            state.lastSelectionIndex = -1;
+            document.getElementById("wfm-gallery-count").textContent = `${images.length} images`;
+            setSemanticCountText(semanticCountLabel(semMode, images.length));
+            renderImages();
+            return;
+        }
         const images = (await apiFetch(API.images(params), { signal: controller.signal })).images || [];
         state.images = images;
         state.lastSelectionIndex = -1;
         document.getElementById("wfm-gallery-count").textContent = `${state.images.length} images`;
+        setSemanticCountText("");
         renderImages();
         updateTagFilter(state.images);
     } catch (e) {
         if (e.name === "AbortError") return;
+        if (semMode) {
+            state.images = [];
+            document.getElementById("wfm-gallery-count").textContent = "";
+            setSemanticCountText("");
+            grid.innerHTML = `<p class="wfm-placeholder">${escapeHtml(semanticErrorMessage(e))}</p>`;
+            showToast(semanticErrorMessage(e), "error");
+            return;
+        }
         grid.innerHTML = `<p class="wfm-placeholder">Error: ${escapeHtml(e.message)}</p>`;
     } finally {
         if (_loadImagesAbortController === controller) {
@@ -703,6 +728,14 @@ function createThumbCard(img) {
         playBadge.className = "wfm-gallery-thumb-video-badge";
         playBadge.textContent = isAudioFile(img) ? "♪" : "▶";
         card.appendChild(playBadge);
+    }
+
+    // セマンティック検索/類似画像の結果にはコサイン類似度を表示
+    if (img.score != null) {
+        const scoreBadge = document.createElement("div");
+        scoreBadge.className = "wfm-gallery-thumb-score";
+        scoreBadge.textContent = img.score.toFixed(3);
+        card.appendChild(scoreBadge);
     }
 
     // お気に入りトグルボタン（カード右上）
@@ -826,7 +859,7 @@ function createTable(images) {
         tdSize.textContent = formatBytes(img.size);
 
         const tdDate = document.createElement("td");
-        tdDate.textContent = formatDate(img.mtime);
+        tdDate.textContent = formatDate(img.mtime) + (img.score != null ? `  (${img.score.toFixed(3)})` : "");
 
         const tdTags = document.createElement("td");
         tdTags.innerHTML = (img.tags || []).map(tag => `<span class="wfm-gallery-tag-badge">${escapeHtml(tag)}</span>`).join("");
@@ -2354,7 +2387,16 @@ function bindEvents() {
     document.getElementById("wfm-gallery-search")?.addEventListener("input", (e) => {
         state.search = e.target.value;
         clearTimeout(_searchDebounceTimer);
+        // Semantic Search ON中は入力のたびにAPIを呼ばず、Enterで実行する（クエリ埋め込みにAPI呼び出しが要るため）。
+        // 全文消去した時だけ通常一覧へ即復帰する。
+        if (isSemanticOn() && state.search.trim()) return;
         _searchDebounceTimer = setTimeout(loadImages, SEARCH_DEBOUNCE_MS);
+    });
+    document.getElementById("wfm-gallery-search")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && isSemanticOn() && !e.isComposing) {
+            clearTimeout(_searchDebounceTimer);
+            loadImages();
+        }
     });
     setupSearchClearBtn("wfm-gallery-search", "wfm-gallery-search-clear-btn", () => {
         clearTimeout(_searchDebounceTimer);
@@ -2653,7 +2695,15 @@ function bindEvents() {
             if (groupFilter) groupFilter.value = "";
             const favBtn = document.getElementById("wfm-gallery-fav-btn");
             if (favBtn) favBtn.classList.remove("active");
+            exitSimilarMode();
             loadImages();
         });
     }
+
+    initSemantic({
+        getSearch: () => state.search,
+        getFolder: () => state.currentFolder,
+        getSelected: () => state.selectedImage,
+        reload: loadImages,
+    });
 }

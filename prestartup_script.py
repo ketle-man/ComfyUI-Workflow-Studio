@@ -63,7 +63,7 @@ if ENV_FILE.exists():
     except ImportError:
         print(
             "[WARNING] Workflow Studio: .env file found but python-dotenv is not installed "
-            "(pip install -r requirements.txt). UNSLOTH_API_KEY will not be loaded from .env."
+            "(pip install -r requirements.txt). UNSLOTH_API_KEY / GEMINI_API_KEY will not be loaded from .env."
         )
     except Exception as e:
         print(f"[WARNING] Workflow Studio: failed to load .env file: {e}")

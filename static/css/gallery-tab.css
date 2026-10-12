@@ -1048,3 +1048,109 @@
 .wfm-gallery-detail-preview--audio .wfm-gallery-audio-wave {
     max-height: 150px;
 }
+
+/* ── セマンティック検索 ─────────────────────────────────────── */
+
+.wfm-gallery-sem-toggle.active {
+    background: var(--wfm-primary);
+    border-color: var(--wfm-primary);
+    color: #fff;
+}
+
+/* 2行目(Similar / 更新)のボタン: Taggerの紫と区別できるティール */
+.wfm-sem-sim {
+    background: #0d9488;
+    border-color: #0d9488;
+    color: #fff;
+}
+.wfm-sem-sim:hover {
+    background: #0f766e;
+    border-color: #0f766e;
+}
+/* 類似画像表示中(トグルON)は縁取りで状態を示す */
+#wfm-gallery-similar-btn.active {
+    box-shadow: 0 0 0 2px #fff inset, 0 0 0 2px #0d9488;
+}
+
+.wfm-gallery-sem-row {
+    gap: 6px;
+    align-items: center;
+    justify-content: flex-start;
+}
+.wfm-gallery-sem-count {
+    margin-left: 6px;
+    font-size: 12px;
+    opacity: 0.85;
+}
+
+.wfm-gallery-thumb-score {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(13, 148, 136, 0.85);
+    color: #fff;
+    font-size: 10px;
+    line-height: 14px;
+    pointer-events: none;
+}
+
+.wfm-sem-modal { display: flex; flex-direction: column; gap: 10px; min-width: 420px; }
+.wfm-sem-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wfm-sem-folder { font-family: monospace; font-size: 12px; word-break: break-all; opacity: 0.85; }
+.wfm-sem-hint { font-size: 11px; opacity: 0.7; margin: 0; }
+.wfm-sem-ok { color: #22c55e; }
+.wfm-sem-ng { color: #ef4444; }
+.wfm-sem-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.wfm-sem-bar { height: 8px; border-radius: 4px; background: var(--wfm-border, #444); overflow: hidden; }
+.wfm-sem-bar-fill { height: 100%; width: 0; background: #0d9488; transition: width 0.3s; }
+
+/* フォルダツリー: 直下の画像が全件セマンティック索引済みのフォルダに付くドット */
+.wfm-gallery-tree-sem-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: #22c55e;
+    vertical-align: middle;
+}
+
+/* モーダルのヘルプボタンから飛んだ先の説明を一時的に強調 */
+.wfm-help-flash {
+    animation: wfm-help-flash 2.5s ease-out;
+}
+@keyframes wfm-help-flash {
+    0%, 60% { background: rgba(13, 148, 136, 0.35); }
+    100% { background: transparent; }
+}
+
+.wfm-sem-local-opts { display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--wfm-border, #444); border-radius: 6px; }
+
+/* セマンティック検索モーダル: タブ */
+.wfm-sem-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--wfm-border, #444); }
+.wfm-sem-tab-btn {
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    color: var(--wfm-text-secondary, #aaa);
+    cursor: pointer;
+    font-size: 13px;
+}
+.wfm-sem-tab-btn:hover { color: var(--wfm-text, #fff); }
+.wfm-sem-tab-btn.active {
+    color: var(--wfm-text, #fff);
+    background: var(--wfm-bg-secondary, #1a1a2e);
+    border-color: var(--wfm-border, #444);
+    margin-bottom: -1px;
+    border-bottom: 1px solid var(--wfm-bg-secondary, #1a1a2e);
+}
+.wfm-sem-pane { display: flex; flex-direction: column; gap: 10px; min-height: 230px; }
+.wfm-sem-footer { justify-content: flex-end; border-top: 1px solid var(--wfm-border, #444); padding-top: 10px; }
+.wfm-sem-num { width: 80px; }
+.wfm-sem-danger { margin-left: auto; color: #ef4444; }
+
+.wfm-sem-row .wfm-select { width: auto; min-width: 90px; }

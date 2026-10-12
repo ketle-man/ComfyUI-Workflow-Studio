@@ -444,6 +444,21 @@ class GalleryService:
         _walk(folder)
         return entries
 
+    def make_list_item(self, name: str, abs_path: str, size: int, mtime: float) -> dict:
+        """一覧アイテムdict(list_imagesと同形式)を作る。セマンティック検索の結果表示用。"""
+        meta = self.metadata_store.get(abs_path)
+        return {
+            "filename": name,
+            "path": abs_path,
+            "size": size,
+            "mtime": mtime,
+            "ext": Path(name).suffix.lower(),
+            "favorite": meta.get("favorite", False),
+            "tags": meta.get("tags", []),
+            "memo": meta.get("memo", ""),
+            "groups": meta.get("groups", []),
+        }
+
     def list_images(
         self,
         folder_path: str,
