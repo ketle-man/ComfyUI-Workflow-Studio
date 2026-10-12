@@ -2206,6 +2206,14 @@
                                 <li id="wfm-help-trouble-8">Model tab shows a checkpoint you didn't expect (e.g. always the same model regardless of the loaded workflow): the checkpoint saved in the workflow file is not installed, so it was silently replaced with another available model during loading — an error toast reports the original (missing) model name when this happens. Select the correct checkpoint manually in the Model tab, or enable "Default Checkpoint" in Settings to force a known-good model on every load.</li>
                             </ul>
                         </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-trouble-card-semantic-title">Semantic Search (Gallery)</h3>
+                            <ul>
+                                <li id="wfm-help-trouble-10">GPU not detected for EmbeddingGemma 2 (Semantic settings &gt; Model says 'No GPU detected', or the connection test reports CPU): the onnxruntime in ComfyUI's Python is the CPU build, so 'CUDAExecutionProvider' is missing. Fix: stop ComfyUI (files in use cannot be replaced), then in ComfyUI's Python run 'pip uninstall -y onnxruntime onnxruntime-gpu' followed by 'pip install --no-deps onnxruntime-gpu', and start ComfyUI again. It can silently return to the CPU build later: other packages that require 'onnxruntime' (e.g. insightface, rtmlib, qwen-tts) make pip install the CPU build over the GPU files whenever they are installed or updated, so if the GPU disappears after adding a custom node, repeat the fix. Requires an NVIDIA GPU with the CUDA runtime/cuDNN that ComfyUI's PyTorch uses; DirectML is not supported. Without a GPU the CPU is used automatically (slower)</li>
+                                <li id="wfm-help-trouble-11">Semantic Search with Gemini says 'GEMINI_API_KEY is not set' or the key is rejected: add GEMINI_API_KEY=your-key (no leading #) to the plugin's .env file (copy .env.example), then restart ComfyUI - the .env file is only read at startup. Get a key at Google AI Studio. If you do not want to use the API, choose EmbeddingGemma 2 (local, no key) in Semantic settings &gt; Model</li>
+                                <li id="wfm-help-trouble-12">Semantic Search or Similar shows no results: results only include images that are already indexed inside the selected folder (a green dot in the folder tree means the folder is fully indexed) - build the index from the gear button first, and select a folder that contains indexed images. After changing the model, vector size or image precision, choose 'Rebuild all'. A minimum score set in Semantic settings &gt; Search can also hide everything; set it to 0 to check. The first search after indexing takes a few seconds because the local model is reloaded</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="wfm-help-page" id="wfm-help-page-support">
