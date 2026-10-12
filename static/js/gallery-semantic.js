@@ -17,6 +17,7 @@ const API = {
     search:  "/wfm/gallery/semantic/search",
     similar: "/wfm/gallery/semantic/similar",
     clear:   "/wfm/gallery/semantic/clear",
+    folders: (root) => `/wfm/gallery/semantic/folders?root=${encodeURIComponent(root)}`,
     test:    "/wfm/gallery/semantic/test",
 };
 
@@ -95,6 +96,40 @@ export function semanticCountLabel(mode, count) {
         : t("semCountText", count);
 }
 
+let _dotRoot = "";
+let _dotSeq = 0;
+
+/**
+ * フォルダツリーの枚数バッジ横に、直下の画像が全件インデックス済みのフォルダへドットを付ける。
+ * ツリー再構築後・インデックス作成後に呼ぶ（DOMはその場で更新し、ツリーは作り直さない）。
+ */
+export async function refreshSemanticDots(root) {
+    if (root) _dotRoot = root;
+    if (!_dotRoot) return;
+    const seq = ++_dotSeq;
+    let folders;
+    try {
+        const res = await fetch(API.folders(_dotRoot));
+        if (!res.ok) return;
+        folders = (await res.json()).folders || {};
+    } catch {
+        return;
+    }
+    if (seq !== _dotSeq) return;   // より新しい呼び出しがある
+    document.querySelectorAll(".wfm-gallery-tree-item").forEach(item => {
+        const label = item.querySelector(".wfm-gallery-tree-label");
+        const badge = label?.querySelector(".wfm-gallery-tree-count");
+        label?.querySelector(".wfm-gallery-tree-sem-dot")?.remove();
+        const st = folders[(item.dataset.path || "").replace(/\\/g, "/")];
+        if (badge && st && st.indexable > 0 && st.indexed >= st.indexable) {
+            const dot = document.createElement("span");
+            dot.className = "wfm-gallery-tree-sem-dot";
+            dot.title = t("semDotTitle");
+            badge.after(dot);
+        }
+    });
+}
+
 /** フォルダ切替・フィルタクリア時に類似表示を解除する（再読込は呼び出し側） */
 export function exitSimilarMode() {
     sem.anchor = "";
@@ -164,6 +199,7 @@ function modalHtml() {
             <button class="wfm-btn" id="wfm-sem-cancel" disabled>${escapeHtml(t("semCancelJob"))}</button>
             <button class="wfm-btn" id="wfm-sem-test">${escapeHtml(t("semTest"))}</button>
             <button class="wfm-btn" id="wfm-sem-clear">${escapeHtml(t("semClear"))}</button>
+            <button class="wfm-btn" id="wfm-sem-help" title="${escapeHtml(t("semHelpTitle"))}">?</button>
             <button class="wfm-btn" id="wfm-sem-close">${escapeHtml(t("close"))}</button>
         </div>
         <p class="wfm-sem-hint">${escapeHtml(t("semCostNote"))}</p>
@@ -177,6 +213,7 @@ function modalAlive() {
 
 let _pollTimer = null;
 let _backends = {};
+let _sawRunning = false;
 
 function selectedModel() {
     return document.querySelector('input[name="wfm-sem-model"]:checked')?.value || GEMINI;
@@ -251,7 +288,26 @@ async function refreshModal() {
     document.getElementById("wfm-sem-test").disabled = !ready;
 
     clearTimeout(_pollTimer);
-    if (job.running) _pollTimer = setTimeout(refreshModal, 1000);
+    if (job.running) {
+        _pollTimer = setTimeout(refreshModal, 1000);
+        _sawRunning = true;
+    } else if (_sawRunning) {
+        _sawRunning = false;
+        refreshSemanticDots();
+    }
+}
+
+/** ヘルプタブのGallery > セマンティック検索の説明へ飛ぶ */
+function openSemanticHelp() {
+    clearTimeout(_pollTimer);
+    closeModal();
+    document.querySelector('.wfm-tab[data-tab="help"]')?.click();
+    document.querySelector('.wfm-help-nav-item[data-help-page="gallery"]')?.click();
+    const target = document.getElementById("wfm-help-gallery-33");
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.add("wfm-help-flash");
+    setTimeout(() => target.classList.remove("wfm-help-flash"), 2500);
 }
 
 function openSemanticModal() {
@@ -273,7 +329,9 @@ function openSemanticModal() {
     document.getElementById("wfm-sem-close").addEventListener("click", () => {
         clearTimeout(_pollTimer);
         closeModal();
+        refreshSemanticDots();
     });
+    document.getElementById("wfm-sem-help").addEventListener("click", openSemanticHelp);
     document.getElementById("wfm-sem-start").addEventListener("click", async () => {
         const mode = document.querySelector('input[name="wfm-sem-mode"]:checked')?.value || "missing";
         if (mode === "all" && !confirm(t("semConfirmAll"))) return;
@@ -309,6 +367,7 @@ function openSemanticModal() {
         try {
             await postJson(API.clear, {});
             showToast(t("semCleared"), "success");
+            refreshSemanticDots();
         } catch (e) {
             showToast(semanticErrorMessage(e), "error");
         }

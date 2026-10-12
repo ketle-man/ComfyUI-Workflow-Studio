@@ -227,6 +227,19 @@ class SemanticService:
                 pass
         return out
 
+    def folder_status(self, root: str) -> dict:
+        """フォルダごとの索引状況 {絶対パス: {"indexable": n, "indexed": m}} (直下の画像のみ。Galleryツリーの枚数表示と同じ単位)"""
+        self._ensure_loaded()
+        entries = self._scope_entries(root, True)
+        out: dict[str, dict] = {}
+        with self._lock:
+            for _, ap, sz, mt in entries:
+                d = out.setdefault(ap.rsplit("/", 1)[0], {"indexable": 0, "indexed": 0})
+                d["indexable"] += 1
+                if self._is_fresh(ap, sz, mt):
+                    d["indexed"] += 1
+        return out
+
     def _is_fresh(self, path: str, size: int, mtime: float) -> bool:
         st = self._stamp.get(path)
         return st is not None and st[0] == size and abs(st[1] - mtime) < 1e-3

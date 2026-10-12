@@ -1095,3 +1095,23 @@
 .wfm-sem-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .wfm-sem-bar { height: 8px; border-radius: 4px; background: var(--wfm-border, #444); overflow: hidden; }
 .wfm-sem-bar-fill { height: 100%; width: 0; background: #8b5cf6; transition: width 0.3s; }
+
+/* フォルダツリー: 直下の画像が全件セマンティック索引済みのフォルダに付くドット */
+.wfm-gallery-tree-sem-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: #22c55e;
+    vertical-align: middle;
+}
+
+/* モーダルのヘルプボタンから飛んだ先の説明を一時的に強調 */
+.wfm-help-flash {
+    animation: wfm-help-flash 2.5s ease-out;
+}
+@keyframes wfm-help-flash {
+    0%, 60% { background: rgba(139, 92, 246, 0.35); }
+    100% { background: transparent; }
+}

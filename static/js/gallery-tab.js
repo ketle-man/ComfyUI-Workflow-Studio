@@ -15,7 +15,7 @@ import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
 import { initImagePromptTab, activateImagePromptTab } from "./image-prompt-tab.js";
 import { initStyleCatalogTab, activateStyleCatalogTab } from "./style-catalog-tab.js";
 import { applyStoredVideoVolume } from "./settings-tab.js";
-import { initSemantic, getSemanticMode, isSemanticOn, fetchSemanticImages, semanticCountLabel, semanticErrorMessage, exitSimilarMode } from "./gallery-semantic.js";
+import { initSemantic, refreshSemanticDots, getSemanticMode, isSemanticOn, fetchSemanticImages, semanticCountLabel, semanticErrorMessage, exitSimilarMode } from "./gallery-semantic.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
 
@@ -454,6 +454,7 @@ async function loadFolderTree() {
         state.folderTree = data;
         tree.innerHTML = "";
         renderTreeNode(data, tree, 0, true);
+        refreshSemanticDots(state.outputRoot);
 
         if (isFirstLoad) {
             // 初回のみ root を自動選択

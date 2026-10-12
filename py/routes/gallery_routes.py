@@ -66,6 +66,7 @@ for _ext, _mime in ((".wav", "audio/wav"), (".mp3", "audio/mpeg"), (".ogg", "aud
 def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/folders", list_folders)
     app.router.add_get("/wfm/gallery/semantic/status", semantic_status)
+    app.router.add_get("/wfm/gallery/semantic/folders", semantic_folders)
     app.router.add_post("/wfm/gallery/semantic/index", semantic_index)
     app.router.add_post("/wfm/gallery/semantic/cancel", semantic_cancel)
     app.router.add_post("/wfm/gallery/semantic/search", semantic_search)
@@ -134,6 +135,17 @@ async def semantic_status(request: web.Request) -> web.Response:
         return web.json_response(await asyncio.to_thread(_semantic.status, folder, recursive))
     except Exception as e:
         logger.error("semantic_status error: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def semantic_folders(request: web.Request) -> web.Response:
+    root = request.rel_url.query.get("root", "")
+    try:
+        return web.json_response({"folders": await asyncio.to_thread(_semantic.folder_status, root)})
+    except SemanticError as e:
+        return _semantic_error(e)
+    except Exception as e:
+        logger.error("semantic_folders error: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
