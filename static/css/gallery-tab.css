@@ -1115,3 +1115,5 @@
     0%, 60% { background: rgba(13, 148, 136, 0.35); }
     100% { background: transparent; }
 }
+
+.wfm-sem-local-opts { display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--wfm-border, #444); border-radius: 6px; }

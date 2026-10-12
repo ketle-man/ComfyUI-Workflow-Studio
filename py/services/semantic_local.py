@@ -9,6 +9,7 @@ onnxruntime + tokenizers + huggingface_hub だけで動かす(transformers の�
 """
 import logging
 import math
+import os
 import threading
 from pathlib import Path
 
@@ -26,23 +27,69 @@ DEFAULT_DTYPE = "q4"
 
 _PATCH = 16
 _POOL = 3
-_MAX_SOFT = 280
-_MAX_PATCHES = _MAX_SOFT * _POOL ** 2   # 2520
+SOFT_TOKENS = (70, 140, 280)            # 画像1枚あたりのソフトトークン数(多いほど高精度・低速)
+DEFAULT_SOFT = 280
 _IMAGE_TOKEN = "<|image|>"
 _BOI = "<|image>"
 _EOI = "<image|>"
 
+DEVICES = ("auto", "cpu", "cuda", "dml")
+_PROVIDER_BY_DEVICE = {"cuda": "CUDAExecutionProvider", "dml": "DmlExecutionProvider"}
+
 _lock = threading.Lock()
-_runtime = None   # (dtype, _Runtime)
+_runtime = None   # ((dtype, device, threads), _Runtime)
 
 
-def _target_size(h: int, w: int) -> tuple[int, int]:
+_opts = {"device": "auto", "threads": 0}   # 実行デバイス/CPUスレッド数(configureで更新)
+
+
+def configure(device: str = "auto", threads: int = 0) -> None:
+    """ローカル推論の実行設定。次回のensure_runtimeから反映(device/threads変更時はセッション再作成)。"""
+    _opts["device"] = device if device in DEVICES else "auto"
+    _opts["threads"] = max(0, int(threads))
+
+
+def current_config() -> dict:
+    return dict(_opts)
+
+
+def release() -> None:
+    """セッションを破棄してVRAM/RAMを解放する(インデックス作成後など)。次回利用時に再ロードされる。"""
+    global _runtime
+    with _lock:
+        _runtime = None
+
+
+def active_provider() -> str:
+    """直近にロードしたセッションの実行プロバイダ(未ロードなら空)"""
+    rt = _runtime[1] if _runtime else None
+    return rt.providers[0].replace("ExecutionProvider", "") if rt else ""
+
+
+def available_devices() -> dict:
+    """onnxruntime が使える実行デバイス。GPU用ビルド(onnxruntime-gpu / -directml)が無ければcpuのみ。"""
+    try:
+        import onnxruntime as ort
+        prov = ort.get_available_providers()
+        version = ort.__version__
+    except Exception:
+        return {"cpu": True, "cuda": False, "dml": False, "ort_version": ""}
+    return {"cpu": True, "cuda": "CUDAExecutionProvider" in prov, "dml": "DmlExecutionProvider" in prov,
+            "ort_version": version, "cpu_count": os.cpu_count() or 1}
+
+
+def default_threads() -> int:
+    """既定のCPUスレッド数: 画像生成と同居しても邪魔になりにくいよう、コアの半分(最低1)"""
+    return max(1, (os.cpu_count() or 2) // 2)
+
+
+def _target_size(h: int, w: int, max_patches: int) -> tuple[int, int]:
     """Gemma4ImageProcessor の get_aspect_ratio_preserving_size"""
-    factor = math.sqrt(_MAX_PATCHES * _PATCH ** 2 / (h * w))
+    factor = math.sqrt(max_patches * _PATCH ** 2 / (h * w))
     side = _POOL * _PATCH
     th = int(math.floor(factor * h / side)) * side
     tw = int(math.floor(factor * w / side)) * side
-    max_side = (_MAX_PATCHES // _POOL ** 2) * side
+    max_side = (max_patches // _POOL ** 2) * side
     if th == 0 and tw == 0:
         raise ValueError("image too small")
     if th == 0:
@@ -53,14 +100,29 @@ def _target_size(h: int, w: int) -> tuple[int, int]:
 
 
 class _Runtime:
-    def __init__(self, model_dir: Path, dtype: str):
+    def __init__(self, model_dir: Path, dtype: str, device: str = "auto", threads: int = 0):
         import onnxruntime as ort
         from tokenizers import Tokenizer
 
         sfx = DTYPES[dtype]
         so = ort.SessionOptions()
-        providers = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in ort.get_available_providers()]
+        so.log_severity_level = 3   # CUDA使用時のMemcpy警告などを抑止
+        if threads > 0:
+            so.intra_op_num_threads = threads
+            so.inter_op_num_threads = 1
+        avail = ort.get_available_providers()
+        if device in _PROVIDER_BY_DEVICE:
+            providers = [_PROVIDER_BY_DEVICE[device]] if _PROVIDER_BY_DEVICE[device] in avail else []
+        elif device == "cpu":
+            providers = []
+        else:   # auto: 使えるGPUを優先
+            providers = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in avail]
+        if "DmlExecutionProvider" in providers:
+            # DirectMLは並列実行/メモリパターン最適化に非対応
+            so.enable_mem_pattern = False
+            so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         providers.append("CPUExecutionProvider")
+        self.providers = providers
 
         def make(name):
             path = str(model_dir / "onnx" / f"{name}{sfx}.onnx")
@@ -70,6 +132,7 @@ class _Runtime:
                 if providers == ["CPUExecutionProvider"]:
                     raise
                 logger.warning("EmbeddingGemma2: %s failed on %s (%s); falling back to CPU", name, providers[0], e)
+                self.providers = ["CPUExecutionProvider"]
                 return ort.InferenceSession(path, so, providers=["CPUExecutionProvider"])
 
         self.text = make("model")
@@ -92,10 +155,11 @@ class _Runtime:
     def embed_text(self, text: str, prefix: str) -> np.ndarray:
         return self._run_text(f"{prefix}{text.strip()}", None)
 
-    def embed_image(self, image) -> np.ndarray:
+    def embed_image(self, image, soft_tokens: int = DEFAULT_SOFT) -> np.ndarray:
         from PIL import Image
         im = image.convert("RGB")
-        th, tw = _target_size(im.height, im.width)
+        max_patches = soft_tokens * _POOL ** 2
+        th, tw = _target_size(im.height, im.width, max_patches)
         if (th, tw) != (im.height, im.width):
             im = im.resize((tw, th), Image.BICUBIC)
         arr = np.asarray(im, dtype=np.float32) * (1.0 / 255.0)          # H,W,3
@@ -103,11 +167,11 @@ class _Runtime:
         n = ph * pw
         # (pH, dy, pW, dx, C) -> (pH, pW, dy, dx, C) -> (n, 768)
         patches = arr.reshape(ph, _PATCH, pw, _PATCH, 3).transpose(0, 2, 1, 3, 4).reshape(n, _PATCH * _PATCH * 3)
-        pixel = np.zeros((1, _MAX_PATCHES, _PATCH * _PATCH * 3), np.float32)
-        pixel[0, :n] = patches
-        pos = np.full((1, _MAX_PATCHES, 2), -1, dtype=np.int64)
+        # パディング無し(n個ちょうど)で渡す: 計算量が減り、パディングは出力に影響しない
+        pixel = patches[None].astype(np.float32)
+        pos = np.zeros((1, n, 2), dtype=np.int64)
         rows, cols = np.divmod(np.arange(n), pw)
-        pos[0, :n, 0], pos[0, :n, 1] = cols, rows
+        pos[0, :, 0], pos[0, :, 1] = cols, rows
         feats = self.vision.run(["image_features"], {"pixel_values": pixel, "pixel_position_ids": pos})[0]
         text = f"{_BOI}{_IMAGE_TOKEN * (n // _POOL ** 2)}{_EOI}"
         return self._run_text(text, feats.astype(np.float32))
@@ -123,13 +187,19 @@ def is_downloaded(data_dir: Path, dtype: str = DEFAULT_DTYPE) -> bool:
     return all(p.exists() for p in need)
 
 
-def ensure_runtime(data_dir: Path, dtype: str = DEFAULT_DTYPE, progress=None) -> _Runtime:
-    """モデルをダウンロード(未取得時)してセッションを返す。dtype変更時は作り直す。"""
+def ensure_runtime(data_dir: Path, dtype: str = DEFAULT_DTYPE, progress=None,
+                   device: str | None = None, threads: int | None = None) -> _Runtime:
+    """モデルをダウンロード(未取得時)してセッションを返す。dtype/device/threads変更時は作り直す。"""
     global _runtime
     if dtype not in DTYPES:
         dtype = DEFAULT_DTYPE
+    device = _opts["device"] if device is None else device
+    threads = _opts["threads"] if threads is None else threads
+    if device not in DEVICES:
+        device = "auto"
+    key = (dtype, device, int(threads))
     with _lock:
-        if _runtime and _runtime[0] == dtype:
+        if _runtime and _runtime[0] == key:
             return _runtime[1]
         d, sfx = model_dir(data_dir), DTYPES[dtype]
         if not is_downloaded(data_dir, dtype):
@@ -141,7 +211,7 @@ def ensure_runtime(data_dir: Path, dtype: str = DEFAULT_DTYPE, progress=None) ->
                 hf_hub_download(REPO_ID, f, local_dir=str(d))
         if progress:
             progress("loading")
-        _runtime = (dtype, _Runtime(d, dtype))
+        _runtime = (key, _Runtime(d, dtype, device, int(threads)))
         return _runtime[1]
 
 
@@ -158,6 +228,6 @@ def embed_text(data_dir: Path, text: str, dim: int, dtype: str = DEFAULT_DTYPE) 
     return _finish(rt.embed_text(text[:8000], "task: search result | query: "), dim)
 
 
-def embed_image(data_dir: Path, image, dim: int, dtype: str = DEFAULT_DTYPE) -> np.ndarray:
+def embed_image(data_dir: Path, image, dim: int, soft: int = DEFAULT_SOFT, dtype: str = DEFAULT_DTYPE) -> np.ndarray:
     rt = ensure_runtime(data_dir, dtype)
-    return _finish(rt.embed_image(image), dim)
+    return _finish(rt.embed_image(image, soft if soft in SOFT_TOKENS else DEFAULT_SOFT), dim)

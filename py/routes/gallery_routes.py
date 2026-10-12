@@ -149,9 +149,16 @@ async def semantic_folders(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+def _apply_local_options(body: dict) -> None:
+    """リクエストに実行デバイス/スレッド数が含まれていれば反映・保存する"""
+    if "device" in body:
+        _semantic.set_local_options(str(body.get("device", "auto")), int(body.get("threads", 0) or 0))
+
+
 async def semantic_index(request: web.Request) -> web.Response:
     body = await _json_body(request)
     try:
+        _apply_local_options(body)
         await asyncio.to_thread(
             _semantic.start_index,
             str(body.get("folder", "")),
@@ -159,6 +166,7 @@ async def semantic_index(request: web.Request) -> web.Response:
             "all" if body.get("mode") == "all" else "missing",
             str(body.get("model", SEMANTIC_DEFAULT_MODEL)),
             int(body.get("dim", DEFAULT_DIM)),
+            int(body.get("soft", 280) or 280),
         )
         return web.json_response({"ok": True})
     except SemanticError as e:
@@ -216,8 +224,9 @@ async def semantic_clear(request: web.Request) -> web.Response:
 async def semantic_test(request: web.Request) -> web.Response:
     body = await _json_body(request)
     try:
-        dims = await asyncio.to_thread(_semantic.test_connection, str(body.get("model", SEMANTIC_DEFAULT_MODEL)), int(body.get("dim", DEFAULT_DIM)))
-        return web.json_response({"ok": True, "dimensions": dims})
+        _apply_local_options(body)
+        res = await asyncio.to_thread(_semantic.test_connection, str(body.get("model", SEMANTIC_DEFAULT_MODEL)), int(body.get("dim", DEFAULT_DIM)))
+        return web.json_response({"ok": True, **res})
     except SemanticError as e:
         return _semantic_error(e)
     except Exception as e:

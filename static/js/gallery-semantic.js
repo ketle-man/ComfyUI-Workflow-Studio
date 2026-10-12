@@ -24,6 +24,7 @@ const API = {
 const LS_ON = "wfm_gallery_semantic_on";
 const LS_DIM = "wfm_gallery_semantic_dim";
 const LS_MODEL = "wfm_gallery_semantic_model";
+const LS_SOFT = "wfm_gallery_semantic_soft";
 const GEMINI = "gemini-embedding-2";
 const LOCAL = "embeddinggemma-2";
 const LS_SUB = "wfm_gallery_semantic_recursive";
@@ -184,6 +185,25 @@ function modalHtml() {
         <div class="wfm-sem-row"><b>${escapeHtml(t("semModel"))}</b>
             <label><input type="radio" name="wfm-sem-model" value="${GEMINI}"> ${escapeHtml(t("semModelGemini"))}</label>
             <label><input type="radio" name="wfm-sem-model" value="${LOCAL}"> ${escapeHtml(t("semModelLocal"))}</label></div>
+        <div id="wfm-sem-local-opts" class="wfm-sem-local-opts" style="display:none;">
+            <div class="wfm-sem-row"><b>${escapeHtml(t("semDevice"))}</b>
+                <select id="wfm-sem-device" class="wfm-select">
+                    <option value="auto">${escapeHtml(t("semDeviceAuto"))}</option>
+                    <option value="cpu">CPU</option>
+                    <option value="cuda">GPU (CUDA)</option>
+                </select>
+                <span id="wfm-sem-device-info" class="wfm-sem-hint"></span></div>
+            <div class="wfm-sem-row" id="wfm-sem-threads-row"><b>${escapeHtml(t("semThreads"))}</b>
+                <select id="wfm-sem-threads" class="wfm-select"></select>
+                <span class="wfm-sem-hint">${escapeHtml(t("semThreadsHint"))}</span></div>
+            <div class="wfm-sem-row"><b>${escapeHtml(t("semSoft"))}</b>
+                <select id="wfm-sem-soft" class="wfm-select">
+                    <option value="280">${escapeHtml(t("semSoftHigh"))}</option>
+                    <option value="140">${escapeHtml(t("semSoftStd"))}</option>
+                    <option value="70">${escapeHtml(t("semSoftLight"))}</option>
+                </select>
+                <span class="wfm-sem-hint">${escapeHtml(t("semSoftHint"))}</span></div>
+        </div>
         <div class="wfm-sem-row"><b>${escapeHtml(t("semDimension"))}</b>
             <select id="wfm-sem-dim" class="wfm-select"></select>
             <span class="wfm-sem-hint">${escapeHtml(t("semDimHint"))}</span></div>
@@ -219,6 +239,37 @@ function selectedModel() {
     return document.querySelector('input[name="wfm-sem-model"]:checked')?.value || GEMINI;
 }
 
+/** ローカルモデルの実行設定(デバイス/スレッド/画像精度)の初期値をサーバー保存値から設定する */
+function initLocalOpts(st) {
+    const lo = st.local || {};
+    const devSel = document.getElementById("wfm-sem-device");
+    devSel.value = (lo.options && lo.options.device) || "auto";
+    const cores = lo.devices?.cpu_count || 4;
+    const cur = (lo.options && lo.options.threads) || lo.default_threads || Math.max(1, Math.floor(cores / 2));
+    const set = new Set([1, 2, 4, 6, 8, 12, 16, 24, 32].filter(n => n <= cores).concat([cores, cur, lo.default_threads || 1]));
+    document.getElementById("wfm-sem-threads").innerHTML = [...set].sort((a, b) => a - b)
+        .map(n => `<option value="${n}">${n}${n === cores ? ` (${t("semThreadsAll")})` : ""}</option>`).join("");
+    document.getElementById("wfm-sem-threads").value = String(cur);
+    const soft = st.indexed_total && st.index_model === LOCAL ? st.index_soft : parseInt(lsGet(LS_SOFT, String(lo.default_soft || 280)), 10);
+    document.getElementById("wfm-sem-soft").value = String([70, 140, 280].includes(soft) ? soft : 280);
+}
+
+/** 検出した実行デバイスの表示(GPU版onnxruntimeが無いときの案内を含む) */
+function updateDeviceInfo(lo) {
+    const dev = lo?.devices;
+    if (!dev) return;
+    const info = document.getElementById("wfm-sem-device-info");
+    const cudaOpt = document.querySelector('#wfm-sem-device option[value="cuda"]');
+    if (cudaOpt) cudaOpt.disabled = !dev.cuda;
+    if (!dev.cuda && document.getElementById("wfm-sem-device").value === "cuda") {
+        document.getElementById("wfm-sem-device").value = "auto";
+    }
+    if (info) info.textContent = dev.cuda ? t("semDeviceCudaOk", dev.ort_version) : t("semDeviceNoGpu", dev.ort_version);
+    const dv = document.getElementById("wfm-sem-device").value;
+    const useCpu = dv === "cpu" || (dv === "auto" && !dev.cuda);
+    document.getElementById("wfm-sem-threads-row").style.display = useCpu ? "" : "none";
+}
+
 /** 選択中モデルの次元選択肢を作り直す(preferredが選択肢にあればそれを選ぶ) */
 function fillDims(model, preferred) {
     const sel = document.getElementById("wfm-sem-dim");
@@ -251,9 +302,12 @@ async function refreshModal() {
             || document.querySelector(`input[name="wfm-sem-model"][value="${GEMINI}"]`);
         radio.checked = true;
         fillDims(radio.value, st.indexed_total ? st.index_dim : parseInt(lsGet(LS_DIM, "0"), 10));
+        initLocalOpts(st);
         document.getElementById("wfm-sem-dim").dataset.init = "1";
     }
     const model = selectedModel();
+    document.getElementById("wfm-sem-local-opts").style.display = model === LOCAL ? "" : "none";
+    updateDeviceInfo(st.local);
     const ready = model === LOCAL ? true : !!st.has_key;
     const keyLine = model === LOCAL
         ? (_backends[LOCAL]?.downloaded ? t("semLocalReady") : t("semLocalNeedDownload"))
@@ -317,6 +371,13 @@ function openSemanticModal() {
     }
     openModal(t("semModalTitle"), modalHtml());
     const dimOf = () => parseInt(document.getElementById("wfm-sem-dim").value, 10) || 0;
+    // ローカルモデル選択時のみ実行設定を送る(サーバー側で保存され、検索時のクエリ埋め込みにも使われる)
+    const localOpts = () => selectedModel() === LOCAL ? {
+        device: document.getElementById("wfm-sem-device").value,
+        threads: parseInt(document.getElementById("wfm-sem-threads").value, 10) || 0,
+        soft: parseInt(document.getElementById("wfm-sem-soft").value, 10) || 280,
+    } : {};
+    document.getElementById("wfm-sem-device").addEventListener("change", () => refreshModal());
     document.querySelectorAll('input[name="wfm-sem-model"]').forEach(r => r.addEventListener("change", () => {
         fillDims(selectedModel(), 0);
         refreshModal();
@@ -337,6 +398,7 @@ function openSemanticModal() {
         if (mode === "all" && !confirm(t("semConfirmAll"))) return;
         lsSet(LS_DIM, String(dimOf()));
         lsSet(LS_MODEL, selectedModel());
+        lsSet(LS_SOFT, document.getElementById("wfm-sem-soft").value);
         try {
             await postJson(API.index, {
                 folder: ctx.getFolder(),
@@ -344,6 +406,7 @@ function openSemanticModal() {
                 mode,
                 model: selectedModel(),
                 dim: dimOf(),
+                ...localOpts(),
             });
         } catch (e) {
             showToast(semanticErrorMessage(e), "error");
@@ -356,8 +419,8 @@ function openSemanticModal() {
     });
     document.getElementById("wfm-sem-test").addEventListener("click", async () => {
         try {
-            const r = await postJson(API.test, { model: selectedModel(), dim: dimOf() });
-            showToast(t("semTestOk", r.dimensions), "success");
+            const r = await postJson(API.test, { model: selectedModel(), dim: dimOf(), ...localOpts() });
+            showToast(r.provider && r.provider !== "API" ? t("semTestOkProvider", r.dimensions, r.provider) : t("semTestOk", r.dimensions), "success");
         } catch (e) {
             showToast(semanticErrorMessage(e), "error");
         }

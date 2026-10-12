@@ -37,5 +37,9 @@ psd-tools>=1.10
 # -- Gallery Semantic Search: local EmbeddingGemma 2 (optional) --
 # Uses onnxruntime (above) + tokenizers + huggingface_hub (both normally pre-installed with ComfyUI's
 # transformers). The model (~300 MB, q4) is downloaded to the data folder on first use.
+# GPU (NVIDIA/CUDA): replace onnxruntime with onnxruntime-gpu
+#   pip uninstall onnxruntime onnxruntime-gpu
+#   pip install onnxruntime-gpu
+# Local EmbeddingGemma 2 then indexes ~45x faster than on the CPU. DirectML is not supported.
 # tokenizers
 # huggingface_hub
