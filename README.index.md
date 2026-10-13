@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.8.2-green)
+![Version](https://img.shields.io/badge/version-0.8.3-green)
 
 ## Features (tab -> feature names)
 
@@ -109,6 +109,8 @@ Restart ComfyUI after installation.
 
 Sample workflows are included in the `workflows/` folder. You can open them directly in ComfyUI via drag & drop, or load them from the Workflow tab.
 
+Samples for the Feeder tab: `ws_sdxl_image_feeder_i2i` / `ws_dwpose_image_feeder` (Image Loop mode, require the `comfyui-image-feeder` custom node) and `ws_sdxl_gallery_feeder_i2i` (v0.8.3, SDXL I2I with the bundled **WFS_GalleryFeeder** node — no extra custom node needed; put images in the `__Feeder__` Gallery group and use the Feeder tab's Gallery mode).
+
 > **Note:** Some sample workflows require additional custom nodes.
 > If a node is shown as missing (red/unknown) after loading, install the required custom nodes via **ComfyUI Manager** or by cloning the repository from GitHub into your `ComfyUI/custom_nodes/` directory.
 >
@@ -118,6 +120,15 @@ Sample workflows are included in the `workflows/` folder. You can open them dire
 > ```
 >
 > After installation, restart ComfyUI to activate the new nodes.
+
+---
+
+## Manual
+
+A beginner-oriented manual (covers v0.8.3, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
+
+- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.8.3_en.zip`
+- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.8.3.zip`
 
 ---
 

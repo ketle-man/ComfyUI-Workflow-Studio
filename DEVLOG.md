@@ -2,6 +2,28 @@
 
 ---
 
+## v0.8.3（2026-10-13）
+
+### GenerateUI: シードモード「Workflow」を追加（改善候補メモ 2-A）
+
+生成パネルのSeed欄が常に優先され、ギャラリーから読み込んだ画像を元のシードで再現しにくかった問題への対応。
+
+- `templates/index.html`: `#wfm-gen-seed-mode` に `workflow` を追加（Random / Fixed / Increment / Decrement / Workflow）。
+- `comfyui-client.js`: `getWorkflowSeed()`（API形式ワークフローの最初のリテラルな `seed` / `noise_seed` を返す。リンク入力・負値は無視）を追加し、`generate()` が `seedMode === "workflow"` のときシードを上書きせずワークフロー値を使うようにした。数値のシード入力が無いワークフローではパネル値（-1ならランダム）にフォールバック。生成後はSeed欄に実際に使った値が入る。
+- 副次的に見つけた不具合の修正: 呼び出し側が渡す `{ ...workflow }` は浅いコピーでノードオブジェクトを `currentWorkflow` と共有していたため、Random生成のシード上書きが読み込み済みワークフローに漏れ、その後のWorkflowモードが元のシードではなく直前のランダム値を使っていた。`generate()` 冒頭で `structuredClone(workflow)` するようにした。
+- 実機確認（ComfyUI_5 / chat_t2i_sdxl）: Random→Workflowの順でも元のシード（1097716508243681）で生成され、本体のシードは変化しないことを確認。同じシード・同じ設定の連続生成はComfyUIのキャッシュで新規画像が増えない（仕様）。
+- ヘルプ（helpGen8、en/ja/zh）とindex.htmlのヘルプ行にWorkflowモードを追記。
+
+### サンプルワークフロー: Gallery Feeder用I2I（改善候補メモ 7）
+
+- 追加: `workflows/ws_sdxl_gallery_feeder_i2i.json`（+ `.png`）。既存の `ws_sdxl_image_feeder_i2i`（SDXL I2I）の ImageFeeder を `WFS_GalleryFeeder`（group_name=`__Feeder__` / sort_mode=filename_asc）に差し替えたもの。リンク・ノードIDは元サンプルと同じ構成で整合。サムネイルPNGは既存サンプルのものを流用（要差し替え）。
+
+### ドキュメント: 初心者向けマニュアル（日本語・英語）
+
+- `docs/manual/`（日本語）と `docs/manual/en/`（英語）に、v0.8.3対応・画像なしのテキスト版マニュアルを追加（章ごとのMarkdown、全章まとめMarkdown、配布用ZIP）。Kindle版（画像入りEPUB）は作者のリポジトリ外原稿から別途作成。
+- 内容はv0.7.13版から更新: Workflowシードモード、Gallery Feederサンプル、セマンティック検索（8-6）、音声ファイルの扱いと変換（8-7）、メタデータタブのレイアウト変更、WS Library NタブのAlt+クリックなど。Kindleでの文字化け対策として、U+2015等の記号を代替表記に置換。
+- 配布版の再生成スクリプト（`make_repo_version.py` / `make_repo_version_en.py`）はリポジトリ外のマニュアル作業フォルダにある。
+
 ## v0.8.2（2026-10-12）
 
 ### Gallery: セマンティック検索（Gemini Embedding 2 / EmbeddingGemma 2）

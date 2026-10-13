@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.8.2-green)
+![Version](https://img.shields.io/badge/version-0.8.3-green)
 
 ## Screenshots
 
@@ -109,6 +109,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Bypass/Mute node handling** (v0.3.75) — loading a UI-format workflow with Bypass-mode nodes now reroutes their wires to the upstream source (matching same-type input/output slots, recursively through chained bypasses) instead of leaving a dangling reference that failed validation; Mute-mode nodes are excluded without rerouting, same as ComfyUI itself; when either is present, a note listing the affected nodes appears above the Raw JSON search bar in the Input/Model/Settings tabs
 - **One-click generation** — queue prompts to ComfyUI without leaving the studio
 - **Seed control** — randomize, lock, or manually set seeds; seed input and mode selector stacked vertically for readability
+  - **Workflow seed mode** (v0.8.3) — the mode selector's new **Workflow** option generates with the loaded workflow's own seed as-is (no override), e.g. to reproduce a Gallery image with its original seed; falls back to the Seed field only if the workflow has no literal seed input. Seed overrides no longer leak back into the loaded workflow (generation now works on a deep copy), so Workflow mode still sees the original seed after Random runs
 - **Style selector** — checkbox and dropdown next to the Reset Workflow button; enable to apply a Fooocus-style JSON to positive and negative prompts at generation time; style files (`*.json`) are loaded from `user/default/Workflow-Studio/style/`; the style's `{prompt}` placeholder is replaced with the original prompt text, or the style is appended if no placeholder exists; `negative_prompt` is appended to the existing negative prompt; styles are applied to a per-generation copy and do not modify the loaded workflow
   - **Wildcards inside a Style now expand** (v0.4.7) — an A1111-style `__wildcard__` reference written into a Style's Positive/Negative prompt is expanded at generation time just like one typed directly into GenerateUI; the Style text is merged into the prompt *before* wildcard expansion runs (previously the order was reversed, so a Style's own wildcard references were sent to ComfyUI unexpanded)
 - **Create Catalog / Catalog buttons** (v0.3.95) — next to the Style dropdown. **Create Catalog** generates one preview image per Style checked in the Batch tab's Style sub-tab (using the currently loaded workflow, typically T2I), then saves each result into a chosen `ws_style_catalog` subfolder named after the Style (existing files with the same name are overwritten); a modal lets you create a new destination folder or pick an existing one — separate folders are useful for grouping catalogs by checkpoint or by purpose. **Catalog** jumps straight to the Gallery tab's Style_Catalog sub-tab to browse the results (see below)
@@ -550,6 +551,8 @@ Restart ComfyUI after installation.
 
 Sample workflows are included in the `workflows/` folder. You can open them directly in ComfyUI via drag & drop, or load them from the Workflow tab.
 
+Samples for the Feeder tab: `ws_sdxl_image_feeder_i2i` / `ws_dwpose_image_feeder` (Image Loop mode, require the `comfyui-image-feeder` custom node) and `ws_sdxl_gallery_feeder_i2i` (v0.8.3, SDXL I2I with the bundled **WFS_GalleryFeeder** node — no extra custom node needed; put images in the `__Feeder__` Gallery group and use the Feeder tab's Gallery mode).
+
 > **Note:** Some sample workflows require additional custom nodes.
 > If a node is shown as missing (red/unknown) after loading, install the required custom nodes via **ComfyUI Manager** or by cloning the repository from GitHub into your `ComfyUI/custom_nodes/` directory.
 >
@@ -559,6 +562,15 @@ Sample workflows are included in the `workflows/` folder. You can open them dire
 > ```
 >
 > After installation, restart ComfyUI to activate the new nodes.
+
+---
+
+## Manual
+
+A beginner-oriented manual (covers v0.8.3, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
+
+- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.8.3_en.zip`
+- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.8.3.zip`
 
 ---
 

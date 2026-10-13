@@ -312,18 +312,43 @@ export const comfyUI = {
         }
     },
 
+    // First literal seed/noise_seed value in an API-format workflow (null if none).
+    // Linked inputs (arrays) are skipped.
+    getWorkflowSeed(workflow) {
+        for (const node of Object.values(workflow)) {
+            if (!node?.inputs) continue;
+            for (const key of ["seed", "noise_seed"]) {
+                const v = node.inputs[key];
+                if (typeof v === "number" && v >= 0) return v;
+            }
+        }
+        return null;
+    },
+
     // High-level generate
     async generate(workflow, options = {}) {
         const { seedMode = "random", seedValue = -1, onProgress, onComplete, onError, timeoutMs } = options;
 
         this.generating = true;
         try {
+            // Callers pass a shallow copy ({ ...workflow }) whose node objects are shared with
+            // currentWorkflow; clone so seed overrides don't leak back into the loaded
+            // workflow (otherwise "workflow" mode would reuse the last random seed).
+            workflow = structuredClone(workflow);
             // Apply seed
             let seed = seedValue;
-            if (seedMode === "random" || seed < 0) {
-                seed = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+            if (seedMode === "workflow") {
+                // Use the workflow's own seed as-is (no override). Fall back to the
+                // panel value only if the workflow has no seed input at all.
+                const wfSeed = this.getWorkflowSeed(workflow);
+                if (wfSeed != null) seed = wfSeed;
+                else this.applySeedToWorkflow(workflow, seed < 0 ? Math.floor(Math.random() * Number.MAX_SAFE_INTEGER) : seed);
+            } else {
+                if (seedMode === "random" || seed < 0) {
+                    seed = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+                }
+                this.applySeedToWorkflow(workflow, seed);
             }
-            this.applySeedToWorkflow(workflow, seed);
 
             // Connect WebSocket
             const wsOk = await this.connectWebSocket();
