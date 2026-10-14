@@ -3240,7 +3240,7 @@ function _extractTextEncoders(wf) {
 }
 function _extractLoRAs(wf) {
     if (!wf || typeof wf !== "object") return [];
-    const results = [], seen = new Set();
+    const results = [], seen = new Set(), stackNames = new Set();
     function add(name, sm, sc) {
         if (!name || typeof name !== "string" || name === "None" || seen.has(name)) return;
         seen.add(name);
@@ -3263,6 +3263,19 @@ function _extractLoRAs(wf) {
             if (ct === "LoraLoader") add(n.inputs?.lora_name, n.inputs?.strength_model, n.inputs?.strength_clip);
             else if (ct === "LoraLoaderModelOnly") add(n.inputs?.lora_name, n.inputs?.strength, 1.0);
             else if (ct === "ImageMetadataLoRALoader") { for (let i = 1; i <= 3; i++) add(n.inputs?.[`lora_${i}`], n.inputs?.[`strength_model_${i}`], n.inputs?.[`strength_clip_${i}`]); }
+            else if (ct === "LoadLoraModel" || ct === "LoadLoraTextEncoder") {
+                // Native stack node: DynamicGroup rows are flat API keys "loras.<row>.<field>".
+                // Model node carries the model strength, Text Encoder node the clip strength.
+                const isModel = ct === "LoadLoraModel";
+                for (const [k, name] of Object.entries(n.inputs || {})) {
+                    const m = /^loras\.(\d+)\.lora_name$/.exec(k);
+                    if (!m || typeof name !== "string" || n.inputs[`loras.${m[1]}.enabled`] === false) continue;
+                    const s = n.inputs[`loras.${m[1]}.strength`];
+                    const hit = stackNames.has(name) && results.find((r) => r.name === name);
+                    if (hit) hit[isModel ? "strength_model" : "strength_clip"] = parseFloat(s) || 1.0;
+                    else { add(name, isModel ? s : 1.0, isModel ? 1.0 : s); stackNames.add(name); }
+                }
+            }
             else if (ct === "Lora Loader (LoraManager)") {
                 const lorasData = n.inputs?.loras;
                 const list = lorasData?.__value__ ?? (Array.isArray(lorasData) ? lorasData : null);

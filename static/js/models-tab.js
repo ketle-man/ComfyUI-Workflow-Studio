@@ -61,6 +61,8 @@ export function applyToGenUI(modelName, modelType) {
                 __value__: [{ name: stem, strength: 1.0, active: true, expanded: false, clipStrength: 1.0, locked: false }],
             };
             comfyUI.currentWorkflow[nodeId].inputs.text = `<lora:${stem}:1:1>`;
+        } else if (comfyEditor.isLoraStackNode(comfyUI.currentWorkflow[nodeId])) {
+            comfyEditor.applyLoraStack([{ name: comfyEditor.resolveLoraName(modelName) }]);
         } else {
             comfyUI.currentWorkflow[nodeId].inputs.lora_name = comfyEditor.resolveLoraName(modelName);
         }

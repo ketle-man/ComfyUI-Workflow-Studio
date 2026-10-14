@@ -1353,7 +1353,9 @@ function _applyLabLoraToWorkflow(wf, analysis, lora) {
     const bypass = !!lora.nodeBypass;
     const strModel = bypass ? 0 : (lora.strengthModel ?? 1.0);
     const strClip = bypass ? 0 : (lora.strengthClip ?? 1.0);
-    if (isLoraManager) {
+    if (comfyEditor.isLoraStackNode(wf[nodeId])) {
+        comfyEditor.applyLoraStack([{ name: comfyEditor.resolveLoraName(lora.name), strModel, strClip, enabled: !bypass }], wf);
+    } else if (isLoraManager) {
         const stem = lora.name.replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "");
         wf[nodeId].inputs.loras = {
             __value__: [{ name: stem, strength: strModel, active: !bypass, expanded: false, clipStrength: strClip, locked: false }],

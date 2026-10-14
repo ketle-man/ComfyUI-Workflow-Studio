@@ -1889,6 +1889,9 @@ async function _runBatchGenerate() {
                                 __value__: [{ name: stem, strength: 1.0, active: true, expanded: false, clipStrength: 1.0, locked: false }],
                             };
                             comfyUI.currentWorkflow[node.id].inputs.text = `<lora:${stem}:1:1>`;
+                        } else if (node.is_lora_stack) {
+                            const actualName = loraNameMap?.get(loraName.replace(/\\/g, "/")) || loraName;
+                            comfyEditor.applyLoraStack([{ name: actualName }]);
                         } else {
                             const actualName = loraNameMap?.get(loraName.replace(/\\/g, "/")) || loraName;
                             comfyUI.currentWorkflow[node.id].inputs.lora_name = actualName;

@@ -1541,6 +1541,29 @@ export const comfyWorkflow = {
                 }
             }
 
+            // Native Load LoRA (Model / Text Encoder) — DynamicGroup rows arrive as flat keys
+            // "loras.<row>.lora_name|strength|enabled". One entry per node (first enabled row
+            // is the representative); editing goes through comfyEditor.applyLoraStack.
+            if (ct === "LoadLoraModel" || ct === "LoadLoraTextEncoder") {
+                const isModel = ct === "LoadLoraModel";
+                const rows = new Map();
+                for (const [k, v] of Object.entries(inputs)) {
+                    const m = /^loras\.(\d+)\.(lora_name|strength|enabled)$/.exec(k);
+                    if (!m) continue;
+                    if (!rows.has(+m[1])) rows.set(+m[1], {});
+                    rows.get(+m[1])[m[2]] = v;
+                }
+                const first = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r)
+                    .find((r) => r.enabled !== false && typeof r.lora_name === "string");
+                const s = typeof first?.strength === "number" ? first.strength : 1;
+                result.lora_nodes.push({
+                    id, type: ct, title, is_lora_stack: true,
+                    lora_name: first?.lora_name,
+                    strength_model: isModel ? s : 1,
+                    strength_clip: isModel ? 1 : s,
+                });
+            }
+
             // Lora Loader (LoraManager) — loras stored in inputs.loras.__value__
             if (ct === "Lora Loader (LoraManager)") {
                 result.lora_nodes.push({ id, type: ct, title, is_lora_manager: true });

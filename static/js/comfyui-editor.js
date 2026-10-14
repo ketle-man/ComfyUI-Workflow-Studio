@@ -198,7 +198,59 @@ function _buildLoraManagerSyntax(stackModels) {
         .join(" ");
 }
 
+// ── Native LoRA stack nodes (LoadLoraModel / LoadLoraTextEncoder) ─────────
+// DynamicGroup rows are flat API keys "loras.<row>.lora_name|strength|enabled" (max 20,
+// min 1). The Model node takes the model strength and the Text Encoder node the clip
+// strength; every stack node in the workflow is written together so a single Apply /
+// Bypass keeps the pair consistent.
+const _LORA_STACK_STRENGTH = { LoadLoraModel: "strModel", LoadLoraTextEncoder: "strClip" };
+
+function _isLoraStackNode(wfNode) {
+    return !!wfNode && Object.hasOwn(_LORA_STACK_STRENGTH, wfNode.class_type);
+}
+
+function _readLoraStackRows(inputs) {
+    const rows = new Map();
+    for (const [k, v] of Object.entries(inputs || {})) {
+        const m = /^loras\.(\d+)\.(lora_name|strength|enabled)$/.exec(k);
+        if (!m) continue;
+        if (!rows.has(+m[1])) rows.set(+m[1], {});
+        rows.get(+m[1])[m[2]] = v;
+    }
+    return [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r);
+}
+
+function _writeLoraStackRows(wfNode, rows) {
+    for (const k of Object.keys(wfNode.inputs)) if (k.startsWith("loras.")) delete wfNode.inputs[k];
+    rows.slice(0, 20).forEach((r, i) => {
+        wfNode.inputs[`loras.${i}.lora_name`] = r.lora_name;
+        wfNode.inputs[`loras.${i}.strength`] = r.strength;
+        wfNode.inputs[`loras.${i}.enabled`] = r.enabled;
+    });
+}
+
+// items: [{ name, strModel?, strClip?, enabled? }] — omitted strengths keep the node's
+// first existing row (default 1). Writes every stack node in `wf`.
+function _applyLoraStack(items, wf = comfyUI.currentWorkflow) {
+    if (!items.length) return;
+    for (const wfNode of Object.values(wf || {})) {
+        if (!_isLoraStackNode(wfNode)) continue;
+        const key = _LORA_STACK_STRENGTH[wfNode.class_type];
+        const prev = _readLoraStackRows(wfNode.inputs)[0]?.strength;
+        wfNode.inputs ??= {};
+        _writeLoraStackRows(wfNode, items.slice(0, 20).map((it) => ({
+            lora_name: it.name,
+            strength: it[key] ?? (typeof prev === "number" ? prev : 1),
+            enabled: it.enabled !== false,
+        })));
+    }
+}
+
 function _applyLoraToNode(nodeId, loraPath, strModel, strClip, isLoraManager) {
+    if (_isLoraStackNode(comfyUI.currentWorkflow[nodeId])) {
+        _applyLoraStack([{ name: comfyEditor.resolveLoraName(loraPath), strModel, strClip }]);
+        return;
+    }
     if (isLoraManager) {
         const stem = _loraBasename(loraPath);
         comfyUI.currentWorkflow[nodeId].inputs.loras = {
@@ -462,6 +514,10 @@ export const comfyEditor = {
         const found = this.models.loras.find((n) => n.replace(/\\/g, "/") === normalized);
         return found || name;
     },
+
+    // Native LoRA stack nodes (LoadLoraModel / LoadLoraTextEncoder) — see _applyLoraStack.
+    isLoraStackNode: _isLoraStackNode,
+    applyLoraStack: _applyLoraStack,
 
     renderAll(analysis, workflow, opts = {}) {
         this.renderPromptTab(analysis, "wfm-gen-prompt-fields");
@@ -776,7 +832,11 @@ export const comfyEditor = {
             // Restore whatever was set before bypassing
             const snap = _loraBypassSnapshot[nodeId];
             if (snap) {
-                if (isLoraManager) {
+                if (snap.stackRows) {
+                    for (const [id, rows] of Object.entries(snap.stackRows)) {
+                        if (comfyUI.currentWorkflow?.[id]) _writeLoraStackRows(comfyUI.currentWorkflow[id], JSON.parse(JSON.stringify(rows)));
+                    }
+                } else if (isLoraManager) {
                     wfNode.inputs.loras = { __value__: JSON.parse(JSON.stringify(snap.loras || [])) };
                     wfNode.inputs.text = snap.text ?? "";
                 } else {
@@ -791,7 +851,16 @@ export const comfyEditor = {
             // Snapshot current values, then zero the strength (LoraManager: every
             // entry in its loras list, keeping the list itself intact so un-bypassing
             // restores the exact same Stack — not just a single-LoRA fallback).
-            if (isLoraManager) {
+            if (_isLoraStackNode(wfNode)) {
+                // Native stack nodes: snapshot every stack node's rows, then zero each strength
+                const stackRows = {};
+                for (const [id, n] of Object.entries(comfyUI.currentWorkflow)) {
+                    if (!_isLoraStackNode(n)) continue;
+                    stackRows[id] = _readLoraStackRows(n.inputs);
+                    _writeLoraStackRows(n, stackRows[id].map((r) => ({ ...r, strength: 0 })));
+                }
+                _loraBypassSnapshot[nodeId] = { stackRows };
+            } else if (isLoraManager) {
                 const loras = Array.isArray(wfNode.inputs.loras?.__value__) ? wfNode.inputs.loras.__value__ : [];
                 _loraBypassSnapshot[nodeId] = { loras: JSON.parse(JSON.stringify(loras)), text: wfNode.inputs.text ?? "" };
                 wfNode.inputs.loras = { __value__: loras.map((l) => ({ ...l, strength: 0, clipStrength: 0 })) };
@@ -862,7 +931,9 @@ export const comfyEditor = {
         const _firstLoraNode = loraNodes[0];
         if (_firstLoraNode && comfyUI.currentWorkflow?.[_firstLoraNode.id]) {
             const _wfNode = comfyUI.currentWorkflow[_firstLoraNode.id];
-            if (!_firstLoraNode.is_lora_manager) {
+            if (_firstLoraNode.is_lora_stack) {
+                currentVal = _readLoraStackRows(_wfNode.inputs)[0]?.lora_name || currentVal;
+            } else if (!_firstLoraNode.is_lora_manager) {
                 currentVal = _wfNode.inputs?.lora_name || currentVal;
             } else {
                 // LoraManager: loras.__value__[0].nameからフルパスを復元
@@ -1294,6 +1365,14 @@ export const comfyEditor = {
                 });
                 comfyUI.currentWorkflow[nodeId].inputs.loras = { __value__: loraValue };
                 comfyUI.currentWorkflow[nodeId].inputs.text = _buildLoraManagerSyntax(stackModels);
+            } else if (node?.is_lora_stack) {
+                // Native stack nodes take the whole Stack group as rows (max 20)
+                _applyLoraStack(stackModels.map((m) => ({
+                    name: comfyEditor.resolveLoraName(m),
+                    strModel: _stackStrengths[m]?.m ?? 1.0,
+                    strClip: _stackStrengths[m]?.c ?? 1.0,
+                    enabled: _stackActive[m] !== false,
+                })));
             } else {
                 const first = stackModels[0];
                 if (first) {
