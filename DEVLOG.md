@@ -2,6 +2,39 @@
 
 ---
 
+## v0.8.4（2026-10-14）
+
+### ComfyUI v0.40.0 対応: ネイティブ LoRA スタックノード（`LoadLoraModel` / `LoadLoraTextEncoder`）
+
+ComfyUI v0.40.0 の変更点を確認し、影響のあった LoRA 検出・編集を対応させた（コミット 5078dd7）。
+
+**背景・調査結果**
+- 新ノードは `comfy_extras/nodes_lora_stack.py`。1ノードに DynamicGroup `loras`（1〜20行）を持ち、API形式では `loras.<行>.lora_name|strength|enabled` のドット結合キーで渡す。Model用とText Encoder用で別ノード。
+- Workflow Studio の LoRA 検出は固定リスト（`LoraLoader` / `LoraLoaderModelOnly` / Power Lora / LoraManager / ImageMetadataLoRALoader）だったため新ノードは未検出。また既存の編集コードが `inputs.lora_name` を書き込むため、そのまま使うと DynamicGroup の検証エラーになる状態だった。
+- **ComfyUI フロントエンド 1.55.17 には DynamicGroup の実装が無い**（型名ラベルのみ）。GUI のグラフエディタではこのノードに行を追加できず、UI形式の `widgets_values` も空になる。そのため対応は **API形式のみ**。UI形式の対応はフロントエンドの対応後に実物のJSONで再検証が必要。
+
+**実装**
+- `comfyui-workflow.js`: `analyzeWorkflow` が2ノードを `is_lora_stack` として `lora_nodes` に追加（1ノード1エントリ、代表は有効な最初の行。無効行は飛ばし、行番号順に解釈）。
+- `comfyui-editor.js`: 共通の書き込み処理 `applyLoraStack`（`comfyEditor` から公開）を追加。ワークフロー内の全スタックノードを同期して書き込む（Modelノード=Str M、Text Encoderノード=Str C）。Single / Stack Apply（Stackは全モデルを行として書く、最大20行）、バイパスボタン（全行のstrengthを0、解除で行ごと復元）、LoRAペインの現在値表示に対応。
+- `lab-tab.js` / `models-tab.js` / `generate-tab.js`: Lab、Models タブの Apply、LoRA バッチも同じ処理経由に。Models Apply は既存の強度を保持する。
+- `metadata-tab.js` / `web/comfyui/node_sets_menu.js`: Metadata タブ・サイドパネル I タブの LoRA 抽出（API形式）に対応。Model/Text Encoder 両ノードの同名LoRAは1件にまとめ、両方の強度を表示する。
+- ヘルプ（helpGen20 / helpGen21 / helpGen29 / helpSidepanel15、en/ja/zh）と index.html を更新。README に項目を追加。
+
+**実機確認（ComfyUI_5 / ポート8189、v0.40.0）**
+- テスト用 API 形式ワークフロー（Checkpoint → Load LoRA 2ノード×2行 → SDXL）を `/prompt` へ投入: HTTP 200・`node_errors` 空・1枚生成成功（18秒）。
+- 生成時ログの `lora key not loaded: ...`（約5千行）は、Model/Text Encoder で別ノードに分かれる設計上、各ノードが対象外キーを報告する無害なノイズ（従来 `LoraLoader` 単独では0件、件数も2LoRA×キー数と一致）。
+- GenerateUI 画面で、ID:2/ID:3 の選択、バイパスボタンの往復（0→元の値）、Single Apply（RAW JSON・LORA SYNTAX・トリガーワード更新）を実クリックで確認。
+- 書き込み処理は実ファイルから切り出して Node で単体試験（強度維持・行入替・両ノード同期・バイパス復元・ワークフロー引数指定）。
+
+**影響なしと確認した項目**
+- WebSocket のメタデータ付与: メタデータは `workflow_metadata` の送信または機能フラグ `supports_preview_metadata` の宣言時のみ付く。本プラグインのクライアントはどちらも行わず、メッセージも既知フィールドだけを `try/catch` 付きで読むため影響なし。
+- 3D 出力・カメラ系ノード: 結果取得は `images` と `saved_svg` のみを見るため無視されるだけ。
+- Comic Creator（v1.53.2）: LoRA / WebSocket / `/prompt` を使わず、`/upload/image` の応答形式も互換。`/ccc` と `/wfm` の iframe 連携も正常。
+
+**その他（運用上の発見）**
+- ランタイム（ComfyUI_5 の `custom_nodes`）が v0.8.2 開発途中の版のまま古いファイルが残っていた（部分同期）。リポジトリの追跡ファイルを同期し直した（`workflows/`・`data/`・`.env` は上書きしない）。
+- comfy-cli の既定ワークスペースは ComfyUI_6（プラグイン 0.3.78）。comfy-mcp の `server_info` の running / freshness は 8189 の ComfyUI_5 とは別物。
+
 ## v0.8.3（2026-10-13）
 
 ### GenerateUI: シードモード「Workflow」を追加（改善候補メモ 2-A）
