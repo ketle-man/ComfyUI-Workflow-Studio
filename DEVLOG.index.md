@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.8.5（2026-10-14）** — Metadata / I タブ: Gemini 系ノード（Nano Banana）の画像を読めるように
 - **v0.8.4（2026-10-14）** — ComfyUI v0.40.0 対応: ネイティブ LoRA スタックノード（`LoadLoraModel` / `LoadLoraTextEncoder`）
 - **v0.8.3（2026-10-13）** — GenerateUI: シードモード「Workflow」を追加（改善候補メモ 2-A）
 - **v0.8.2（2026-10-12）** — Gallery: セマンティック検索（Gemini Embedding 2 / EmbeddingGemma 2）

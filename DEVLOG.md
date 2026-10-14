@@ -2,6 +2,24 @@
 
 ---
 
+## v0.8.5（2026-10-14）
+
+### Metadata / I タブ: Gemini 系ノード（Nano Banana）の画像を読めるように
+
+Comic Creator v1.54.0 で、Nano Banana を ComfyUI ネイティブノード（`GeminiNanoBanana2V2`）経由で生成できるようにした（併用）。この経路の画像は SaveImage により `prompt` / `workflow` が PNG に埋め込まれるため、Workflow Studio 側で通常の ComfyUI 画像として読めるようにした。
+
+- `metadata-tab.js` / `web/comfyui/node_sets_menu.js`: 自ノードの `prompt` 入力を持つ `Gemini(Image|NanoBanana)*` ノードを、動画ノード（`*ImageToVideo` / `*TextToVideo`）と同じ扱いでプロンプト候補（`texts`）へ追加。`NEGATIVE_PROMPT:` を含む送信全文がそのまま1件として出る（Positive / Negative の分割はしない）。
+- `extractDiffusionModels`（API形式）: Gemini 系ノードの `model` 入力（例: `Gemini Nano Banana 2.1`）をモデル名として表示。
+- `extractSamplerSettings`: Gemini 系ノードの `seed` を補助ノードとして拾い、設定欄に表示。
+- 対象は API 形式のみ（DynamicCombo のため UI 形式の `widgets_values` の並びは未確認）。`GenerateUI` のプロンプト編集・実行は対象外。
+- `cc_nanobanana` フォルダ用の特別扱い（`history.jsonl` 参照・Promptタブ非表示）は、従来の Gemini API 直叩きの画像のため変更なし。ネイティブ経路の出力先は別フォルダ（`cc_nanobanana_native`）なので、この特別扱いに該当せず、埋め込みメタデータが使われる。
+
+**実機確認（ComfyUI_5 / ポート8189、v0.40.0）**
+- Comic Creator のネイティブ経路で実際に生成した画像（`cc_nanobanana_native/NB_00001_.png`、848×1264）を `extractAllMetadata` に通し、モデル名（`Gemini Nano Banana 2.1`）・シード・プロンプト（`NEGATIVE_PROMPT:` 付き全文）が取れることを確認。Gallery の一覧・画像メタ取得でも通常の画像として扱われる（`nanobanana` エントリは null）。
+
+**ネイティブ API ノードの認証について（今回の調査で判明）**
+- API ノードは `/prompt` の `extra_data` に `auth_token_comfy_org`（ブラウザのログイン）または `api_key_comfy_org`（Comfy APIキー）が必要。ComfyUI 本体の画面は自動で付けるが、Workflow Studio の `queuePrompt`（`fetch('/prompt')` 直叩き）は付けないため、GenerateUI からパートナーAPIノードを実行すると認証エラーになる。今回は対応せず（Comic Creator はサーバー側で `COMFY_API_KEY` を渡す方式で対応）。必要になれば Workflow Studio 側にも同様のサーバー側プロキシが必要。
+
 ## v0.8.4（2026-10-14）
 
 ### ComfyUI v0.40.0 対応: ネイティブ LoRA スタックノード（`LoadLoraModel` / `LoadLoraTextEncoder`）

@@ -3214,7 +3214,12 @@ function _extractDiffusionModels(wf) {
     if (!wf || typeof wf !== "object") return [];
     const _UNET_TYPES = new Set(["UNETLoader", "UnetLoaderGGUF", "UNETLoaderGGUF"]);
     if (Array.isArray(wf.nodes)) return _collectUnique(_collectAllNodes(wf).filter(n => _UNET_TYPES.has(n.type)).map(n => n.widgets_values?.[0]));
-    return _collectUnique(Object.values(wf).filter(n => _UNET_TYPES.has(n?.class_type)).map(n => n.inputs?.unet_name));
+    // Gemini系の画像生成ノード(Nano Banana等、API形式)は"model"入力がモデル名(例: "Gemini Nano Banana 2.1")
+    const _isGeminiImage = (ct) => /^Gemini(Image|NanoBanana)/.test(ct ?? "");
+    return _collectUnique([
+        ...Object.values(wf).filter(n => _UNET_TYPES.has(n?.class_type)).map(n => n.inputs?.unet_name),
+        ...Object.values(wf).filter(n => _isGeminiImage(n?.class_type)).map(n => typeof n.inputs?.model === "string" ? n.inputs.model : undefined),
+    ]);
 }
 function _extractTextEncoders(wf) {
     if (!wf || typeof wf !== "object") return [];
@@ -3537,7 +3542,8 @@ function _extractPromptsAPI(wf) {
         // MiniMaxH3ImageToVideo等の動画生成オールインワンノード。CLIPTextEncode等を経由せず
         // 自ノードの"prompt"入力に直接テキストを持つ(positive/negativeの区別も無い)ため、
         // _isTextEncoderNode判定を通さずtextMapへ直接投入する(fallbackのtextsに載る)。
-        if (typeof n.inputs?.prompt === "string" && /ImageToVideo|TextToVideo/i.test(ct)) {
+        // Gemini系の画像生成ノード(Nano Banana等)も同様に自ノードの"prompt"入力を持つ。
+        if (typeof n.inputs?.prompt === "string" && /ImageToVideo|TextToVideo|^Gemini(Image|NanoBanana)/i.test(ct)) {
             textMap.set(id, n.inputs.prompt);
             continue;
         }
