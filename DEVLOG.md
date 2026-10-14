@@ -30,6 +30,24 @@ Comic Creator v1.55.0 で、半自動マンガがネイティブノード経由�
 - `.env` に `COMFY_API_KEY` を設定し、GenerateUI でサンプル（Nano Banana 2.1）を読み込み、Prompt タブで編集して Apply → Generate を実クリック: リクエストは `/api/wfm/partner/prompt` 経由、16.4秒で成功、編集どおりの絵（青いティーポット）が `output/nano_banana_00001_.png` に出力された。
 - キー未設定時の案内文（`partnerAuthHint`）が表示用文言として解決されること、ヘルプ（`helpGen32`）が表示されることを確認。
 
+### 今後の作業候補（2026-10-14 時点・未着手。v0.8.4〜v0.8.6 の続き）
+
+**ネイティブ LoRA スタックノード（`LoadLoraModel` / `LoadLoraTextEncoder`、v0.8.4）**
+- **UI形式への対応**: ComfyUI フロントエンド 1.55.17 は DynamicGroup を実装していない（行を追加できず `widgets_values` も空）。フロントエンドが対応したら、実物の UI 形式 JSON で `widgets_values` の並びを確認し、`analyzeWorkflow` / Metadata / I タブの UI 形式分岐を追加する。
+- **画面操作の確認**: GenerateUI の Stack タブ（Stack グループを複数行として書き込む処理）は、関数の直接呼び出しでのみ確認済み。Models タブで Stack グループを登録した状態での画面確認が未実施。
+
+**Gemini / Nano Banana 系ノード（v0.8.5 / v0.8.6）**
+- **Metadata / I タブの表示拡充**: プロンプトは Positive / Negative に分けず全文を1件で表示している（送信全文に `NEGATIVE_PROMPT:` が含まれる）。`NEGATIVE_PROMPT:` で分割して Positive / Negative に振り分ける、`aspect_ratio` / `resolution` / `thinking_level` を設定欄に出す、UI 形式の `widgets_values`（並びは `[prompt, model, aspect_ratio, resolution, thinking_level, seed, control_after_generate, response_modalities, system_prompt, temperature, top_p]`）に対応する、が候補。
+- **他のパートナーAPIノードの Prompt タブ対応**: 現状は `Gemini(Image|NanoBanana)*` のみを `prompt_nodes` に登録している。`/object_info` の `api_node: true` かつ `prompt` 入力を持つノード（Seedream / Kling 等）へ一般化できないか検討する。
+- **費用ガード**: Batch / Lab / カタログ作成などの繰り返し実行でパートナーAPIノードを使うと、回数ぶんのクレジットが連続して消費される。`/object_info` の `price_badge` から概算を出して、実行前に表示・確認する案。
+- **Settings タブに `COMFY_API_KEY` の設定状態を表示**: 現状は `.env` 編集のみ。`GET /api/wfm/partner/status`（設定の有無のみ返す）を使って、設定済み／未設定と設定手順を Settings タブに出す。キー自体は表示・入力させない方針を維持する。
+- **サンプルの追加**: 参考画像付き（I2I、`LoadImage` → `model.images.image_1`）の Nano Banana ワークフロー、複数参考画像のもの。Nano Banana Pro（`GeminiImage2Node`）は Comic Creator 側のネイティブ対応と合わせて。
+
+**運用・開発環境**
+- **同期スクリプトの整備**: 開発リポジトリから実機の `custom_nodes` への反映は、今回も手作業（追跡ファイルの `cmp` 比較 + `cp`、`workflows/` / `data/` / `.env` は除外）だった。CLAUDE.md の「同期スクリプトでパッケージ全体をデプロイ」に沿って、`tools/` に同期スクリプト（除外リスト付き、ハッシュ比較・`__pycache__` 削除まで）を用意する。部分同期が残ると古い版が混在する（今回、実機は v0.8.2 開発途中の版のまま止まっていた）。
+- **comfy-cli / comfy-mcp の既定ワークスペース**が ComfyUI_6（プラグイン 0.3.78）で、実際に使っている ComfyUI_5（8189）と一致しない。`server_info` の `running` / `freshness` は ComfyUI_6 の情報になるため、MCP で実機を扱うときは注意するか、既定ワークスペースを揃える。
+- **英語・中国語UIでの表示確認**: 今回追加したヘルプ（`helpGen32` ほか）と `partnerAuthHint` は日本語UIでのみ画面確認した。
+
 ## v0.8.5（2026-10-14）
 
 ### Metadata / I タブ: Gemini 系ノード（Nano Banana）の画像を読めるように
