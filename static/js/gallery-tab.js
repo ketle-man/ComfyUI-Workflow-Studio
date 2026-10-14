@@ -1082,6 +1082,9 @@ async function loadImageDetail(img) {
             apiFetch(API.imageWorkflow(img.path)),
         ]);
         state.embeddedWorkflow = wfRes.has_workflow ? wfRes.workflow : null;
+        // cc_nanobananaフォルダでも、ComfyUIネイティブノード経由（半自動マンガ・Auto等）の画像にはワークフロー/
+        // プロンプトが埋め込まれているため、Promptタブを表示する（埋め込みの無いGemini API直叩きの画像だけ非表示のまま）
+        if (state.embeddedWorkflow && isNanobananaFolderImage(img)) updatePromptTabVisibility(false);
         renderWorkflowJson(state.embeddedWorkflow);
         _updateCopyCanvasBtn();
         renderImagePromptSection(metaRes.image_prompt);

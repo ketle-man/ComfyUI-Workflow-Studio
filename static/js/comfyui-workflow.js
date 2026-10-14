@@ -172,6 +172,11 @@ function _getWidgetInputTypes(objectInfo, classType) {
  * presence_penalty under optional — all 7 still occupy a widgets_values slot). Dropping the
  * optional ones here under-counts how many slots the combo actually consumed, misaligning
  * every widget declared after it in the node's schema.
+ *
+ * Only sub-fields that are actually widgets count: a sub-field can also be a link socket (e.g. the
+ * Nano Banana 2.1 node's "images" Autogrow group and its "files" GEMINI_INPUT_FILES input), which the
+ * frontend does NOT serialize into widgets_values — counting those would shift every value after
+ * them (seed read as "IMAGE", the system prompt landing in response_modalities, ...).
  */
 function _getDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey) {
     const info = objectInfo[classType];
@@ -179,9 +184,13 @@ function _getDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey
     const options = spec?.[1]?.options;
     if (!Array.isArray(options)) return [];
     const opt = options.find((o) => o.key === selectedKey) || options[0];
+    const isWidget = ([, sub]) => {
+        if (Array.isArray(sub) && sub[1]?.forceInput) return false;
+        return !!_resolveWidgetType(Array.isArray(sub) ? sub[0] : sub, sub);
+    };
     return [
-        ...Object.keys(opt?.inputs?.required || {}),
-        ...Object.keys(opt?.inputs?.optional || {}),
+        ...Object.entries(opt?.inputs?.required || {}).filter(isWidget).map(([k]) => k),
+        ...Object.entries(opt?.inputs?.optional || {}).filter(isWidget).map(([k]) => k),
     ];
 }
 
@@ -191,6 +200,14 @@ function _getDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey
  * Common extras: "fixed", "increment", "decrement", "randomize" after seed/INT fields.
  */
 const _CONTROL_AFTER_GENERATE = new Set(["fixed", "increment", "decrement", "randomize"]);
+
+// True when the widget's object_info spec declares control_after_generate (seed-style INT widgets):
+// the frontend then serializes one extra "randomize"/"fixed"/... slot right after the widget's value.
+function _hasControlAfterGenerate(objectInfo, classType, widgetName) {
+    const info = objectInfo[classType]?.input;
+    const spec = info?.required?.[widgetName] || info?.optional?.[widgetName];
+    return !!(Array.isArray(spec) && spec[1]?.control_after_generate);
+}
 
 function _isExtraWidgetValue(val, expectedType) {
     if (expectedType === "INT" || expectedType === "FLOAT") {
@@ -764,6 +781,16 @@ export const comfyWorkflow = {
                         if (wIdx >= widgets.length) break;
                         const name = widgetNames[nIdx];
                         const expectedType = widgetTypes[nIdx];
+                        // A control_after_generate widget (seed etc.) is followed by a frontend-only
+                        // "randomize"/"fixed"/... slot even when the next widget is not numeric (e.g.
+                        // Nano Banana 2.1: seed -> response_modalities); the type heuristic below only
+                        // catches it when the next widget happens to be INT/FLOAT.
+                        if (nIdx > 0 && !linkedInputNames.has(widgetNames[nIdx - 1])
+                            && _hasControlAfterGenerate(objectInfo, node.type, widgetNames[nIdx - 1])
+                            && _CONTROL_AFTER_GENERATE.has(widgets[wIdx])) {
+                            wIdx++;
+                            if (wIdx >= widgets.length) break;
+                        }
                         // Skip if this input is already linked
                         if (linkedInputNames.has(name)) {
                             if (!linkedSlotNames.has(name)) {
@@ -1451,6 +1478,16 @@ export const comfyWorkflow = {
             // (WAN, HunyuanVideo, etc.) work without a code change — same detection metadata-tab.js
             // and node_sets_menu.js already use for prompt extraction (see extractPromptsAPI).
             if ((ct.includes("ImageToVideo") || ct.includes("TextToVideo")) && typeof inputs.prompt === "string") {
+                result.prompt_nodes.push({
+                    id, type: ct, title, role: "positive",
+                    text: inputs.prompt, textKey: "prompt",
+                });
+            }
+
+            // Gemini image nodes (Nano Banana etc., partner API nodes) — like the video all-in-one nodes above
+            // they hold their own "prompt" widget (no negative counterpart; the node's reference images
+            // arrive through LoadImage nodes, which GenerateUI's Image tab already handles generically).
+            if (/^Gemini(Image|NanoBanana)/.test(ct) && typeof inputs.prompt === "string") {
                 result.prompt_nodes.push({
                     id, type: ct, title, role: "positive",
                     text: inputs.prompt, textKey: "prompt",

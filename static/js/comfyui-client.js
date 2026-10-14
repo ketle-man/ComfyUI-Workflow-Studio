@@ -4,6 +4,7 @@
  */
 
 import { prepareVramForGeneration } from "./vram-prepare.js";
+import { t } from "./i18n.js";
 
 function _uuid() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -194,6 +195,21 @@ export const comfyUI = {
         return this._fetchModelList(["KSampler"], "scheduler");
     },
 
+    // パートナー(API)ノード（Nano Banana等）は /prompt の extra_data にComfyの認証情報が必要。ComfyUI画面は
+    // ログイン情報を自動で付けるが、本アプリの直接fetchは付けないため、サーバー側の COMFY_API_KEY(.env) が
+    // 設定されていれば WFSサーバー経由で投入してキーを付与する（キーはブラウザへ出さない）。
+    async isPartnerKeyConfigured() {
+        const now = Date.now();
+        if (this._partnerKey && now - this._partnerKey.at < 60000) return this._partnerKey.value;
+        let value = false;
+        try {
+            const res = await fetch("/api/wfm/partner/status");
+            if (res.ok) value = !!(await res.json()).configured;
+        } catch { /* 無視 */ }
+        this._partnerKey = { value, at: now };
+        return value;
+    },
+
     // Generation
     async queuePrompt(workflow, extraData = null) {
         // Settings tab "VRAM Management": unload Ollama models to free VRAM (no-op when off, never throws)
@@ -203,7 +219,10 @@ export const comfyUI = {
             client_id: this.clientId,
         };
         if (extraData) body.extra_data = extraData;
-        const res = await fetch(`${this.baseUrl}/prompt`, {
+        // 接続先が同一オリジン（このComfyUI）のときだけ中継を使う（別サーバーへキーを送らない）
+        const sameOrigin = !this.baseUrl || this.baseUrl === location.origin;
+        const viaProxy = sameOrigin && await this.isPartnerKeyConfigured();
+        const res = await fetch(viaProxy ? "/api/wfm/partner/prompt" : `${this.baseUrl}/prompt`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -251,7 +270,10 @@ export const comfyUI = {
                         }
                     }
                     if (msg.type === "execution_error" && msg.data?.prompt_id === promptId) {
-                        finish(false, new Error(msg.data.exception_message || "Execution error"));
+                        let message = msg.data.exception_message || "Execution error";
+                        // パートナー(API)ノードの認証エラーには、設定方法を案内する
+                        if (/Unauthorized|login first/i.test(message)) message = `${message.trim()} ${t("partnerAuthHint")}`;
+                        finish(false, new Error(message));
                     }
                     if (msg.type === "execution_interrupted" && msg.data?.prompt_id === promptId) {
                         finish(false, new Error("Execution interrupted"));

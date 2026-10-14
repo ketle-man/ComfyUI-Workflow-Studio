@@ -492,6 +492,7 @@ function applyI18nToHtml() {
         "wfm-help-gen-29": "helpGen29",
         "wfm-help-gen-30": "helpGen30",
         "wfm-help-gen-31": "helpGen31",
+        "wfm-help-gen-32": "helpGen32",
         "wfm-help-feeder-title": "helpFeederTitle",
         "wfm-help-feeder-desc": "helpFeederDesc",
         "wfm-help-feeder-imgloop-title": "helpFeederImgloopTitle",

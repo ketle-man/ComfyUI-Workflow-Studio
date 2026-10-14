@@ -2,6 +2,34 @@
 
 ---
 
+## v0.8.6（2026-10-14）
+
+### GenerateUI: パートナーAPIノード（Nano Banana 等）の実行に対応
+
+v0.8.5 で見送った課題。パートナーAPIノードは `/prompt` の `extra_data` に Comfy の認証情報（`auth_token_comfy_org` = ブラウザのログイン、または `api_key_comfy_org` = Comfy APIキー）が必要。ComfyUI 本体の画面は自動で付けるが、WFS の `queuePrompt`（`fetch('/prompt')` 直叩き）は付けないため、GenerateUI からは `Unauthorized: Please login first to use this node.` で失敗していた。
+
+- **`py/routes/partner_routes.py`（新規）**: `GET /api/wfm/partner/status`（キー設定の有無のみ）、`POST /api/wfm/partner/prompt`（`/prompt` の中継）。`.env` の `COMFY_API_KEY`（prestartup_script.py が python-dotenv で読み込み）が設定されているとき、プロンプトに API ノード（`/object_info` の `api_node: true`、クラスごとにキャッシュ）が含まれる場合だけ `extra_data.api_key_comfy_org` を付与して自 ComfyUI の `/prompt` へ中継し、応答はそのまま返す。クライアントが既に認証情報を付けている場合は上書きしない。キーはブラウザへ出さない。`.env.example` に追記。
+- **`comfyui-client.js`**: `queuePrompt` は、キー設定あり（`isPartnerKeyConfigured()`、60秒キャッシュ）かつ接続先が同一オリジンのときだけ中継を使う（別サーバーへキーを送らない）。`execution_error` が `Unauthorized` / `login first` のときは、設定方法を案内する文言（`partnerAuthHint`、3言語）を付ける。
+- **`comfyui-workflow.js`**: `Gemini(Image|NanoBanana)*` ノードの `prompt` 入力を `prompt_nodes`（positive、`textKey: "prompt"`）に追加し、GenerateUI の Prompt タブで編集できるようにした。参考画像は従来どおり Image タブの `LoadImage` 経由。
+- ヘルプ（`helpGen32`、`index.html` / `i18n.js` 3言語 / `app.js` の `helpIdMap`）、README、サンプルワークフロー `workflows/ws_nano_banana_2_1_t2i.json` を追加。
+
+### UI形式→API形式の変換: DynamicCombo ノードの `widgets_values` ずれを修正
+
+Nano Banana 2.1 の UI 形式ワークフローを変換すると値がずれていた（`seed` が `"IMAGE"`、システムプロンプトが `response_modalities` に入る等）。原因は2つで、どちらも修正した。
+
+1. `_getDynamicComboSubNames` が、選択肢の子入力のうちソケット（`images` = Autogrow、`files` = `GEMINI_INPUT_FILES`）まで `widgets_values` の1枠として数えていた。ウィジェット型の子入力だけを数えるようにした（`_resolveWidgetType` を再利用）。
+2. `seed` 等の `control_after_generate` 付きウィジェットの直後に入るフロントエンド専用の `"randomize"` 等の1枠を、次のウィジェットが数値型のときしか読み飛ばせなかった（Nano Banana 2.1 は `seed` の次が COMBO の `response_modalities`）。object_info の `control_after_generate` フラグで判定する `_hasControlAfterGenerate` を追加。
+
+- 検証: ComfyUI 本体のフロントエンドで作ったワークフローの `graphToPrompt()` 出力と、変換結果が完全に一致。実機の保存済み UI 形式ワークフロー301件を修正前後で比較し、300件は変換結果が同一、変化は今回の Nano Banana サンプルのみ。
+
+### Gallery: `cc_nanobanana` フォルダの画像でもメタデータがあれば Prompt タブを表示
+
+Comic Creator v1.55.0 で、半自動マンガがネイティブノード経由で生成した画像が `cc_nanobanana` に保存され、PNG に `prompt` / `workflow` が埋め込まれるようになるため。`gallery-tab.js`: 埋め込みワークフローがある画像は `isNanobananaFolderImage` による Prompt タブの非表示を解除する（埋め込みの無い Gemini API 直叩きの画像だけ従来どおり非表示）。
+
+**実機確認（ComfyUI_5 / ポート8189、v0.40.0）**
+- `.env` に `COMFY_API_KEY` を設定し、GenerateUI でサンプル（Nano Banana 2.1）を読み込み、Prompt タブで編集して Apply → Generate を実クリック: リクエストは `/api/wfm/partner/prompt` 経由、16.4秒で成功、編集どおりの絵（青いティーポット）が `output/nano_banana_00001_.png` に出力された。
+- キー未設定時の案内文（`partnerAuthHint`）が表示用文言として解決されること、ヘルプ（`helpGen32`）が表示されることを確認。
+
 ## v0.8.5（2026-10-14）
 
 ### Metadata / I タブ: Gemini 系ノード（Nano Banana）の画像を読めるように
