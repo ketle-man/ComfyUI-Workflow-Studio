@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.8.6-green)
+![Version](https://img.shields.io/badge/version-0.8.7-green)
 
 ## Screenshots
 
@@ -54,6 +54,10 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 |              Lab Tab              |               Lab Index Image               |
 | :--------------------------------: | :------------------------------------------: |
 | ![Lab Tab](docs/15_labtab.png) | ![Lab Index Image](docs/16_lab_index.png) |
+
+|        Gallery Tab - Semantic Search ("sunset city street")        |
+| :-----------------------------------------------------------------: |
+| ![Gallery Semantic Search](docs/20_gallery_semantic_search.png) |
 
 ---
 

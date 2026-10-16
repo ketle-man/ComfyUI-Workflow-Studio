@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.8.7（2026-10-16）** — Qwen Image 2.1 Turbo（ComfyUI公式テンプレート T2I / I2I）対応
 - **v0.8.6（2026-10-14）** — GenerateUI: パートナーAPIノード（Nano Banana 等）の実行に対応
 - **v0.8.5（2026-10-14）** — Metadata / I タブ: Gemini 系ノード（Nano Banana）の画像を読めるように
 - **v0.8.4（2026-10-14）** — ComfyUI v0.40.0 対応: ネイティブ LoRA スタックノード（`LoadLoraModel` / `LoadLoraTextEncoder`）

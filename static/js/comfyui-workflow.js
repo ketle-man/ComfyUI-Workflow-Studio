@@ -458,6 +458,9 @@ function _flattenSubgraphs(workflow, objectInfo) {
         // from ports that truly carry a link end-to-end (e.g. width/height wired to a
         // ResolutionSelector node).
         const redirectedTargets = new Set();
+        // Extra links for the 2nd+ fan-out targets of a port that has a real outer link
+        // (collected here and appended after the loop so wf.links isn't mutated mid-iteration).
+        const fanOutLinks = [];
         for (const link of wf.links) {
             if (link[3] === node.id) {
                 const dstSlot = link[4];
@@ -475,6 +478,13 @@ function _flattenSubgraphs(workflow, objectInfo) {
                     link[3] = target.targetNodeId;
                     link[4] = target.targetSlot;
                     redirectedTargets.add(`${target.targetNodeId}:${target.targetSlot}`);
+                    // Same real outer link feeding further internal targets (e.g. Qwen Image 2.1
+                    // Edit: images.image_1 -> TextEncodeQwenImage21 AND the prompt-enhancer's
+                    // BatchImagesNode) — duplicate it for each remaining target.
+                    for (const extra of (inputPortTargets[portIdx] || []).slice(1)) {
+                        fanOutLinks.push([0, link[1], link[2], extra.targetNodeId, extra.targetSlot, link[5]]);
+                        redirectedTargets.add(`${extra.targetNodeId}:${extra.targetSlot}`);
+                    }
                 }
             }
             if (link[1] === node.id) {
@@ -485,6 +495,11 @@ function _flattenSubgraphs(workflow, objectInfo) {
                     link[2] = source.sourceSlot;
                 }
             }
+        }
+
+        for (const l of fanOutLinks) {
+            l[0] = ++maxLinkId;
+            wf.links.push(l);
         }
 
         // === Add internal nodes (remapped IDs) ===
@@ -846,6 +861,14 @@ export const comfyWorkflow = {
                             const spec = allInputDefs[name];
                             if (spec) {
                                 const choices = Array.isArray(spec[0]) ? spec[0] : null;
+                                // Template saved the bare file name while this install lists it under a
+                                // sub-folder (or the reverse, or with the other path separator): prefer the
+                                // choice whose file name matches over an unrelated choices[0].
+                                if (choices && choices.length > 0 && typeof val === "string" && !choices.includes(val)) {
+                                    const base = (x) => String(x).split(/[\\/]/).pop();
+                                    const sameFile = choices.filter((c) => typeof c === "string" && base(c) === base(val));
+                                    if (sameFile.length === 1) val = sameFile[0];
+                                }
                                 if (!opts.readOnly && choices && choices.length > 0 && !choices.includes(val)) {
                                     if (name === "ckpt_name") {
                                         _lastCheckpointSubstitutions.push({
@@ -906,6 +929,7 @@ export const comfyWorkflow = {
                 _meta: { title: node.title || node.type },
             };
         }
+        _unifyPromptEnhancerText(api);
         return api;
     },
 
@@ -1136,6 +1160,13 @@ export const comfyWorkflow = {
                     if (isPos && Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
                     if (isNeg && Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
                 }
+                // ReferenceMultiLatent (Flux.3 Klein edit) — encodes reference images into the
+                // conditioning and outputs positive/negative/empty_latent: separate positive/negative
+                // inputs feeding separate outputs, so each role routes only to its own input.
+                if (ct === "ReferenceMultiLatent") {
+                    if (isPos && Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
+                    if (isNeg && Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
+                }
                 // LTXVConditioning (LTX-2.5) — same shape as InstructPixToPixConditioning:
                 // separate positive/negative inputs feeding separate outputs consumed by
                 // LTXVDualCFGGuider, so each role must route only to its own input.
@@ -1168,6 +1199,13 @@ export const comfyWorkflow = {
                         if (isNeg) samplerNegativeRef[tv[0]] = true;
                     }
                 }
+                // TextEncodeQwenImage21 — fixed roles (the node feeds both guider inputs): a linked
+                // "prompt" (prompt-enhancer switch chain, Qwen Image 2.1 Turbo) is the positive text,
+                // a linked "negative_prompt" the negative.
+                if (ct === "TextEncodeQwenImage21") {
+                    if (Array.isArray(inputs.prompt)) samplerPositiveRef[inputs.prompt[0]] = true;
+                    if (Array.isArray(inputs.negative_prompt)) samplerNegativeRef[inputs.negative_prompt[0]] = true;
+                }
                 // PreviewAny — generic value tap/relay used mid-chain in prompt-enhancement wiring
                 // (e.g. Krea-2's "Refine Prompt?" switch output tap); pass role through its
                 // "source" input unchanged.
@@ -1188,6 +1226,19 @@ export const comfyWorkflow = {
                             if (isNeg) samplerNegativeRef[tv[0]] = true;
                         }
                     }
+                }
+            }
+        }
+
+        // ReferenceMultiLatent outputs its own empty latent sized from the reference image, so a
+        // template's leftover EmptyFlux2LatentImage that nothing consumes does nothing — don't offer
+        // its width/height in Settings.
+        const hasRefMultiLatent = Object.values(workflow).some((n) => n?.class_type === "ReferenceMultiLatent");
+        const referencedIds = new Set();
+        if (hasRefMultiLatent) {
+            for (const n of Object.values(workflow)) {
+                for (const v of Object.values(n?.inputs || {})) {
+                    if (Array.isArray(v) && v.length === 2) referencedIds.add(String(v[0]));
                 }
             }
         }
@@ -1462,6 +1513,16 @@ export const comfyWorkflow = {
                 }
             }
 
+            // ComfySwitchNode holding the raw prompt as an inline literal (on_false) — the
+            // prompt-enhancer toggle of Qwen Image 2.1 Turbo, where the subgraph's prompt widget
+            // lands directly on the switch instead of a PrimitiveStringMultiline.
+            if (ct === "ComfySwitchNode" && typeof inputs.on_false === "string" && (isPos || isNeg)) {
+                result.prompt_nodes.push({
+                    id, type: ct, title, role: getRole(),
+                    text: inputs.on_false, textKey: "on_false",
+                });
+            }
+
             // PrimitiveStringMultiline / PrimitiveString — when feeding a prompt node
             if ((ct === "PrimitiveStringMultiline" || ct === "PrimitiveString") && (isPos || isNeg)) {
                 result.prompt_nodes.push({
@@ -1503,12 +1564,14 @@ export const comfyWorkflow = {
             // has the same width/height/batch_size shape plus a "layers" count, left as-is.
             if (ct === "EmptyLatentImage" || ct === "EmptySD3LatentImage" || ct === "EmptyFlux2LatentImage"
                 || ct === "EmptyQwenImageLayeredLatentImage") {
-                result.latent_nodes.push({
-                    id, type: ct, title,
-                    width: typeof inputs.width === "number" ? inputs.width : undefined,
-                    height: typeof inputs.height === "number" ? inputs.height : undefined,
-                    batch_size: inputs.batch_size,
-                });
+                if (!hasRefMultiLatent || referencedIds.has(String(id))) {
+                    result.latent_nodes.push({
+                        id, type: ct, title,
+                        width: typeof inputs.width === "number" ? inputs.width : undefined,
+                        height: typeof inputs.height === "number" ? inputs.height : undefined,
+                        batch_size: inputs.batch_size,
+                    });
+                }
             }
 
             // Video latent nodes (Wan2.2's EmptyHunyuanLatentVideo, LTX-2.5's
@@ -1758,6 +1821,30 @@ export const comfyWorkflow = {
 };
 
 /** Check if a node is display-only (no connected inputs or outputs) */
+/**
+ * Prompt-enhancer toggle (Qwen Image 2.1 Turbo): the template's subgraph "prompt" port fans out to
+ * both a ComfySwitchNode.on_false (raw text) and TextGenerate.prompt (text fed to the enhancer,
+ * wired to on_true). After flattening these are two independent literals, so editing one in the UI
+ * would leave the other stale. Route both through one shared PrimitiveStringMultiline instead.
+ */
+function _unifyPromptEnhancerText(api) {
+    for (const [swId, sw] of Object.entries(api)) {
+        if (sw.class_type !== "ComfySwitchNode" || typeof sw.inputs?.on_false !== "string") continue;
+        const tgRef = sw.inputs.on_true;
+        if (!Array.isArray(tgRef)) continue;
+        const tg = api[String(tgRef[0])];
+        if (tg?.class_type !== "TextGenerate" || tg.inputs.prompt !== sw.inputs.on_false) continue;
+        const primId = `${swId}:wfs_prompt`;
+        api[primId] = {
+            class_type: "PrimitiveStringMultiline",
+            inputs: { value: sw.inputs.on_false },
+            _meta: { title: "Prompt" },
+        };
+        sw.inputs.on_false = [primId, 0];
+        tg.inputs.prompt = [primId, 0];
+    }
+}
+
 function _isDisplayOnlyNode(node) {
     const hasConnectedOutput = node.outputs?.some(o => o.links && o.links.length > 0);
     const hasConnectedInput = node.inputs?.some(i => i.link != null);

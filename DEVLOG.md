@@ -2,6 +2,27 @@
 
 ---
 
+## v0.8.7（2026-10-16）
+
+### Qwen Image 2.1 Turbo（ComfyUI公式テンプレート T2I / I2I）対応
+
+テンプレート（`SamplerCustomAdvanced`+`ManualSigmas`+`CFGGuider`、プロンプトエンハンサー=`TextGenerate`+`ComfySwitchNode`構成）をGenerateUIで使えるようにした。
+
+- **Positiveプロンプトが空になる問題**: プロンプトが`PreviewAny → ComfySwitchNode(on_false=文字列リテラル)`経由で`TextEncodeQwenImage21.prompt`に入るため検出できなかった。`comfyui-workflow.js`のPass 1で`TextEncodeQwenImage21`のリンクされた`prompt`/`negative_prompt`へロールを伝播し、Pass 2で文字列リテラルを持つ`ComfySwitchNode`を`textKey: "on_false"`のプロンプトノードとして登録。
+- **サブグラフ展開のファンアウト**: `_flattenSubgraphs()`は外部リンクをポートの最初の接続先にしか張らなかったため、`images.image_1`がTextEncodeとプロンプトエンハンサー用`BatchImagesNode`の2か所へ分岐するI2Iで、後者が画像未接続になっていた。2番目以降の接続先にも同じ外部リンクを複製するよう修正。
+- 実機(8189)でT2I/I2Iとも生成成功を確認。
+- プロンプトエンハンサー対応: `TextGenerate.prompt`とスイッチ`on_false`が展開後に別々のリテラルになる問題を、`_unifyPromptEnhancerText()`で共有の`PrimitiveStringMultiline`（`<switchId>:wfs_prompt`）へ集約して解消。GenerateUIの入力欄の編集がエンハンサー入力にも反映される。I2Iでエンハンサーをオンにして実機確認（入力プロンプトと参照画像の両方がエンハンサーに届く）。
+
+### Flux.3 Image Klein（ComfyUI公式テンプレート 4種）対応
+
+Klein（cfg 3.5/25step）とKlein SD（蒸留、cfg 1/16step）それぞれのT2I（プロンプトエンハンサー付きサブグラフ）とImage Edit（`ReferenceMultiLatent`）。`CLIPLoader`のtype=`flux3`は既存の変換でそのまま通る。
+
+- **`ReferenceMultiLatent`のロール伝播**: positive/negative入力が別々の出力に出るノードなので、`InstructPixToPixConditioning`と同様にロールを各入力へ個別に伝播。従来はEdit版のPositive/Negativeが両方とも"Positive Prompt"というタイトルだったため、Negative側もpositiveと誤判定されていた。
+- **未使用の空Latent**: `ReferenceMultiLatent`は参照画像サイズの`empty_latent`を自前で出力するため、テンプレートに残っている未接続の`EmptyFlux2LatentImage`はSettingsのLatent Imageに出さない（`ReferenceMultiLatent`を含むワークフローに限定）。
+- T2I側はQwen Image 2.1 Turboと同様、エンハンサーの`TextGenerate.prompt`が入力用`PrimitiveStringMultiline`に直結しているため、そのまま編集が両方に反映される。SD版T2I(SD_4)はテンプレート既定でエンハンサーがオン。
+- **COMBO値の誤置換**: テンプレートは`unet_name`をフォルダ接頭辞なし（`flux3_image_klein_int8_convrot.safetensors`）で保存しているが、実機の選択肢は`diffusion_models\flux3_...`。従来の「選択肢に無い値はchoices[0]へ無警告で差し替え」により、無関係なモデルに差し替わって実行されていた。選択肢に無い場合はまずファイル名（区切り文字`\`/`/`の後ろ）が一致する選択肢が1つだけあればそれを採用してから、従来のフォールバックに回すよう変更（`_convertUiToApiImpl`のCOMBO検証）。
+- 実機で4種とも生成成功（エンハンサーはオフ）。Edit版は参照画像の編集が効くことを画像で確認。
+
 ## v0.8.6（2026-10-14）
 
 ### GenerateUI: パートナーAPIノード（Nano Banana 等）の実行に対応
