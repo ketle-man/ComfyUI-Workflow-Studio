@@ -74,12 +74,51 @@ async function _loadObjectInfo() {
     return _objectInfoCache || {};
 }
 
+// Per-node-type object_info (GET /object_info/<type>, ~20 ms each). The full /object_info is
+// tens of MB and can take 10-40 s on installs with many custom nodes, so conversions and the
+// compatibility check only fetch the types the workflow actually uses. type -> info, or null when
+// ComfyUI doesn't know the type. Only successful responses are cached.
+const _objectInfoByType = new Map();
+
+async function _loadObjectInfoFor(types) {
+    if (_objectInfoCache) return _objectInfoCache;
+    const wanted = [...new Set(types)].filter((ty) => typeof ty === "string" && ty && !_objectInfoByType.has(ty));
+    let failed = false;
+    for (let i = 0; i < wanted.length; i += 16) {
+        await Promise.all(wanted.slice(i, i + 16).map(async (ty) => {
+            try {
+                const res = await fetch(`/object_info/${encodeURIComponent(ty)}`);
+                if (!res.ok) { if (res.status === 404) _objectInfoByType.set(ty, null); else failed = true; return; }
+                const data = await res.json();
+                _objectInfoByType.set(ty, data?.[ty] || null);
+            } catch { failed = true; }
+        }));
+    }
+    // Any transport failure: fall back to the full snapshot rather than report types as unknown
+    if (failed) return _loadObjectInfo();
+    const out = {};
+    for (const ty of types) { const info = _objectInfoByType.get(ty); if (info) out[ty] = info; }
+    return out;
+}
+
+// Node types a UI-format workflow uses, including nodes inside subgraph definitions
+function _collectNodeTypes(workflow) {
+    const sgIds = new Set((workflow?.definitions?.subgraphs || []).map((sg) => sg.id));
+    const types = new Set();
+    const add = (nodes) => { for (const n of nodes || []) if (n?.type && !sgIds.has(n.type)) types.add(n.type); };
+    add(workflow?.nodes);
+    for (const sg of workflow?.definitions?.subgraphs || []) add(sg.nodes);
+    return [...types];
+}
+
 /**
  * Get ordered widget (non-link) input names for a node class from object_info.
  * These correspond to widgets_values in UI-format nodes.
  */
 // Scalar widget types object_info can declare for a required/optional input.
-const _WIDGET_TYPE_SET = new Set(["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO", "COMFY_DYNAMICCOMBO_V3"]);
+// BOUNDING_BOXES: CreateBoundingBoxes' canvas widgets (editor_state / last_incoming) — array-valued
+// frontend widgets that occupy a widgets_values slot; sent to the API as {"__value__": [...]}.
+const _WIDGET_TYPE_SET = new Set(["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO", "COMFY_DYNAMICCOMBO_V3", "BOUNDING_BOXES"]);
 
 /**
  * Resolve a possibly-compound object_info type spec (e.g. LTXVEmptyLatentAudio's frame_rate:
@@ -100,11 +139,10 @@ function _resolveWidgetType(type, spec) {
     if (typeof type !== "string") return null;
     const explicit = spec?.[1]?.widgetType;
     if (typeof explicit === "string" && _WIDGET_TYPE_SET.has(explicit.toUpperCase())) return explicit.toUpperCase();
-    for (const part of type.split(",")) {
-        const upper = part.trim().toUpperCase();
-        if (_WIDGET_TYPE_SET.has(upper)) return upper;
-    }
-    return null;
+    // Only the first (default) segment decides: a union that merely *accepts* a scalar as one of its
+    // link types (CreateBoundingBoxes.bboxes: "BOUNDING_BOX,ARRAY,STRING") is still a link-only socket.
+    const first = type.split(",")[0].trim().toUpperCase();
+    return _WIDGET_TYPE_SET.has(first) ? first : null;
 }
 
 function _getWidgetInputNames(objectInfo, classType) {
@@ -551,9 +589,19 @@ function _flattenSubgraphs(workflow, objectInfo) {
             const port = sgDef.inputs[portIdx];
             const outerInp = outerWidgetInputs.find((inp) => inp.name === port.name);
             const outerWidgetIdx = outerInp ? outerWidgetInputs.indexOf(outerInp) : -1;
-            const hasOuterOverride = !!outerInp && outerInp.link == null && outerWidgetIdx !== -1
-                && outerWidgetIdx < (node.widgets_values || []).length;
-            const outerValue = hasOuterOverride ? node.widgets_values[outerWidgetIdx] : undefined;
+            // Newer frontends also save a name-keyed copy of the outer widget values
+            // (widgets_values_named) and may omit widget ports (seed/steps/cfg/...) from the outer
+            // node's inputs[] while widgets_values still holds every port, so the index-among-inputs
+            // lookup drifts (e.g. MOSS-Image: unet_name read the steps value). Prefer the named copy.
+            const named = node.widgets_values_named;
+            const hasNamed = !!named && typeof named === "object"
+                && Object.prototype.hasOwnProperty.call(named, port.name);
+            const hasOuterOverride = hasNamed
+                ? !(outerInp && outerInp.link != null)
+                : (!!outerInp && outerInp.link == null && outerWidgetIdx !== -1
+                    && outerWidgetIdx < (node.widgets_values || []).length);
+            const outerValue = !hasOuterOverride ? undefined
+                : (hasNamed ? named[port.name] : node.widgets_values[outerWidgetIdx]);
 
             // Value to apply to non-widget (wildcard) fan-out targets: the outer override if
             // present, otherwise whatever a sibling widget-type target ends up holding (its own
@@ -661,6 +709,11 @@ export const comfyWorkflow = {
         return _loadObjectInfo();
     },
 
+    // object_info limited to the given node types (fast; see _loadObjectInfoFor)
+    async getObjectInfoForTypes(types) {
+        return _loadObjectInfoFor(types);
+    },
+
     getLastBypassedNodes() {
         return _lastBypassedNodes;
     },
@@ -679,6 +732,7 @@ export const comfyWorkflow = {
     // at the top) would replace it with an unrelated pre-existing file instead.
     invalidateObjectInfoCache() {
         _objectInfoCache = null;
+        _objectInfoByType.clear();
     },
 
     // opts.readOnly: 表示用の読み取り変換。COMBO値の差し替えを行わず、Workflowタブの互換性
@@ -700,7 +754,7 @@ export const comfyWorkflow = {
         _lastMutedNodes = [];
         if (!workflow.nodes || !workflow.links) return {};
 
-        const objectInfo = await _loadObjectInfo();
+        const objectInfo = await _loadObjectInfoFor(_collectNodeTypes(workflow));
 
         // Flatten subgraphs before conversion (needs objectInfo to correctly map outer
         // subgraph-node widget values onto internal nodes' widgets_values indices)
@@ -890,6 +944,9 @@ export const comfyWorkflow = {
                                 }
                             }
                         }
+                        // List values are reserved for node links in the API format; the backend unwraps
+                        // {"__value__": [...]} for array-valued widgets.
+                        if (expectedType === "BOUNDING_BOXES" && Array.isArray(val)) val = { __value__: val };
                         inputs[name] = val;
                     }
                 } else {
@@ -1216,6 +1273,15 @@ export const comfyWorkflow = {
                         if (isNeg) samplerNegativeRef[sv[0]] = true;
                     }
                 }
+                // PrimitiveStringMultiline/PrimitiveString whose value is linked (MOSS-Image's
+                // layout-prompt workflows feed it from a PreviewAny relay) — pass the role upstream.
+                if (ct === "PrimitiveStringMultiline" || ct === "PrimitiveString") {
+                    const tv = inputs.value;
+                    if (Array.isArray(tv)) {
+                        if (isPos) samplerPositiveRef[tv[0]] = true;
+                        if (isNeg) samplerNegativeRef[tv[0]] = true;
+                    }
+                }
                 // StringConcatenate — appends e.g. a LoRA trigger word onto the prompt text
                 // (Krea-2); propagate role through both operands so the upstream literal is found.
                 if (ct === "StringConcatenate") {
@@ -1524,7 +1590,19 @@ export const comfyWorkflow = {
             }
 
             // PrimitiveStringMultiline / PrimitiveString — when feeding a prompt node
-            if ((ct === "PrimitiveStringMultiline" || ct === "PrimitiveString") && (isPos || isNeg)) {
+            // MOSSImageLayoutPrompt (MOSS-Image bounding-box layout) — builds the final prompt from its own
+            // "prompt" widget (whole-image description) plus the CreateBoundingBoxes elements.
+            if (ct === "MOSSImageLayoutPrompt" && typeof inputs.prompt === "string" && (isPos || isNeg)) {
+                result.prompt_nodes.push({
+                    id, type: ct, title, role: getRole(),
+                    text: inputs.prompt, textKey: "prompt",
+                });
+            }
+
+            // PrimitiveStringMultiline / PrimitiveString — when feeding a prompt node (a linked
+            // value has no literal to edit; its role is propagated upstream in Pass 1b instead)
+            if ((ct === "PrimitiveStringMultiline" || ct === "PrimitiveString") && (isPos || isNeg)
+                && !Array.isArray(inputs.value)) {
                 result.prompt_nodes.push({
                     id, type: ct, title, role: getRole(),
                     text: inputs.value || "",

@@ -1110,8 +1110,6 @@ function openDetailModal(wf) {
     getRawWorkflow(wf.filename)
         .then((raw) => setFormatBadge(document.getElementById("wfm-detail-format-badge"), comfyWorkflow.detectFormat(raw, wf.filename)))
         .catch(() => {});
-    // Warm the /object_info cache (large; ~10 s on first fetch) so the check button answers quickly
-    comfyWorkflow.getObjectInfo();
     document.getElementById("wfm-detail-compat-check")?.addEventListener("click", async () => {
         const btn = document.getElementById("wfm-detail-compat-check");
         const el = document.getElementById("wfm-detail-compat-result");

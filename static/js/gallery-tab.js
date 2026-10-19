@@ -1093,7 +1093,16 @@ async function loadImageDetail(img) {
         // Promptタブは prompt_workflow (API形式優先) を使う。トップレベルとサブグラフに
         // 独立した複数系統を持つワークフローでは workflow (UI形式) からの抽出だと
         // トップレベル系統しか拾えないことがあるため（Metadataタブと同じ優先順位に揃える）。
-        renderPromptTab(wfRes.prompt_workflow ?? state.embeddedWorkflow, metaRes.embedded);
+        let promptWf = wfRes.prompt_workflow ?? state.embeddedWorkflow;
+        // サブグラフを持つUI形式(API形式のpromptチャンクが無い画像)は、外側ノードの実際の値を
+        // 反映するため変換してから抽出する(Metadataタブと同じ扱い)。失敗時は元の形式のまま。
+        if (Array.isArray(promptWf?.nodes) && promptWf.definitions?.subgraphs?.length > 0) {
+            try {
+                const converted = await comfyWorkflow.convertUiToApi(promptWf, { readOnly: true });
+                if (converted && Object.keys(converted).length > 0) promptWf = converted;
+            } catch { /* keep UI format */ }
+        }
+        renderPromptTab(promptWf, metaRes.embedded);
     } catch (e) {
         renderWorkflowJson(null);
         _updateCopyCanvasBtn();

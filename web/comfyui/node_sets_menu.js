@@ -2962,10 +2962,16 @@ function _wfmFlattenSubgraphs(workflow, objectInfo) {
         }
 
         const outerWidgetInputs = (node.inputs || []).filter((inp) => inp.widget);
+        // widgets_values_named (name-keyed copy saved by newer frontends, e.g. MOSS-Image): outer inputs[]
+        // may omit widget ports (seed/steps/...) while widgets_values holds every port, so the index
+        // lookup below would drift — see static/js/comfyui-workflow.js _flattenSubgraphs.
+        const namedOuter = node.widgets_values_named;
+        const hasNamedOuter = !!namedOuter && typeof namedOuter === "object";
         outerWidgetInputs.forEach((inp, widgetIdx) => {
             if (inp.link != null) return;
-            if (widgetIdx >= (node.widgets_values || []).length) return;
-            const outerValue = node.widgets_values[widgetIdx];
+            const useNamed = hasNamedOuter && Object.prototype.hasOwnProperty.call(namedOuter, inp.name);
+            if (!useNamed && widgetIdx >= (node.widgets_values || []).length) return;
+            const outerValue = useNamed ? namedOuter[inp.name] : node.widgets_values[widgetIdx];
 
             const portIdx = (sgDef.inputs || []).findIndex((p) => p.name === inp.name);
             if (portIdx === -1) return;

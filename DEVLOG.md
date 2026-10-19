@@ -2,6 +2,26 @@
 
 ---
 
+## v0.8.8（2026-10-19）
+
+### MOSS-Image 対応（GenerateUI / Gallery / Metadata / Iタブ）
+
+ユーザー提供の5本（Base/SFT × T2I/バウンディングボックス、manga 8stepのLoRA構成）で、`convertUiToApi`→`analyzeWorkflow`を実測して直した。
+
+- **サブグラフの外側ウィジェット値のズレ**: 新フロントエンドは外側ノードに`widgets_values_named`（名前キーの値）も保存し、`inputs[]`にはseed/steps/cfg/sampler/schedulerが載らない一方`widgets_values`は全ポートを持つ。従来の「`inputs[]`内の位置」参照だとunet_nameに25、vae_nameに`er_sde`が入っていた。`_flattenSubgraphs()`で`widgets_values_named`を優先（無い場合は従来どおり）。Iタブ用の複製（`node_sets_menu.js`の`_wfmFlattenSubgraphs`）にも同じ修正。
+- **`CreateBoundingBoxes`の変換**: `bboxes`の型`BOUNDING_BOX,ARRAY,STRING`が共用体の途中にSTRINGを含むため入力欄と誤判定され、本来の入力欄`editor_state`/`last_incoming`（型`BOUNDING_BOXES`）が読まれていなかった。共用体型は先頭セグメントだけで判定し、`BOUNDING_BOXES`を入力欄型に追加。配列値はAPIでリンク扱いされるため`{"__value__": [...]}`で送る（バックエンドが展開）。Flux.3 Klein 4種にも同ノードがあり、変換前は検証エラーになる出力だったものが直った。
+- **プロンプト検出**: `MOSSImageLayoutPrompt`の`prompt`をpositiveとして検出（`textKey: prompt`）。リンクされた`PrimitiveStringMultiline`/`PrimitiveString`はロールを上流へ伝播し、リンクのままの値は編集対象にしない（従来は配列がtextに入っていた）。
+- **Gallery Promptタブ**: APIの`prompt`チャンクが無くサブグラフ入りのUI形式のみの画像は、変換してから抽出（Metadataタブと同じ扱い）。通常の生成画像は従来どおりAPI形式を使う。
+- 実機(8189)でbboxes版とmanga版の生成成功を確認。ワークフロー357件で変換結果を新旧比較し、差分はFlux.3 Klein 4件のCreateBoundingBoxesのみ。
+
+### 変換チェック（GenerateUI Check）の初回待ち時間を短縮
+
+初回に`/object_info`全件（この環境で約26MB・約43秒、毎回）を取得していたのが原因。ワークフロー詳細を開いた時点で全件の先読みも走らせており、サーバーを長時間塞いでいた。
+
+- `_loadObjectInfoFor(types)`: 使用ノード型（サブグラフ内も含む）だけを`/object_info/<型>`で取得（1型約20ms、16並列、型ごとにキャッシュ）。転送失敗時や、既知の型が1つも無いときは全件にフォールバック。全件キャッシュがあればそれを優先。`invalidateObjectInfoCache()`は型別キャッシュも消す。
+- 変換（`_convertUiToApiImpl`）と互換性チェックで使用。GenerateUIの初回変換も速くなる。先読みは削除。
+- MOSSで初回変換 約43秒→約250ms、2回目以降は約2ms。362ワークフローで全件版との変換結果が完全一致。
+
 ## v0.8.7（2026-10-16）
 
 ### Qwen Image 2.1 Turbo（ComfyUI公式テンプレート T2I / I2I）対応

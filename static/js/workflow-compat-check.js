@@ -65,7 +65,11 @@ async function _checkConversion(raw, filename) {
     } catch (e) {
         return { status: "error", lines: [t("compatConvertFailed", e.message || String(e))] };
     }
-    const objectInfo = await comfyWorkflow.getObjectInfo();
+    // Only the node types in use are needed — the full /object_info can take tens of seconds
+    const usedTypes = [...new Set(Object.values(api || {}).map((n) => n?.class_type).filter(Boolean))];
+    let objectInfo = await comfyWorkflow.getObjectInfoForTypes(usedTypes);
+    // Nothing known at all: either every type is missing or the server is unreachable — only the full snapshot can tell
+    if (Object.keys(objectInfo).length === 0 && usedTypes.length > 0) objectInfo = await comfyWorkflow.getObjectInfo();
     if (format === "api") subs = _comboMismatches(api, objectInfo);
 
     const ids = Object.keys(api || {});
