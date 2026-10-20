@@ -821,6 +821,21 @@
     border-top: 1px solid var(--wfm-border);
 }
 
+/* クロップ関連ボタンを左寄せにし、｜区切りの右に音声変換を置く */
+.wfm-video-edit-crop-head {
+    justify-content: flex-start;
+}
+
+.wfm-video-edit-crop-head > span:first-child {
+    margin-right: 4px;
+}
+
+.wfm-video-edit-head-sep {
+    color: var(--wfm-text-secondary);
+    font-weight: 400;
+    user-select: none;
+}
+
 .wfm-video-edit-crop-row {
     display: flex;
     align-items: end;
@@ -992,10 +1007,33 @@
 }
 
 .wfm-video-source-panel {
-    width: 220px;
+    width: 320px;
     flex: none;
     display: flex;
     flex-direction: column;
+}
+
+/* ファイル名は1行(はみ出しは省略)、操作ボタン3つは折り返さず横一列 */
+.wfm-video-source-status-line {
+    margin-top: 6px;
+    min-height: 1.4em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wfm-video-source-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.wfm-video-source-actions .wfm-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 6px;
+    padding-right: 6px;
+    white-space: nowrap;
 }
 
 .wfm-video-pane-header {

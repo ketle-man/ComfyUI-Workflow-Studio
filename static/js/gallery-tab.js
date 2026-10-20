@@ -1864,13 +1864,38 @@ function openConvertModal(paths) {
         showToast(t("convertNoTarget"), "info");
         return;
     }
-    const hasVideo = targets.some(isVideoFile);
+    openAudioConvertDialog({
+        count: targets.length,
+        hasVideo: targets.some(isVideoFile),
+        convertOne: async (opts, i) => {
+            const res = await fetch(API.convert, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: targets[i].path, ...opts }),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            if (data.deleted) state.selectedImages.delete(targets[i].path);
+            return data;
+        },
+        onDone: async () => {
+            await loadImages();
+            updateBulkBar();
+        },
+    });
+}
 
+/**
+ * 音声変換ダイアログ（Gallery・Video Edit共通）。
+ * convertOne(opts, i): i件目を変換し、失敗時はthrowする。結果は {tags_skipped?} を含むオブジェクト。
+ * allowDelete / allowCopyMeta=false の場合は該当チェックを出さず、optsにもfalseで渡す。
+ */
+export function openAudioConvertDialog({ count, hasVideo, convertOne, onDone, allowDelete = true, allowCopyMeta = true }) {
     const overlay = document.createElement("div");
     overlay.className = "wfm-gallery-lightbox";
     overlay.innerHTML = `
         <div class="wfm-gallery-move-modal wfm-gallery-convert-modal">
-            <div class="wfm-gallery-move-modal-title">${escapeHtml(t("convertTitle", targets.length))}</div>
+            <div class="wfm-gallery-move-modal-title">${escapeHtml(t("convertTitle", count))}</div>
             ${hasVideo ? `<div class="wfm-gallery-convert-note">${escapeHtml(t("convertVideoNote"))}</div>` : ""}
             <label class="wfm-gallery-convert-row">${escapeHtml(t("convertFormat"))}
                 <select id="wfm-convert-format" class="wfm-select">
@@ -1895,8 +1920,8 @@ function openConvertModal(paths) {
                 </select>
             </label>
             <label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-inherit" checked> ${escapeHtml(t("convertInherit"))}</label>
-            <label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-copymeta" checked> ${escapeHtml(t("convertCopyMeta"))}</label>
-            <label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-delete"> ${escapeHtml(t("convertDeleteOriginal"))}</label>
+            ${allowCopyMeta ? `<label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-copymeta" checked> ${escapeHtml(t("convertCopyMeta"))}</label>` : ""}
+            ${allowDelete ? `<label class="wfm-gallery-convert-check"><input type="checkbox" id="wfm-convert-delete"> ${escapeHtml(t("convertDeleteOriginal"))}</label>` : ""}
             <div class="wfm-gallery-convert-status" id="wfm-convert-status"></div>
             <div class="wfm-gallery-move-modal-footer">
                 <button id="wfm-convert-run" class="wfm-btn wfm-btn-primary">${escapeHtml(t("convertRun"))}</button>
@@ -1925,8 +1950,8 @@ function openConvertModal(paths) {
     q("#wfm-convert-cancel").addEventListener("click", () => { if (!running) overlay.remove(); });
     overlay.addEventListener("click", (e) => { if (e.target === overlay && !running) overlay.remove(); });
     q("#wfm-convert-run").addEventListener("click", async () => {
-        const deleteOriginal = q("#wfm-convert-delete").checked;
-        if (deleteOriginal && !window.confirm(t("convertConfirmDelete", targets.length))) return;
+        const deleteOriginal = !!q("#wfm-convert-delete")?.checked;
+        if (deleteOriginal && !window.confirm(t("convertConfirmDelete", count))) return;
         running = true;
         q("#wfm-convert-run").disabled = true;
         q("#wfm-convert-cancel").disabled = true;
@@ -1936,33 +1961,25 @@ function openConvertModal(paths) {
             sample_rate: Number(q("#wfm-convert-rate").value),
             channels: q("#wfm-convert-channels").value,
             inherit_metadata: q("#wfm-convert-inherit").checked,
-            copy_gallery_meta: q("#wfm-convert-copymeta").checked,
+            copy_gallery_meta: !!q("#wfm-convert-copymeta")?.checked,
             delete_original: deleteOriginal,
         };
         let ok = 0, fail = 0, tagsSkipped = false;
-        for (let i = 0; i < targets.length; i++) {
-            q("#wfm-convert-status").textContent = t("convertProgress", i + 1, targets.length);
+        for (let i = 0; i < count; i++) {
+            q("#wfm-convert-status").textContent = t("convertProgress", i + 1, count);
             try {
-                const res = await fetch(API.convert, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ path: targets[i].path, ...opts }),
-                });
-                const data = await res.json();
-                if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                const data = await convertOne(opts, i);
                 ok++;
-                if (data.tags_skipped) tagsSkipped = true;
-                if (data.deleted) state.selectedImages.delete(targets[i].path);
+                if (data?.tags_skipped) tagsSkipped = true;
             } catch (e) {
                 fail++;
-                console.warn("[Gallery] convert failed:", targets[i].filename, e);
+                console.warn("[Gallery] convert failed:", i, e);
             }
         }
         overlay.remove();
         showToast(t("convertDone", ok, fail), fail ? "error" : "success");
         if (tagsSkipped && opts.inherit_metadata) showToast(t("convertTagsSkipped"), "info");
-        await loadImages();
-        updateBulkBar();
+        await onDone?.({ ok, fail });
     });
 
     document.body.appendChild(overlay);

@@ -2,6 +2,16 @@
 
 ---
 
+## v0.8.9（2026-10-20）
+
+### Video: アセット登録ボタン / Editの音声変換 / ソースパネルのレイアウト
+
+- **アセット登録**: 動画ソースパネルに「アセット登録」ボタンを追加（`video-tab.js`）。ローカルファイルは`comfyUI.uploadImage`でinputへ上げ、バックエンド`POST /api/wfm/video/asset/register`（`VideoService.register_asset`）でoutput/videoへコピーしてから`__Video Assets__`グループへ追加する。Galleryはoutputフォルダしか一覧しないためコピーが必要。すでにoutput配下のソース（Asset選択・生成結果）はコピーせずタグ付けのみ。同名はアンダースコア+連番で回避。登録後はAssetタブを更新。
+- **Editの音声変換**: クロップ行のボタンをクロップ関連（編集/キャンセル/リセット）左寄せ→`|`区切り→「音声変換...」の並びに変更。Galleryの変換モーダルを`openAudioConvertDialog()`として共通化・export（`convertOne`コールバック方式。`allowDelete`/`allowCopyMeta`で項目の出し分け）。Gallery側の挙動は不変。Editのクリップはinputフォルダにあるため`POST /api/wfm/video/edit/convert-audio`（`VideoService.convert_audio_to_output`、PyAVを`asyncio.to_thread`で実行）がoutput/videoへ保存する。音声付き動画クリップのみ対象、読み込み中のクリップはトーストで案内。
+- **ソースパネルのレイアウト**: パネル幅を220→320pxに拡大（左右プレビューはflex:1で自動的に縮む）、ファイル名を専用の1行（省略表示）にし、ボタン3つを折り返さず横一列に。
+- ヘルプ（helpVideo5/helpVideo11、日英中）を更新。
+- 教訓: i18n.jsの英語文字列内に`"`を入れると全体が構文エラーになる（`node --check`は.mjsコピーで確認）。
+
 ## v0.8.8（2026-10-19）
 
 ### MOSS-Image 対応（GenerateUI / Gallery / Metadata / Iタブ）

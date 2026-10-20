@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.8.8-green)
+![Version](https://img.shields.io/badge/version-0.8.9-green)
 
 ## Features (tab -> feature names)
 
@@ -77,7 +77,7 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 Layer-based image editor, Loading images, Open PSD button, Close button, New button, Tools, Layer panel, Duplicate layer (⧉), Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
 
 ### Video Tab (v0.5.0 – v0.7.4)
-Dedicated video generation UI, independent of GenerateUI, Plan subtab, Base settings row, Edit subtab, Edit: Multi-track, Edit: Audio / BGM, Edit: Text overlays, Edit: Crop, Edit: Undo / Redo, Edit project persistence, Asset subtab, Project subtab, Two center previews, First Frame / Last Frame are both optional, Semantic node lookup, not hardcoded IDs, Field highlight color, Load in Video, Frame tab, GIF tab, Playback volume
+Dedicated video generation UI, independent of GenerateUI, Plan subtab, Base settings row, Edit subtab, Edit: Multi-track, Edit: Audio / BGM, Edit: Text overlays, Edit: Crop, Edit: Convert audio, Edit: Undo / Redo, Edit project persistence, Asset subtab, Project subtab, Two center previews, Register as Asset, First Frame / Last Frame are both optional, Semantic node lookup, not hardcoded IDs, Field highlight color, Load in Video, Frame tab, GIF tab, Playback volume
 
 ### AI TOOL Tab (v0.3.14)
 4-pane layout, Translation pane, Chat pane, Chat pane — image generation via Tool Calling, Chat pane — generate_image extra parameters, TOOLS pane (VLM), TOOLS pane — shared Chat attachment, TOOLS pane (Wildcards), Chat pane — image-to-image (I2I), Chat pane — SVG generation, no ComfyUI workflow involved, Chat pane — Skills, Settings pane, Unsloth backend, Decision API client, Settings pane — Chat Image Generation, Settings pane — Chat I2I Generation, Settings pane — Generation, Model unload, Settings shared, Backend support, URL security, Lemonade's other endpoints (not integrated)

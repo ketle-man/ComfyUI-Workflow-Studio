@@ -83,7 +83,8 @@ import {
     setSourcePreview, setResultPreview, getActivePreviewVideoElement, getResultPreviewVideoElement,
     getPreviewPaneElements,
 } from "./video-preview.js";
-import { VTEMP_GROUP, ensureVideoGroup } from "./gallery-tab.js";
+import { VTEMP_GROUP, ensureVideoGroup, openAudioConvertDialog } from "./gallery-tab.js";
+import { escapeHtml } from "./util.js";
 
 const _s = {
     clips: [], // { id, name, file, kind:"video"|"image", serverRef:{filename,subfolder,type}|null, duration, width, height, fps, hasAudio, trimStart, trimEnd, crop:{x,y,w,h}(0..1)|null, probing, error }
@@ -1057,13 +1058,13 @@ function _renderCropSection(clip) {
         .map((k) => `<option value="${k}">${k === "free" ? t("videoEditCropFree") : k}</option>`)
         .join("");
     host.innerHTML = `
-        <div class="wfm-video-edit-section-head">
+        <div class="wfm-video-edit-section-head wfm-video-edit-crop-head">
             <span>${t("videoEditCrop")}</span>
-            <span style="display:flex;gap:6px;">
-                <button type="button" class="wfm-btn wfm-btn-xs" id="wfm-video-edit-crop-toggle"></button>
-                <button type="button" class="wfm-btn wfm-btn-xs" id="wfm-video-edit-crop-cancel" style="display:${_cropEditing ? "" : "none"};">${t("videoEditCropCancel")}</button>
-                <button type="button" class="wfm-btn wfm-btn-xs" id="wfm-video-edit-crop-reset">${t("videoEditCropReset")}</button>
-            </span>
+            <button type="button" class="wfm-btn wfm-btn-xs" id="wfm-video-edit-crop-toggle"></button>
+            <button type="button" class="wfm-btn wfm-btn-xs" id="wfm-video-edit-crop-cancel" style="display:${_cropEditing ? "" : "none"};">${t("videoEditCropCancel")}</button>
+            <button type="button" class="wfm-btn wfm-btn-xs" id="wfm-video-edit-crop-reset">${t("videoEditCropReset")}</button>
+            <span class="wfm-video-edit-head-sep" aria-hidden="true">|</span>
+            <button type="button" class="wfm-btn wfm-btn-xs" id="wfm-video-edit-audio-convert" title="${escapeHtml(t("videoEditAudioConvertTitle"))}">${t("videoEditAudioConvert")}</button>
         </div>
         <div class="wfm-video-edit-crop-row">
             <label>${t("videoEditCropAspect")}<select class="wfm-input" id="wfm-video-edit-crop-aspect">${aspectOptions}</select></label>
@@ -1089,12 +1090,38 @@ function _renderCropSection(clip) {
         clip.crop = _cropEditing ? { x: 0, y: 0, w: 1, h: 1 } : null;
         _commitCrop(clip);
     });
+    document.getElementById("wfm-video-edit-audio-convert").addEventListener("click", () => _openClipAudioConvert(clip));
     aspect.addEventListener("change", () => {
         _cropAspect = aspect.value;
         if (clip.crop) _applyCropAspect(clip);
         _commitCrop(clip);
     });
     _updateCropInfo(clip);
+}
+
+// Audio conversion for the selected clip: reuses Gallery's convert dialog, but the
+// clip lives in ComfyUI's input folder, so the backend writes the result into
+// output/video (visible in Gallery) instead of next to the source.
+function _openClipAudioConvert(clip) {
+    if (clip.probing || !clip.serverRef) { showToast(t("videoEditClipNotReady"), "info"); return; }
+    if (clip.kind !== "video" || !clip.hasAudio) { showToast(t("convertNoTarget"), "info"); return; }
+    openAudioConvertDialog({
+        count: 1,
+        hasVideo: true,
+        allowDelete: false,
+        allowCopyMeta: false,
+        convertOne: async (opts) => {
+            const res = await fetch("/api/wfm/video/edit/convert-audio", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...clip.serverRef, ...opts }),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            showToast(t("videoEditAudioConvertSaved", data.filename), "success");
+            return data;
+        },
+    });
 }
 
 // Leaves crop-edit mode. keep=true ("Done", or leaving the Edit subtab /

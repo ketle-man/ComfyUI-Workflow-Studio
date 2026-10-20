@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.8.9（2026-10-20）** — Video: アセット登録ボタン / Editの音声変換 / ソースパネルのレイアウト
 - **v0.8.8（2026-10-19）** — MOSS-Image 対応（GenerateUI / Gallery / Metadata / Iタブ）
 - **v0.8.7（2026-10-16）** — Qwen Image 2.1 Turbo（ComfyUI公式テンプレート T2I / I2I）対応
 - **v0.8.6（2026-10-14）** — GenerateUI: パートナーAPIノード（Nano Banana 等）の実行に対応

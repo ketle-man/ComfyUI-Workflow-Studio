@@ -21,6 +21,8 @@ _edit_project_service = VideoEditProjectService(VIDEO_EDIT_PROJECT_DIR)
 def setup_routes(app: web.Application):
     app.router.add_post("/api/wfm/video/frame/save-to-output", handle_save_frame)
     app.router.add_post("/api/wfm/video/to-gif", handle_to_gif)
+    app.router.add_post("/api/wfm/video/asset/register", handle_register_asset)
+    app.router.add_post("/api/wfm/video/edit/convert-audio", handle_convert_audio)
     app.router.add_get("/api/wfm/video/edit/probe", handle_probe_video)
     app.router.add_post("/api/wfm/video/edit/overlay-text", handle_overlay_text)
 
@@ -47,6 +49,45 @@ async def handle_save_frame(request: web.Request) -> web.Response:
     except Exception as e:
         logger.error("Error saving video frame to output: %s", e)
         return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_register_asset(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+        filename = body.get("filename", "")
+        if not filename:
+            return web.json_response({"error": "filename required"}, status=400)
+        result = await asyncio.to_thread(
+            _service.register_asset, filename, body.get("subfolder", ""), body.get("type", "input")
+        )
+        return web.json_response({"status": "ok", **result})
+    except FileNotFoundError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except Exception as e:
+        logger.error("Error registering video asset: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_convert_audio(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+        filename = body.get("filename", "")
+        if not filename:
+            return web.json_response({"error": "filename required"}, status=400)
+        # PyAVの変換はCPU負荷が高いのでスレッドで実行する(イベントループを止めない)
+        result = await asyncio.to_thread(
+            _service.convert_audio_to_output, filename, body.get("subfolder", ""), body.get("type", "input"), body
+        )
+        return web.json_response({"ok": True, **result})
+    except FileNotFoundError as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=404)
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    except Exception as e:
+        logger.error("Error converting clip audio: %s", e)
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
 async def handle_to_gif(request: web.Request) -> web.Response:

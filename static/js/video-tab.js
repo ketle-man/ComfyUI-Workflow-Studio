@@ -150,6 +150,7 @@ function _applyVideoI18n() {
     setText("wfm-video-edit-bgm-hint", "videoEditBgmHint");
     setText("wfm-video-edit-sound-btn", "videoEditSoundAdd");
     setText("wfm-video-source-add-to-edit", "videoSourceAddToEdit");
+    setText("wfm-video-source-register-asset", "videoSourceRegisterAsset");
     setText("wfm-video-source-label", "videoSourceLabel");
     setText("wfm-video-source-hint", "videoSourceHint");
     setText("wfm-video-source-drop-label", "videoSourceDropLabel");
@@ -208,6 +209,44 @@ function _wireVideoSourcePanel() {
             showToast(t("videoEditClipSent", file.name), "success");
         } catch (err) {
             showToast(t("errorWithMsg", err.message), "error");
+        }
+    });
+
+    // "Register as Asset" — puts whatever is loaded in the Source pane into Gallery's
+    // curated __Video Assets__ group so it shows up in the Asset subtab. Local files
+    // are uploaded to input first, then copied into output/video by the backend
+    // (Gallery only lists the output folder); sources already in output are tagged as-is.
+    document.getElementById("wfm-video-source-register-asset")?.addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        let ref = getActivePreviewSource();
+        if (!ref) { showToast(t("videoNoSourceLoaded"), "error"); return; }
+        btn.disabled = true;
+        try {
+            if (ref.kind === "local") {
+                const uploaded = await comfyUI.uploadImage(ref.file, ref.file.name);
+                ref = { kind: "input", filename: uploaded.name, subfolder: uploaded.subfolder || "", type: "input" };
+                updateActivePreviewSourceRef(ref);
+            }
+            const res = await fetch("/api/wfm/video/asset/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: ref.filename, subfolder: ref.subfolder || "", type: ref.type || "input" }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+            await ensureVideoGroup();
+            const addRes = await fetch(`/wfm/gallery/groups/${encodeURIComponent(VIDEO_GROUP)}/add`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: json.path }),
+            });
+            if (!addRes.ok) throw new Error(`HTTP ${addRes.status}`);
+            showToast(t("videoSourceAssetRegistered", json.filename), "success");
+            refreshVideoAssetTab();
+        } catch (err) {
+            showToast(t("errorWithMsg", err.message), "error");
+        } finally {
+            btn.disabled = false;
         }
     });
 

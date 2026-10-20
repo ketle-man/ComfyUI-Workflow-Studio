@@ -237,6 +237,68 @@ class VideoService:
         save_path.write_bytes(image_bytes)
         return {"filename": save_name, "subfolder": subfolder}
 
+    @staticmethod
+    def _unique_output_path(stem: str, ext: str) -> tuple[Path, str]:
+        """output/video/ 配下で未使用のパスを決める。戻り値は (絶対パス, subfolder)。"""
+        import folder_paths  # type: ignore
+
+        subfolder = "video"
+        out_dir = Path(folder_paths.get_output_directory()) / subfolder
+        out_dir.mkdir(parents=True, exist_ok=True)
+        dst = out_dir / f"{stem}{ext}"
+        counter = 1
+        while dst.exists():
+            dst = out_dir / f"{stem}_{counter}{ext}"
+            counter += 1
+        return dst, subfolder
+
+    def register_asset(self, filename: str, subfolder: str, type_: str) -> dict:
+        """Video Sourceの動画をGalleryに載せるため、outputフォルダ配下の実体にする。
+        既にoutput配下ならそのまま、input/tempならoutput/videoへコピーする。"""
+        import shutil
+
+        src = self._resolve_media_path(filename, subfolder, type_)
+        if type_ == "output":
+            return {"filename": src.name, "subfolder": subfolder or "", "path": str(src).replace("\\", "/")}
+        dst, out_sub = self._unique_output_path(src.stem, src.suffix)
+        shutil.copy2(src, dst)
+        return {"filename": dst.name, "subfolder": out_sub, "path": str(dst).replace("\\", "/")}
+
+    def convert_audio_to_output(self, filename: str, subfolder: str, type_: str, opts: dict) -> dict:
+        """動画/音声クリップの音声を指定形式へ変換し、output/videoへ保存する。"""
+        from .convert_service import OUTPUT_FORMATS, convert_audio, supports_tags
+
+        fmt = str(opts.get("format", ""))
+        if fmt not in OUTPUT_FORMATS:
+            raise ValueError(f"Unsupported format: {fmt}")
+
+        def _int(key: str) -> int:
+            try:
+                return max(0, int(opts.get(key) or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        src = self._resolve_media_path(filename, subfolder, type_)
+        inherit = bool(opts.get("inherit_metadata", True))
+        dst, out_sub = self._unique_output_path(src.stem, OUTPUT_FORMATS[fmt]["ext"])
+        try:
+            convert_audio(
+                src, dst, fmt,
+                bitrate_kbps=_int("bitrate"),
+                sample_rate=_int("sample_rate"),
+                channels=str(opts.get("channels", "keep")),
+                inherit_metadata=inherit,
+            )
+        except Exception:
+            dst.unlink(missing_ok=True)
+            raise
+        return {
+            "filename": dst.name,
+            "subfolder": out_sub,
+            "path": str(dst).replace("\\", "/"),
+            "tags_skipped": inherit and not supports_tags(fmt),
+        }
+
     def probe_video(self, filename: str, subfolder: str, type_: str) -> dict:
         """Reads duration/dimensions/fps/audio presence via PyAV only (no ffmpeg
         subprocess) — used by the Video Edit tab right after a clip is added, so
