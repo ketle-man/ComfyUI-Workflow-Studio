@@ -95,6 +95,9 @@ Now, to generate. At minimum, you check and set these three things.
 > - When loading, a message says the workflow's Checkpoint "..." was not found and was replaced with another model without warning
 >   (in this case it has been replaced automatically with the first model in the list you have)
 >
+> From v0.8.7, if you have exactly one model with the same file name that differs only in its folder, it is replaced with that model instead of the first one.
+> (Official templates often save model names without a folder, and the old behavior could swap in an unrelated model.)
+>
 > In either case, choose the model you want to use from the list and press Apply.
 > If choosing again each time is a nuisance, the **Default Checkpoint** in the Settings tab (Chapter 11) is handy.
 

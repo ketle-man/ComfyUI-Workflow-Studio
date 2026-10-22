@@ -82,6 +82,7 @@ Open the Batch subtab and turn off all the Batch Queue column checkboxes.
 ### It generates with a different model than you expected
 If the model saved in the workflow is not on your computer, it may be replaced automatically with another model.
 In that case a message says the Checkpoint "..." was not found and was replaced with another model without warning.
+(From v0.8.7, if you have exactly one model with the same name that differs only in its folder, it is replaced with that one.)
 In the **Model** subtab of GenerateUI, choose the model you want to use again and press **Apply**.
 
 If you always want to use the same model, the **Default Checkpoint** in the Settings tab is handy (Chapter 11, section 11-5).
@@ -152,6 +153,10 @@ Run the installation command shown in the error message in the Python that Comfy
 | The GPU is not detected (settings say no GPU detected, or runs on the CPU) | The onnxruntime in ComfyUI's Python is the CPU version | Stop ComfyUI, then in ComfyUI's Python run `pip uninstall -y onnxruntime onnxruntime-gpu` followed by `pip install onnxruntime-gpu`, and restart ComfyUI (DirectML is not supported) |
 | Gemini says "GEMINI_API_KEY is not set", or the key is rejected | There is no key in `.env`, or the line starts with `#` | Write `GEMINI_API_KEY=key` in the plugin's `.env` (copy `.env.example`) and restart ComfyUI. `.env` is only read at startup |
 | Search or Similar gives no results | The selected folder has no indexed images | Build the index with the gear button. Choose a folder with a green dot. When you change the model or precision, "rebuild all" |
+
+### A partner API (Nano Banana) says authentication failed
+The cause is a missing Comfy API key in `.env`. Write `COMFY_API_KEY=your key` (issued at platform.comfy.org) in the plugin's `.env` and restart ComfyUI (Chapter 5, section 5-8).
+`.env` is read only at startup.
 
 ### Images do not appear in the Gallery
 - Press **Refresh** in the Gallery.

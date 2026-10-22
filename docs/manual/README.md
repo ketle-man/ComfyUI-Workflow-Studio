@@ -2,12 +2,12 @@
 
 ノードが苦手でも大丈夫 ― 画像生成をもっと手軽に、もっと整理して
 
-- 対象バージョン：Workflow Studio v0.8.3
+- 対象バージョン：Workflow Studio v0.8.9
 - 著者：ketle-man
 - © 2026 ketle-man
 
 このマニュアルは、Kindle版をもとにした **画像なしのテキスト版** です。
-章ごとのファイルは `chapters/` フォルダ、全章をまとめたファイルは `Workflow_Studio_Manual_v0.8.3.md` です。
+章ごとのファイルは `chapters/` フォルダ、全章をまとめたファイルは `Workflow_Studio_Manual_v0.8.9.md` です。
 画面の例は省略しているため、実際の画面はWorkflow Studioのヘルプタブとあわせてご覧ください。
 
 ## 目次
@@ -29,6 +29,4 @@
 - [13_付録](chapters/13_付録.md)
 - [14_おわりに](chapters/14_おわりに.md)
 
-全章まとめ：[Workflow_Studio_Manual_v0.8.3.md](Workflow_Studio_Manual_v0.8.3.md)
-
-English edition: [en/README.md](en/README.md)
+全章まとめ：[Workflow_Studio_Manual_v0.8.9.md](Workflow_Studio_Manual_v0.8.9.md)

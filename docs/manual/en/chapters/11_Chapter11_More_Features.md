@@ -131,6 +131,17 @@ You load a matching workflow with **Load in Video** in the Workflow tab and use 
 
 There are also the **Frame** feature, which saves a favorite scene of a video as a still image, and **GIF**, which converts a video to an animated GIF.
 
+### Register as Asset and audio conversion (v0.8.9 and later)
+- **Register as Asset** - a button in the Video Source panel on the left. It copies a video from your PC into the output folder (`output/video`) and registers it in the "Video Assets" group.
+  Once registered, it appears in the Asset subtab list and can be used in Edit and elsewhere.
+  Videos already in the output folder (ones chosen in Asset or generation results) are only tagged into the group, not copied. If the name already exists, a number is added after it.
+- **Convert audio...** - a button next to the crop buttons in the Edit subtab. It converts only the audio of the selected video clip to FLAC, MP3, Opus, M4A or WAV and saves it into `output/video`.
+  It is the same dialog as Gallery's Convert. Only video clips that contain audio are covered.
+- Pressing the audio-conversion button opens the dialog below. Choose the **output format** (such as FLAC), the **sample rate** and the **channels**, then press **Convert**.
+  If you check the option to carry over the embedded prompt/workflow tags, the original video's information is kept in formats that can hold tags (such as FLAC).
+
+- The Video Source panel is a little wider, the file name shows on one line, and the buttons sit in a single row.
+
 > **Caution**
 > Video generation uses far more GPU memory and time than image generation.
 > Check the required specs of the model before trying it.

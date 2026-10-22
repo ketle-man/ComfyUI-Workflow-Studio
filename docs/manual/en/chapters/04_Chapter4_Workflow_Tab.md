@@ -257,7 +257,8 @@ Hovering the mouse over a badge shows the reason for the judgment.
 > Even with a warning or cross, generation itself is often possible, so treat it as a rough indication of "hard to finish using GenerateUI alone".
 
 > **Tip**
-> The first check after opening the Workflow tab can take about 10 seconds, because it fetches node information from ComfyUI.
+> The check fetches from ComfyUI only the information of the nodes that workflow uses (v0.8.8 and later).
+> It used to take tens of seconds the first time, but now the result appears almost instantly.
 > From the second time on, results appear immediately.
 
 ---

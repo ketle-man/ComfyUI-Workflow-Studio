@@ -2,12 +2,12 @@
 
 Don't Be Afraid of Nodes - Generate Images More Easily and Keep Them Organized
 
-- Covers: Workflow Studio v0.8.3
+- Covers: Workflow Studio v0.8.9
 - Author: ketle-man
 - (c) 2026 ketle-man
 
 This is the **text-only edition** (without screenshots) of the Kindle book.
-Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.8.3_en.md`.
+Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.8.9_en.md`.
 Screen examples are omitted, so please use the book together with Workflow Studio's Help tab.
 
 ---
@@ -142,7 +142,7 @@ It is written so that you can follow it if you know basic computer operations (c
 
 ## Version and environment covered
 
-- **Workflow Studio**: v0.8.3
+- **Workflow Studio**: v0.8.9
 - **ComfyUI**: the latest version at the time of writing
 - **OS**: Windows (screen examples are from Windows)
 
@@ -997,7 +997,8 @@ Hovering the mouse over a badge shows the reason for the judgment.
 > Even with a warning or cross, generation itself is often possible, so treat it as a rough indication of "hard to finish using GenerateUI alone".
 
 > **Tip**
-> The first check after opening the Workflow tab can take about 10 seconds, because it fetches node information from ComfyUI.
+> The check fetches from ComfyUI only the information of the nodes that workflow uses (v0.8.8 and later).
+> It used to take tens of seconds the first time, but now the result appears almost instantly.
 > From the second time on, results appear immediately.
 
 ---
@@ -1142,6 +1143,9 @@ Now, to generate. At minimum, you check and set these three things.
 > - The field shows "(model name) (not found)" with a warning mark
 > - When loading, a message says the workflow's Checkpoint "..." was not found and was replaced with another model without warning
 >   (in this case it has been replaced automatically with the first model in the list you have)
+>
+> From v0.8.7, if you have exactly one model with the same file name that differs only in its folder, it is replaced with that model instead of the first one.
+> (Official templates often save model names without a folder, and the old behavior could swap in an unrelated model.)
 >
 > In either case, choose the model you want to use from the list and press Apply.
 > If choosing again each time is a nuisance, the **Default Checkpoint** in the Settings tab (Chapter 11) is handy.
@@ -1453,11 +1457,60 @@ Results are listed in the **Results** panel.
 - **Plan Save** - lets you save the settings (the plan). When saved, an overview image summarizing the results is also made,
   and dropping that image lets you load the same plan again.
 
+---
+
+## 5-8 Using partner APIs (Nano Banana)
+
+ComfyUI has **partner API nodes**, such as Google's **Nano Banana** image model (the Gemini image nodes), that hand the generation over to a cloud service.
+From v0.8.6, GenerateUI can also run workflows that contain these nodes.
+
+> **Caution**
+> Partner API nodes run in the cloud, not on your PC's GPU, and **consume Comfy credits (paid)**.
+> If you run them repeatedly with Batch, Lab and so on, credits are consumed once per run.
+
+### Preparation: set your Comfy API key
+1. Issue a Comfy API key at platform.comfy.org.
+2. Add the line `COMFY_API_KEY=your key` to the `.env` file in the plugin folder.
+   (If there is no `.env`, copy `.env.example` to make one.)
+3. Restart ComfyUI. `.env` is read only at startup.
+
+The key is used only on the server side and is never sent to the browser.
+If you run without a key, a message says that partner API authentication failed and how to set it up.
+
+### How to use
+1. In the Workflow tab, load the Nano Banana sample (`ws_nano_banana_2_1_t2i`) into GenerateUI.
+2. Edit the prompt in the **Prompt** subtab and press **Apply**.
+3. To use reference images, specify them on the image cards in the **Image** subtab.
+4. Press **Generate**.
+
+> **Tip**
+> You can also run it from ComfyUI's own screen while logged in. In that case you do not need the `.env` setting.
+
+---
+
+## 5-9 More workflows are supported (v0.8.4 and later)
+
+The workflows you can use in GenerateUI have increased as follows. They are used the same way as other workflows.
+
+- **Qwen Image 2.1 Turbo** - ComfyUI's official templates for text to image (T2I) and image to image (I2I). Edits also carry over to the prompt enhancer's input (the feature that expands your prompt automatically).
+- **Flux.3 Klein** - the four official templates (T2I and Image Edit, for Klein and Klein SD).
+- **MOSS-Image** - Base/SFT T2I, and the bounding-box versions that specify positions with frames.
+- **Native LoRA stack** - ComfyUI v0.40's nodes that load several LoRAs at once (LoadLoraModel / LoadLoraTextEncoder). Apply, bypass and the Metadata display are supported.
+
+> **Caution**
+> The native LoRA stack nodes are supported **only in API-format workflows**.
+> ComfyUI's own screen cannot yet add rows to this node, so UI-format workflows are not covered.
+
+> **Tip**
+> The Metadata tab and the side panel's **I** tab can also read images made with Nano Banana (v0.8.5 and later).
+> The prompt appears as one whole entry, not split into Positive/Negative.
+
 > **Summary of this chapter (second half)**
 > - With the Batch subtab, you can generate in bulk while changing the model, prompt, sampler and so on, one kind at a time
 > - Choose the kind with the Batch Queue column checkbox and start with Generate. Turn the check off when done
 > - Feeder is a feature that feeds many images one at a time into a workflow. A dedicated node is required
 > - Lab is an advanced feature that can switch several settings at separate timings
+> - Partner API nodes (Nano Banana and others) run once `COMFY_API_KEY` is set in `.env`. They consume credits
 
 ---
 
@@ -2716,6 +2769,17 @@ You load a matching workflow with **Load in Video** in the Workflow tab and use 
 
 There are also the **Frame** feature, which saves a favorite scene of a video as a still image, and **GIF**, which converts a video to an animated GIF.
 
+### Register as Asset and audio conversion (v0.8.9 and later)
+- **Register as Asset** - a button in the Video Source panel on the left. It copies a video from your PC into the output folder (`output/video`) and registers it in the "Video Assets" group.
+  Once registered, it appears in the Asset subtab list and can be used in Edit and elsewhere.
+  Videos already in the output folder (ones chosen in Asset or generation results) are only tagged into the group, not copied. If the name already exists, a number is added after it.
+- **Convert audio...** - a button next to the crop buttons in the Edit subtab. It converts only the audio of the selected video clip to FLAC, MP3, Opus, M4A or WAV and saves it into `output/video`.
+  It is the same dialog as Gallery's Convert. Only video clips that contain audio are covered.
+- Pressing the audio-conversion button opens the dialog below. Choose the **output format** (such as FLAC), the **sample rate** and the **channels**, then press **Convert**.
+  If you check the option to carry over the embedded prompt/workflow tags, the original video's information is kept in formats that can hold tags (such as FLAC).
+
+- The Video Source panel is a little wider, the file name shows on one line, and the buttons sit in a single row.
+
 > **Caution**
 > Video generation uses far more GPU memory and time than image generation.
 > Check the required specs of the model before trying it.
@@ -2903,6 +2967,7 @@ Open the Batch subtab and turn off all the Batch Queue column checkboxes.
 ### It generates with a different model than you expected
 If the model saved in the workflow is not on your computer, it may be replaced automatically with another model.
 In that case a message says the Checkpoint "..." was not found and was replaced with another model without warning.
+(From v0.8.7, if you have exactly one model with the same name that differs only in its folder, it is replaced with that one.)
 In the **Model** subtab of GenerateUI, choose the model you want to use again and press **Apply**.
 
 If you always want to use the same model, the **Default Checkpoint** in the Settings tab is handy (Chapter 11, section 11-5).
@@ -2973,6 +3038,10 @@ Run the installation command shown in the error message in the Python that Comfy
 | The GPU is not detected (settings say no GPU detected, or runs on the CPU) | The onnxruntime in ComfyUI's Python is the CPU version | Stop ComfyUI, then in ComfyUI's Python run `pip uninstall -y onnxruntime onnxruntime-gpu` followed by `pip install onnxruntime-gpu`, and restart ComfyUI (DirectML is not supported) |
 | Gemini says "GEMINI_API_KEY is not set", or the key is rejected | There is no key in `.env`, or the line starts with `#` | Write `GEMINI_API_KEY=key` in the plugin's `.env` (copy `.env.example`) and restart ComfyUI. `.env` is only read at startup |
 | Search or Similar gives no results | The selected folder has no indexed images | Build the index with the gear button. Choose a folder with a green dot. When you change the model or precision, "rebuild all" |
+
+### A partner API (Nano Banana) says authentication failed
+The cause is a missing Comfy API key in `.env`. Write `COMFY_API_KEY=your key` (issued at platform.comfy.org) in the plugin's `.env` and restart ComfyUI (Chapter 5, section 5-8).
+`.env` is read only at startup.
 
 ### Images do not appear in the Gallery
 - Press **Refresh** in the Gallery.

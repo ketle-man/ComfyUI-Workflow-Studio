@@ -173,8 +173,57 @@ Results are listed in the **Results** panel.
 - **Plan Save** - lets you save the settings (the plan). When saved, an overview image summarizing the results is also made,
   and dropping that image lets you load the same plan again.
 
+---
+
+## 5-8 Using partner APIs (Nano Banana)
+
+ComfyUI has **partner API nodes**, such as Google's **Nano Banana** image model (the Gemini image nodes), that hand the generation over to a cloud service.
+From v0.8.6, GenerateUI can also run workflows that contain these nodes.
+
+> **Caution**
+> Partner API nodes run in the cloud, not on your PC's GPU, and **consume Comfy credits (paid)**.
+> If you run them repeatedly with Batch, Lab and so on, credits are consumed once per run.
+
+### Preparation: set your Comfy API key
+1. Issue a Comfy API key at platform.comfy.org.
+2. Add the line `COMFY_API_KEY=your key` to the `.env` file in the plugin folder.
+   (If there is no `.env`, copy `.env.example` to make one.)
+3. Restart ComfyUI. `.env` is read only at startup.
+
+The key is used only on the server side and is never sent to the browser.
+If you run without a key, a message says that partner API authentication failed and how to set it up.
+
+### How to use
+1. In the Workflow tab, load the Nano Banana sample (`ws_nano_banana_2_1_t2i`) into GenerateUI.
+2. Edit the prompt in the **Prompt** subtab and press **Apply**.
+3. To use reference images, specify them on the image cards in the **Image** subtab.
+4. Press **Generate**.
+
+> **Tip**
+> You can also run it from ComfyUI's own screen while logged in. In that case you do not need the `.env` setting.
+
+---
+
+## 5-9 More workflows are supported (v0.8.4 and later)
+
+The workflows you can use in GenerateUI have increased as follows. They are used the same way as other workflows.
+
+- **Qwen Image 2.1 Turbo** - ComfyUI's official templates for text to image (T2I) and image to image (I2I). Edits also carry over to the prompt enhancer's input (the feature that expands your prompt automatically).
+- **Flux.3 Klein** - the four official templates (T2I and Image Edit, for Klein and Klein SD).
+- **MOSS-Image** - Base/SFT T2I, and the bounding-box versions that specify positions with frames.
+- **Native LoRA stack** - ComfyUI v0.40's nodes that load several LoRAs at once (LoadLoraModel / LoadLoraTextEncoder). Apply, bypass and the Metadata display are supported.
+
+> **Caution**
+> The native LoRA stack nodes are supported **only in API-format workflows**.
+> ComfyUI's own screen cannot yet add rows to this node, so UI-format workflows are not covered.
+
+> **Tip**
+> The Metadata tab and the side panel's **I** tab can also read images made with Nano Banana (v0.8.5 and later).
+> The prompt appears as one whole entry, not split into Positive/Negative.
+
 > **Summary of this chapter (second half)**
 > - With the Batch subtab, you can generate in bulk while changing the model, prompt, sampler and so on, one kind at a time
 > - Choose the kind with the Batch Queue column checkbox and start with Generate. Turn the check off when done
 > - Feeder is a feature that feeds many images one at a time into a workflow. A dedicated node is required
 > - Lab is an advanced feature that can switch several settings at separate timings
+> - Partner API nodes (Nano Banana and others) run once `COMFY_API_KEY` is set in `.env`. They consume credits
