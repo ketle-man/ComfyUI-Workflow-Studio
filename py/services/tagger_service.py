@@ -72,7 +72,10 @@ class TaggerService:
                 continue
             exts = {f.suffix.lower() for f in item.iterdir() if f.is_file()}
             if ".onnx" in exts:
-                models.append({"name": item.name, "type": "onnx"})
+                entry = {"name": item.name, "type": "onnx"}
+                if (item / "preprocess.json").exists() and (item / "selected_tags.csv").exists():
+                    entry["pixai"] = True
+                models.append(entry)
             elif ".h5" in exts:
                 models.append({"name": item.name, "type": "deepdanbooru"})
         return models
@@ -128,6 +131,9 @@ class TaggerService:
                 "input_shape": session.get_inputs()[0].shape,
                 "type": "onnx",
             }
+            categories = self._load_pixai_categories(model_dir, len(labels))
+            if categories:
+                data["pixai_categories"] = categories
             self._cache[name] = data
             logger.info("ONNX loaded: %s (%d labels)", name, len(labels))
             return data
@@ -173,6 +179,20 @@ class TaggerService:
                 logger.warning("Label load failed %s: %s", p, e)
         return []
 
+    @staticmethod
+    def _load_pixai_categories(model_dir: Path, n_labels: int) -> Optional[list]:
+        """PixAI Tagger形式(preprocess.json + selected_tags.csvのcategory列)ならカテゴリ番号の配列を返す。"""
+        if not (model_dir / "preprocess.json").exists():
+            return None
+        csv_path = model_dir / "selected_tags.csv"
+        try:
+            with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+                rows = list(csv.DictReader(f))
+            cats = [int(r["category"]) for r in rows]
+        except Exception:
+            return None
+        return cats if cats and len(cats) == n_labels else None
+
     # ── 推論（WD Tagger / DeepDanbooru） ────────────────────
 
     def predict(self, image_b64: str, model_name: str, threshold: float = 0.35, char_threshold: float = 0.85) -> dict:
@@ -190,7 +210,51 @@ class TaggerService:
             logger.error("predict error: %s", e)
             return {"error": str(e)}
 
+    # PixAI Tagger v1.0 推奨しきい値(category番号 -> しきい値)。meta/ratingはタグに含めない。
+    # UIの2本のスライダーは推奨値(general 0.17 / character 0.27)を基準にした相対指定で、
+    # general側(0,1)はthreshold、character側(3,4)はchar_thresholdに追従する。
+    _PIXAI_THRESHOLDS = {0: 0.17, 1: 0.15, 3: 0.24, 4: 0.27}
+    _PIXAI_BASE = {"general": 0.17, "character": 0.27}
+    _PIXAI_SIZE = 1008
+
+    def _predict_pixai(self, img: Image.Image, data: dict, thr: float, char_thr: float) -> list:
+        """PixAI Tagger v1.0: 白背景合成 → 黒パディングで1008角 → RGB, (x/255-0.5)/0.5, NCHW。出力はsigmoid済み確率。"""
+        size = self._PIXAI_SIZE
+        img = ImageOps.exif_transpose(img)
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        canvas = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        canvas.alpha_composite(img)
+        img = canvas.convert("RGB")
+
+        scale = size / max(img.size)
+        w, h = max(1, round(img.width * scale)), max(1, round(img.height * scale))
+        img = img.resize((w, h), Image.Resampling.BICUBIC)
+        padded = Image.new("RGB", (size, size), (0, 0, 0))
+        padded.paste(img, ((size - w) // 2, (size - h) // 2))
+
+        arr = (np.asarray(padded, dtype=np.float32) / 255.0 - 0.5) / 0.5
+        arr = np.ascontiguousarray(arr.transpose(2, 0, 1)[None])
+        preds = data["session"].run(None, {data["input_name"]: arr})[0][0]
+
+        d_gen = thr - self._PIXAI_BASE["general"]
+        d_chr = char_thr - self._PIXAI_BASE["character"]
+        limits = {
+            c: max(0.0, min(1.0, base + (d_gen if c in (0, 1) else d_chr)))
+            for c, base in self._PIXAI_THRESHOLDS.items()
+        }
+        labels, cats = data["labels"], data["pixai_categories"]
+        picked = [
+            (float(score), labels[i])
+            for i, score in enumerate(preds)
+            if i < len(labels) and float(score) >= limits.get(cats[i], 2.0)
+        ]
+        picked.sort(key=lambda t: t[0], reverse=True)
+        return [name for _, name in picked]
+
     def _predict_onnx(self, img: Image.Image, data: dict, thr: float, char_thr: float) -> list:
+        if data.get("pixai_categories"):
+            return self._predict_pixai(img, data, thr, char_thr)
         shape = data["input_shape"]
         fmt = "NHWC"
         size = 224

@@ -199,6 +199,35 @@ function _updateVlmBackendIndicators() {
 
 // ── モデル一覧ロード ─────────────────────────────────────────────
 
+// PixAI Tagger はWD系と推奨しきい値が違う(general 0.17 / character 0.27)ため、
+// モデル切替時にスライダーが各モデルの既定値のままなら、新モデルの既定値へ切り替える。
+const _WD_DEFAULTS = { thr: 0.35, chr: 0.85 };
+const _PIXAI_DEFAULTS = { thr: 0.17, chr: 0.27 };
+let _pixaiModels = new Set();
+let _thresholdDefaultsBound = false;
+
+function _setupModelThresholdDefaults() {
+    if (_thresholdDefaultsBound) return;
+    _thresholdDefaultsBound = true;
+    [
+        ["wfm-tagger-model", "wfm-tagger-threshold", "wfm-tagger-char-threshold"],
+        ["wfm-tagger-batch-model", "wfm-tagger-batch-threshold", "wfm-tagger-batch-char-threshold"],
+    ].forEach(([modelId, thrId, chrId]) => {
+        const sel = document.getElementById(modelId);
+        if (!sel) return;
+        sel.addEventListener("change", () => {
+            const to = _pixaiModels.has(sel.value) ? _PIXAI_DEFAULTS : _WD_DEFAULTS;
+            const from = to === _PIXAI_DEFAULTS ? _WD_DEFAULTS : _PIXAI_DEFAULTS;
+            [[thrId, from.thr, to.thr], [chrId, from.chr, to.chr]].forEach(([id, oldDef, newDef]) => {
+                const slider = document.getElementById(id);
+                if (!slider || Math.abs(parseFloat(slider.value) - oldDef) > 0.005) return;
+                slider.value = newDef;
+                slider.dispatchEvent(new Event("input"));
+            });
+        });
+    });
+}
+
 async function _loadModels() {
     try {
         const res = await fetch("/wfm/tagger/models");
@@ -210,6 +239,8 @@ async function _loadModels() {
             sel.innerHTML = `<option value="">${t("taggerNoModel")}</option>` +
                 models.map(m => `<option value="${m.name}">[${m.type}] ${m.name}</option>`).join("");
         });
+        _pixaiModels = new Set(models.filter(m => m.pixai).map(m => m.name));
+        _setupModelThresholdDefaults();
     } catch (e) {
         console.warn("tagger: _loadModels error", e);
     }

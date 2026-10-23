@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.8.9-green)
+![Version](https://img.shields.io/badge/version-0.8.10-green)
 
 ## Screenshots
 
@@ -403,7 +403,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 <summary><h3>Tagger Tab (v0.3.38)</h3></summary>
 
 - **3 sub-tabs** — Single / Batch / DB for single-image tagging, folder batch processing, and tag database management
-- **Model support** — WD Tagger (ONNX, NCHW/NHWC auto-detect), SwinV2 (ONNX), DeepDanbooru (.h5, requires TensorFlow); place each model in its own subfolder under `ComfyUI/models/tagger/<model-name>/` containing the `.onnx` + `selected_tags.csv` (or `.h5` + label file)
+- **Model support** — WD Tagger (ONNX, NCHW/NHWC auto-detect), SwinV2 (ONNX), DeepDanbooru (.h5, requires TensorFlow); place each model in its own subfolder under `ComfyUI/models/tagger/<model-name>/` containing the `.onnx` + `selected_tags.csv` (or `.h5` + label file). **PixAI Tagger v1.0** (v0.8.10) is supported via the community ONNX conversion [Mexes/pixai-tagger-v1.0-onnx-fp32-fp16-int8](https://huggingface.co/Mexes/pixai-tagger-v1.0-onnx-fp32-fp16-int8): put one of `model.onnx` / `model_fp16.onnx` / `model_int8.onnx` (only one `.onnx` per folder) together with `selected_tags.csv` and `preprocess.json` in a subfolder. It is detected by `preprocess.json` and uses its own preprocessing (1008px, black padding, RGB, mean/std 0.5; the model already outputs probabilities); tags come from the general / style / copyright / character categories (meta and rating are left out). Selecting it switches the sliders to its recommended defaults (Threshold 0.17 / Char Thr. 0.27); the sliders then offset the recommended per-category values (Threshold moves general and style, Char Thr. moves character and copyright). FP16 needs a GPU to be fast: with both `onnxruntime` and `onnxruntime-gpu` installed the CPU package overwrites the GPU one and CUDA is silently unavailable, so keep only `onnxruntime-gpu`
 - **Threshold sliders** — General threshold (default 0.35) and Character threshold for `character:` prefix tags (default 0.85); sliders update the display value in real time
 - **VLM tagging** (v0.3.38, multi-backend: v0.5.4) — optional vision model alongside WD Tagger, running on Ollama, LM Studio, Lemonade, or Unsloth through the same unified backend used by the Prompt tab; results from both models are merged into one comma-separated tag string
   - **⚙ Settings modal** (v0.5.4) — a Settings button (Single and Batch tabs) opens the same modal component as the Prompt tab's AI Assistant (Backend / Connection / Model / Generation / Unload), but saved under its own `localStorage` key so Tagger's VLM backend/model choice is independent of the Prompt tab's; **Thinking mode** and **Max tokens** apply to VLM requests too, and the **Unload** button frees the selected model (Ollama/LM Studio/Lemonade; Unsloth unsupported) — replaces the old Tagger-only direct Ollama URL/model fields

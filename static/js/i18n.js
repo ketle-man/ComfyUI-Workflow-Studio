@@ -1107,10 +1107,10 @@ const LANGUAGES = {
 
         // -- Tagger Tab --
         helpTaggerTitle: "Tagger Tab",
-        helpTagger1: "Automatic image tagging using WD Tagger (ONNX), SwinV2, DeepDanbooru (.h5), and VLM (Ollama / LM Studio / Lemonade / Unsloth) — 3 sub-tabs: Single / Batch / DB",
-        helpTagger2: "Model placement: put each model in its own subfolder under ComfyUI/models/tagger/<model-name>/; the folder must contain a .onnx file + selected_tags.csv (or .h5 + label file for DeepDanbooru)",
+        helpTagger1: "Automatic image tagging using WD Tagger (ONNX), PixAI Tagger v1.0 (ONNX), SwinV2, DeepDanbooru (.h5), and VLM (Ollama / LM Studio / Lemonade / Unsloth) — 3 sub-tabs: Single / Batch / DB",
+        helpTagger2: "Model placement: put each model in its own subfolder under ComfyUI/models/tagger/<model-name>/; the folder must contain a .onnx file + selected_tags.csv (or .h5 + label file for DeepDanbooru). PixAI Tagger v1.0: use the community ONNX conversion Mexes/pixai-tagger-v1.0-onnx-fp32-fp16-int8 — one .onnx (model_fp16.onnx recommended on GPU) + selected_tags.csv + preprocess.json in the folder; it is detected automatically",
         helpTagger3: "Single tab: drag & drop an image onto the preview area, or click Upload to pick a file; the Tagger button in the Gallery detail panel opens the selected image directly here",
-        helpTagger4: "Threshold slider: minimum confidence score for general tags (default 0.35); Character Threshold: separate threshold for character: prefix tags (default 0.85)",
+        helpTagger4: "Threshold slider: minimum confidence score for general tags (default 0.35); Character Threshold: separate threshold for character: prefix tags (default 0.85). For PixAI Tagger the sliders switch to 0.17 / 0.27 when the model is selected and shift its recommended per-category thresholds (Threshold: general/style, Character Threshold: copyright/character)",
         helpTagger5: "VLM Tagging: enable the checkbox to run a vision model alongside WD Tagger; click the ⚙ Settings button to choose backend (Ollama / LM Studio / Lemonade / Unsloth), URL, model, Thinking mode, Max tokens, and unload the model (with Ollama, every model loaded in Ollama on localhost is unloaded, decision models included) — independent from the Prompt tab's own AI settings; customize the prompt and Max Tags inline; results from both models are merged",
         helpTagger6: "Result tags can be sent to: (1) GenUI:P — appended to the GenerateUI tab's positive prompt textarea and applied to the loaded workflow immediately; (2) Send to Prompt — appended to the Prompt tab's positive textarea; (3) Save to Gallery — saved to Gallery image metadata (requires image opened from Gallery); (4) Write to File — embedded into JPEG EXIF (ImageDescription) or PNG tEXt (Tags key); (5) Save to DB — stored in the internal SQLite database",
         helpTagger7: "Batch tab: enter a folder path, configure WD Tagger and enable VLM tagging (uses the same ⚙ Settings as the Single tab); output options: Save to DB (default on), Write to File (EXIF/PNG metadata), Write .txt (creates <filename>.txt alongside each image); click Start Batch to process all images in the folder; progress bar and log are updated in real time; Stop cancels after the current image",
@@ -2821,10 +2821,10 @@ const LANGUAGES = {
 
         // -- Tagger Tab --
         helpTaggerTitle: "Taggerタブ",
-        helpTagger1: "WD Tagger（ONNX）・SwinV2・DeepDanbooru（.h5）・VLM（Ollama / LM Studio / Lemonade / Unsloth）による自動タグ付け — サブタブ: Single / Batch / DB",
-        helpTagger2: "モデル配置：ComfyUI/models/tagger/<モデル名>/ 以下に各モデルのフォルダを作成し、.onnx + selected_tags.csv（DeepDanbooruは .h5 + ラベルファイル）を格納",
+        helpTagger1: "WD Tagger（ONNX）・PixAI Tagger v1.0（ONNX）・SwinV2・DeepDanbooru（.h5）・VLM（Ollama / LM Studio / Lemonade / Unsloth）による自動タグ付け — サブタブ: Single / Batch / DB",
+        helpTagger2: "モデル配置：ComfyUI/models/tagger/<モデル名>/ 以下に各モデルのフォルダを作成し、.onnx + selected_tags.csv（DeepDanbooruは .h5 + ラベルファイル）を格納。PixAI Tagger v1.0 はコミュニティ変換版 Mexes/pixai-tagger-v1.0-onnx-fp32-fp16-int8 を使用し、フォルダに .onnx を1つ（GPUなら model_fp16.onnx 推奨）+ selected_tags.csv + preprocess.json を置くと自動判別",
         helpTagger3: "Singleタブ：プレビューエリアへ画像をドラッグ＆ドロップ、またはUploadボタンでファイルを選択；GalleryタブのTaggerボタンで選択画像を直接開くことも可能",
-        helpTagger4: "閾値スライダー：一般タグの信頼スコア下限（デフォルト0.35）；キャラ閾値：character: プレフィックス付きタグ専用の閾値（デフォルト0.85）",
+        helpTagger4: "閾値スライダー：一般タグの信頼スコア下限（デフォルト0.35）；キャラ閾値：character: プレフィックス付きタグ専用の閾値（デフォルト0.85）。PixAI Tagger はモデル選択時にスライダーが0.17 / 0.27に切り替わり、推奨のカテゴリ別しきい値をずらす形で効く（閾値: general/style、キャラ閾値: copyright/character）",
         helpTagger5: "VLMタグ付け：チェックボックスをオンにするとWD Taggerと並行してビジョンモデルを実行；⚙設定ボタンからバックエンド（Ollama / LM Studio / Lemonade / Unsloth）・URL・モデル・Thinking mode・Max tokensの選択とモデルのアンロードが可能（Ollamaのときは、意思決定モデルを含むローカルホストのOllamaのロード中の全モデルをアンロード）——Promptタブ独自のAI設定とは別管理；プロンプトとMax Tagsはインラインで編集可能；両モデルの結果はマージされる",
         helpTagger6: "生成タグの送信先：(1) GenUI:P — 生成UIタブのポジティブプロンプトに追記し、読み込み中のワークフローへ即時適用；(2) プロンプトに送信 — Promptタブの正プロンプトテキストエリアに追記；(3) Galleryに保存 — ギャラリーの画像メタデータに保存（Galleryから開いた画像のみ有効）；(4) ファイルに書込 — JPEGはEXIF（ImageDescription）、PNGはtEXt（Tagsキー）に書き込み；(5) DBに保存 — 内蔵SQLiteデータベースに保存",
         helpTagger7: "Batchタブ：処理対象フォルダパスを入力してWD Taggerを設定し、VLMタグ付けを有効化（Singleタブと同じ⚙設定を使用）；出力オプション（DBに保存〈デフォルトON〉・ファイルに書込〈EXIF/PNGメタデータ〉・.txt出力〈画像と同フォルダに <ファイル名>.txt を生成〉）を選択；バッチ開始で指定フォルダ内の全画像を処理；進行状況バーとログがリアルタイム更新；停止ボタンは現在の画像処理完了後にキャンセル",
@@ -4535,10 +4535,10 @@ const LANGUAGES = {
 
         // -- Tagger Tab --
         helpTaggerTitle: "Tagger标签",
-        helpTagger1: "使用WD Tagger（ONNX）、SwinV2、DeepDanbooru（.h5）和VLM（Ollama / LM Studio / Lemonade / Unsloth）进行自动图像标注 — 子标签：Single / Batch / DB",
-        helpTagger2: "模型放置：在ComfyUI/models/tagger/<模型名>/ 下为每个模型创建单独子文件夹，必须包含 .onnx + selected_tags.csv（DeepDanbooru为 .h5 + 标签文件）",
+        helpTagger1: "使用WD Tagger（ONNX）、PixAI Tagger v1.0（ONNX）、SwinV2、DeepDanbooru（.h5）和VLM（Ollama / LM Studio / Lemonade / Unsloth）进行自动图像标注 — 子标签：Single / Batch / DB",
+        helpTagger2: "模型放置：在ComfyUI/models/tagger/<模型名>/ 下为每个模型创建单独子文件夹，必须包含 .onnx + selected_tags.csv（DeepDanbooru为 .h5 + 标签文件）。PixAI Tagger v1.0 使用社区ONNX转换版 Mexes/pixai-tagger-v1.0-onnx-fp32-fp16-int8：文件夹内放一个 .onnx（GPU推荐 model_fp16.onnx）+ selected_tags.csv + preprocess.json，将自动识别",
         helpTagger3: "Single标签：将图像拖放到预览区域，或点击Upload选择文件；图库详情面板的Tagger按钮可直接在此处打开所选图像",
-        helpTagger4: "阈值滑块：一般标签的最低置信度（默认0.35）；角色阈值：character: 前缀标签的独立阈值（默认0.85）",
+        helpTagger4: "阈值滑块：一般标签的最低置信度（默认0.35）；角色阈值：character: 前缀标签的独立阈值（默认0.85）。选择PixAI Tagger时滑块会切换为0.17 / 0.27，并在其推荐的分类阈值上做偏移（阈值：general/style，角色阈值：copyright/character）",
         helpTagger5: "VLM打标：勾选复选框可与WD Tagger并行运行视觉模型；点击⚙设置按钮可选择后端（Ollama / LM Studio / Lemonade / Unsloth）、URL、模型、Thinking mode、Max tokens，并卸载模型（使用 Ollama 时，会卸载本机 Ollama 已加载的所有模型，包括决策模型）——与Prompt标签页自身的AI设置相互独立；提示词和Max Tags可在标签页内直接编辑；两个模型的结果将合并",
         helpTagger6: "生成标签的发送目标：(1) GenUI:P — 追加到生成UI标签的正向提示词并立即应用到已加载工作流；(2) 发送到提示词 — 追加到提示词标签的正向文本区；(3) 保存到图库 — 保存到图库图像元数据（仅限从图库打开的图像）；(4) 写入文件 — JPEG写入EXIF（ImageDescription）、PNG写入tEXt（Tags键）；(5) 保存到DB — 存入内置SQLite数据库",
         helpTagger7: "Batch标签：输入目标文件夹路径并配置WD Tagger，启用VLM打标（与Single标签使用相同的⚙设置）；选择输出选项（保存DB〈默认开启〉、写入文件〈EXIF/PNG元数据〉、输出.txt〈在图像同目录生成 <文件名>.txt〉）；开始批处理后将处理文件夹内所有图像；进度条和日志实时更新；停止按钮在当前图像处理完成后取消",

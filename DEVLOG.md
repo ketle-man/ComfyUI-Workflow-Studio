@@ -2,6 +2,20 @@
 
 ---
 
+## v0.8.10（2026-10-23）
+
+### Tagger: PixAI Tagger v1.0 対応
+
+- **対象**: コミュニティ変換の `Mexes/pixai-tagger-v1.0-onnx-fp32-fp16-int8`（FP32/FP16/INT8、sigmoid込みの確率出力、`selected_tags.csv`にcategory列）。モデルフォルダに`preprocess.json`と`selected_tags.csv`があり、行数が出力数(30,877)と一致すればPixAI形式とみなす（`TaggerService._load_pixai_categories`）。`list_models`は該当モデルに`pixai: true`を付ける。
+- **前処理**（`_predict_pixai`）: 透過は白合成 → 長辺1008にBICUBICで縮小 → 黒で1008角にセンタリング → RGBのまま`(x/255-0.5)/0.5` → NCHW。WD系(白パディング/BGR/0-255)とは別経路。
+- **タグ抽出**: general(0)/style(1)/copyright(3)/character(4)のみ採用（meta/ratingは除外）、確率の高い順。推奨しきい値は general 0.17 / style 0.15 / copyright 0.24 / character 0.27。UIのThreshold(general,style)とChar Thr.(copyright,character)は推奨値を基準にした相対指定（スライダー=0.17/0.27で推奨値そのもの）。
+- **UI**（`tagger-tab.js`）: PixAIモデル選択でスライダーが0.17/0.27へ、WD系へ戻すと0.35/0.85へ切替（Single/Batch両方）。手動で変えた値は上書きしない。
+- **性能**: CUDA(onnxruntime-gpu)で約0.4秒/枚（FP16・1008px）、CPUでは約21秒/枚。
+- 教訓: `onnxruntime`と`onnxruntime-gpu`が同じvenvに共存すると、後から入ったCPU版が同じ`onnxruntime/`フォルダを上書きしてCUDAが無言で無効になる（`get_available_providers()`にCUDAが出ない）。insightface/rtmlib/qwen-tts/onnxruntime-genaiが`onnxruntime`を要求するため再発しやすい。直し方は両方uninstallして`onnxruntime-gpu`のみ入れ直し。
+- ヘルプ（helpTagger1/2/4、日英中）を更新。
+
+---
+
 ## v0.8.9（2026-10-20）
 
 ### Video: アセット登録ボタン / Editの音声変換 / ソースパネルのレイアウト
