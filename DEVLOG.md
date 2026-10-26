@@ -2,6 +2,21 @@
 
 ---
 
+## v0.8.11（2026-10-26）
+
+### Gallery: Send CC をレイアウト／Imageタブの2ボタンに分割
+
+- **背景**: これまで「Send CC」はレイアウトタブ（選択コマ／オーバーレイ）専用で、Imageタブへ送れるのはComic Creatorの「I2Iへ送る」を押した直後（`window.parent._ccI2ITargetMode === 'image'`）の戻り経路だけだった。送り先を自分で選べるようにしたい、という要望。
+- **UI**（`templates/index.html`）: `wfm-gallery-send-cc-btn` を「Send CC Layout」に改名し、隣に `wfm-gallery-send-cc-image-btn`「Send CC Image」を追加。どちらもComic Creator内にiframe埋め込みされたときだけ表示（従来どおり）。
+- **Send CC Layout**（`gallery-tab.js`）: 従来の経路（画像は `insertImageFromUrl`、MP4は `insertVideoFromUrl`）のまま。`_ccI2ITargetMode` による分岐は撤去（Imageタブへは新ボタンで送る）。
+- **Send CC Image**: Comic Creator側の新設ブリッジ `window.parent.sendImageToImageTab(url, name)` を呼ぶ。ブリッジは Imageタブへ `switchTab` してから `_ccImageTab.loadFromUrl` で読み込む（作業中のレイヤーがあれば新規レイヤー、無ければ新規キャンバス）。動画はImageタブ未対応のため従来どおりトーストで弾く。ブリッジが無い（古いComic Creator）／失敗時は「Comic Creator内から開いてください」のトースト。
+- **連携の前提**: Comic Creator側の `window.sendImageToImageTab`（`14-integrations.js`、feature/ocr-text-insert ブランチ）が必要。
+- **検証**: Comic Creator内のGalleryで両ボタンの表示と、画像選択→Send CC Image→Imageタブへの読み込み（トースト表示）を実機（ComfyUI_5）で確認。Send CC Layoutの実クリックは未検証（処理は従来のまま）。
+- ヘルプ（helpGallery37、日英中）、README、マニュアル第8章・第11章（日英）を更新。
+- 教訓: ComfyUI_5への同期は変更したファイルだけでなく、事前に実行側とHEADが同一であることを `diff --strip-trailing-cr` で確認してからコピーする。
+
+---
+
 ## v0.8.10（2026-10-23）
 
 ### Tagger: PixAI Tagger v1.0 対応

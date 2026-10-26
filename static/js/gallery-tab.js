@@ -2323,93 +2323,82 @@ function bindEvents() {
         }
     });
 
-    // 選択画像を ComfyUI Comic Creator の選択コマ／オーバーレイへ送信
-    // （ComfyUI Comic CreaterからこのGalleryタブがiframe埋め込みされている場合のみ表示・動作する）
+    // 選択画像を ComfyUI Comic Creator へ送信（ComfyUI Comic CreaterからこのGalleryタブがiframe埋め込みされている場合のみ表示・動作する）
+    //   Send CC Layout: レイアウトタブの選択コマ／オーバーレイへ（動画はComic Creatorの動画ツールへ）
+    //   Send CC Image : Imageタブへ（作業中のレイヤーがあれば新規レイヤー、無ければ新規キャンバス）。動画は未対応
     const sendCcBtn = document.getElementById("wfm-gallery-send-cc-btn");
-    if (sendCcBtn) {
-        let embedded = false;
+    const sendCcImageBtn = document.getElementById("wfm-gallery-send-cc-image-btn");
+    let ccEmbedded = false;
+    try {
+        ccEmbedded = !!(window.parent && window.parent !== window);
+    } catch (e) {
+        ccEmbedded = false;
+    }
+    if (ccEmbedded) {
+        if (sendCcBtn) sendCcBtn.style.display = "";
+        if (sendCcImageBtn) sendCcImageBtn.style.display = "";
+    }
+
+    // window.parent のメンバーを安全に取り出す（クロスオリジン等で参照できなければnull）
+    const getCcParentFn = (name) => {
         try {
-            embedded = !!(window.parent && window.parent !== window);
-        } catch (e) {
-            embedded = false;
+            if (window.parent && window.parent !== window && typeof window.parent[name] === "function") return window.parent[name];
+        } catch (e) { /* ignore */ }
+        return null;
+    };
+
+    sendCcBtn?.addEventListener("click", () => {
+        if (!state.selectedImage) {
+            showToast(t("gallerySelectImageFirst"), "info");
+            return;
         }
-        if (embedded) sendCcBtn.style.display = "";
+        const url = API.serveImage(state.selectedImage.path);
 
-        sendCcBtn.addEventListener("click", () => {
-            if (!state.selectedImage) {
-                showToast(t("gallerySelectImageFirst"), "info");
-                return;
-            }
-            const url = API.serveImage(state.selectedImage.path);
-            const isVideo = isVideoFile(state.selectedImage);
-
-            // I2I送信元がImageタブだった場合はそちらへ画像を読み込ませる（_ccI2ITargetModeはComic Creater側が
-            // 「I2Iへ送る」ボタン押下時にセットするフラグ。undefined/'layout'なら従来通りコマ/オーバーレイへ挿入）
-            let targetMode = null;
-            try {
-                targetMode = window.parent?._ccI2ITargetMode || null;
-            } catch (e) {
-                targetMode = null;
-            }
-            if (targetMode === "image") {
-                // Imageタブは動画未対応（Comic Creator側の動画ツールはレイアウトタブのみ対応）
-                if (isVideo) {
-                    showToast(t("galleryVideoNotSupportedInImageTab"), "info");
-                    return;
-                }
-                let imageTab = null;
-                try {
-                    if (window.parent && window.parent !== window && typeof window.parent._ccImageTab?.loadFromUrl === "function") {
-                        imageTab = window.parent._ccImageTab;
-                    }
-                } catch (e) {
-                    imageTab = null;
-                }
-                if (!imageTab) {
-                    showToast(t("galleryCCNotAvailable"), "info");
-                    return;
-                }
-                imageTab.loadFromUrl(url, (state.selectedImage.filename || "cc-image").replace(/\.[^.]+$/, ""));
-                showToast(t("gallerySentCC"), "success");
-                return;
-            }
-
-            // レイアウトタブのコマ/オーバーレイへ（デフォルト経路）。動画（.mp4）はComic Creator側の
-            // 動画ツール専用の受け口（insertVideoFromUrl）へ、それ以外は従来通り画像として送る
-            if (isVideo) {
-                let insertVideoFn = null;
-                try {
-                    if (window.parent && window.parent !== window && typeof window.parent.insertVideoFromUrl === "function") {
-                        insertVideoFn = window.parent.insertVideoFromUrl;
-                    }
-                } catch (e) {
-                    insertVideoFn = null;
-                }
-                if (!insertVideoFn) {
-                    showToast(t("galleryCCNotAvailable"), "info");
-                    return;
-                }
-                insertVideoFn(url, state.selectedImage.filename || "video.mp4");
-                showToast(t("gallerySentCC"), "success");
-                return;
-            }
-
-            let insertFn = null;
-            try {
-                if (window.parent && window.parent !== window && typeof window.parent.insertImageFromUrl === "function") {
-                    insertFn = window.parent.insertImageFromUrl;
-                }
-            } catch (e) {
-                insertFn = null;
-            }
-            if (!insertFn) {
+        // 動画（.mp4）はComic Creator側の動画ツール専用の受け口（insertVideoFromUrl）へ、それ以外は画像として送る
+        if (isVideoFile(state.selectedImage)) {
+            const insertVideoFn = getCcParentFn("insertVideoFromUrl");
+            if (!insertVideoFn) {
                 showToast(t("galleryCCNotAvailable"), "info");
                 return;
             }
-            insertFn(url);
+            insertVideoFn(url, state.selectedImage.filename || "video.mp4");
             showToast(t("gallerySentCC"), "success");
-        });
-    }
+            return;
+        }
+
+        const insertFn = getCcParentFn("insertImageFromUrl");
+        if (!insertFn) {
+            showToast(t("galleryCCNotAvailable"), "info");
+            return;
+        }
+        insertFn(url);
+        showToast(t("gallerySentCC"), "success");
+    });
+
+    sendCcImageBtn?.addEventListener("click", async () => {
+        if (!state.selectedImage) {
+            showToast(t("gallerySelectImageFirst"), "info");
+            return;
+        }
+        // Imageタブは動画未対応
+        if (isVideoFile(state.selectedImage)) {
+            showToast(t("galleryVideoNotSupportedInImageTab"), "info");
+            return;
+        }
+        const sendFn = getCcParentFn("sendImageToImageTab");
+        if (!sendFn) {
+            showToast(t("galleryCCNotAvailable"), "info");
+            return;
+        }
+        const url = API.serveImage(state.selectedImage.path);
+        try {
+            const ok = await sendFn(url, (state.selectedImage.filename || "cc-image").replace(/\.[^.]+$/, ""));
+            showToast(t(ok === false ? "galleryCCNotAvailable" : "gallerySentCC"), ok === false ? "info" : "success");
+        } catch (e) {
+            console.error("[gallery] Send CC Image failed", e);
+            showToast(t("galleryCCNotAvailable"), "info");
+        }
+    });
 
     // 検索（連続キー入力のたびにリクエストを飛ばすと、50枚程度のフォルダでも
     // ファイルI/Oの重いサーバー処理が積み重なって読み込みが遅延するためdebounceする）

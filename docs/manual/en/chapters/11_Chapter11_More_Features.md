@@ -209,8 +209,8 @@ It is software you install separately from Workflow Studio, but if you install b
 If you install both, the following integrations are possible.
 
 - **Use Workflow Studio's Gallery inside Comic Creator**
-  Workflow Studio's Gallery appears inside Comic Creator, and you can choose generated images and send them to panels with the **Send CC** button.
-  (The Send CC button is shown only in a Gallery opened inside Comic Creator)
+  Workflow Studio's Gallery appears inside Comic Creator, and you can choose generated images and send them to panels with **Send CC Layout** (Layout tab panel / overlay) or to the Image tab with **Send CC Image**.
+  (The Send CC buttons are shown only in a Gallery opened inside Comic Creator)
 - **Generate images from Comic Creator**
   From the Comic Creator screen, through Workflow Studio (GenerateUI), you can generate images to put in panels (T2I),
   or redraw based on a rough you drew or an image you placed (I2I and inpainting).

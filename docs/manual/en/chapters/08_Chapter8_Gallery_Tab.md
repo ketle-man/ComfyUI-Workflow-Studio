@@ -153,7 +153,8 @@ You can also use a Gallery image as an "input image" for generation.
 | Send GenUI Image | Sets the chosen image as the input image (LoadImage node) of the GenerateUI workflow |
 | Send to LI node | Sets the chosen image on the image-loading node currently selected on ComfyUI's node screen |
 | Image Edit | Opens the chosen image in the Image Edit tab (Chapter 11) |
-| Send CC | Sends the chosen image to a panel in Comic Creator (shown only when the Gallery is opened inside Comic Creator; Chapter 11, section 11-6) |
+| Send CC Layout | Sends the chosen image to Comic Creator's Layout tab (the selected panel / overlay) (shown only when the Gallery is opened inside Comic Creator; Chapter 11, section 11-6) |
+| Send CC Image | Sends the chosen image to Comic Creator's Image tab (as a new layer if a document is open, otherwise as a new canvas; videos are not supported; shown under the same condition as Send CC Layout) |
 
 Handy when redrawing a generated image further with an I2I (image to image) workflow.
 
