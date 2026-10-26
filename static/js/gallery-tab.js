@@ -176,6 +176,26 @@ window._wfmReceiveI2IRunRequest = async (imageBlob, params, workflowData, workfl
     }
 };
 
+// 複数画像版のI2I実行（Comic Creater の Nanobanana+ タブ「Local」用）。
+// iframe.contentWindow._wfmReceiveMultiImageI2IRunRequest(imageBlobs, params, workflowData?, workflowFilename?)
+// imageBlobs[i] がワークフロー内 i 番目の LoadImage ノードへ割り当てられる。結果: { ok, url, slotCount, usedImages }
+window._wfmReceiveMultiImageI2IRunRequest = async (imageBlobs, params, workflowData, workflowFilename) => {
+    try {
+        if (workflowData) {
+            if (!comfyUI.connected) {
+                await comfyUI.checkConnection();
+            }
+            if (comfyUI.connected && (!comfyEditor.models.checkpoints || comfyEditor.models.checkpoints.length === 0)) {
+                await comfyEditor.loadModelLists();
+            }
+            await loadWorkflowIntoEditor(workflowData, workflowFilename || "workflow.json");
+        }
+        return await window._wfmImageEditTab.runI2IExternalMulti(imageBlobs, params);
+    } catch (e) {
+        return { ok: false, message: e.message };
+    }
+};
+
 // ComfyUI Comic Creater からiframe越しにコマの設定（シーン・要素・セリフ等）を受け取り、
 // AIタブの設定タブと同じLLM接続設定（Ollama/LM Studio）で画像生成プロンプトの下書きを
 // 生成して返す（半自動マンガ作成の「L」ボタン連携用）。

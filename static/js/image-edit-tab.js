@@ -1345,6 +1345,10 @@ class ImageEditTab {
     }
 
     // Comic Creator等、同一オリジンiframe越しの外部呼び出し専用エントリポイント（I2I版）。
+    async runI2IExternalMulti(imageBlobs, opts) {
+        return this._inpaint.runI2IExternalMulti(imageBlobs, opts);
+    }
+
     async runI2IExternal(imageBlob, opts) {
         return this._inpaint.runI2IExternal(imageBlob, opts);
     }

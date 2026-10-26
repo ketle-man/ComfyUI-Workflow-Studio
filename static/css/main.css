@@ -984,6 +984,103 @@ body {
     min-height: 0;
 }
 
+/* Input tab: Prompt (3) | Image (2) side by side. Wraps Image under Prompt when the column is narrow. */
+.wfm-gen-params-col--input {
+    container-type: inline-size;
+    container-name: wfm-input;
+    min-width: 0;
+}
+
+.wfm-input-split {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.wfm-input-inner-panel--prompt {
+    flex: 3 1 0;
+    min-width: 0;
+    border-right: 1px solid var(--wfm-border);
+}
+
+.wfm-input-inner-panel--image {
+    flex: 2 1 0;
+    min-width: 0;
+}
+
+.wfm-input-panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--wfm-text-secondary);
+    margin-bottom: 6px;
+}
+
+@container wfm-input (max-width: 720px) {
+    .wfm-input-split {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .wfm-input-inner-panel--prompt,
+    .wfm-input-inner-panel--image {
+        flex: none;
+        overflow-y: visible;
+        border-right: none;
+    }
+    .wfm-input-inner-panel--prompt {
+        border-bottom: 1px solid var(--wfm-border);
+    }
+}
+
+/* Input tab Raw JSON: collapsible to a slim strip at the right edge */
+.wfm-rawjson-collapse-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    padding: 3px 10px;
+    background: var(--wfm-bg-secondary);
+    border: none;
+    border-bottom: 1px solid var(--wfm-border);
+    color: var(--wfm-text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.wfm-rawjson-collapse-btn:hover {
+    color: var(--wfm-text);
+}
+
+.wfm-rawjson-collapse-label {
+    display: none;
+}
+
+.wfm-gen-rawjson-col.wfm-gen-rawjson-col--collapsed {
+    width: 30px;
+}
+
+.wfm-gen-rawjson-col--collapsed .wfm-rawjson-collapse-btn {
+    flex: 1;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 8px 0;
+    border-bottom: none;
+    border-left: 1px solid var(--wfm-border);
+    background: var(--wfm-bg-secondary);
+}
+
+.wfm-gen-rawjson-col--collapsed .wfm-rawjson-collapse-label {
+    display: block;
+    writing-mode: vertical-rl;
+    letter-spacing: 1px;
+}
+
+.wfm-gen-rawjson-col--collapsed #wfm-gen-rawjson-widget {
+    display: none !important;
+}
+
 /* Right sub-column: Raw JSON */
 .wfm-gen-rawjson-col {
     width: 540px;

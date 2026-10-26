@@ -2,6 +2,23 @@
 
 ---
 
+## v0.8.12（2026-10-27）
+
+### Comic Creator向け複数画像I2Iブリッジ + GenerateUI Inputタブ: Prompt/Image統合・Raw JSON折りたたみ
+
+- **背景**: Comic Creator v1.65.0 の Nanobanana+ タブ（ローカルモード）が、Flux.3 Image Klein / Qwen Image 2.1 等の Image Edit 系ワークフローを複数の参照画像つきで実行したい、という要望。既存の `_wfmReceiveI2IRunRequest` は画像1枚（slot 0固定）だった。
+- **複数画像ブリッジ**: `gallery-tab.js` に `window._wfmReceiveMultiImageI2IRunRequest(imageBlobs, params, workflowData, workflowFilename)` を追加（ワークフロー読込→`image-edit-tab.js` の `runI2IExternalMulti` へ委譲）。`InpaintI2IActions.js` の `_runI2IWithImages` が `imageBlobs[i]` を i 番目のLoadImageへ `applyImageToSlot(file, i, ...)` で割り当て（ノード数超過分は無視）。戻り値は `{ ok, url, slotCount, usedImages }`。
+- **生成パラメータ**: width/height/steps/cfg/denoise/sampler_name/scheduler は既存の `comfyEditor.setGenerationParams` を再利用（指定時のみ書き込み。未指定=ワークフローの値のまま）。シードは `generate(workflow, { seedValue })` で固定。
+- **How to apply（限界）**: `setGenerationParams` はKSampler系・解析済みlatentノードにしか書けない。出力サイズを入力画像から決める構成（例: Flux.3 Image Klein の `ReferenceMultiLatent`）では `EmptyFlux2LatentImage` が解析対象外になり、width/height は反映されない（Steps/CFG/シード/プロンプトは反映）。
+- **Inputタブ（GenerateUI）**: Prompt / Image の内部タブを廃止し、同一画面に左右（Prompt:Image = 3:2）で並べた。親カラム（`.wfm-gen-params-col--input`）をCSSコンテナにして、幅が720px以下になるとImageがPromptの下へ折り返す（`@container`）。JSのタブ切替ハンドラは削除（`gallery-tab.js` の `[data-input-tab="image"]` クリックは `?.` のため無害）。
+- **Raw JSONの折りたたみ（Inputのみ）**: 右カラムの上端に »/« ボタン。折りたたむと幅30pxの縦書き「Raw JSON」の帯だけが右端に残り、Prompt/Imageが広がる。状態は `localStorage`（`wfm_gen_rawjson_collapsed`）。Model/Settings の Raw JSON は従来どおり。
+  - 落とし穴: `.wfm-gen-rawjson-col`（幅540px）より前に書いた `--collapsed { width:30px }` は詳細度が同じで負ける。`.wfm-gen-rawjson-col.wfm-gen-rawjson-col--collapsed` と2クラスで指定する。
+- **検証**: Comic Creator内のiframe（ComfyUI_5、8189）で、横並び（757px : 514px）・折りたたみ（540→30px）・狭幅での折り返しと、Comic Creator経由の実生成（Qwen2.1 1枚/2枚入力、Flux.3 Klein）を確認。
+- ヘルプ（helpGen4 英/日/中・`index.html`）とREADMEを更新。マニュアル（v0.8.9版）は未更新。
+
+
+---
+
 ## v0.8.11（2026-10-26）
 
 ### Gallery: Send CC をレイアウト／Imageタブの2ボタンに分割

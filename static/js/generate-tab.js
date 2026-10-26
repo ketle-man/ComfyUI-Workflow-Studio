@@ -2217,16 +2217,25 @@ export async function initGenerateTab() {
         comfyEditor.renderLoraPane(comfyUI.currentAnalysis, "wfm-gen-lora-fields");
     });
 
-    // Input inner tab (Prompt / Image)
-    document.querySelectorAll(".wfm-input-inner-tab").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            const target = btn.dataset.inputTab;
-            document.querySelectorAll(".wfm-input-inner-tab").forEach((b) => b.classList.remove("active"));
-            btn.classList.add("active");
-            document.querySelectorAll(".wfm-input-inner-panel").forEach((p) => p.style.display = "none");
-            document.getElementById(`wfm-input-panel-${target}`)?.style.setProperty("display", "");
+    // Input tab: Raw JSON column collapse / expand (state remembered in localStorage)
+    {
+        const col = document.getElementById("wfm-gen-rawjson-col-input");
+        const btn = document.getElementById("wfm-gen-rawjson-collapse-btn");
+        const KEY = "wfm_gen_rawjson_collapsed";
+        const apply = (collapsed) => {
+            col?.classList.toggle("wfm-gen-rawjson-col--collapsed", collapsed);
+            const icon = btn?.querySelector(".wfm-rawjson-collapse-icon");
+            if (icon) icon.textContent = collapsed ? "«" : "»";
+        };
+        let stored = false;
+        try { stored = localStorage.getItem(KEY) === "1"; } catch { /* ignore */ }
+        apply(stored);
+        btn?.addEventListener("click", () => {
+            const next = !col.classList.contains("wfm-gen-rawjson-col--collapsed");
+            apply(next);
+            try { localStorage.setItem(KEY, next ? "1" : "0"); } catch { /* ignore */ }
         });
-    });
+    }
 
     // Initial placement: move to first active tab (input)
     moveRawJsonToTab("input");

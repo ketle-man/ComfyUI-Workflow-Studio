@@ -287,6 +287,56 @@ export class InpaintI2IActions {
         return resultImg?.src || null;
     }
 
+    // 複数画像版: imageBlobs[i] をワークフロー内の i 番目の LoadImage ノードへ割り当てて実行する
+    // （Comic Creator の Nanobanana+ タブ「Local」用。LoadImage 数を超える分は無視する）。
+    // denoise は指定されたときだけ反映する（Image Edit系ワークフローはdenoiseを持たないことが多い）。
+    // width/height/steps/cfg/seed は指定時のみ反映（未指定=ワークフロー既定のまま）。
+    // seed が 0以上なら固定シード、未指定/負ならGenerateUIのシード設定に従う。
+    async _runI2IWithImages(imageBlobs, { positive, negative, denoise, width, height, steps, cfg, sampler_name, scheduler, seed, overrideOpts = {}, onStatus } = {}) {
+        const setStatus = onStatus || (() => {});
+
+        const analysisForLookup = overrideOpts.analysis || comfyUI.currentAnalysis;
+        if (!analysisForLookup) throw new Error("No workflow loaded in GenerateUI");
+        const slotCount = analysisForLookup.load_image_nodes?.length || 0;
+        if (imageBlobs.length > 0 && slotCount === 0) {
+            throw new Error("No LoadImage node found in the workflow");
+        }
+
+        setStatus("Uploading...");
+        const used = Math.min(imageBlobs.length, slotCount);
+        for (let i = 0; i < used; i++) {
+            const file = new File([imageBlobs[i]], `i2i_${Math.random().toString(36).slice(2, 10)}.png`, { type: "image/png" });
+            await comfyEditor.applyImageToSlot(file, i, overrideOpts);
+        }
+
+        comfyEditor.setPromptText("positive", positive, overrideOpts);
+        if (negative) comfyEditor.setPromptText("negative", negative, overrideOpts);
+        if (width != null || height != null || steps != null || cfg != null || denoise != null || sampler_name || scheduler) {
+            comfyEditor.setGenerationParams({ width, height, steps, cfg, denoise, sampler_name, scheduler, ...overrideOpts });
+        }
+
+        if (!window._wfmGenerateTab?.generate) throw new Error("GenerateUI is not ready yet");
+
+        setStatus("Generating...");
+        const genOptions = (seed != null && seed >= 0) ? { seedValue: seed } : {};
+        await window._wfmGenerateTab.generate(overrideOpts.workflow || undefined, genOptions);
+
+        const resultImg = document.getElementById("wfm-gen-result-img");
+        return { url: resultImg?.src || null, slotCount, usedImages: used };
+    }
+
+    async runI2IExternalMulti(imageBlobs, { positive = "", negative = "", denoise = null, width, height, steps, cfg, sampler_name, scheduler, seed } = {}) {
+        if (this.i2iExternalRunning) throw new Error("I2I is already running");
+        this.i2iExternalRunning = true;
+        try {
+            const r = await this._runI2IWithImages(imageBlobs || [], { positive, negative, denoise, width, height, steps, cfg, sampler_name, scheduler, seed });
+            if (!r.url) throw new Error("No result image produced");
+            return { ok: true, url: r.url, slotCount: r.slotCount, usedImages: r.usedImages };
+        } finally {
+            this.i2iExternalRunning = false;
+        }
+    }
+
     // Comic Creator等、同一オリジンiframe越しの外部呼び出し専用エントリポイント（I2I版）。
     // runExternal と対になる、マスク不要のシンプルなI2I実行。
     async runI2IExternal(imageBlob, { positive = "", negative = "", denoise = 1.0 } = {}) {

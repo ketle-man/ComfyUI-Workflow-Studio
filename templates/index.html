@@ -335,23 +335,28 @@
                     <!-- Tab: Input — left sub-col: Prompt/Image (tabbed), right sub-col: Raw JSON -->
                     <div id="wfm-gen-subtab-input" class="wfm-gen-subtab-content active">
                         <div class="wfm-gen-tab-cols">
-                            <div class="wfm-gen-params-col">
-                                <div class="wfm-input-inner-tabnav">
-                                    <button class="wfm-input-inner-tab active" data-input-tab="prompt">Prompt</button>
-                                    <button class="wfm-input-inner-tab" data-input-tab="image">Image</button>
-                                </div>
-                                <div id="wfm-input-panel-prompt" class="wfm-input-inner-panel">
-                                    <div id="wfm-gen-prompt-fields">
-                                        <p class="wfm-placeholder">Load a workflow to edit prompts</p>
+                            <div class="wfm-gen-params-col wfm-gen-params-col--input">
+                                <!-- Prompt (3) | Image (2) の2カラム。params-colの幅が狭いとImageがPromptの下へ折り返す（CSSコンテナクエリ） -->
+                                <div class="wfm-input-split">
+                                    <div id="wfm-input-panel-prompt" class="wfm-input-inner-panel wfm-input-inner-panel--prompt">
+                                        <div class="wfm-input-panel-title">Prompt</div>
+                                        <div id="wfm-gen-prompt-fields">
+                                            <p class="wfm-placeholder">Load a workflow to edit prompts</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <div id="wfm-input-panel-image" class="wfm-input-inner-panel" style="display:none;">
-                                    <div id="wfm-gen-image-fields">
-                                        <p class="wfm-placeholder">Load a workflow to set input images</p>
+                                    <div id="wfm-input-panel-image" class="wfm-input-inner-panel wfm-input-inner-panel--image">
+                                        <div class="wfm-input-panel-title">Image</div>
+                                        <div id="wfm-gen-image-fields">
+                                            <p class="wfm-placeholder">Load a workflow to set input images</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="wfm-gen-rawjson-col" id="wfm-gen-rawjson-col-input"></div>
+                            <div class="wfm-gen-rawjson-col wfm-gen-rawjson-col--collapsible" id="wfm-gen-rawjson-col-input">
+                                <button type="button" id="wfm-gen-rawjson-collapse-btn" class="wfm-rawjson-collapse-btn" title="Collapse / expand Raw JSON">
+                                    <span class="wfm-rawjson-collapse-icon">»</span><span class="wfm-rawjson-collapse-label">Raw JSON</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1424,7 +1429,7 @@
                             <h3 id="wfm-help-gen-card-tabs-title">Tab Layout</h3>
                             <ul>
                                 <li id="wfm-help-gen-3">5-tab layout — Input (Prompt + Image), Model, Settings, Feeder, Batch — Input/Model/Settings each include a Raw JSON column for instant preview and direct editing</li>
-                                <li id="wfm-help-gen-4">Input tab: inner tabs — <b>Prompt</b> and <b>Image</b> (drag-and-drop upload); Prompt tab has Positive Prompt, Negative Prompt, and an <b>Embeddings</b> selector at the bottom — select a model, set Weight (default 1.0), then click <b>Paste</b> to insert <code>(embedding:Name:weight)</code> at the cursor position of the last focused textarea (defaults to Positive if neither is focused); a <b>↺</b> button next to each Apply button reverts the textarea to the node's currently applied value; select text (or just place the cursor on a word/parenthesis block) and press <b>Ctrl+↑/↓</b> to adjust its emphasis weight in <code>(text:weight)</code> syntax by ±0.05 — the parentheses are removed automatically when the weight returns to 1.0</li>
+                                <li id="wfm-help-gen-4">Input tab: <b>Prompt</b> (left) and <b>Image</b> (right, about 3:2) are shown side by side on one screen (drag-and-drop upload); when the Prompt/Image area gets narrow (about 720px or less) Image wraps under Prompt, and the Raw JSON column can be collapsed to a slim strip at the right edge with its <b>»</b> button (Input tab only; remembered); the Prompt area has Positive Prompt, Negative Prompt, and an <b>Embeddings</b> selector at the bottom — select a model, set Weight (default 1.0), then click <b>Paste</b> to insert <code>(embedding:Name:weight)</code> at the cursor position of the last focused textarea (defaults to Positive if neither is focused); a <b>↺</b> button next to each Apply button reverts the textarea to the node's currently applied value; select text (or just place the cursor on a word/parenthesis block) and press <b>Ctrl+↑/↓</b> to adjust its emphasis weight in <code>(text:weight)</code> syntax by ±0.05 — the parentheses are removed automatically when the weight returns to 1.0</li>
                                 <li id="wfm-help-gen-5">Model tab: Checkpoint, VAE, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors) are always shown; ControlNet and Hypernetwork (with Strength field) are collapsed by default since they're used less often — click their header to expand; LoRA (Single/Stack tabs) has its own column to the right; all selectors have a filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones</li>
                                 <li id="wfm-help-gen-28">Model tab — Highlight color: the label of each model type (Checkpoint, VAE, Diffusion Model, Text Encoder, ControlNet, Hypernetwork) and the LoRA column header turn a distinct color (default bright green) when the loaded workflow actually contains that type of node; this stays visible even while ControlNet/Hypernetwork are collapsed, so you can tell at a glance whether they're in use without expanding them; the color is customizable in the Settings tab</li>
                                 <li id="wfm-help-gen-6">Settings tab: KSampler and Latent Image side by side, each at 50% width</li>
