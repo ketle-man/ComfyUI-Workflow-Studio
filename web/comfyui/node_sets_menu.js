@@ -652,17 +652,6 @@ window.wfmOpenMaskEditorForNode = async (imageDataUrl, maskDataUrl) => {
     });
     if (!resp.ok) throw new Error("Failed to send image to Mask Editor One");
 
-    // WFS側で既にマスクレイヤーを描いていた場合、それを初期マスクとしてそのまま引き継ぐ
-    // （applyImageAndMaskToMaskEditorOneNode の layer_data 形式と同じスキーマ）
-    if (maskDataUrl) {
-        const layerWidget = node.widgets?.find((w) => w.name === "layer_data");
-        if (layerWidget) {
-            layerWidget.value = JSON.stringify({
-                layers: [{ visible: true, opacity: 1, operation: "add", imageData: maskDataUrl }],
-            });
-        }
-    }
-
     // ノード側のプレビュー/モーダル背景を、送信した画像に同期させる
     node._bgDataUrl = imageDataUrl;
     node._bgImg = await new Promise((r) => {
@@ -672,6 +661,29 @@ window.wfmOpenMaskEditorForNode = async (imageDataUrl, maskDataUrl) => {
         img.src = imageDataUrl;
     });
     node._previewMode = "image";
+
+    // ワークフロー保存/再読み込み時に古い画像が復元されないよう、node.properties.bg_image を同期する
+    // （mask-editor-one 側が node._persistBgDataUrl を提供している場合のみ。旧バージョンでは無視）
+    if (typeof node._persistBgDataUrl === "function") {
+        node._persistBgDataUrl(imageDataUrl, "wfs_image.png").catch(() => {});
+    }
+
+    // WFS側で既にマスクレイヤーを描いていた場合、それを初期マスクとしてそのまま引き継ぐ
+    // （applyImageAndMaskToMaskEditorOneNode の layer_data 形式と同じスキーマ。
+    //   width/height は送信画像のサイズで、ノードプレビュー復元時のレイヤーサイズ決定に使われる）
+    if (maskDataUrl) {
+        const layerWidget = node.widgets?.find((w) => w.name === "layer_data");
+        if (layerWidget) {
+            const layerData = {
+                layers: [{ visible: true, opacity: 1, operation: "add", imageData: maskDataUrl }],
+            };
+            if (node._bgImg) {
+                layerData.width  = node._bgImg.naturalWidth;
+                layerData.height = node._bgImg.naturalHeight;
+            }
+            layerWidget.value = JSON.stringify(layerData);
+        }
+    }
     node.setDirtyCanvas?.(true, true);
 
     const prevMaskUrl = node._maskDataUrl;

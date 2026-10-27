@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.8.13（2026-10-27）** — Edit in Mask Editor One: 送信画像をノードへ永続化（Mask Editor One v0.1.12 対応）
 - **v0.8.12（2026-10-27）** — Comic Creator向け複数画像I2Iブリッジ + GenerateUI Inputタブ: Prompt/Image統合・Raw JSON折りたたみ
 - **v0.8.11（2026-10-26）** — Gallery: Send CC をレイアウト／Imageタブの2ボタンに分割
 - **v0.8.10（2026-10-23）** — Tagger: PixAI Tagger v1.0 対応

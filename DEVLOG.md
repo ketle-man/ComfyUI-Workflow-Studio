@@ -2,6 +2,20 @@
 
 ---
 
+## v0.8.13（2026-10-27）
+
+### Edit in Mask Editor One: 送信画像をノードへ永続化（Mask Editor One v0.1.12 対応）
+
+- **背景**: Mask Editor One v0.1.12（PR #4）が、背景画像を `input/mask_editor/` へアップロードして `node.properties.bg_image` に保存し、ワークフロー切り替え／リロード時の `onConfigure` で復元するようになった。一方 `window.wfmOpenMaskEditorForNode`（`web/comfyui/node_sets_menu.js`）は `node._bgDataUrl` / `node._bgImg` を直接差し替えるだけで `properties` を更新しないため、そのままだとリロード時に**以前の画像が復元され、`/mask_editor/store_image` のサーバーキャッシュを上書きする**（WFSが送った画像が消える）。
+- **修正**: 画像送信後に `node._persistBgDataUrl(imageDataUrl, "wfs_image.png")` を呼んで `properties.bg_image` を同期（Mask Editor One 側が公開する関数。旧バージョンでは `typeof` チェックで無視）。
+- **layer_data**: 既存マスクを引き継ぐ際の `layer_data` に、送信画像の `width` / `height` を付与。ノードのマスクプレビュー復元はこのサイズでレイヤーを作る（無い場合は復元済みの背景画像サイズ、それも無ければスキップ）。付与順は「`_bgImg` ロード後」に変更。
+- **How to apply**: 外部から `MaskEditorOne` ノードの画像を差し替えるコードは、`node._bgDataUrl` を書き換えたら必ず `node._persistBgDataUrl()` で参照も同期すること。`applyImageAndMaskToMaskEditorOneNode`（API形式ワークフローへ書き込む経路）はグラフ上のノードを触らないので影響なし。
+- **検証**: ComfyUI_5（8189）で、画像A保存→WFS相当でB送信→シリアライズ／復元で、背景がB（300×600）・マスクプレビューも300×600になること、`width/height` なしの `layer_data` でも背景サイズで復元されることを確認。
+- ヘルプ（`helpImageEditMask14` 英/日/中）とREADMEを更新。マニュアル（v0.8.9版）は未更新。
+
+
+---
+
 ## v0.8.12（2026-10-27）
 
 ### Comic Creator向け複数画像I2Iブリッジ + GenerateUI Inputタブ: Prompt/Image統合・Raw JSON折りたたみ
