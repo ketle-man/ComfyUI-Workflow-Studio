@@ -74,7 +74,7 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 3 sub-tabs, Model support, Threshold sliders, VLM tagging, Single tab, Single output options, Batch tab, DB tab, Dependencies
 
 ### TagSpace Tab (unreleased)
-Choose tags visually in a 3D latent space, Build / Update, Explore, Make a prompt, Tagger fill, Requirements
+Choose tags visually in a 3D latent space, Build / Update, Explore, Make a prompt, Tagger fill, Glow / Twinkle, Hover preview, Requirements
 
 ### Image Edit Tab (v0.3.65)
 Layer-based image editor, Loading images, Open PSD button, Close button, New button, Tools, Layer panel, Duplicate layer (⧉), Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
