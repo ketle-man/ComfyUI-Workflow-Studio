@@ -417,6 +417,17 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 </details>
 
 <details>
+<summary><h3>TagSpace Tab (unreleased)</h3></summary>
+
+- **Choose tags visually in a 3D latent space** — WFS's own data is placed in the EmbeddingGemma 2 vector space and shown in 3D (three.js, bundled): **Cards** (ImagePrompt images with their prompt, drawn as thumbnails), **Tags** (words split out of ImagePrompt prompts, wildcards, the Tagger DB and the Prompt library, colored by source) and **Gallery points** (a sample of indexed Gallery images as a faint background). Nearby items have similar meanings
+- **Build / Update** — collects the cards, adds card images that are not yet indexed to the Gallery semantic index, embeds new tags with Ollama (cached in `tagspace_tags.npz`) and projects everything to 3D with PCA. **Tags** sets how many tags are kept (ranked by number of sources, then frequency), **Gallery points** how many Gallery images are shown. Images and text form two separate clusters in the same space (modality gap), so each is centered on its own mean (images: the cards) before PCA, which makes cards and their matching tags overlap. First build with ~1,000 cards / 2,000 tags: about 2.5 min; rebuilds with caches: a few seconds
+- **Explore** — drag to rotate, right-drag to pan, wheel to zoom; hover shows name, thumbnail and prompt/sources; layer checkboxes for Cards / Thumbnails / Tags / Gallery. The search box (Enter, any language) places a marker for the text and lists the nearest items
+- **Make a prompt** — click a card or tag to add it (click again to remove) and list nearby items; cards and tags are ranked separately and interleaved, so a card also shows its closest tags. The prompt joins the chips with duplicates removed; **Add to GenerateUI (Positive)** appends it to the loaded workflow's positive prompt, **Copy** puts it on the clipboard
+- **Requirements** — Ollama with EmbeddingGemma 2 (Gallery > Semantic settings > Model); a Gallery semantic index built with Gemini must be rebuilt with EmbeddingGemma 2 first
+
+</details>
+
+<details>
 <summary><h3>Image Edit Tab (v0.3.65)</h3></summary>
 
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG or a fully layered PSD
@@ -664,7 +675,8 @@ ComfyUI-Workflow-Studio/
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
 │   │   ├── eagle_routes.py      # Eagle integration API
-│   │   └── gallery_routes.py    # Gallery tab API (Output + ImagePrompt + Style_Catalog sub-tabs)
+│   │   ├── gallery_routes.py    # Gallery tab API (Output + ImagePrompt + Style_Catalog sub-tabs)
+│   │   └── tagspace_routes.py   # TagSpace tab API (build / space / search / neighbors)
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
 │       ├── nodes_service.py     # Node metadata & node sets

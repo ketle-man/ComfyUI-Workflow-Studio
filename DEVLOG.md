@@ -4,6 +4,19 @@
 
 ## 未リリース（2026-11-02）
 
+### TagSpace タブ新設（latenttag-3d の WFS 統合）
+
+- **目的**: latenttag-3d（単独アプリは別途継続）を WFS に組み込み、WFS のデータだけでタグを視覚的に選んでプロンプトを作る。
+- **材料**: カード＝ImagePrompt（`ws_image_prompt`、`.txt` または ponyxlWildcardsVault の YAML から `_read_sidecar_prompt` でプロンプト解決、プロンプトのある951枚）／タグ＝ImagePrompt・ワイルドカード（`.txt` 行・YAML の `- ` 行）・Tagger DB・`prompts.json` の文を `, \n | { } BREAK` で分解し正規化（重み・括弧・Dynamic Prompts の `n::`・LoRA・`__wildcard__`・`rating:` を除去、`_`→空白、2〜40文字・5語以内）。出典の種類数→出現回数の順で上位 N（既定2000）／背景＝Gallery 索引から seed 固定で間引いた画像（既定4000）。
+- **ベクトル**: カードは Gallery セマンティック索引の画像ベクトルを流用（未索引分は構築時に `SemanticService.start_index(..., "missing")` で追加）。タグは Ollama でテキスト埋め込み（`task: search result | query:` 付き）し `tagspace_tags.npz` にキャッシュ。索引が Gemini のときはエラーにする。
+- **modality gap**: 同じ空間でも画像とテキストは別の塊になる。実測で、そのまま PCA すると第1・第2軸が画像/テキストの分離に使われた（|Δ平均|/標準偏差 2.99・4.43）。画像とテキストを別々の平均で中心化すると 0 になり、画像→近いタグも改善（例 `alley`: 中心化前 anime, twintails… → 後 street, neon lights, city lights, night）。
+  - 画像側の平均を「カード＋背景」で取ると、数の多い背景に引っ張られてカードがタグの塊から離れた（中心間距離 5.06）。カードの平均に変えて 0.00 にした。
+  - 近傍・検索も同じ中心化コサイン。同種どうしのスコアが高く出るため、カードとタグを別々に順位付けして交互に並べる。
+- **3D**: three.js r187（MIT）から使う部品＋OrbitControls だけを esbuild で束ねた `static/lib/three/three-tagspace.min.js`（559KB）を同梱し、タブを初めて開いたときに動的 import。カードは Sprite（サムネイルを6並列で順次読み込み）、タグ・背景は Points、選択/近傍/検索は重ね描き、ラベルは HTML オーバーレイ。タブが非表示の間は描画ループを止める。
+- **API**: `/wfm/tagspace/{status,space,build,cancel,search,neighbors}`（`tagspace_routes.py`。Gallery と同じ GalleryService/SemanticService を共有）。生成物は `tagspace_space.json`（表示用）・`tagspace_space.npz`（近傍/検索用）・`tagspace_tags.npz`（タグのベクトル）。
+- **検証**（ComfyUI_5 / 8189）: 初回構築 約2.5分（カード画像1,054枚の索引追加＋タグ2,000件）、キャッシュありの再構築 7秒。英語・日本語の検索、キャンバスのホバー/クリック（タグ・カード）、チップのトグル、重複除去、GenerateUI の Positive への追記（`wfs_sdxl_gallery.json`）、ワークフロー未読込時のトーストを確認。コンソールエラー0。
+- 注意: Git Bash の curl で日本語の JSON を送ると文字化けして空の検索になる（API 側の問題ではない）。ヘルプ（TagSpace ページ 英/日/中）と README を追加。マニュアルは未更新。
+
 ### Gallery セマンティック検索: EmbeddingGemma 2 を ONNX から Ollama へ移行
 
 - **背景**: latenttag-3d（Ollama の `embeddinggemma-2` でタグを埋め込む）と Gallery 索引を共通の空間で使いたい。ONNX 版（`semantic_local.py`、q4）は onnxruntime-gpu の入れ替え問題も抱えていた。

@@ -455,6 +455,35 @@ class SemanticService:
                 raise SemanticError(e.code, str(e))
         return embed_text(text, dim)
 
+    # ── 他機能(TagSpace)向けの読み出し ─────────────────────
+
+    def index_info(self) -> dict:
+        self._ensure_loaded()
+        with self._lock:
+            return {"model": self._model, "dim": self._dim, "count": len(self._vecs)}
+
+    def job_status(self) -> dict:
+        return dict(self._job)
+
+    def vectors_for(self, entries: list) -> dict[str, np.ndarray]:
+        """entries([(name, abs_path, size, mtime)])のうち、索引済みで最新のもののベクトル"""
+        self._ensure_loaded()
+        with self._lock:
+            return {ap: self._vecs[ap] for _, ap, sz, mt in entries
+                    if ap in self._vecs and self._is_fresh(ap, sz, mt)}
+
+    def sample_vectors(self, n: int, exclude_prefix: str = "", seed: int = 0) -> tuple[list[str], np.ndarray]:
+        """索引から最大n件を無作為に(seed固定で)取り出す。exclude_prefix配下は除く"""
+        self._ensure_loaded()
+        with self._lock:
+            paths = [p for p in self._vecs if not (exclude_prefix and p.startswith(exclude_prefix))]
+            if len(paths) > n:
+                pick = np.random.default_rng(seed).choice(len(paths), n, replace=False)
+                paths = [paths[i] for i in sorted(pick)]
+            mat = (np.stack([self._vecs[p] for p in paths]) if paths
+                   else np.zeros((0, max(self._dim, 1)), np.float32))
+        return paths, mat
+
     # ── 検索 ───────────────────────────────────────────────
 
     def _matrix(self):

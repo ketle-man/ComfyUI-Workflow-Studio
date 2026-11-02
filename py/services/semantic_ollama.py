@@ -173,7 +173,12 @@ def _image_b64(image) -> str:
 
 
 def embed_text(text: str, dim: int) -> np.ndarray:
-    return _finish(_embed([QUERY_PREFIX + text[:8000].strip()])[0], dim)
+    return embed_texts([text], dim)[0]
+
+
+def embed_texts(texts: list[str], dim: int) -> list[np.ndarray]:
+    """検索文(クエリ)として複数のテキストをまとめて埋め込む"""
+    return [_finish(v, dim) for v in _embed([QUERY_PREFIX + t[:8000].strip() for t in texts])]
 
 
 def embed_images(images: list, dim: int) -> list[np.ndarray]:

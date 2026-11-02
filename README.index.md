@@ -73,6 +73,9 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 ### Tagger Tab (v0.3.38)
 3 sub-tabs, Model support, Threshold sliders, VLM tagging, Single tab, Single output options, Batch tab, DB tab, Dependencies
 
+### TagSpace Tab (unreleased)
+Choose tags visually in a 3D latent space, Build / Update, Explore, Make a prompt, Requirements
+
 ### Image Edit Tab (v0.3.65)
 Layer-based image editor, Loading images, Open PSD button, Close button, New button, Tools, Layer panel, Duplicate layer (⧉), Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
 
@@ -210,7 +213,8 @@ ComfyUI-Workflow-Studio/
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
 │   │   ├── eagle_routes.py      # Eagle integration API
-│   │   └── gallery_routes.py    # Gallery tab API (Output + ImagePrompt + Style_Catalog sub-tabs)
+│   │   ├── gallery_routes.py    # Gallery tab API (Output + ImagePrompt + Style_Catalog sub-tabs)
+│   │   └── tagspace_routes.py   # TagSpace tab API (build / space / search / neighbors)
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
 │       ├── nodes_service.py     # Node metadata & node sets

@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/wfm_static/css/image-edit-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/lab-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/video-tab.css">
+    <link rel="stylesheet" href="/wfm_static/css/tagspace-tab.css">
 </head>
 <body>
     <!-- Header -->
@@ -28,6 +29,7 @@
             <button class="wfm-tab" data-tab="image-edit">Image Edit</button>
             <button class="wfm-tab" data-tab="video">Video</button>
             <button class="wfm-tab" data-tab="tagger">Tagger</button>
+            <button class="wfm-tab" data-tab="tagspace">TagSpace</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
             <button class="wfm-tab" data-tab="ai">AI TOOL</button>
@@ -1354,6 +1356,7 @@
                         <button class="wfm-help-nav-item" data-help-page="sidepanel">Library (Side Panel)</button>
                         <button class="wfm-help-nav-item" data-help-page="aitool">AI TOOL Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="tagger">Tagger Tab</button>
+                        <button class="wfm-help-nav-item" data-help-page="tagspace">TagSpace Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="imageedit">Image Edit Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="video">Video Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="shortcuts">Keyboard Shortcuts</button>
@@ -1996,6 +1999,29 @@
                             <ul>
                                 <li id="wfm-help-tagger-7">Batch tab: enter a folder path, configure WD Tagger and enable VLM tagging (uses the same &#9881; Settings as the Single tab); output options: Save to DB (default on), Write to File (EXIF/PNG metadata), Write .txt (creates &lt;filename&gt;.txt alongside each image); click Start Batch to process all images in the folder; progress bar and log are updated in real time; Stop cancels after the current image</li>
                                 <li id="wfm-help-tagger-8">DB tab: searchable database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records as a CSV file</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="wfm-help-page" id="wfm-help-page-tagspace">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-tagspace-title">TagSpace Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="tagspace">Open tab &rarr;</button>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagspace-card-overview-title">Overview &amp; Building the Space</h3>
+                            <ul>
+                                <li id="wfm-help-tagspace-1">TagSpace places WFS's own data in the EmbeddingGemma 2 vector space and shows it in 3D: Cards (ImagePrompt images with their prompt, shown as thumbnails), Tags (words split out of ImagePrompt prompts, wildcards, the Tagger DB and the Prompt library, colored by source) and Gallery points (a sample of indexed Gallery images as a faint background). Nearby items have similar meanings</li>
+                                <li id="wfm-help-tagspace-2">Requirements: Ollama running with EmbeddingGemma 2 (Gallery &gt; Semantic settings &gt; Model). If the Gallery semantic index was made with Gemini, rebuild it with EmbeddingGemma 2 first</li>
+                                <li id="wfm-help-tagspace-3">Build / Update: collects the cards, adds card images that are not yet indexed to the Gallery semantic index, embeds new tags with Ollama (cached in tagspace_tags.npz, so later builds are fast) and projects everything to 3D with PCA. Tags: how many tags to keep (ranked by the number of sources, then frequency); Gallery points: how many Gallery images to show (0 = none). Images and text are centered separately before PCA so cards and their matching tags overlap (images and text otherwise form two separate clusters). The first build with about 1,000 cards and 2,000 tags took about 2.5 minutes</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagspace-card-use-title">Choosing Tags &amp; Making a Prompt</h3>
+                            <ul>
+                                <li id="wfm-help-tagspace-4">Navigation: drag to rotate, right-drag to pan, wheel to zoom. Hover shows the name, thumbnail and prompt/sources; the checkboxes show or hide Cards, Thumbnails, Tags and Gallery</li>
+                                <li id="wfm-help-tagspace-5">Click a card or tag to add it to the Prompt panel (click again to remove) and list nearby items — cards and tags are ranked separately and listed alternately, so a card also shows its closest tags. Use + in the list to add, click a row to move to it. The search box (Enter, any language) places a white marker for the text and lists the nearest items</li>
+                                <li id="wfm-help-tagspace-6">Prompt panel: a card adds its whole prompt, a tag adds the tag. The text joins them with duplicates removed (case and spacing ignored). "Add to GenerateUI (Positive)" appends it to the positive prompt of the workflow loaded in GenerateUI; Copy puts it on the clipboard</li>
                             </ul>
                         </div>
                     </div>
@@ -3394,6 +3420,9 @@
                 </div>
             </div>
         </section>
+
+        <!-- TagSpace Tab (内容は tagspace-tab.js が生成) -->
+        <section id="wfm-tab-tagspace" class="wfm-tab-content"></section>
 
         <!-- AI Tab -->
         <section id="wfm-tab-ai" class="wfm-tab-content">
