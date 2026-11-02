@@ -33,7 +33,12 @@ _EMBED_BATCH = 32
 _RADIUS = 10.0                # 3D座標の広がり(98パーセンタイル半径)
 _IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _VAULT_THUMB_DIRS = {"thumbnails", "thumbnails_option2"}
-SOURCES = ("image_prompt", "tagger", "prompt_library", "wildcard")
+SOURCES = ("image_prompt", "gallery", "tagger", "prompt_library", "wildcard")
+_PROMPT_MAX = 4000            # キャッシュするプロンプトの最大文字数
+# Positive をたどるときに文字列として拾う入力名(CLIPTextEncode系・Qwen/Flux系のエンコーダー・文字列ノード)
+_TEXT_INPUTS = {"text", "prompt", "positive", "text_g", "text_l", "clip_l", "t5xxl", "string", "value",
+                "user_prompt", "system_prompt_text"}
+_SKIP_INPUTS = {"negative", "negative_prompt", "neg"}
 
 _SPLIT = re.compile(r"[,\n|{}]+|\bBREAK\b")
 _WEIGHT = re.compile(r":\s*-?\d+(?:\.\d+)?\s*$")
@@ -65,6 +70,41 @@ def split_tags(text: str) -> list[str]:
     return [t for t in (normalize_tag(p) for p in _SPLIT.split(text or "")) if t]
 
 
+def _upstream_texts(graph: dict, node_id: str, seen: set) -> list[str]:
+    """API形式グラフで node_id から上流へたどり、プロンプト用の文字列入力を集める(negative側はたどらない)"""
+    if node_id in seen or node_id not in graph:
+        return []
+    seen.add(node_id)
+    out = []
+    for key, val in ((graph[node_id] or {}).get("inputs") or {}).items():
+        lk = key.lower()
+        if lk in _SKIP_INPUTS:
+            continue
+        if isinstance(val, str):
+            if lk in _TEXT_INPUTS and val.strip():
+                out.append(val.strip())
+        elif isinstance(val, list) and len(val) == 2 and isinstance(val[0], (str, int)):
+            out += _upstream_texts(graph, str(val[0]), seen)
+    return out
+
+
+def positive_prompt(graph: dict) -> str:
+    """API形式グラフの Positive プロンプト。サンプラー/ガイダーの positive(無ければ BasicGuider等の conditioning)から上流をたどる"""
+    if not isinstance(graph, dict) or "nodes" in graph:
+        return ""
+    texts = []
+    for node in graph.values():
+        ins = (node or {}).get("inputs") if isinstance(node, dict) else None
+        if not isinstance(ins, dict):
+            continue
+        link = ins.get("positive")
+        if not isinstance(link, list) and "negative" not in ins:
+            link = ins.get("conditioning") if "guider" in str(node.get("class_type", "")).lower() else None
+        if isinstance(link, list) and link:
+            texts += _upstream_texts(graph, str(link[0]), set())
+    return ", ".join(dict.fromkeys(texts))[:_PROMPT_MAX]
+
+
 class TagSpaceService:
     def __init__(self, data_dir: Path, gallery_service, semantic_service):
         self.data_dir = data_dir
@@ -73,6 +113,7 @@ class TagSpaceService:
         self._tag_file = data_dir / "tagspace_tags.npz"
         self._space_file = data_dir / "tagspace_space.json"
         self._mat_file = data_dir / "tagspace_space.npz"
+        self._prompt_file = data_dir / "tagspace_prompts.json"   # Gallery画像の Positive {path: [size, mtime, text]}
         self._lock = threading.RLock()
         self._tag_cache: dict[str, np.ndarray] | None = None   # tag -> 768次元(正規化済み)
         self._space: dict | None = None      # 3D表示用データ(JSON)
@@ -177,20 +218,74 @@ class TagSpaceService:
             if isinstance(it, dict) and it.get("text"):
                 yield str(it["text"])
 
-    def collect_tags(self, cards: list[dict], max_tags: int) -> list[dict]:
-        """全ソースのタグを数え、出現したソースの種類数→出現回数の順で上位を返す"""
-        counts: Counter = Counter()
-        srcs: dict[str, set] = {}
-        feeds = {"image_prompt": (c["prompt"] for c in cards), "tagger": self._tagger_texts(),
-                 "prompt_library": self._library_texts(), "wildcard": self._wildcard_texts()}
+    def _gallery_prompts(self, exclude_prefix: str) -> dict[str, str]:
+        """索引済み Gallery 画像の Positive プロンプト。(size, mtime)が同じならキャッシュを使う"""
+        try:
+            cache = json.loads(self._prompt_file.read_text(encoding="utf-8")) if self._prompt_file.exists() else {}
+        except Exception as e:
+            logger.warning("TagSpace: failed to load prompt cache: %s", e)
+            cache = {}
+        entries = [e for e in self.semantic.indexed_entries(exclude_prefix)
+                   if Path(e[0]).suffix.lower() in _IMG_EXTS]
+        job = self._job
+        job.update(phase="prompts", done=0, total=len(entries))
+        new_cache, out = {}, {}
+        for n, (path, size, mtime) in enumerate(entries):
+            if self._cancel.is_set():
+                break
+            if not Path(path).is_file():
+                continue   # 索引作成後に削除された画像(キャッシュにも残さない)
+            hit = cache.get(path)
+            if hit and hit[0] == size and abs(hit[1] - mtime) < 1e-3:
+                text = hit[2]
+            else:
+                try:
+                    text = positive_prompt(self.gallery._extract_embedded_workflow(path, prefer="prompt"))
+                except Exception:
+                    text = ""
+            new_cache[path] = [size, mtime, text]
+            if text:
+                out[path] = text
+            if n % 200 == 0:
+                job["done"] = n
+        job["done"] = len(entries)
+        if not self._cancel.is_set():   # 中止時は途中までの結果で既存のキャッシュを上書きしない
+            tmp = self._prompt_file.with_suffix(".tmp.json")
+            tmp.write_text(json.dumps(new_cache, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(self._prompt_file)
+        return out
+
+    def collect_tags(self, cards: list[dict], max_tags: int, gallery_texts=()) -> list[dict]:
+        """全ソースのタグを数えて上位 max_tags 件を返す。
+        ソースごとに出現数の多い順に並べ、ソースを順番に1件ずつ取る(数の多いGalleryだけで埋まらないように)。
+        出現数は「そのタグを含む文の数」で数える。"""
+        per_src: dict[str, Counter] = {s: Counter() for s in SOURCES}
+        feeds = {"image_prompt": (c["prompt"] for c in cards), "gallery": iter(gallery_texts),
+                 "tagger": self._tagger_texts(), "prompt_library": self._library_texts(),
+                 "wildcard": self._wildcard_texts()}
         for src, texts in feeds.items():
             for text in texts:
-                for tag in split_tags(text):
-                    counts[tag] += 1
-                    srcs.setdefault(tag, set()).add(src)
-        ranked = sorted(counts, key=lambda t: (-len(srcs[t]), -counts[t], t))[:max_tags]
-        return [{"id": f"tag:{t}", "kind": "tag", "label": t, "count": counts[t],
-                 "sources": [s for s in SOURCES if s in srcs[t]]} for t in ranked]
+                per_src[src].update(set(split_tags(text)))
+        queues = {s: sorted(c, key=lambda t, c=c: (-c[t], t)) for s, c in per_src.items() if c}
+        picked: list[str] = []
+        seen: set = set()
+        pos = dict.fromkeys(queues, 0)
+        while len(picked) < max_tags and queues:
+            for src in list(queues):
+                q, i = queues[src], pos[src]
+                while i < len(q) and q[i] in seen:
+                    i += 1
+                if i >= len(q):
+                    del queues[src]
+                    continue
+                pos[src] = i + 1
+                seen.add(q[i])
+                picked.append(q[i])
+                if len(picked) >= max_tags:
+                    break
+        return [{"id": f"tag:{t}", "kind": "tag", "label": t,
+                 "count": sum(per_src[s][t] for s in SOURCES),
+                 "sources": [s for s in SOURCES if per_src[s][t]]} for t in picked]
 
     # ── タグベクトルのキャッシュ ───────────────────────────
 
@@ -265,9 +360,15 @@ class TagSpaceService:
             cards = [c for c in cards if c["id"] in card_vecs]
             dim = self.semantic.index_info()["dim"] or ollama.DEFAULT_LOCAL_DIM
 
-            # 2. タグを集めて未キャッシュ分を埋め込む
+            # 2. Gallery 画像の Positive プロンプト(タグの材料と、背景点のタグ)
+            prefix = Path(root).resolve().as_posix().rstrip("/") + "/" if root else ""
+            gallery_prompts = self._gallery_prompts(prefix)
+            if self._cancel.is_set():
+                return
+
+            # 3. タグを集めて未キャッシュ分を埋め込む
             job.update(phase="tags", done=0, total=0)
-            tags = self.collect_tags(cards, max_tags)
+            tags = self.collect_tags(cards, max_tags, gallery_prompts.values())
             cache = self._tag_vectors()
             todo = [t["label"] for t in tags if t["label"] not in cache]
             job.update(total=len(todo))
@@ -289,13 +390,15 @@ class TagSpaceService:
             if self._cancel.is_set():
                 return
 
-            # 3. 背景の Gallery 画像
+            # 4. 背景の Gallery 画像
             job.update(phase="project", done=0, total=0)
-            prefix = Path(root).resolve().as_posix().rstrip("/") + "/" if root else ""
-            bg_paths, bg_mat = self.semantic.sample_vectors(bg, exclude_prefix=prefix) if bg else ([], None)
+            bg_paths, bg_mat = self.semantic.sample_vectors(bg + bg // 4, exclude_prefix=prefix) if bg else ([], None)
+            if bg_paths:   # 索引作成後に削除された画像を除く(多めに取って bg 件に詰める)
+                keep = [i for i, p in enumerate(bg_paths) if Path(p).is_file()][:bg]
+                bg_paths, bg_mat = [bg_paths[i] for i in keep], bg_mat[keep]
 
-            # 4. 投影
-            self._project(cards, card_vecs, tags, cache, dim, bg_paths, bg_mat)
+            # 5. 投影
+            self._project(cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts)
         except SemanticError as e:
             job["error_code"], job["error"] = e.code, str(e)
         except Exception as e:
@@ -314,7 +417,7 @@ class TagSpaceService:
         n = np.linalg.norm(m, axis=1, keepdims=True)
         return m / np.where(n > 0, n, 1)
 
-    def _project(self, cards, card_vecs, tags, cache, dim, bg_paths, bg_mat) -> None:
+    def _project(self, cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts=None) -> None:
         img = self._unit(np.stack([card_vecs[c["id"]] for c in cards]), dim) if cards else np.zeros((0, dim), np.float32)
         txt = self._unit(np.stack([cache[t["label"]] for t in tags]), dim) if tags else np.zeros((0, dim), np.float32)
         if len(img) + len(txt) < 3:
@@ -341,9 +444,12 @@ class TagSpaceService:
             c["xyz"] = p
         for t, p in zip(tags, xyz(txt - mean_txt)):
             t["xyz"] = p
-        bg_items = [{"id": p, "xyz": q} for p, q in zip(bg_paths, xyz(bg_u - mean_img))] if len(bg_u) else []
+        gp = gallery_prompts or {}
+        # 背景点にはその画像のプロンプト由来のタグを持たせる(クリックでまとめて追加)
+        bg_items = [{"id": p, "xyz": q, "tags": list(dict.fromkeys(split_tags(gp.get(p, ""))))}
+                    for p, q in zip(bg_paths, xyz(bg_u - mean_img))] if len(bg_u) else []
         meta = {"built_at": time.strftime("%Y-%m-%d %H:%M:%S"), "cards": len(cards), "tags": len(tags),
-                "background": len(bg_items), "dim": dim, "model": LOCAL_MODEL,
+                "background": len(bg_items), "gallery_prompts": len(gp), "dim": dim, "model": LOCAL_MODEL,
                 "explained": [round(float(v), 4) for v in var[:3]]}
         space = {"meta": meta, "cards": cards, "tags": tags, "background": bg_items}
 

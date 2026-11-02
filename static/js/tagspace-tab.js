@@ -24,7 +24,7 @@ const API = {
 };
 const THREE_URL = "/wfm_static/lib/three/three-tagspace.min.js";
 const LS_VIEW = "wfm_tagspace_view";
-const SOURCE_COLORS = { image_prompt: "#f59e0b", tagger: "#10b981", prompt_library: "#3b82f6", wildcard: "#a855f7" };
+const SOURCE_COLORS = { image_prompt: "#f59e0b", gallery: "#f472b6", tagger: "#10b981", prompt_library: "#3b82f6", wildcard: "#a855f7" };
 const NEAR_K = 20;
 const LABEL_MAX = 24;          // 同時に出すラベル数の上限(選択・近傍・検索結果・ホバー)
 const THUMB_CONCURRENCY = 6;
@@ -158,7 +158,7 @@ function bindShell() {
 
 // ── 状態・構築 ───────────────────────────────────────────────
 
-const PHASES = ["cards", "index", "tags", "project"];
+const PHASES = ["cards", "index", "prompts", "tags", "project"];
 
 async function refreshStatus(loadIfBuilt) {
     let st;
@@ -223,7 +223,10 @@ async function loadSpace() {
     state.items.clear();
     for (const c of state.space.cards) state.items.set(c.id, c);
     for (const g of state.space.tags) state.items.set(g.id, g);
-    for (const b of state.space.background) state.items.set(b.id, { ...b, kind: "image" });
+    for (const b of state.space.background) {
+        b.kind = "image";   // 3Dの点(userData.items)と同じオブジェクトに付ける
+        state.items.set(b.id, b);
+    }
     // 再構築で消えた要素はチップから外す
     state.chips = state.chips.filter((c) => state.items.has(c.id));
     state.selected = state.items.has(state.selected) ? state.selected : null;
@@ -487,10 +490,9 @@ function updateLabels() {
     let html = "";
     for (const [id, cls] of ids) {
         const it = state.items.get(id);
-        if (it.kind === "image") continue;
         const p = screenPos(it.xyz);
         if (!p) continue;
-        html += `<span class="wfm-ts-label wfm-ts-label-${cls}" style="transform:translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)">${escapeHtml(it.label)}</span>`;
+        html += `<span class="wfm-ts-label wfm-ts-label-${cls}" style="transform:translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)">${escapeHtml(itemTitle(it))}</span>`;
     }
     if (box.dataset.html !== html) {
         box.innerHTML = html;
@@ -510,7 +512,8 @@ function showTooltip(it, x, y) {
     }
     const thumb = it.kind !== "tag" ? `<img src="${API.thumb(it.id, 160)}" alt="">` : "";
     const body = it.kind === "card" ? escapeHtml(it.prompt.slice(0, 160))
-        : it.kind === "tag" ? escapeHtml(sourcesText(it)) : "";
+        : it.kind === "tag" ? escapeHtml(sourcesText(it))
+        : escapeHtml(it.tags?.length ? it.tags.slice(0, 20).join(", ") : t("tsImageNoTags"));
     tip.innerHTML = `${thumb}<div><b>${escapeHtml(itemTitle(it))}</b> <span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span>` +
         `${body ? `<div class="wfm-ts-tip-body">${body}</div>` : ""}</div>`;
     tip.style.display = "";
@@ -563,7 +566,7 @@ function bindPointer(canvas) {
         if (moved || e.button !== 0 || !state.space) return;
         const it = pick(e.clientX, e.clientY);
         if (!it) return;
-        if (it.kind !== "image") toggleChip(it.id);
+        if (canAdd(it)) toggleChip(it.id);
         select(it.id);
     });
 }
@@ -623,8 +626,9 @@ function renderDetail() {
     const thumb = it.kind !== "tag" ? `<img class="wfm-ts-detail-thumb" src="${API.thumb(it.id, 240)}" alt="">` : "";
     const body = it.kind === "card" ? `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div><div class="wfm-ts-muted">${escapeHtml(it.category)}</div>`
         : it.kind === "tag" ? `<div class="wfm-ts-muted">${escapeHtml(sourcesText(it))}</div>`
-        : `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
-    const btn = it.kind === "image" ? ""
+        : `<div class="wfm-ts-detail-text">${escapeHtml(it.tags?.length ? it.tags.join(", ") : t("tsImageNoTags"))}</div>` +
+          `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
+    const btn = !canAdd(it) ? ""
         : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(t(inChips ? "tsRemove" : "tsAdd"))}</button>`;
     box.innerHTML = `${thumb}<div><b>${escapeHtml(itemTitle(it))}</b> <span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></div>${body}${btn}`;
 }
@@ -664,14 +668,23 @@ function onListClick(e) {
 
 // ── プロンプト組み立て ───────────────────────────────────────
 
+/** カード・タグと、プロンプト由来のタグを持つGallery画像はチップにできる */
+function canAdd(it) {
+    return !!it && (it.kind !== "image" || it.tags?.length > 0);
+}
+
+function chipText(it) {
+    return it.kind === "card" ? it.prompt : it.kind === "image" ? it.tags.join(", ") : it.label;
+}
+
 function toggleChip(id) {
     const i = state.chips.findIndex((c) => c.id === id);
     if (i >= 0) {
         state.chips.splice(i, 1);
     } else {
         const it = state.items.get(id);
-        if (!it || it.kind === "image") return;
-        state.chips.push({ id, kind: it.kind, label: it.label, text: it.kind === "card" ? it.prompt : it.label });
+        if (!canAdd(it)) return;
+        state.chips.push({ id, kind: it.kind, label: itemTitle(it), text: chipText(it) });
     }
     refreshChips();
 }

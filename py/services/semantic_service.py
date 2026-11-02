@@ -472,6 +472,13 @@ class SemanticService:
             return {ap: self._vecs[ap] for _, ap, sz, mt in entries
                     if ap in self._vecs and self._is_fresh(ap, sz, mt)}
 
+    def indexed_entries(self, exclude_prefix: str = "") -> list[tuple[str, int, float]]:
+        """索引済みの (path, size, mtime) 一覧。exclude_prefix配下は除く"""
+        self._ensure_loaded()
+        with self._lock:
+            return [(p, *self._stamp[p]) for p in self._vecs
+                    if not (exclude_prefix and p.startswith(exclude_prefix))]
+
     def sample_vectors(self, n: int, exclude_prefix: str = "", seed: int = 0) -> tuple[list[str], np.ndarray]:
         """索引から最大n件を無作為に(seed固定で)取り出す。exclude_prefix配下は除く"""
         self._ensure_loaded()

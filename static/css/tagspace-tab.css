@@ -45,6 +45,7 @@
 .wfm-ts-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 110px; overflow: auto; }
 .wfm-ts-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 7px; border-radius: 10px; font-size: 11px; background: var(--wfm-bg-secondary, #333); border: 1px solid var(--wfm-border, #444); }
 .wfm-ts-chip-card { border-color: var(--wfm-primary, #6366f1); }
+.wfm-ts-chip-image { border-color: #f472b6; }
 .wfm-ts-chip button { border: none; background: transparent; color: inherit; cursor: pointer; padding: 0 4px; font-size: 12px; }
 .wfm-ts-output { width: 100%; resize: vertical; font-size: 12px; box-sizing: border-box; }
 .wfm-ts-actions { display: flex; gap: 6px; flex-wrap: wrap; }
