@@ -10,10 +10,11 @@ from ..config import DATA_DIR
 from ..services.tagspace_service import TagSpaceService, DEFAULT_MAX_TAGS, DEFAULT_BG
 from ..services.semantic_service import SemanticError
 from .gallery_routes import _service as _gallery, _semantic, _semantic_error, _num, _json_body
+from .tagger_routes import _svc as _tagger
 
 logger = logging.getLogger(__name__)
 
-_tagspace = TagSpaceService(DATA_DIR, _gallery, _semantic)
+_tagspace = TagSpaceService(DATA_DIR, _gallery, _semantic, _tagger)
 
 
 def setup_routes(app: web.Application):
@@ -50,7 +51,9 @@ async def tagspace_build(request: web.Request) -> web.Response:
         bg = _num(body, "background", DEFAULT_BG, 0, 20000)
     except SemanticError as e:
         return _semantic_error(e)
-    return await _call(lambda: (_tagspace.start_build(max_tags, bg), {"ok": True})[1])
+    tagger_model = str(body.get("tagger_model", "") or "")
+    tagger_scope = str(body.get("tagger_scope", "background") or "background")
+    return await _call(lambda: (_tagspace.start_build(max_tags, bg, tagger_model, tagger_scope), {"ok": True})[1])
 
 
 async def tagspace_cancel(request: web.Request) -> web.Response:

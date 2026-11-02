@@ -26,6 +26,12 @@
   - バグ修正: セマンティック索引に削除済み画像が残っており、背景のサムネイルが 404 になった。背景は多めに取って実在するファイルだけに絞り、プロンプト読み取りでも削除済みは除外。
   - 既知: 画像編集モデルの指示文（例 `do not use the colors`）も5語以内ならタグとして残る。
   - 検証（ComfyUI_5 再起動後）: 構築148秒（プロンプト読み取り111秒）→キャッシュ有りで15〜16秒。背景4000点で存在しないファイル0件・サムネイル404は40件抽出で0件。Gallery 点のクリック（タグありは1チップで追加、タグなしは追加不可）と、ホバー331回でコンソールエラー0を確認。
+- **追加: Tagger 補完**（プロンプトを取り出せない Gallery 画像、2.9万枚中 10,652枚）
+  - ツールバー「Tagger補完: [OFF/モデル] [Gallery点のみ/プロンプトの無い全画像]」。モデルは Tagger タブの ONNX モデル（`.onnx` の無い `wd-vit-tagger-v3` は出ない）。`TaggerService.tag_image()` を追加し、しきい値は既定値（WD 0.35/0.85、PixAI は推奨値 0.17/0.27）、評価ラベル（general/sensitive/questionable/explicit）は除外。
+  - 背景点の選択をタグ集めより前に移し、「Gallery点のみ」はその中のプロンプト由来タグが無い画像だけを処理。結果は `tagspace_tagger.json`（path→size/mtime/model/tags）にキャッシュし、100件ごとと終了時に保存（中止しても残る）。補完のために読み込んだモデルは終了後に Tagger のキャッシュから外す（Tagger タブで読み込み済みなら残す）。
+  - 新出典 `tagger_auto`（「Tagger補完」、黄緑）。背景点は `tag_src: prompt|tagger` を持ち、Tagger 由来はツールチップ/詳細に「（Tagger補完）」。進み具合に実行先（CUDA/CPU）を表示。
+  - **環境の問題（再発）**: ComfyUI_5 の venv で `onnxruntime` 1.31.0（CPU）と `onnxruntime-gpu` 1.30.0 が共存し CUDA が無効。CPU では wd-v1-4-convnext 465ms/枚・wd-v1-4-vit 641ms/枚（全画像なら約1.5時間）。修復は ComfyUI 停止→`fix_onnxruntime_gpu.bat`（外側リポジトリ、v0.8.10 と同じ）。今回は未実施。
+  - 検証（CPU）: Gallery点600・Gallery点のみ・convnext で 288枚を142秒（0.49秒/枚）、全600点にタグ（プロンプト312・Tagger 288・なし0）。`tagger_auto` を含むタグ571件（うち補完でしか出ないもの180件: 1boy, multiple girls, scenery 等）。キャッシュで再構築17秒。UI（選択欄の有効/無効、凡例、「（Tagger補完）」表示、クリックで1チップ）とコンソールエラー0を確認。確認後は Gallery点4000・補完OFFで作り直し済み。
 
 ### Gallery セマンティック検索: EmbeddingGemma 2 を ONNX から Ollama へ移行
 

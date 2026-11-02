@@ -24,7 +24,7 @@ const API = {
 };
 const THREE_URL = "/wfm_static/lib/three/three-tagspace.min.js";
 const LS_VIEW = "wfm_tagspace_view";
-const SOURCE_COLORS = { image_prompt: "#f59e0b", gallery: "#f472b6", tagger: "#10b981", prompt_library: "#3b82f6", wildcard: "#a855f7" };
+const SOURCE_COLORS = { image_prompt: "#f59e0b", gallery: "#f472b6", tagger_auto: "#84cc16", tagger: "#10b981", prompt_library: "#3b82f6", wildcard: "#a855f7" };
 const NEAR_K = 20;
 const LABEL_MAX = 24;          // 同時に出すラベル数の上限(選択・近傍・検索結果・ホバー)
 const THUMB_CONCURRENCY = 6;
@@ -49,7 +49,7 @@ const state = {
 };
 
 function loadOpts() {
-    const def = { cards: true, tags: true, background: true, thumbs: true, maxTags: 2000, bg: 4000, srcOff: [] };
+    const def = { cards: true, tags: true, background: true, thumbs: true, maxTags: 2000, bg: 4000, srcOff: [], taggerModel: "", taggerScope: "background" };
     try {
         return { ...def, ...(JSON.parse(localStorage.getItem(LS_VIEW) || "{}") || {}) };
     } catch {
@@ -90,6 +90,11 @@ function renderShell() {
             <button class="wfm-btn wfm-btn-sm" id="wfm-ts-cancel" style="display:none;">${escapeHtml(t("tsCancel"))}</button>
             <label class="wfm-ts-num">${escapeHtml(t("tsMaxTags"))}<input type="number" id="wfm-ts-max-tags" class="wfm-input" min="50" max="6000" step="50" value="${o.maxTags}"></label>
             <label class="wfm-ts-num">${escapeHtml(t("tsBackground"))}<input type="number" id="wfm-ts-bg" class="wfm-input" min="0" max="20000" step="500" value="${o.bg}"></label>
+            <label class="wfm-ts-num" title="${escapeHtml(t("tsTaggerHint"))}">${escapeHtml(t("tsTagger"))}
+                <select id="wfm-ts-tagger-model" class="wfm-select"><option value="">${escapeHtml(t("tsTaggerOff"))}</option></select>
+                <select id="wfm-ts-tagger-scope" class="wfm-select">
+                    ${["background", "all"].map((k) => `<option value="${k}" ${o.taggerScope === k ? "selected" : ""}>${escapeHtml(t(`tsScope_${k}`))}</option>`).join("")}
+                </select></label>
             <span class="wfm-ts-sep"></span>
             ${layer("cards", t("tsLayerCards"))}${layer("thumbs", t("tsThumbs"))}${layer("tags", t("tsLayerTags"))}${layer("background", t("tsLayerGallery"))}
             <span class="wfm-ts-legend" title="${escapeHtml(t("tsSourceFilterHint"))}">${Object.entries(SOURCE_COLORS).map(([k, c]) =>
@@ -136,6 +141,8 @@ function bindShell() {
     $("wfm-ts-cancel").addEventListener("click", () => postJson(API.cancel).catch(() => {}));
     $("wfm-ts-max-tags").addEventListener("change", (e) => { state.opts.maxTags = parseInt(e.target.value, 10) || 2000; saveOpts(); });
     $("wfm-ts-bg").addEventListener("change", (e) => { state.opts.bg = Math.max(0, parseInt(e.target.value, 10) || 0); saveOpts(); });
+    $("wfm-ts-tagger-model").addEventListener("change", (e) => { state.opts.taggerModel = e.target.value; saveOpts(); updateTaggerScope(); });
+    $("wfm-ts-tagger-scope").addEventListener("change", (e) => { state.opts.taggerScope = e.target.value; saveOpts(); });
     document.querySelectorAll("[data-ts-layer]").forEach((cb) => cb.addEventListener("change", () => {
         state.opts[cb.dataset.tsLayer] = cb.checked;
         saveOpts();
@@ -169,7 +176,7 @@ function bindShell() {
 
 // ── 状態・構築 ───────────────────────────────────────────────
 
-const PHASES = ["cards", "index", "prompts", "tags", "project"];
+const PHASES = ["cards", "index", "prompts", "tagger", "tags", "project"];
 
 async function refreshStatus(loadIfBuilt) {
     let st;
@@ -182,11 +189,12 @@ async function refreshStatus(loadIfBuilt) {
         return;
     }
     const job = st.job || {};
+    fillTaggerModels(st.tagger_models || []);
     $("wfm-ts-build").disabled = !!job.running;
     $("wfm-ts-cancel").style.display = job.running ? "" : "none";
     if (job.running) {
         const phase = PHASES.includes(job.phase) ? job.phase : "cards";
-        setStatus(t(`tsPhase_${phase}`, job.done || 0, job.total || 0));
+        setStatus(t(`tsPhase_${phase}`, job.done || 0, job.total || 0, job.note || ""));
         clearTimeout(state.pollTimer);
         state.pollTimer = setTimeout(() => refreshStatus(true), 1000);
         return;
@@ -205,6 +213,25 @@ async function refreshStatus(loadIfBuilt) {
     }
 }
 
+/** Tagger補完のモデル選択肢(サーバーが返すONNXモデル)。保存済みの選択が無くなっていればOFFにする */
+function fillTaggerModels(models) {
+    const sel = $("wfm-ts-tagger-model");
+    if (!sel || sel.dataset.filled === models.join("|")) return;
+    sel.dataset.filled = models.join("|");
+    sel.innerHTML = `<option value="">${escapeHtml(t("tsTaggerOff"))}</option>` +
+        models.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+    if (!models.includes(state.opts.taggerModel)) {
+        state.opts.taggerModel = "";
+        saveOpts();
+    }
+    sel.value = state.opts.taggerModel;
+    updateTaggerScope();
+}
+
+function updateTaggerScope() {
+    $("wfm-ts-tagger-scope").disabled = !state.opts.taggerModel;
+}
+
 function setStatus(text, isError = false) {
     const el = $("wfm-ts-status");
     el.textContent = text;
@@ -213,7 +240,10 @@ function setStatus(text, isError = false) {
 
 async function startBuild() {
     try {
-        await postJson(API.build, { max_tags: state.opts.maxTags, background: state.opts.bg });
+        await postJson(API.build, {
+            max_tags: state.opts.maxTags, background: state.opts.bg,
+            tagger_model: state.opts.taggerModel, tagger_scope: state.opts.taggerScope,
+        });
     } catch (e) {
         showToast(errorMessage(e), "error");
         return;
@@ -555,13 +585,17 @@ function showTooltip(it, x, y) {
     const thumb = it.kind !== "tag" ? `<img src="${API.thumb(it.id, 160)}" alt="">` : "";
     const body = it.kind === "card" ? escapeHtml(it.prompt.slice(0, 160))
         : it.kind === "tag" ? escapeHtml(sourcesText(it))
-        : escapeHtml(it.tags?.length ? it.tags.slice(0, 20).join(", ") : t("tsImageNoTags"));
+        : escapeHtml(it.tags?.length ? it.tags.slice(0, 20).join(", ") + taggerMark(it) : t("tsImageNoTags"));
     tip.innerHTML = `${thumb}<div><b>${escapeHtml(itemTitle(it))}</b> <span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span>` +
         `${body ? `<div class="wfm-ts-tip-body">${body}</div>` : ""}</div>`;
     tip.style.display = "";
     const host = $("wfm-ts-view");
     tip.style.left = `${Math.min(x + 14, host.clientWidth - tip.offsetWidth - 6)}px`;
     tip.style.top = `${Math.min(y + 14, host.clientHeight - tip.offsetHeight - 6)}px`;
+}
+
+function taggerMark(it) {
+    return it.tag_src === "tagger" ? ` ${t("tsTagsFromTagger")}` : "";
 }
 
 function sourcesText(tag) {
@@ -668,7 +702,7 @@ function renderDetail() {
     const thumb = it.kind !== "tag" ? `<img class="wfm-ts-detail-thumb" src="${API.thumb(it.id, 240)}" alt="">` : "";
     const body = it.kind === "card" ? `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div><div class="wfm-ts-muted">${escapeHtml(it.category)}</div>`
         : it.kind === "tag" ? `<div class="wfm-ts-muted">${escapeHtml(sourcesText(it))}</div>`
-        : `<div class="wfm-ts-detail-text">${escapeHtml(it.tags?.length ? it.tags.join(", ") : t("tsImageNoTags"))}</div>` +
+        : `<div class="wfm-ts-detail-text">${escapeHtml(it.tags?.length ? it.tags.join(", ") + taggerMark(it) : t("tsImageNoTags"))}</div>` +
           `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
     const btn = !canAdd(it) ? ""
         : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(t(inChips ? "tsRemove" : "tsAdd"))}</button>`;

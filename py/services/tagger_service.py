@@ -210,6 +210,29 @@ class TaggerService:
             logger.error("predict error: %s", e)
             return {"error": str(e)}
 
+    # WD Tagger の評価(rating)ラベル。TagSpace の補完では除く
+    _RATING_LABELS = {"general", "sensitive", "questionable", "explicit"}
+
+    def tag_image(self, img: Image.Image, model_name: str) -> list:
+        """他機能(TagSpace)向け: ONNXモデルで画像1枚にタグを付ける。しきい値は既定値
+        (WD 0.35/0.85、PixAIは推奨値)。評価ラベルは除く。読み込めなければ RuntimeError。"""
+        data = self._load_model(model_name)
+        if data is None or data.get("type") != "onnx":
+            raise RuntimeError(f"Model '{model_name}' could not be loaded")
+        if data.get("pixai_categories"):
+            thr, char_thr = self._PIXAI_BASE["general"], self._PIXAI_BASE["character"]
+        else:
+            thr, char_thr = 0.35, 0.85
+        return [t for t in self._predict_onnx(img, data, thr, char_thr) if t not in self._RATING_LABELS]
+
+    def model_provider(self, model_name: str) -> str:
+        """読み込み済みモデルの実行先(CUDA / CPU)。未読み込みなら空文字"""
+        data = self._cache.get(model_name)
+        try:
+            return data["session"].get_providers()[0].replace("ExecutionProvider", "") if data else ""
+        except Exception:
+            return ""
+
     # PixAI Tagger v1.0 推奨しきい値(category番号 -> しきい値)。meta/ratingはタグに含めない。
     # UIの2本のスライダーは推奨値(general 0.17 / character 0.27)を基準にした相対指定で、
     # general側(0,1)はthreshold、character側(3,4)はchar_thresholdに追従する。

@@ -33,7 +33,10 @@ _EMBED_BATCH = 32
 _RADIUS = 10.0                # 3D座標の広がり(98パーセンタイル半径)
 _IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _VAULT_THUMB_DIRS = {"thumbnails", "thumbnails_option2"}
-SOURCES = ("image_prompt", "gallery", "tagger", "prompt_library", "wildcard")
+SOURCES = ("image_prompt", "gallery", "tagger_auto", "tagger", "prompt_library", "wildcard")
+TAGGER_SCOPES = ("background", "all")   # Tagger補完の対象: 背景の点のみ / プロンプトの無い全画像
+_TAGGER_MAX_SIDE = 1024      # Taggerに渡す前の長辺上限(PixAIの1008pxより少し大きく)
+_TAGGER_SAVE_EVERY = 100
 _PROMPT_MAX = 4000            # キャッシュするプロンプトの最大文字数
 # Positive をたどるときに文字列として拾う入力名(CLIPTextEncode系・Qwen/Flux系のエンコーダー・文字列ノード)
 _TEXT_INPUTS = {"text", "prompt", "positive", "text_g", "text_l", "clip_l", "t5xxl", "string", "value",
@@ -106,14 +109,16 @@ def positive_prompt(graph: dict) -> str:
 
 
 class TagSpaceService:
-    def __init__(self, data_dir: Path, gallery_service, semantic_service):
+    def __init__(self, data_dir: Path, gallery_service, semantic_service, tagger_service=None):
         self.data_dir = data_dir
         self.gallery = gallery_service
         self.semantic = semantic_service
+        self.tagger = tagger_service
         self._tag_file = data_dir / "tagspace_tags.npz"
         self._space_file = data_dir / "tagspace_space.json"
         self._mat_file = data_dir / "tagspace_space.npz"
         self._prompt_file = data_dir / "tagspace_prompts.json"   # Gallery画像の Positive {path: [size, mtime, text]}
+        self._tagger_file = data_dir / "tagspace_tagger.json"    # Tagger補完 {path: [size, mtime, model, tags]}
         self._lock = threading.RLock()
         self._tag_cache: dict[str, np.ndarray] | None = None   # tag -> 768次元(正規化済み)
         self._space: dict | None = None      # 3D表示用データ(JSON)
@@ -123,7 +128,7 @@ class TagSpaceService:
 
     @staticmethod
     def _idle_job() -> dict:
-        return {"running": False, "phase": "", "done": 0, "total": 0, "error": "", "error_code": "",
+        return {"running": False, "phase": "", "done": 0, "total": 0, "note": "", "error": "", "error_code": "",
                 "finished": False, "cancelled": False}
 
     # ── 状態 ───────────────────────────────────────────────
@@ -131,7 +136,7 @@ class TagSpaceService:
     def status(self) -> dict:
         space = self._load_space()
         meta = (space or {}).get("meta") or {}
-        return {"job": dict(self._job), "built": bool(space), "meta": meta,
+        return {"job": dict(self._job), "built": bool(space), "meta": meta, "tagger_models": self.tagger_models(),
                 "index": self.semantic.index_info(), "ollama": ollama.status(),
                 "semantic_job": self.semantic.job_status()}
 
@@ -218,6 +223,71 @@ class TagSpaceService:
             if isinstance(it, dict) and it.get("text"):
                 yield str(it["text"])
 
+    def tagger_models(self) -> list[str]:
+        """Tagger補完に使えるモデル(ONNX)"""
+        if self.tagger is None:
+            return []
+        try:
+            return [m["name"] for m in self.tagger.list_models() if m.get("type") == "onnx"]
+        except Exception:
+            return []
+
+    def _tagger_fill(self, targets: list[tuple[str, int, float]], model: str) -> dict[str, str]:
+        """targets([(path, size, mtime)])を Tagger でタグ付けする。同じ画像・同じモデルならキャッシュを使う。
+        中止しても、それまでの結果はキャッシュに残す。戻り値: {path: "tag, tag, ..."}"""
+        from PIL import Image
+        try:
+            cache = json.loads(self._tagger_file.read_text(encoding="utf-8")) if self._tagger_file.exists() else {}
+        except Exception as e:
+            logger.warning("TagSpace: failed to load tagger cache: %s", e)
+            cache = {}
+        job = self._job
+        job.update(phase="tagger", done=0, total=len(targets), note="")
+        out: dict[str, str] = {}
+        dirty = 0
+        was_loaded = model in getattr(self.tagger, "_cache", {})
+
+        def save():
+            tmp = self._tagger_file.with_suffix(".tmp.json")
+            tmp.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(self._tagger_file)
+
+        try:
+            for n, (path, size, mtime) in enumerate(targets):
+                if self._cancel.is_set():
+                    break
+                hit = cache.get(path)
+                if hit and hit[0] == size and abs(hit[1] - mtime) < 1e-3 and hit[2] == model:
+                    text = hit[3]
+                else:
+                    try:
+                        with Image.open(path) as im:
+                            im.seek(0)
+                            im = im.convert("RGBA") if im.mode in ("RGBA", "LA", "P") else im.convert("RGB")
+                            im.thumbnail((_TAGGER_MAX_SIDE, _TAGGER_MAX_SIDE), Image.LANCZOS)
+                        text = ", ".join(self.tagger.tag_image(im, model))
+                    except RuntimeError as e:      # モデルを読み込めない: 続けても全件失敗する
+                        raise SemanticError("tagspace_tagger_model", str(e))
+                    except Exception as e:
+                        logger.warning("TagSpace: tagger failed for %s: %s", path, e)
+                        text = ""
+                    cache[path] = [size, mtime, model, text]
+                    dirty += 1
+                    if not job["note"]:
+                        job["note"] = self.tagger.model_provider(model)
+                    if dirty >= _TAGGER_SAVE_EVERY:
+                        save()
+                        dirty = 0
+                if text:
+                    out[path] = text
+                job["done"] = n + 1
+        finally:
+            if dirty:
+                save()
+            if not was_loaded:   # 補完のために読み込んだモデルはメモリから外す(Taggerタブで使用中のものは残す)
+                getattr(self.tagger, "_cache", {}).pop(model, None)
+        return out
+
     def _gallery_prompts(self, exclude_prefix: str) -> dict[str, str]:
         """索引済み Gallery 画像の Positive プロンプト。(size, mtime)が同じならキャッシュを使う"""
         try:
@@ -255,13 +325,13 @@ class TagSpaceService:
             tmp.replace(self._prompt_file)
         return out
 
-    def collect_tags(self, cards: list[dict], max_tags: int, gallery_texts=()) -> list[dict]:
+    def collect_tags(self, cards: list[dict], max_tags: int, gallery_texts=(), tagger_texts=()) -> list[dict]:
         """全ソースのタグを数えて上位 max_tags 件を返す。
         ソースごとに出現数の多い順に並べ、ソースを順番に1件ずつ取る(数の多いGalleryだけで埋まらないように)。
         出現数は「そのタグを含む文の数」で数える。"""
         per_src: dict[str, Counter] = {s: Counter() for s in SOURCES}
         feeds = {"image_prompt": (c["prompt"] for c in cards), "gallery": iter(gallery_texts),
-                 "tagger": self._tagger_texts(), "prompt_library": self._library_texts(),
+                 "tagger_auto": iter(tagger_texts), "tagger": self._tagger_texts(), "prompt_library": self._library_texts(),
                  "wildcard": self._wildcard_texts()}
         for src, texts in feeds.items():
             for text in texts:
@@ -313,7 +383,11 @@ class TagSpaceService:
 
     # ── 構築ジョブ ─────────────────────────────────────────
 
-    def start_build(self, max_tags: int, bg: int) -> None:
+    def start_build(self, max_tags: int, bg: int, tagger_model: str = "", tagger_scope: str = "background") -> None:
+        if tagger_model and tagger_model not in self.tagger_models():
+            raise SemanticError("tagspace_tagger_model", tagger_model)
+        if tagger_scope not in TAGGER_SCOPES:
+            tagger_scope = TAGGER_SCOPES[0]
         with self._lock:
             if self._job["running"]:
                 raise SemanticError("already_running")
@@ -328,7 +402,7 @@ class TagSpaceService:
             self._cancel.clear()
             self._job = self._idle_job()
             self._job.update(running=True, phase="cards")
-        args = (max(50, min(int(max_tags), MAX_TAGS_LIMIT)), max(0, min(int(bg), BG_LIMIT)))
+        args = (max(50, min(int(max_tags), MAX_TAGS_LIMIT)), max(0, min(int(bg), BG_LIMIT)), tagger_model, tagger_scope)
         threading.Thread(target=self._run_build, args=args, daemon=True).start()
 
     def cancel(self) -> None:
@@ -336,7 +410,7 @@ class TagSpaceService:
         if self._job.get("phase") == "index":
             self.semantic.cancel()
 
-    def _run_build(self, max_tags: int, bg: int) -> None:
+    def _run_build(self, max_tags: int, bg: int, tagger_model: str = "", tagger_scope: str = "background") -> None:
         job = self._job
         try:
             cards, entries = self._cards()
@@ -366,9 +440,28 @@ class TagSpaceService:
             if self._cancel.is_set():
                 return
 
-            # 3. タグを集めて未キャッシュ分を埋め込む
-            job.update(phase="tags", done=0, total=0)
-            tags = self.collect_tags(cards, max_tags, gallery_prompts.values())
+            # 3. 背景の Gallery 画像(Tagger補完の対象を決めるため、タグ集めより先に選ぶ)
+            bg_paths, bg_mat = self.semantic.sample_vectors(bg + bg // 4, exclude_prefix=prefix) if bg else ([], None)
+            if bg_paths:   # 索引作成後に削除された画像を除く(多めに取って bg 件に詰める)
+                keep = [i for i, p in enumerate(bg_paths) if Path(p).is_file()][:bg]
+                bg_paths, bg_mat = [bg_paths[i] for i in keep], bg_mat[keep]
+
+            # 4. Tagger補完: プロンプト由来のタグが無い画像
+            tagger_tags: dict[str, str] = {}
+            if tagger_model:
+                stamps = {p: (sz, mt) for p, sz, mt in self.semantic.indexed_entries(prefix)}
+                pool = bg_paths if tagger_scope == "background" else [
+                    p for p in stamps if Path(p).suffix.lower() in _IMG_EXTS and Path(p).is_file()]
+                targets = [(p, *stamps[p]) for p in pool
+                           if p in stamps and Path(p).suffix.lower() in _IMG_EXTS
+                           and not split_tags(gallery_prompts.get(p, ""))]
+                tagger_tags = self._tagger_fill(targets, tagger_model)
+                if self._cancel.is_set():
+                    return
+
+            # 5. タグを集めて未キャッシュ分を埋め込む
+            job.update(phase="tags", done=0, total=0, note="")
+            tags = self.collect_tags(cards, max_tags, gallery_prompts.values(), tagger_tags.values())
             cache = self._tag_vectors()
             todo = [t["label"] for t in tags if t["label"] not in cache]
             job.update(total=len(todo))
@@ -390,15 +483,10 @@ class TagSpaceService:
             if self._cancel.is_set():
                 return
 
-            # 4. 背景の Gallery 画像
+            # 6. 投影
             job.update(phase="project", done=0, total=0)
-            bg_paths, bg_mat = self.semantic.sample_vectors(bg + bg // 4, exclude_prefix=prefix) if bg else ([], None)
-            if bg_paths:   # 索引作成後に削除された画像を除く(多めに取って bg 件に詰める)
-                keep = [i for i, p in enumerate(bg_paths) if Path(p).is_file()][:bg]
-                bg_paths, bg_mat = [bg_paths[i] for i in keep], bg_mat[keep]
-
-            # 5. 投影
-            self._project(cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts)
+            self._project(cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts, tagger_tags,
+                          tagger_model if tagger_tags else "")
         except SemanticError as e:
             job["error_code"], job["error"] = e.code, str(e)
         except Exception as e:
@@ -417,7 +505,8 @@ class TagSpaceService:
         n = np.linalg.norm(m, axis=1, keepdims=True)
         return m / np.where(n > 0, n, 1)
 
-    def _project(self, cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts=None) -> None:
+    def _project(self, cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts=None,
+                 tagger_tags=None, tagger_model: str = "") -> None:
         img = self._unit(np.stack([card_vecs[c["id"]] for c in cards]), dim) if cards else np.zeros((0, dim), np.float32)
         txt = self._unit(np.stack([cache[t["label"]] for t in tags]), dim) if tags else np.zeros((0, dim), np.float32)
         if len(img) + len(txt) < 3:
@@ -444,12 +533,20 @@ class TagSpaceService:
             c["xyz"] = p
         for t, p in zip(tags, xyz(txt - mean_txt)):
             t["xyz"] = p
-        gp = gallery_prompts or {}
-        # 背景点にはその画像のプロンプト由来のタグを持たせる(クリックでまとめて追加)
-        bg_items = [{"id": p, "xyz": q, "tags": list(dict.fromkeys(split_tags(gp.get(p, ""))))}
-                    for p, q in zip(bg_paths, xyz(bg_u - mean_img))] if len(bg_u) else []
+        gp, tt = gallery_prompts or {}, tagger_tags or {}
+
+        def bg_item(path, pos):
+            """背景点にはその画像のタグを持たせる(クリックでまとめて追加)。プロンプト由来が無ければTagger補完"""
+            tags_p = list(dict.fromkeys(split_tags(gp.get(path, ""))))
+            if tags_p:
+                return {"id": path, "xyz": pos, "tags": tags_p, "tag_src": "prompt"}
+            tags_t = list(dict.fromkeys(split_tags(tt.get(path, ""))))
+            return {"id": path, "xyz": pos, "tags": tags_t, "tag_src": "tagger" if tags_t else ""}
+
+        bg_items = [bg_item(p, q) for p, q in zip(bg_paths, xyz(bg_u - mean_img))] if len(bg_u) else []
         meta = {"built_at": time.strftime("%Y-%m-%d %H:%M:%S"), "cards": len(cards), "tags": len(tags),
-                "background": len(bg_items), "gallery_prompts": len(gp), "dim": dim, "model": LOCAL_MODEL,
+                "background": len(bg_items), "gallery_prompts": len(gp), "tagger_images": len(tt),
+                "tagger_model": tagger_model, "dim": dim, "model": LOCAL_MODEL,
                 "explained": [round(float(v), 4) for v in var[:3]]}
         space = {"meta": meta, "cards": cards, "tags": tags, "background": bg_items}
 

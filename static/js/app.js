@@ -592,7 +592,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-card-styleprompt-title": "helpGalleryCardStyleprompt",
         "wfm-help-gallery-card-stylecatalog-title": "helpGalleryCardStylecatalog",
         "wfm-help-tagger-title": "helpTaggerTitle",
-        "wfm-help-tagspace-title": "helpTagSpaceTitle", "wfm-help-tagspace-card-overview-title": "helpTagSpaceCardOverview", "wfm-help-tagspace-card-use-title": "helpTagSpaceCardUse", "wfm-help-tagspace-1": "helpTagSpace1", "wfm-help-tagspace-2": "helpTagSpace2", "wfm-help-tagspace-3": "helpTagSpace3", "wfm-help-tagspace-4": "helpTagSpace4", "wfm-help-tagspace-5": "helpTagSpace5", "wfm-help-tagspace-6": "helpTagSpace6",
+        "wfm-help-tagspace-title": "helpTagSpaceTitle", "wfm-help-tagspace-card-overview-title": "helpTagSpaceCardOverview", "wfm-help-tagspace-card-use-title": "helpTagSpaceCardUse", "wfm-help-tagspace-1": "helpTagSpace1", "wfm-help-tagspace-2": "helpTagSpace2", "wfm-help-tagspace-3": "helpTagSpace3", "wfm-help-tagspace-4": "helpTagSpace4", "wfm-help-tagspace-5": "helpTagSpace5", "wfm-help-tagspace-6": "helpTagSpace6", "wfm-help-tagspace-7": "helpTagSpace7",
         "wfm-help-tagger-1": "helpTagger1", "wfm-help-tagger-2": "helpTagger2",
         "wfm-help-tagger-3": "helpTagger3", "wfm-help-tagger-4": "helpTagger4",
         "wfm-help-tagger-5": "helpTagger5", "wfm-help-tagger-6": "helpTagger6",
