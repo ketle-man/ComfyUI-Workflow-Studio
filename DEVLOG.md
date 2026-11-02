@@ -12,7 +12,9 @@
 - **Ollama の画像埋め込みの罠**: `/api/embed` に `images` フィールドを付けても**エラーにならず無視され、テキストだけの埋め込みが返る**。正しくは `input: [{"image": "<base64>"}]`。`[{"images": ...}]` は 400、壊れた画像は 500 "Failed to load image or audio file"、未取得モデルは 404。`input: []` + `keep_alive: 0` でアンロードできる。
 - **実装**: `semantic_ollama.py` を新設し `semantic_local.py` を削除。画像は4枚ずつ送信（1枚ずつより約1.8倍速い）し、バッチが失敗したら1枚ずつ送り直して原因の画像だけを失敗扱いにする。Ollama 内部の接続切断（400 "forcibly closed" 等）と 5xx は最大5回再試行。接続不可・モデル未取得はジョブ開始前に検出し、作成中に起きたら中止。作成後は VRAM から外す。URL は `url_guard` で検査。設定は `semantic_settings.json`（`url` / `tag`）、保存用に `/wfm/gallery/semantic/options` を追加。
 - **UI**: モデル設定タブのデバイス/CPUスレッド/画像精度を廃止し、Ollama URL・モデルサイズ（未取得表示つき）に置き換え。ヘルプ（helpGallery33/35/36・helpTrouble10/11 英/日/中）、README、requirements.txt を更新。マニュアル（v0.8.9版）は未更新。
-- **残作業**: ComfyUI 再起動後の実機確認（検索・類似・インデックス作成）が未実施。旧 ONNX モデル（`user/default/Workflow-Studio/models/embeddinggemma-2`、302MB）は削除可能。`onnxruntime` は Tagger で使うため依存に残す。
+- **実機確認**（ComfyUI_5 / 8189、再起動 13:17 > 反映 13:13 をプロセス起動時刻で確認）: 既存索引 29,356件をそのまま読み込み。テキスト検索 0.9秒、類似画像 約0.6秒（4件）。URL ガードで `169.254.169.254` を拒否。モデル設定の 740m⇔440m 切替が保存され状態欄に反映。`ponyxl/scenes/city`（未索引9枚）を「新規・変更のみ」で作成→約1.7秒・失敗0（4+4+1枚のバッチ）、作成後 `/api/ps` が空（アンロード済み）、追加した `alley.jpeg` の類似上位は同フォルダの画像（0.88〜0.93）。コンソールエラーなし。
+  - 確認中に Python の urllib から `/similar` が1回120秒タイムアウト、`/folders` が1回 WinError 10054 になった。いずれも再試行や curl では毎回0.6秒前後で正常で、変更していない `/folders` でも起きたため今回の変更とは別の現象と判断（このPCで以前から出ている接続切断と同種の可能性）。
+- **残作業**: 旧 ONNX モデル（`user/default/Workflow-Studio/models/embeddinggemma-2`、302MB）は削除可能。`onnxruntime` は Tagger で使うため依存に残す。
 
 ---
 
