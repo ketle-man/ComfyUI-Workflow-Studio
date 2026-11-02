@@ -28,13 +28,17 @@ const SOURCE_COLORS = { image_prompt: "#f59e0b", gallery: "#f472b6", tagger_auto
 const NEAR_K = 20;
 const LABEL_MAX = 24;          // 同時に出すラベル数の上限(選択・近傍・検索結果・ホバー)
 const THUMB_CONCURRENCY = 6;
+const ZOOM_SIZE = 360;        // 選択中・近傍一覧の画像にマウスを乗せたときの拡大表示(px)
+const ADDITIVE_BLENDING = 2;  // THREE.AdditiveBlending(同梱サブセットに未エクスポート)
+const GLOW_SCALE = 2.4;       // 発光時の点サイズ倍率(テクスチャの芯が通常の点と同じ大きさになる)
+const NIGHT_SKY = "#05070d";
 
 let THREE = null;
 const view = {
     renderer: null, scene: null, camera: null, controls: null, raycaster: null,
     layers: {},            // cards(Points) / cardSprites(Group) / tags(Points) / background(Points)
     highlight: null, probe: null, probeLines: null,
-    dotTexture: null, running: false, fly: null,
+    dotTexture: null, glowTexture: null, twinkleTime: { value: 0 }, running: false, fly: null,
 };
 const state = {
     space: null,
@@ -49,7 +53,7 @@ const state = {
 };
 
 function loadOpts() {
-    const def = { cards: true, tags: true, background: true, thumbs: true, maxTags: 2000, bg: 4000, srcOff: [], taggerModel: "", taggerScope: "background" };
+    const def = { cards: true, tags: true, background: true, thumbs: true, glow: true, twinkle: true, maxTags: 2000, bg: 4000, srcOff: [], taggerModel: "", taggerScope: "background" };
     try {
         return { ...def, ...(JSON.parse(localStorage.getItem(LS_VIEW) || "{}") || {}) };
     } catch {
@@ -96,7 +100,7 @@ function renderShell() {
                     ${["background", "all"].map((k) => `<option value="${k}" ${o.taggerScope === k ? "selected" : ""}>${escapeHtml(t(`tsScope_${k}`))}</option>`).join("")}
                 </select></label>
             <span class="wfm-ts-sep"></span>
-            ${layer("cards", t("tsLayerCards"))}${layer("thumbs", t("tsThumbs"))}${layer("tags", t("tsLayerTags"))}${layer("background", t("tsLayerGallery"))}
+            ${layer("cards", t("tsLayerCards"))}${layer("thumbs", t("tsThumbs"))}${layer("tags", t("tsLayerTags"))}${layer("background", t("tsLayerGallery"))}${layer("glow", t("tsGlow"))}${layer("twinkle", t("tsTwinkle"))}
             <span class="wfm-ts-legend" title="${escapeHtml(t("tsSourceFilterHint"))}">${Object.entries(SOURCE_COLORS).map(([k, c]) =>
                 `<label class="wfm-ts-check"><input type="checkbox" data-ts-source="${k}" ${o.srcOff.includes(k) ? "" : "checked"}>` +
                 `<span class="wfm-ts-swatch" style="background:${c}"></span>${escapeHtml(t(`tsSrc_${k}`))}</label>`).join("")}</span>
@@ -110,6 +114,7 @@ function renderShell() {
                 <div class="wfm-ts-empty" id="wfm-ts-empty">${escapeHtml(t("tsLoading"))}</div>
                 <div class="wfm-ts-hint">${escapeHtml(t("tsHint"))}</div>
             </div>
+            <div class="wfm-ts-zoom" id="wfm-ts-zoom" style="display:none;"><img alt=""></div>
             <aside class="wfm-ts-side">
                 <section class="wfm-ts-panel">
                     <h4>${escapeHtml(t("tsDetailTitle"))}</h4>
@@ -146,7 +151,12 @@ function bindShell() {
     document.querySelectorAll("[data-ts-layer]").forEach((cb) => cb.addEventListener("change", () => {
         state.opts[cb.dataset.tsLayer] = cb.checked;
         saveOpts();
-        applyLayerVisibility();
+        if (cb.dataset.tsLayer === "glow" || cb.dataset.tsLayer === "twinkle") {
+            applySky();
+            if (state.space) buildScene();
+        } else {
+            applyLayerVisibility();
+        }
     }));
     document.querySelectorAll("[data-ts-source]").forEach((cb) => cb.addEventListener("change", () => {
         state.opts.srcOff = Object.keys(SOURCE_COLORS).filter(
@@ -164,6 +174,17 @@ function bindShell() {
     $("wfm-ts-copy").addEventListener("click", copyPrompt);
     $("wfm-ts-clear").addEventListener("click", () => { state.chips = []; refreshChips(); });
     $("wfm-ts-list").addEventListener("click", onListClick);
+    // 画像はクリックすると選択が変わるので、マウスを乗せたときに拡大表示する
+    for (const id of ["wfm-ts-detail", "wfm-ts-list"]) {
+        $(id).addEventListener("mouseover", (e) => {
+            const img = e.target.closest("[data-ts-zoom]");
+            if (img) showZoom(img);
+        });
+        $(id).addEventListener("mouseout", (e) => {
+            if (e.target.closest("[data-ts-zoom]") && !e.relatedTarget?.closest?.("[data-ts-zoom]")) hideZoom();
+        });
+        $(id).addEventListener("click", hideZoom);
+    }
     $("wfm-ts-chips").addEventListener("click", (e) => {
         const id = e.target.closest("[data-ts-remove]")?.dataset.tsRemove;
         if (id) toggleChip(id);
@@ -312,7 +333,49 @@ function makeDotTexture() {
     return tex;
 }
 
-function makePoints(items, colorOf, size, opacity = 1) {
+/** 星のような発光用: 明るい芯 + 柔らかいにじみ */
+function makeGlowTexture() {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.12, "rgba(255,255,255,0.95)");
+    grad.addColorStop(0.28, "rgba(255,255,255,0.4)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.1)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+function applySky() {
+    if (view.scene) view.scene.background = new THREE.Color(state.opts.glow ? NIGHT_SKY : cssColor("--wfm-bg", "#111318"));
+}
+
+/** またたき: 点ごとの位相・速さで明るさを揺らす(PointsMaterialのシェーダーに差し込む) */
+function twinkleBeforeCompile(shader) {
+    shader.uniforms.uTwinkleTime = view.twinkleTime;
+    shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute vec2 twinkle;\nuniform float uTwinkleTime;")
+        .replace("#include <color_vertex>", "#include <color_vertex>\nvColor.rgb *= 0.15 + 1.1 * pow(0.5 + 0.5 * sin(uTwinkleTime * twinkle.y + twinkle.x), 2.0);");
+}
+
+function twinkleAttribute(n) {
+    const tw = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+        // 添字から決まる疑似乱数(再構築しても同じ点は同じリズムで瞬く)
+        const r1 = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
+        const r2 = Math.abs(Math.sin(i * 78.233) * 12345.6789) % 1;
+        tw[i * 2] = r1 * Math.PI * 2;
+        tw[i * 2 + 1] = 0.6 + r2 * 1.6;
+    }
+    return new THREE.Float32BufferAttribute(tw, 2);
+}
+
+function makePoints(items, colorOf, size, opacity = 1, twinkle = false) {
     const pos = new Float32Array(items.length * 3);
     const col = new Float32Array(items.length * 3);
     items.forEach((it, i) => {
@@ -323,10 +386,19 @@ function makePoints(items, colorOf, size, opacity = 1) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-    const mat = new THREE.PointsMaterial({
-        size, vertexColors: true, map: view.dotTexture, alphaTest: 0.5,
-        transparent: opacity < 1, opacity, sizeAttenuation: true, depthWrite: opacity >= 1,
-    });
+    const mat = state.opts.glow
+        ? new THREE.PointsMaterial({
+            size: size * GLOW_SCALE, vertexColors: true, map: view.glowTexture, blending: ADDITIVE_BLENDING,
+            transparent: true, opacity, sizeAttenuation: true, depthWrite: false,
+        })
+        : new THREE.PointsMaterial({
+            size, vertexColors: true, map: view.dotTexture, alphaTest: 0.5,
+            transparent: opacity < 1, opacity, sizeAttenuation: true, depthWrite: opacity >= 1,
+        });
+    if (twinkle && state.opts.glow && state.opts.twinkle) {
+        geo.setAttribute("twinkle", twinkleAttribute(items.length));
+        mat.onBeforeCompile = twinkleBeforeCompile;
+    }
     const pts = new THREE.Points(geo, mat);
     pts.userData.items = items;
     return pts;
@@ -338,7 +410,7 @@ function disposeObject(obj) {
     obj.traverse?.((o) => {
         o.geometry?.dispose();
         if (o.material) {
-            o.material.map && o.material.map !== view.dotTexture && o.material.map.dispose();
+            o.material.map && o.material.map !== view.dotTexture && o.material.map !== view.glowTexture && o.material.map.dispose();
             o.material.dispose();
         }
     });
@@ -348,9 +420,10 @@ function buildScene() {
     for (const key of Object.keys(view.layers)) disposeObject(view.layers[key]);
     view.layers = {};
     const { cards, tags, background } = state.space;
-    view.layers.background = makePoints(background, () => new THREE.Color("#9aa3b2"), 0.1, 0.55);
+    // 発光時は加算合成で重なりが白く飛ぶので、数の多いGallery点は控えめにする
+    view.layers.background = makePoints(background, () => new THREE.Color("#9aa3b2"), 0.1, state.opts.glow ? 0.3 : 0.55, true);
     view.layers.tags = makeTagPoints(tags);
-    view.layers.cards = makePoints(cards, (c) => groupColor(c.group), 0.22);
+    view.layers.cards = makePoints(cards, (c) => groupColor(c.group), 0.22, 1, true);
     // サムネイル表示用のスプライト(テクスチャは順次読み込む)
     const group = new THREE.Group();
     for (const c of cards) {
@@ -387,7 +460,7 @@ function listRows() {
 }
 
 function makeTagPoints(tags) {
-    return makePoints(tags.filter(isShown), (g) => new THREE.Color(tagColor(g)), 0.16);
+    return makePoints(tags.filter(isShown), (g) => new THREE.Color(tagColor(g)), 0.16, 1, true);
 }
 
 function rebuildTagLayer() {
@@ -473,7 +546,6 @@ async function initThree() {
     THREE = await import(THREE_URL);
     const host = $("wfm-ts-view");
     view.scene = new THREE.Scene();
-    view.scene.background = new THREE.Color(cssColor("--wfm-bg", "#111318"));
     view.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 500);
     view.camera.position.set(0, 4, 22);
     view.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -484,6 +556,8 @@ async function initThree() {
     view.controls.dampingFactor = 0.08;
     view.raycaster = new THREE.Raycaster();
     view.dotTexture = makeDotTexture();
+    view.glowTexture = makeGlowTexture();
+    applySky();
     new ResizeObserver(resize).observe(host);
     resize();
     bindPointer(view.renderer.domElement);
@@ -508,6 +582,7 @@ function loop() {
     }
     requestAnimationFrame(loop);
     if (view.fly) stepFly();
+    view.twinkleTime.value = performance.now() / 1000;
     view.controls.update();
     view.renderer.render(view.scene, view.camera);
     updateLabels();
@@ -639,11 +714,15 @@ function bindPointer(canvas) {
     canvas.addEventListener("pointerup", (e) => {
         const moved = down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4;
         down = null;
-        if (moved || e.button !== 0 || !state.space) return;
+        if (moved || e.button !== 0 || !state.space || e.detail > 1) return;
+        // クリックは選択(確認)だけ。プロンプトへの追加はダブルクリック・追加ボタン・一覧の＋で行う
         const it = pick(e.clientX, e.clientY);
-        if (!it) return;
-        if (canAdd(it)) toggleChip(it.id);
-        select(it.id);
+        if (it) select(it.id);
+    });
+    canvas.addEventListener("dblclick", (e) => {
+        if (!state.space) return;
+        const it = pick(e.clientX, e.clientY);
+        if (it && canAdd(it)) toggleChip(it.id);
     });
 }
 
@@ -700,14 +779,41 @@ function renderDetail() {
         return;
     }
     const inChips = state.chips.some((c) => c.id === it.id);
-    const thumb = it.kind !== "tag" ? `<img class="wfm-ts-detail-thumb" src="${API.thumb(it.id, 240)}" alt="">` : "";
+    const thumb = it.kind !== "tag" ? `<img class="wfm-ts-detail-thumb" data-ts-zoom="${escapeHtml(it.id)}" src="${API.thumb(it.id, 240)}" alt="">` : "";
     const body = it.kind === "card" ? `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div><div class="wfm-ts-muted">${escapeHtml(it.category)}</div>`
         : it.kind === "tag" ? `<div class="wfm-ts-muted">${escapeHtml(sourcesText(it))}</div>`
         : `<div class="wfm-ts-detail-text">${escapeHtml(it.tags?.length ? it.tags.join(", ") + taggerMark(it) : t("tsImageNoTags"))}</div>` +
           `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
     const btn = !canAdd(it) ? ""
         : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(t(inChips ? "tsRemove" : "tsAdd"))}</button>`;
-    box.innerHTML = `${thumb}<div><b>${escapeHtml(itemTitle(it))}</b> <span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></div>${body}${btn}`;
+    // 追加/削除ボタンは見出し行に置く(本文が長くてもスクロールせずに押せる)
+    box.innerHTML = `<div class="wfm-ts-detail-head"><span class="wfm-ts-detail-title"><b>${escapeHtml(itemTitle(it))}</b> ` +
+        `<span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></span>${btn}</div>${thumb}${body}`;
+}
+
+/** 画像の拡大表示: サイド列の左側(3Dビューの上)に出す */
+function showZoom(img) {
+    const box = $("wfm-ts-zoom");
+    const big = box.querySelector("img");
+    const id = img.dataset.tsZoom;
+    if (box.dataset.id !== id) {
+        box.dataset.id = id;
+        big.src = img.src;   // 読み込み済みの小さい画像を先に出し、大きい画像に差し替える
+        const hi = new Image();
+        hi.onload = () => { if (box.dataset.id === id) big.src = hi.src; };
+        hi.src = API.thumb(id, ZOOM_SIZE * 2);
+    }
+    const r = img.getBoundingClientRect();
+    const side = img.closest(".wfm-ts-side")?.getBoundingClientRect() || r;
+    box.style.display = "";
+    const top = Math.min(Math.max(8, r.top + r.height / 2 - ZOOM_SIZE / 2), window.innerHeight - ZOOM_SIZE - 8);
+    box.style.left = `${Math.max(8, side.left - ZOOM_SIZE - 12)}px`;
+    box.style.top = `${top}px`;
+}
+
+function hideZoom() {
+    const box = $("wfm-ts-zoom");
+    if (box) box.style.display = "none";
 }
 
 function renderList() {
@@ -721,7 +827,7 @@ function renderList() {
     $("wfm-ts-list").innerHTML = rows.map((r) => {
         const it = state.items.get(r.id);
         const icon = it.kind !== "tag"
-            ? `<img class="${it.kind === "image" ? "wfm-ts-row-image" : ""}" src="${API.thumb(it.id, 64)}" alt="" loading="lazy">`
+            ? `<img class="${it.kind === "image" ? "wfm-ts-row-image" : ""}" data-ts-zoom="${escapeHtml(it.id)}" src="${API.thumb(it.id, 64)}" alt="" loading="lazy">`
             : `<span class="wfm-ts-dot" style="background:${tagColor(it)}"></span>`;
         const on = chipIds.has(it.id);
         // タグの無いGallery画像は追加できない(ボタンの代わりに空き)

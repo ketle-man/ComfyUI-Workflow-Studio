@@ -33,7 +33,9 @@
 .wfm-ts-panel-grow { flex: 1; }
 .wfm-ts-muted { color: var(--wfm-text-secondary, #aaa); font-size: 11px; }
 .wfm-ts-detail { display: flex; flex-direction: column; gap: 4px; font-size: 12px; max-height: 260px; overflow: auto; }
-.wfm-ts-detail .wfm-btn { align-self: flex-start; }
+.wfm-ts-detail-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding-bottom: 2px; background: var(--wfm-surface, #222); }
+.wfm-ts-detail-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfm-ts-detail-head .wfm-btn { flex: none; }
 .wfm-ts-detail-thumb { max-width: 100%; max-height: 140px; object-fit: contain; align-self: flex-start; border-radius: 4px; }
 .wfm-ts-detail-text { white-space: pre-wrap; word-break: break-word; }
 .wfm-ts-path { word-break: break-all; }
@@ -54,3 +56,5 @@
 .wfm-ts-chip button { border: none; background: transparent; color: inherit; cursor: pointer; padding: 0 4px; font-size: 12px; }
 .wfm-ts-output { width: 100%; resize: vertical; font-size: 12px; box-sizing: border-box; }
 .wfm-ts-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.wfm-ts-zoom { position: fixed; z-index: 1000; width: 360px; height: 360px; display: flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; pointer-events: none; border-radius: 8px; background: var(--wfm-surface, #222); border: 1px solid var(--wfm-border, #444); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+.wfm-ts-zoom img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
