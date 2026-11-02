@@ -49,7 +49,7 @@ const state = {
 };
 
 function loadOpts() {
-    const def = { cards: true, tags: true, background: true, thumbs: true, maxTags: 2000, bg: 4000 };
+    const def = { cards: true, tags: true, background: true, thumbs: true, maxTags: 2000, bg: 4000, srcOff: [] };
     try {
         return { ...def, ...(JSON.parse(localStorage.getItem(LS_VIEW) || "{}") || {}) };
     } catch {
@@ -92,8 +92,9 @@ function renderShell() {
             <label class="wfm-ts-num">${escapeHtml(t("tsBackground"))}<input type="number" id="wfm-ts-bg" class="wfm-input" min="0" max="20000" step="500" value="${o.bg}"></label>
             <span class="wfm-ts-sep"></span>
             ${layer("cards", t("tsLayerCards"))}${layer("thumbs", t("tsThumbs"))}${layer("tags", t("tsLayerTags"))}${layer("background", t("tsLayerGallery"))}
-            <span class="wfm-ts-legend">${Object.entries(SOURCE_COLORS).map(([k, c]) =>
-                `<span><span class="wfm-ts-swatch" style="background:${c}"></span>${escapeHtml(t(`tsSrc_${k}`))}</span>`).join("")}</span>
+            <span class="wfm-ts-legend" title="${escapeHtml(t("tsSourceFilterHint"))}">${Object.entries(SOURCE_COLORS).map(([k, c]) =>
+                `<label class="wfm-ts-check"><input type="checkbox" data-ts-source="${k}" ${o.srcOff.includes(k) ? "" : "checked"}>` +
+                `<span class="wfm-ts-swatch" style="background:${c}"></span>${escapeHtml(t(`tsSrc_${k}`))}</label>`).join("")}</span>
             <input type="search" id="wfm-ts-search" class="wfm-input wfm-ts-search" placeholder="${escapeHtml(t("tsSearchPlaceholder"))}">
         </div>
         <div class="wfm-ts-status" id="wfm-ts-status"></div>
@@ -139,6 +140,14 @@ function bindShell() {
         state.opts[cb.dataset.tsLayer] = cb.checked;
         saveOpts();
         applyLayerVisibility();
+    }));
+    document.querySelectorAll("[data-ts-source]").forEach((cb) => cb.addEventListener("change", () => {
+        state.opts.srcOff = Object.keys(SOURCE_COLORS).filter(
+            (k) => !document.querySelector(`[data-ts-source="${k}"]`).checked);
+        saveOpts();
+        rebuildTagLayer();
+        renderList();
+        updateHighlight();
     }));
     $("wfm-ts-search").addEventListener("keydown", (e) => {
         if (e.key === "Enter") runSearch(e.target.value);
@@ -310,7 +319,7 @@ function buildScene() {
     view.layers = {};
     const { cards, tags, background } = state.space;
     view.layers.background = makePoints(background, () => new THREE.Color("#9aa3b2"), 0.1, 0.55);
-    view.layers.tags = makePoints(tags, (g) => new THREE.Color(SOURCE_COLORS[g.sources?.[0]] || "#cccccc"), 0.16);
+    view.layers.tags = makeTagPoints(tags);
     view.layers.cards = makePoints(cards, (c) => groupColor(c.group), 0.22);
     // サムネイル表示用のスプライト(テクスチャは順次読み込む)
     const group = new THREE.Group();
@@ -326,6 +335,37 @@ function buildScene() {
     Object.values(view.layers).forEach((o) => view.scene.add(o));
     applyLayerVisibility();
     updateHighlight();
+}
+
+/** 出典の表示ON/OFF: 有効な出典を1つでも持つタグを表示し、色は有効な出典のうち最初のもの */
+function tagSources(tag) {
+    const off = state.opts.srcOff || [];
+    return (tag.sources || []).filter((s) => !off.includes(s));
+}
+
+function tagColor(tag) {
+    return SOURCE_COLORS[tagSources(tag)[0] || tag.sources?.[0]] || "#cccccc";
+}
+
+function isShown(it) {
+    return it.kind !== "tag" || tagSources(it).length > 0;
+}
+
+/** 近傍・検索結果のうち、存在して表示中のもの */
+function listRows() {
+    return state.list.rows.filter((r) => state.items.has(r.id) && isShown(state.items.get(r.id)));
+}
+
+function makeTagPoints(tags) {
+    return makePoints(tags.filter(isShown), (g) => new THREE.Color(tagColor(g)), 0.16);
+}
+
+function rebuildTagLayer() {
+    if (!view.layers.tags || !state.space) return;
+    disposeObject(view.layers.tags);
+    view.layers.tags = makeTagPoints(state.space.tags);
+    view.scene.add(view.layers.tags);
+    applyLayerVisibility();
 }
 
 function applyLayerVisibility() {
@@ -373,8 +413,8 @@ function updateHighlight() {
     const chipIds = new Set(state.chips.map((c) => c.id));
     const marks = [];
     for (const id of chipIds) if (state.items.has(id)) marks.push({ xyz: state.items.get(id).xyz, color: accent });
-    for (const r of state.list.rows.slice(0, NEAR_K)) {
-        if (!chipIds.has(r.id) && state.items.has(r.id)) marks.push({ xyz: state.items.get(r.id).xyz, color: near });
+    for (const r of listRows().slice(0, NEAR_K)) {
+        if (!chipIds.has(r.id)) marks.push({ xyz: state.items.get(r.id).xyz, color: near });
     }
     if (marks.length) {
         view.highlight = makePoints(marks, (m) => m.color, 0.42);
@@ -388,7 +428,7 @@ function updateHighlight() {
         view.probe.renderOrder = 11;
         view.scene.add(view.probe);
         const seg = [];
-        for (const r of state.list.rows.slice(0, 10)) {
+        for (const r of listRows().slice(0, 10)) {
             const it = state.items.get(r.id);
             if (it) seg.push(...state.probe, ...it.xyz);
         }
@@ -487,7 +527,7 @@ function updateLabels() {
         }
     };
     state.chips.forEach((c) => push(c.id, "chip"));
-    state.list.rows.slice(0, 12).forEach((r) => push(r.id, "near"));
+    listRows().slice(0, 12).forEach((r) => push(r.id, "near"));
     if (state.hover) push(state.hover, "hover");
     let html = "";
     for (const [id, cls] of ids) {
@@ -638,7 +678,7 @@ function renderDetail() {
 function renderList() {
     $("wfm-ts-list-title").textContent = state.list.title || t("tsNeighborsTitle");
     const chipIds = new Set(state.chips.map((c) => c.id));
-    const rows = state.list.rows.filter((r) => state.items.has(r.id));
+    const rows = listRows();
     if (!rows.length) {
         $("wfm-ts-list").innerHTML = `<span class="wfm-ts-muted">${escapeHtml(t("tsListEmpty"))}</span>`;
         return;
@@ -646,7 +686,7 @@ function renderList() {
     $("wfm-ts-list").innerHTML = rows.map((r) => {
         const it = state.items.get(r.id);
         const icon = it.kind === "card" ? `<img src="${API.thumb(it.id, 64)}" alt="" loading="lazy">`
-            : `<span class="wfm-ts-dot" style="background:${SOURCE_COLORS[it.sources?.[0]] || "#ccc"}"></span>`;
+            : `<span class="wfm-ts-dot" style="background:${tagColor(it)}"></span>`;
         const on = chipIds.has(it.id);
         return `<div class="wfm-ts-row" data-ts-go="${escapeHtml(it.id)}">${icon}<span class="wfm-ts-row-label">${escapeHtml(it.label)}</span>` +
             `<span class="wfm-ts-muted">${r.score.toFixed(2)}</span>` +
