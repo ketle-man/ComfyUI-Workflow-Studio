@@ -653,8 +653,9 @@ async function select(id) {
     state.selected = id;
     renderDetail();
     const it = state.items.get(id);
-    if (!it || it.kind === "image") return;
+    if (!it) return;
     try {
+        // Gallery画像を選んだときは、似たGallery画像も一覧に入る(タグ・カードのときは入らない)
         const data = await postJson(API.neighbors, { id, k: NEAR_K });
         if (state.selected !== id) return;
         state.probe = null;
@@ -719,12 +720,17 @@ function renderList() {
     }
     $("wfm-ts-list").innerHTML = rows.map((r) => {
         const it = state.items.get(r.id);
-        const icon = it.kind === "card" ? `<img src="${API.thumb(it.id, 64)}" alt="" loading="lazy">`
+        const icon = it.kind !== "tag"
+            ? `<img class="${it.kind === "image" ? "wfm-ts-row-image" : ""}" src="${API.thumb(it.id, 64)}" alt="" loading="lazy">`
             : `<span class="wfm-ts-dot" style="background:${tagColor(it)}"></span>`;
         const on = chipIds.has(it.id);
-        return `<div class="wfm-ts-row" data-ts-go="${escapeHtml(it.id)}">${icon}<span class="wfm-ts-row-label">${escapeHtml(it.label)}</span>` +
-            `<span class="wfm-ts-muted">${r.score.toFixed(2)}</span>` +
-            `<button class="wfm-ts-row-add${on ? " on" : ""}" data-ts-add="${escapeHtml(it.id)}" title="${escapeHtml(t(on ? "tsRemove" : "tsAdd"))}">${on ? "✓" : "+"}</button></div>`;
+        // タグの無いGallery画像は追加できない(ボタンの代わりに空き)
+        const btn = canAdd(it)
+            ? `<button class="wfm-ts-row-add${on ? " on" : ""}" data-ts-add="${escapeHtml(it.id)}" title="${escapeHtml(t(on ? "tsRemove" : "tsAdd"))}">${on ? "✓" : "+"}</button>`
+            : `<span class="wfm-ts-row-add-none"></span>`;
+        return `<div class="wfm-ts-row" data-ts-go="${escapeHtml(it.id)}" title="${escapeHtml(t(`tsKind_${it.kind}`))}">${icon}` +
+            `<span class="wfm-ts-row-label">${escapeHtml(itemTitle(it))}</span>` +
+            `<span class="wfm-ts-muted">${r.score.toFixed(2)}</span>${btn}</div>`;
     }).join("");
 }
 

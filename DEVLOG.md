@@ -33,6 +33,11 @@
   - **環境の問題（再発）**: ComfyUI_5 の venv で `onnxruntime` 1.31.0（CPU）と `onnxruntime-gpu` 1.30.0 が共存し CUDA が無効。CPU では wd-v1-4-convnext 465ms/枚・wd-v1-4-vit 641ms/枚（全画像なら約1.5時間）。修復は ComfyUI 停止→`fix_onnxruntime_gpu.bat`（外側リポジトリ、v0.8.10 と同じ）。今回は未実施。
   - 検証（CPU）: Gallery点600・Gallery点のみ・convnext で 288枚を142秒（0.49秒/枚）、全600点にタグ（プロンプト312・Tagger 288・なし0）。`tagger_auto` を含むタグ571件（うち補完でしか出ないもの180件: 1boy, multiple girls, scenery 等）。キャッシュで再構築17秒。UI（選択欄の有効/無効、凡例、「（Tagger補完）」表示、クリックで1チップ）とコンソールエラー0を確認。確認後は Gallery点4000・補完OFFで作り直し済み。
   - GPU 修復後（利用者が `fix_onnxruntime_gpu.bat` を実行、`onnxruntime-gpu` 1.30.0 のみ・CUDA/TensorRT 有効）: Gallery点4000・Gallery点のみ・convnext で 1,918枚を約136秒（約0.07秒/枚、画像読み込み込み。CPU の約7倍）、全4000点にタグ（プロンプト2,082・Tagger 1,918）。全画像（10,652枚）なら約12〜13分の見込み。
+- **追加: Gallery 点の近傍**
+  - 以前は Gallery 点を選んでも `select()` が近傍を問い合わせずに抜け、直前の一覧が残っていた（ファイル名とは無関係）。近傍用 `tagspace_space.npz` にも背景のベクトルが無かった。
+  - 背景のベクトル（`bg_ids` / `bg_vecs`、4000×768 で約12MB）を保存し、カード/タグ/画像の中心化行列を読み込み時にキャッシュ。Gallery 点を基準にしたときだけ「画像→タグ→カード」を交互に並べる。カード・タグ・検索では画像を混ぜない（利用者の指定）。一覧の Gallery 画像は丸いサムネイル、タグの無い画像は「＋」なし。
+  - 検証: `ComfyUI_00510_.png` → 似た画像（0.69〜0.71）・pink body suits 等のタグ・カードが交互、57ms。タグ/カード/検索の一覧は card・tag のみ。画面でも Tagger 補完の Gallery 点で確認。
+  - 未解明: 再起動直後の最初の構築が146秒かかり `tagspace_tagger.json` が書き換えられた（2回目以降は13秒・書き換えなし、ログに警告なし）。再現したら段階ごとの時間を記録して調べる。
 
 ### Gallery セマンティック検索: EmbeddingGemma 2 を ONNX から Ollama へ移行
 

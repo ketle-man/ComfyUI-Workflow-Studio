@@ -162,8 +162,19 @@ class TagSpaceService:
                     raise SemanticError("tagspace_not_built")
                 with np.load(self._mat_file, allow_pickle=False) as z:
                     self._mat = {k: z[k] for k in z.files}
-                self._mat["ids"] = [str(x) for x in self._mat["ids"]]
-                self._mat["pos"] = {i: n for n, i in enumerate(self._mat["ids"])}
+                m = self._mat
+                m["ids"] = [str(x) for x in m["ids"]]
+                m["pos"] = {i: n for n, i in enumerate(m["ids"])}
+                m["bg_ids"] = [str(x) for x in m["bg_ids"]] if "bg_ids" in m else []
+                m["bg_pos"] = {i: n for n, i in enumerate(m["bg_ids"])}
+                # 中心化して正規化したブロック(カード/タグ/背景画像)。近傍・検索のたびに作り直さない
+                n_img = int(m["n_img"])
+                m["blocks"] = {
+                    "card": (m["ids"][:n_img], self._centered(m["vecs"][:n_img], m["mean_img"])),
+                    "tag": (m["ids"][n_img:], self._centered(m["vecs"][n_img:], m["mean_txt"])),
+                    "image": (m["bg_ids"], self._centered(m["bg_vecs"], m["mean_img"]) if "bg_vecs" in m
+                              else np.zeros((0, m["vecs"].shape[1]), np.float32)),
+                }
             return self._mat
 
     # ── 材料の収集 ─────────────────────────────────────────
@@ -554,7 +565,8 @@ class TagSpaceService:
         tmp = self._mat_file.with_suffix(".tmp.npz")
         np.savez(tmp, ids=np.array(ids), vecs=np.concatenate([img, txt]).astype(np.float32),
                  n_img=np.array(n_img), mean_img=mean_img.astype(np.float32), mean_txt=mean_txt.astype(np.float32),
-                 axes=axes, scale=np.array(scale, dtype=np.float32))
+                 axes=axes, scale=np.array(scale, dtype=np.float32),
+                 bg_ids=np.array([b["id"] for b in bg_items]), bg_vecs=bg_u.astype(np.float32))
         tmp.replace(self._mat_file)
         tmp_json = self._space_file.with_suffix(".tmp.json")
         tmp_json.write_text(json.dumps(space, ensure_ascii=False), encoding="utf-8")
@@ -564,35 +576,44 @@ class TagSpaceService:
 
     # ── 近傍・検索 ─────────────────────────────────────────
 
+    @staticmethod
+    def _centered(vecs: np.ndarray, mean: np.ndarray) -> np.ndarray:
+        c = vecs - mean
+        return c / np.maximum(np.linalg.norm(c, axis=1, keepdims=True), 1e-6)
+
     def _rank(self, m: dict, q: np.ndarray, k: int, exclude: str = "", kind: str = "") -> list[dict]:
-        """カードとタグは別の塊なので、それぞれの平均を引いた空間で比べる(=中心化コサイン)"""
-        n_img = int(m["n_img"])
-        q_img = q - m["mean_img"] if kind != "tag" else q - m["mean_txt"]
-        vecs = m["vecs"]
-        cen = np.concatenate([vecs[:n_img] - m["mean_img"], vecs[n_img:] - m["mean_txt"]])
-        cen /= np.maximum(np.linalg.norm(cen, axis=1, keepdims=True), 1e-6)
-        qn = q_img / max(float(np.linalg.norm(q_img)), 1e-6)
-        scores = cen @ qn
-        # 同じ種類どうしの方がスコアが高く出るため、カードとタグを別々に順位付けして交互に並べる
-        ranked = []
-        for lo, hi in ((0, n_img), (n_img, len(vecs))):
-            order = lo + np.argsort(-scores[lo:hi])
-            ranked.append([{"id": m["ids"][i], "score": round(float(scores[i]), 4)}
-                           for i in order[:k + 1] if m["ids"][i] != exclude][:k])
-        cards, tags = ranked
-        first, second = (tags, cards) if kind == "tag" else (cards, tags)
-        out = [r for pair in zip(first, second) for r in pair]
-        n = min(len(first), len(second))
-        out += first[n:] + second[n:]
+        """カード・タグ・画像は別々の塊なので、それぞれの平均を引いた空間で比べる(=中心化コサイン)。
+        同じ種類どうしの方がスコアが高く出るため、種類ごとに順位付けして交互に並べる。
+        Gallery画像(背景点)を候補に入れるのは、Gallery画像を基準にしたときだけ。"""
+        qc = q - (m["mean_txt"] if kind == "tag" else m["mean_img"])
+        qn = qc / max(float(np.linalg.norm(qc)), 1e-6)
+        order = {"tag": ("tag", "card"), "card": ("card", "tag"), "image": ("image", "tag", "card")}[kind or "card"]
+        lists = []
+        for name in order:
+            ids, mat = m["blocks"][name]
+            if not len(ids):
+                lists.append([])
+                continue
+            scores = mat @ qn
+            top = np.argsort(-scores)[:k + 1]
+            lists.append([{"id": ids[i], "score": round(float(scores[i]), 4)} for i in top if ids[i] != exclude][:k])
+        out = []
+        for i in range(k):
+            out += [lst[i] for lst in lists if i < len(lst)]
+            if len(out) >= k:
+                break
         return out[:k]
 
     def neighbors(self, item_id: str, k: int) -> list[dict]:
         m = self._load_mat()
         i = m["pos"].get(item_id)
-        if i is None:
-            raise SemanticError("tagspace_unknown_item", item_id)
-        kind = "card" if i < int(m["n_img"]) else "tag"
-        return self._rank(m, m["vecs"][i], k, exclude=item_id, kind=kind)
+        if i is not None:
+            kind = "card" if i < int(m["n_img"]) else "tag"
+            return self._rank(m, m["vecs"][i], k, exclude=item_id, kind=kind)
+        j = m["bg_pos"].get(item_id)
+        if j is not None:
+            return self._rank(m, m["bg_vecs"][j], k, exclude=item_id, kind="image")
+        raise SemanticError("tagspace_unknown_item", item_id)
 
     def search(self, query: str, k: int) -> dict:
         query = (query or "").strip()[:500]
