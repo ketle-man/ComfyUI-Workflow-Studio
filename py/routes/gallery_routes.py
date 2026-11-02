@@ -73,6 +73,7 @@ def setup_routes(app: web.Application):
     app.router.add_post("/wfm/gallery/semantic/similar", semantic_similar)
     app.router.add_post("/wfm/gallery/semantic/clear", semantic_clear)
     app.router.add_post("/wfm/gallery/semantic/test", semantic_test)
+    app.router.add_post("/wfm/gallery/semantic/options", semantic_options)
     app.router.add_get("/wfm/gallery/images", list_images)
     app.router.add_get("/wfm/gallery/image/meta", get_image_meta)
     app.router.add_get("/wfm/gallery/image/workflow", get_image_workflow)
@@ -112,7 +113,7 @@ def setup_routes(app: web.Application):
 
 
 # ──────────────────────────────────────────────────────────────
-# セマンティック検索 (Gemini Embedding 2)
+# セマンティック検索 (Gemini Embedding 2 / Ollama EmbeddingGemma 2)
 # ──────────────────────────────────────────────────────────────
 
 def _semantic_error(e: SemanticError) -> web.Response:
@@ -164,9 +165,9 @@ async def semantic_folders(request: web.Request) -> web.Response:
 
 
 def _apply_local_options(body: dict) -> None:
-    """リクエストに実行デバイス/スレッド数が含まれていれば反映・保存する"""
-    if "device" in body:
-        _semantic.set_local_options(str(body.get("device", "auto")), _num(body, "threads", 0, 0, 256))
+    """リクエストに Ollama の接続先/モデルサイズが含まれていれば反映・保存する"""
+    if "ollama_url" in body:
+        _semantic.set_local_options(str(body.get("ollama_url", "")), str(body.get("ollama_tag", "")))
 
 
 async def semantic_index(request: web.Request) -> web.Response:
@@ -180,7 +181,6 @@ async def semantic_index(request: web.Request) -> web.Response:
             "all" if body.get("mode") == "all" else "missing",
             str(body.get("model", SEMANTIC_DEFAULT_MODEL)),
             _num(body, "dim", DEFAULT_DIM, 0, 100000),
-            _num(body, "soft", 280, 0, 100000),
         )
         return web.json_response({"ok": True})
     except SemanticError as e:
@@ -847,4 +847,17 @@ async def get_psd_layers(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=400)
     except Exception as e:
         logger.error("Error reading PSD layers: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def semantic_options(request: web.Request) -> web.Response:
+    """Ollama の接続先/モデルサイズを保存して、新しい状態を返す"""
+    body = await _json_body(request)
+    try:
+        await asyncio.to_thread(_apply_local_options, body)
+        return web.json_response(await asyncio.to_thread(_semantic.status))
+    except SemanticError as e:
+        return _semantic_error(e)
+    except Exception as e:
+        logger.error("semantic_options error: %s", e)
         return web.json_response({"error": str(e)}, status=500)

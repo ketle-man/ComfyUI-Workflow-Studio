@@ -1151,6 +1151,7 @@
 .wfm-sem-pane { display: flex; flex-direction: column; gap: 10px; min-height: 230px; }
 .wfm-sem-footer { justify-content: flex-end; border-top: 1px solid var(--wfm-border, #444); padding-top: 10px; }
 .wfm-sem-num { width: 80px; }
+.wfm-sem-url { width: 240px; max-width: 100%; }
 .wfm-sem-danger { margin-left: auto; color: #ef4444; }
 
 .wfm-sem-row .wfm-select { width: auto; min-width: 90px; }

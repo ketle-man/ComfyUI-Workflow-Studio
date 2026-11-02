@@ -1,5 +1,5 @@
 /**
- * Gallery Tab - セマンティック検索 (Gemini Embedding 2)
+ * Gallery Tab - セマンティック検索 (Gemini Embedding 2 / Ollama の EmbeddingGemma 2)
  *  - 検索ボックスのSemantic Searchトグル（ONでEnter実行の意味検索）
  *  - 詳細パネルの「類似画像」トグル／更新ボタン
  *  - インデックス作成モーダル（Semantic⚙）
@@ -19,18 +19,20 @@ const API = {
     clear:   "/wfm/gallery/semantic/clear",
     folders: (root) => `/wfm/gallery/semantic/folders?root=${encodeURIComponent(root)}`,
     test:    "/wfm/gallery/semantic/test",
+    options: "/wfm/gallery/semantic/options",
 };
 
 const LS_ON = "wfm_gallery_semantic_on";
 const LS_DIM = "wfm_gallery_semantic_dim";
 const LS_MODEL = "wfm_gallery_semantic_model";
-const LS_SOFT = "wfm_gallery_semantic_soft";
 const GEMINI = "gemini-embedding-2";
 const LOCAL = "embeddinggemma-2";
 const LS_SUB = "wfm_gallery_semantic_recursive";
 const LS_TAB = "wfm_gallery_semantic_tab";
 const LS_TH = "wfm_gallery_semantic_th";
 const LIMITS = [50, 100, 200, 500, 1000];
+// Ollama のモデルサイズ(どちらも同じベクトルを返すので、切り替えても再作成は不要)
+const OLLAMA_TAGS = [["embeddinggemma-2:740m", "semOllamaTag740"], ["embeddinggemma-2:440m", "semOllamaTag440"]];
 
 const sem = {
     on: false,             // Semantic Searchトグル
@@ -65,7 +67,8 @@ async function postJson(url, body) {
 /** APIエラーコードをi18nメッセージにする */
 export function semanticErrorMessage(e) {
     const known = ["no_api_key", "api_key_invalid", "index_empty", "dim_mismatch", "already_running",
-        "folder_not_allowed", "unsupported_type", "network_error", "api_error", "local_error"];
+        "folder_not_allowed", "unsupported_type", "network_error", "api_error", "local_error",
+        "ollama_unreachable", "ollama_model_missing", "bad_url"];
     if (e?.code && known.includes(e.code)) {
         return t(`sem_err_${e.code}`, e.message);
     }
@@ -244,23 +247,14 @@ function modalHtml() {
             <select id="wfm-sem-dim" class="wfm-select"></select>
             <span class="wfm-sem-hint">${escapeHtml(t("semDimHint"))}</span></div>
         <div id="wfm-sem-local-opts" class="wfm-sem-local-opts" style="display:none;">
-            <div class="wfm-sem-row"><b>${escapeHtml(t("semDevice"))}</b>
-                <select id="wfm-sem-device" class="wfm-select">
-                    <option value="auto">${escapeHtml(t("semDeviceAuto"))}</option>
-                    <option value="cpu">CPU</option>
-                    <option value="cuda">GPU (CUDA)</option>
+            <div class="wfm-sem-row"><b>${escapeHtml(t("semOllamaUrl"))}</b>
+                <input type="text" id="wfm-sem-ollama-url" class="wfm-input wfm-sem-url" spellcheck="false" placeholder="http://localhost:11434"></div>
+            <div class="wfm-sem-row"><b>${escapeHtml(t("semOllamaTag"))}</b>
+                <select id="wfm-sem-ollama-tag" class="wfm-select">
+                    ${OLLAMA_TAGS.map(([tag, key]) => `<option value="${tag}">${escapeHtml(t(key))}</option>`).join("")}
                 </select>
-                <span id="wfm-sem-device-info" class="wfm-sem-hint"></span></div>
-            <div class="wfm-sem-row" id="wfm-sem-threads-row"><b>${escapeHtml(t("semThreads"))}</b>
-                <select id="wfm-sem-threads" class="wfm-select"></select>
-                <span class="wfm-sem-hint">${escapeHtml(t("semThreadsHint"))}</span></div>
-            <div class="wfm-sem-row"><b>${escapeHtml(t("semSoft"))}</b>
-                <select id="wfm-sem-soft" class="wfm-select">
-                    <option value="280">${escapeHtml(t("semSoftHigh"))}</option>
-                    <option value="140">${escapeHtml(t("semSoftStd"))}</option>
-                    <option value="70">${escapeHtml(t("semSoftLight"))}</option>
-                </select>
-                <span class="wfm-sem-hint">${escapeHtml(t("semSoftHint"))}</span></div>
+                <span id="wfm-sem-ollama-info" class="wfm-sem-hint"></span></div>
+            <p class="wfm-sem-hint">${escapeHtml(t("semOllamaTagHint"))}</p>
         </div>
         <div class="wfm-sem-actions">
             <button class="wfm-btn" id="wfm-sem-test">${escapeHtml(t("semTest"))}</button>
@@ -302,19 +296,12 @@ function selectedModel() {
     return document.querySelector('input[name="wfm-sem-model"]:checked')?.value || GEMINI;
 }
 
-/** ローカルモデルの実行設定(デバイス/スレッド/画像精度)の初期値をサーバー保存値から設定する */
+/** Ollama の接続先/モデルサイズの初期値をサーバー保存値から設定する */
 function initLocalOpts(st) {
-    const lo = st.local || {};
-    const devSel = document.getElementById("wfm-sem-device");
-    devSel.value = (lo.options && lo.options.device) || "auto";
-    const cores = lo.devices?.cpu_count || 4;
-    const cur = (lo.options && lo.options.threads) || lo.default_threads || Math.max(1, Math.floor(cores / 2));
-    const set = new Set([1, 2, 4, 6, 8, 12, 16, 24, 32].filter(n => n <= cores).concat([cores, cur, lo.default_threads || 1]));
-    document.getElementById("wfm-sem-threads").innerHTML = [...set].sort((a, b) => a - b)
-        .map(n => `<option value="${n}">${n}${n === cores ? ` (${t("semThreadsAll")})` : ""}</option>`).join("");
-    document.getElementById("wfm-sem-threads").value = String(cur);
-    const soft = st.indexed_total && st.index_model === LOCAL ? st.index_soft : parseInt(lsGet(LS_SOFT, String(lo.default_soft || 280)), 10);
-    document.getElementById("wfm-sem-soft").value = String([70, 140, 280].includes(soft) ? soft : 280);
+    const ol = st.ollama || {};
+    document.getElementById("wfm-sem-ollama-url").value = ol.url || "";
+    const sel = document.getElementById("wfm-sem-ollama-tag");
+    if (ol.tag) sel.value = ol.tag;
 }
 
 /** 検索タブ: しきい値の入力欄にインデックスのモデル用の保存値を入れる（入力中の値は上書きしない） */
@@ -359,20 +346,15 @@ function closeSemanticModal() {
     }
 }
 
-/** 検出した実行デバイスの表示(GPU版onnxruntimeが無いときの案内を含む) */
-function updateDeviceInfo(lo) {
-    const dev = lo?.devices;
-    if (!dev) return;
-    const info = document.getElementById("wfm-sem-device-info");
-    const cudaOpt = document.querySelector('#wfm-sem-device option[value="cuda"]');
-    if (cudaOpt) cudaOpt.disabled = !dev.cuda;
-    if (!dev.cuda && document.getElementById("wfm-sem-device").value === "cuda") {
-        document.getElementById("wfm-sem-device").value = "auto";
-    }
-    if (info) info.textContent = dev.cuda ? t("semDeviceCudaOk", dev.ort_version) : t("semDeviceNoGpu", dev.ort_version);
-    const dv = document.getElementById("wfm-sem-device").value;
-    const useCpu = dv === "cpu" || (dv === "auto" && !dev.cuda);
-    document.getElementById("wfm-sem-threads-row").style.display = useCpu ? "" : "none";
+/** モデルサイズの選択肢に取得済みかどうかを表示する */
+function updateOllamaInfo(ol) {
+    if (!ol) return;
+    document.querySelectorAll("#wfm-sem-ollama-tag option").forEach(opt => {
+        const key = OLLAMA_TAGS.find(([tag]) => tag === opt.value)?.[1];
+        if (key) opt.textContent = t(key) + (ol.installed?.[opt.value] ? "" : ` ${t("semOllamaNotPulled")}`);
+    });
+    const info = document.getElementById("wfm-sem-ollama-info");
+    if (info) info.textContent = ol.reachable && !ol.ready ? t("semOllamaPullHint", ol.tag) : "";
 }
 
 /** 選択中モデルの次元選択肢を作り直す(preferredが選択肢にあればそれを選ぶ) */
@@ -414,11 +396,12 @@ async function refreshModal() {
     fillThresholds(st);
     const model = selectedModel();
     document.getElementById("wfm-sem-local-opts").style.display = model === LOCAL ? "" : "none";
-    updateDeviceInfo(st.local);
-    const ready = model === LOCAL ? true : !!st.has_key;
-    const keyLine = model === LOCAL
-        ? (_backends[LOCAL]?.downloaded ? t("semLocalReady") : t("semLocalNeedDownload"))
-        : (st.has_key ? t("semKeyOk") : t("semKeyMissing"));
+    updateOllamaInfo(st.ollama);
+    const ol = st.ollama || {};
+    const ready = model === LOCAL ? !!ol.ready : !!st.has_key;
+    const keyLine = model !== LOCAL ? (st.has_key ? t("semKeyOk") : t("semKeyMissing"))
+        : !ol.reachable ? t("semOllamaUnreachable", ol.url)
+        : ol.ready ? t("semOllamaReady", ol.tag) : t("semOllamaMissing", ol.tag);
     const idxLine = t("semIndexInfo", st.indexed_total, st.index_dim || "-");
     const scopeLine = st.scope_total != null ? t("semScopeInfo", st.scope_indexed, st.scope_total) : "";
     document.getElementById("wfm-sem-status").innerHTML =
@@ -437,7 +420,7 @@ async function refreshModal() {
         let text = t("semProgress", job.done || 0, total, job.failed || 0);
         if (job.running && job.current) text += `  ${job.current}`;
         if (!job.running) {
-            if (["no_api_key", "api_key_invalid", "local_error"].includes(job.error_code)) text += `  ${t(`sem_err_${job.error_code}`, job.error)}`;
+            if (["no_api_key", "api_key_invalid", "local_error", "ollama_unreachable", "ollama_model_missing"].includes(job.error_code)) text += `  ${t(`sem_err_${job.error_code}`, job.error)}`;
             else text += `  ${job.cancelled ? t("semCancelled") : t("semFinished")}`;
             if (job.failed && job.error) text += `  (${job.error})`;
         }
@@ -477,13 +460,22 @@ function openSemanticModal() {
     }
     openModal(t("semModalTitle"), modalHtml());
     const dimOf = () => parseInt(document.getElementById("wfm-sem-dim").value, 10) || 0;
-    // ローカルモデル選択時のみ実行設定を送る(サーバー側で保存され、検索時のクエリ埋め込みにも使われる)
-    const localOpts = () => selectedModel() === LOCAL ? {
-        device: document.getElementById("wfm-sem-device").value,
-        threads: parseInt(document.getElementById("wfm-sem-threads").value, 10) || 0,
-        soft: parseInt(document.getElementById("wfm-sem-soft").value, 10) || 280,
-    } : {};
-    document.getElementById("wfm-sem-device").addEventListener("change", () => refreshModal());
+    // ローカルモデル選択時のみ Ollama の設定を送る(サーバー側で保存され、検索時のクエリ埋め込みにも使われる)
+    const ollamaOpts = () => ({
+        ollama_url: document.getElementById("wfm-sem-ollama-url").value.trim(),
+        ollama_tag: document.getElementById("wfm-sem-ollama-tag").value,
+    });
+    const localOpts = () => selectedModel() === LOCAL ? ollamaOpts() : {};
+    const saveOllamaOpts = async () => {
+        try {
+            await postJson(API.options, ollamaOpts());
+        } catch (e) {
+            showToast(semanticErrorMessage(e), "error");
+        }
+        refreshModal();
+    };
+    document.getElementById("wfm-sem-ollama-url").addEventListener("change", saveOllamaOpts);
+    document.getElementById("wfm-sem-ollama-tag").addEventListener("change", saveOllamaOpts);
     document.querySelectorAll('input[name="wfm-sem-model"]').forEach(r => r.addEventListener("change", () => {
         fillDims(selectedModel(), 0);
         refreshModal();
@@ -507,7 +499,6 @@ function openSemanticModal() {
         if (mode === "all" && !confirm(t("semConfirmAll"))) return;
         lsSet(LS_DIM, String(dimOf()));
         lsSet(LS_MODEL, selectedModel());
-        lsSet(LS_SOFT, document.getElementById("wfm-sem-soft").value);
         try {
             await postJson(API.index, {
                 folder: ctx.getFolder(),

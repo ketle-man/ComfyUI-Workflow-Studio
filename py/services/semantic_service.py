@@ -1,7 +1,7 @@
 """
-Semantic Service - Gallery用セマンティック検索（Gemini Embedding 2）
+Semantic Service - Gallery用セマンティック検索（Gemini Embedding 2 / Ollama の EmbeddingGemma 2）
 
-画像(動画・PSDはサムネイル)をGemini Embedding APIでベクトル化してローカルに保存し、
+画像(動画・PSDはサムネイル)をGemini Embedding API または Ollama でベクトル化してローカルに保存し、
 テキストクエリ/類似画像でコサイン類似度検索する。インデックス構築後の検索は
 (テキストクエリの埋め込み1回を除き)ローカル処理でAPI費用はかからない。
 
@@ -21,13 +21,13 @@ from pathlib import Path
 
 import numpy as np
 
-from . import semantic_local as local
+from . import semantic_ollama as local
 
 logger = logging.getLogger(__name__)
 
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 MODEL = "gemini-embedding-2"           # Gemini API (クラウド)
-LOCAL_MODEL = local.LOCAL_MODEL        # EmbeddingGemma 2 (ローカルONNX)
+LOCAL_MODEL = local.LOCAL_MODEL        # EmbeddingGemma 2 (Ollama)
 DEFAULT_DIM = 1536
 VALID_DIMS = (768, 1536, 3072)
 # バックエンド(モデル名) -> 選択可能な出力次元
@@ -126,7 +126,6 @@ class SemanticService:
         self._stamp: dict[str, tuple[int, float]] = {}  # path -> (size, mtime)
         self._dim = 0                               # インデックスの次元(0=空)
         self._model = MODEL                         # インデックスを作ったモデル
-        self._soft = local.DEFAULT_SOFT             # ローカルモデルの画像ソフトトークン数(インデックスと一致させる)
         self._settings_file = data_dir / "semantic_settings.json"
         self._load_settings()
         self._mat_cache = None                      # (paths, matrix)
@@ -137,21 +136,22 @@ class SemanticService:
         self._cancel = threading.Event()
         self._thread: threading.Thread | None = None
 
-    # ── ローカル推論の実行設定(デバイス/スレッド数) ─────────────
+    # ── Ollama の接続先/モデルサイズ ────────────────────────
 
     def _load_settings(self) -> None:
         try:
             if self._settings_file.exists():
                 d = json.loads(self._settings_file.read_text(encoding="utf-8"))
-                local.configure(str(d.get("device", "auto")), int(d.get("threads", 0)))
-                return
+                local.configure(str(d.get("url", local.DEFAULT_URL)), str(d.get("tag", local.DEFAULT_TAG)))
         except Exception as e:
             logger.warning("SemanticService: failed to load settings: %s", e)
-        local.configure("auto", local.default_threads())
 
-    def set_local_options(self, device: str, threads: int) -> None:
-        """実行デバイス/CPUスレッド数を反映して保存する(検索時のクエリ埋め込みにも使われる)"""
-        local.configure(device, threads)
+    def set_local_options(self, url: str, tag: str) -> None:
+        """Ollama の接続先/モデルサイズを反映して保存する(検索時のクエリ埋め込みにも使われる)"""
+        try:
+            local.configure(url, tag)
+        except ValueError as e:
+            raise SemanticError("bad_url", str(e))
         try:
             self._settings_file.write_text(json.dumps(local.current_config()), encoding="utf-8")
         except Exception as e:
@@ -177,7 +177,6 @@ class SemanticService:
                     if model not in DIMS_BY_MODEL:
                         return
                     self._model = model
-                    self._soft = int(z["soft"]) if "soft" in z.files else local.DEFAULT_SOFT
                     paths = [str(p) for p in z["paths"]]
                     sizes, mtimes, vecs = z["sizes"], z["mtimes"], z["vecs"]
                     self._dim = int(z["dim"])
@@ -201,7 +200,7 @@ class SemanticService:
             tmp = self._file.with_suffix(".tmp.npz")
             np.savez(
                 tmp,
-                model=np.array(self._model), dim=np.array(self._dim), soft=np.array(self._soft),
+                model=np.array(self._model), dim=np.array(self._dim),
                 paths=np.array(paths),
                 sizes=np.array([self._stamp[p][0] for p in paths], dtype=np.int64),
                 mtimes=np.array([self._stamp[p][1] for p in paths], dtype=np.float64),
@@ -228,24 +227,18 @@ class SemanticService:
 
     def status(self, folder: str = "", recursive: bool = True) -> dict:
         self._ensure_loaded()
+        ollama = local.status()
         out = {
             "has_key": bool(get_api_key()),
             "model": MODEL,
             "backends": {
                 MODEL: {"dims": list(VALID_DIMS), "default_dim": DEFAULT_DIM, "ready": bool(get_api_key())},
                 LOCAL_MODEL: {"dims": list(local.LOCAL_DIMS), "default_dim": local.DEFAULT_LOCAL_DIM,
-                              "ready": True, "downloaded": local.is_downloaded(self.data_dir)},
+                              "ready": ollama["ready"]},
             },
             "index_model": self._model,
             "index_dim": self._dim,
-            "index_soft": self._soft,
-            "local": {
-                "devices": local.available_devices(),
-                "options": local.current_config(),
-                "default_threads": local.default_threads(),
-                "soft_tokens": list(local.SOFT_TOKENS),
-                "default_soft": local.DEFAULT_SOFT,
-            },
+            "ollama": ollama,
             "indexed_total": len(self._vecs),
             "job": dict(self._job),
         }
@@ -279,8 +272,7 @@ class SemanticService:
 
     # ── インデックス作成ジョブ ────────────────────────────
 
-    def start_index(self, folder: str, recursive: bool, mode: str, model: str, dim: int,
-                    soft: int = local.DEFAULT_SOFT) -> None:
+    def start_index(self, folder: str, recursive: bool, mode: str, model: str, dim: int) -> None:
         self._ensure_loaded()
         if model not in DIMS_BY_MODEL:
             raise SemanticError("bad_model", model)
@@ -288,15 +280,19 @@ class SemanticService:
             raise SemanticError("no_api_key")
         if dim not in DIMS_BY_MODEL[model]:
             raise SemanticError("bad_dim", str(dim))
-        if model != LOCAL_MODEL or soft not in local.SOFT_TOKENS:
-            soft = local.DEFAULT_SOFT   # ソフトトークン数はローカルモデルのみの設定
+        if model == LOCAL_MODEL:
+            st = local.status()   # 接続できない/モデル未取得なら、ジョブを始める前に知らせる
+            if not st["reachable"]:
+                raise SemanticError("ollama_unreachable", f"{st['url']}: {st['error']}")
+            if not st["ready"]:
+                raise SemanticError("ollama_model_missing", st["tag"])
         with self._lock:
             if self._job["running"]:
                 raise SemanticError("already_running")
             entries = self._scope_entries(folder, recursive)
-            mismatch = bool(self._vecs) and (self._dim != dim or self._model != model or self._soft != soft)
+            mismatch = bool(self._vecs) and (self._dim != dim or self._model != model)
             if mismatch and mode != "all":
-                raise SemanticError("dim_mismatch", f"{self._model}/{self._dim}/{self._soft}")
+                raise SemanticError("dim_mismatch", f"{self._model}/{self._dim}")
             if mode == "all":
                 # 範囲内の既存ベクトルを破棄して作り直す(モデル/次元違いなら全消去)
                 if mismatch:
@@ -309,14 +305,13 @@ class SemanticService:
                 self._mat_cache = None
             self._dim = dim
             self._model = model
-            self._soft = soft
             todo = [e for e in entries if not self._is_fresh(e[1], e[2], e[3])]
             # スコープ内で消えたファイルの残骸を掃除(スコープ配下のキーのみ)
             self._prune_missing(folder, recursive, {e[1] for e in entries})
             self._cancel.clear()
             self._job = self._idle_job()
             self._job.update(running=True, total=len(todo))
-        self._thread = threading.Thread(target=self._run_index, args=(todo, model, dim, soft), daemon=True)
+        self._thread = threading.Thread(target=self._run_index, args=(todo, model, dim), daemon=True)
         self._thread.start()
 
     def _prune_missing(self, folder: str, recursive: bool, existing: set[str]) -> None:
@@ -335,52 +330,78 @@ class SemanticService:
     def cancel(self) -> None:
         self._cancel.set()
 
-    def _run_index(self, todo: list, model: str, dim: int, soft: int = local.DEFAULT_SOFT) -> None:
-        def work(entry):
-            if self._cancel.is_set():
-                return
-            name, ap, size, mtime = entry
-            self._job["current"] = name
-            try:
-                vec = self._embed_image(model, dim, Path(ap), soft)
-                self._put(ap, vec, size, mtime)
-                self._job["done"] += 1
-            except SemanticError as e:
-                if e.code in ("no_api_key", "api_key_invalid"):
-                    self._job["error_code"], self._job["error"] = e.code, str(e)
-                    self._cancel.set()
-                else:
-                    self._job["failed"] += 1
-                    if not self._job["error"]:
-                        self._job["error_code"], self._job["error"] = e.code, str(e)
-            except Exception as e:
-                logger.warning("SemanticService: embed failed for %s: %s", ap, e)
+    def _run_index(self, todo: list, model: str, dim: int) -> None:
+        def fail(e: SemanticError) -> None:
+            if e.code in ("no_api_key", "api_key_invalid", "ollama_unreachable", "ollama_model_missing"):
+                # 続けても全件失敗するので中止する
+                self._job["error_code"], self._job["error"] = e.code, str(e)
+                self._cancel.set()
+            else:
                 self._job["failed"] += 1
+                if not self._job["error"]:
+                    self._job["error_code"], self._job["error"] = e.code, str(e)
+
+        def checkpoint() -> None:
             if self._dirty >= _CHECKPOINT_EVERY:
                 try:
                     self._save()
                 except Exception as e:
                     logger.warning("SemanticService: checkpoint failed: %s", e)
 
+        def work(entry):
+            if self._cancel.is_set():
+                return
+            name, ap, size, mtime = entry
+            self._job["current"] = name
+            try:
+                vec = self._embed_image(model, dim, Path(ap))
+                self._put(ap, vec, size, mtime)
+                self._job["done"] += 1
+            except SemanticError as e:
+                fail(e)
+            except Exception as e:
+                logger.warning("SemanticService: embed failed for %s: %s", ap, e)
+                self._job["failed"] += 1
+            checkpoint()
+
+        def work_batch(batch):
+            """Ollama: まとめて送る。失敗したら1枚ずつ送り直して原因の画像だけを失敗扱いにする"""
+            if self._cancel.is_set():
+                return
+            self._job["current"] = batch[0][0]
+            vecs = None
+            try:
+                ims = [self._load_local_image(Path(e[1])) for e in batch]
+                vecs = local.embed_images(ims, dim)
+            except local.OllamaError as e:
+                if e.code != "local_error":
+                    fail(SemanticError(e.code, str(e)))
+                    return
+            except Exception:
+                pass
+            if vecs is None:
+                for entry in batch:
+                    work(entry)
+                return
+            for (name, ap, size, mtime), vec in zip(batch, vecs):
+                self._put(ap, vec, size, mtime)
+                self._job["done"] += 1
+            checkpoint()
+
         try:
             if model == LOCAL_MODEL:
-                # 初回はモデルのダウンロード/ロードを先に行う(失敗したらジョブ全体を中止)
-                try:
-                    local.ensure_runtime(self.data_dir, progress=lambda ph: self._job.update(current=f"({ph} model...)"))
-                except Exception as e:
-                    logger.warning("SemanticService: local model load failed: %s", e)
-                    self._job["error_code"], self._job["error"] = "local_error", str(e)
-                    self._cancel.set()
-            workers = 1 if model == LOCAL_MODEL else _WORKERS   # ローカルはORT側がマルチスレッド
-            with ThreadPoolExecutor(max_workers=workers) as ex:
-                list(ex.map(work, todo))
+                for i in range(0, len(todo), local.BATCH):
+                    work_batch(todo[i:i + local.BATCH])
+            else:
+                with ThreadPoolExecutor(max_workers=_WORKERS) as ex:
+                    list(ex.map(work, todo))
         finally:
             try:
                 self._save()
             except Exception as e:
                 logger.warning("SemanticService: save failed: %s", e)
             if model == LOCAL_MODEL:
-                local.release()   # 画像生成とVRAM/RAMを奪い合わないよう、作成後はモデルを解放(検索時に再ロード)
+                local.release()   # 画像生成とVRAMを奪い合わないよう、作成後はモデルを外す(検索時にOllamaが再ロード)
             self._job["running"] = False
             self._job["finished"] = True
             self._job["cancelled"] = self._cancel.is_set() and not self._job["error_code"]
@@ -401,18 +422,24 @@ class SemanticService:
             im.thumbnail((IMAGE_MAX_SIZE, IMAGE_MAX_SIZE), Image.LANCZOS)
             return im
 
-    def _embed_image(self, model: str, dim: int, path: Path, soft: int | None = None) -> np.ndarray:
+    def _load_local_image(self, path: Path):
+        """Ollama用のRGB画像(透過部は白背景に合成)"""
         from PIL import Image
         im = self._load_pil(path)
+        if im.mode == "RGBA":
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.getchannel("A"))
+            return bg
+        return im
+
+    def _embed_image(self, model: str, dim: int, path: Path) -> np.ndarray:
         if model == LOCAL_MODEL:
-            if im.mode == "RGBA":   # 透過部は白背景に合成
-                bg = Image.new("RGB", im.size, (255, 255, 255))
-                bg.paste(im, mask=im.getchannel("A"))
-                im = bg
+            im = self._load_local_image(path)
             try:
-                return local.embed_image(self.data_dir, im, dim, self._soft if soft is None else soft)
-            except Exception as e:
-                raise SemanticError("local_error", str(e))
+                return local.embed_images([im], dim)[0]
+            except local.OllamaError as e:
+                raise SemanticError(e.code, str(e))
+        im = self._load_pil(path)
         buf = io.BytesIO()
         if im.mode == "RGBA":
             im.save(buf, "PNG")
@@ -423,9 +450,9 @@ class SemanticService:
     def _embed_text(self, model: str, dim: int, text: str) -> np.ndarray:
         if model == LOCAL_MODEL:
             try:
-                return local.embed_text(self.data_dir, text, dim)
-            except Exception as e:
-                raise SemanticError("local_error", str(e))
+                return local.embed_text(text, dim)
+            except local.OllamaError as e:
+                raise SemanticError(e.code, str(e))
         return embed_text(text, dim)
 
     # ── 検索 ───────────────────────────────────────────────
@@ -510,4 +537,4 @@ class SemanticService:
         if dim not in DIMS_BY_MODEL[model]:
             dim = DEFAULT_DIM_BY_MODEL[model]
         n = int(self._embed_text(model, dim, "test").shape[0])
-        return {"dimensions": n, "provider": local.active_provider() if model == LOCAL_MODEL else "API"}
+        return {"dimensions": n, "provider": f"Ollama {local.current_config()['tag']}" if model == LOCAL_MODEL else "API"}

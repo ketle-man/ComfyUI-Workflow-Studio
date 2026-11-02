@@ -2,6 +2,20 @@
 
 ---
 
+## 未リリース（2026-11-02）
+
+### Gallery セマンティック検索: EmbeddingGemma 2 を ONNX から Ollama へ移行
+
+- **背景**: latenttag-3d（Ollama の `embeddinggemma-2` でタグを埋め込む）と Gallery 索引を共通の空間で使いたい。ONNX 版（`semantic_local.py`、q4）は onnxruntime-gpu の入れ替え問題も抱えていた。
+- **互換性の実測**: 同じ入力で ONNX 版と Ollama 版（Q8_0）を比較。テキスト cos 0.985〜0.993、画像（12枚）平均 0.967（最小 0.923）。既存索引に Ollama の検索文を当てた上位10件の一致は 8〜9/10。→ npz の `model` 名は `embeddinggemma-2` のまま、既存索引（2.9万枚）をそのまま使う。
+- **740m / 440m**: 740m=テキスト+画像+音声、440m=テキスト+画像。画像・テキストとも cos 1.0（同じベクトル）なので、切り替えても再作成不要。`:latest` は 740m と同じ（parent_model 740m-q8_0）で、740m 未取得時の代わりに使う。270m / 570m は画像非対応のため選択肢に入れない。
+- **Ollama の画像埋め込みの罠**: `/api/embed` に `images` フィールドを付けても**エラーにならず無視され、テキストだけの埋め込みが返る**。正しくは `input: [{"image": "<base64>"}]`。`[{"images": ...}]` は 400、壊れた画像は 500 "Failed to load image or audio file"、未取得モデルは 404。`input: []` + `keep_alive: 0` でアンロードできる。
+- **実装**: `semantic_ollama.py` を新設し `semantic_local.py` を削除。画像は4枚ずつ送信（1枚ずつより約1.8倍速い）し、バッチが失敗したら1枚ずつ送り直して原因の画像だけを失敗扱いにする。Ollama 内部の接続切断（400 "forcibly closed" 等）と 5xx は最大5回再試行。接続不可・モデル未取得はジョブ開始前に検出し、作成中に起きたら中止。作成後は VRAM から外す。URL は `url_guard` で検査。設定は `semantic_settings.json`（`url` / `tag`）、保存用に `/wfm/gallery/semantic/options` を追加。
+- **UI**: モデル設定タブのデバイス/CPUスレッド/画像精度を廃止し、Ollama URL・モデルサイズ（未取得表示つき）に置き換え。ヘルプ（helpGallery33/35/36・helpTrouble10/11 英/日/中）、README、requirements.txt を更新。マニュアル（v0.8.9版）は未更新。
+- **残作業**: ComfyUI 再起動後の実機確認（検索・類似・インデックス作成）が未実施。旧 ONNX モデル（`user/default/Workflow-Studio/models/embeddinggemma-2`、302MB）は削除可能。`onnxruntime` は Tagger で使うため依存に残す。
+
+---
+
 ## v0.8.13（2026-10-27）
 
 ### Edit in Mask Editor One: 送信画像をノードへ永続化（Mask Editor One v0.1.12 対応）
