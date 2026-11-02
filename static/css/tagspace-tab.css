@@ -24,7 +24,10 @@
 .wfm-ts-tip-body { margin-top: 2px; color: var(--wfm-text-secondary, #aaa); }
 .wfm-ts-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--wfm-text-secondary, #aaa); pointer-events: none; }
 .wfm-ts-hint { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: var(--wfm-text-secondary, #aaa); opacity: 0.8; pointer-events: none; }
-.wfm-ts-side { width: 320px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; border-left: 1px solid var(--wfm-border, #444); }
+.wfm-ts-side { width: 300px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; border-left: 1px solid var(--wfm-border, #444); }
+/* プロンプト列(右端): チップは中身の高さ(最大40%)、出力欄が残りの高さいっぱいに伸びる */
+.wfm-ts-side-prompt .wfm-ts-chips { flex: 0 1 auto; max-height: 40%; align-content: flex-start; }
+.wfm-ts-side-prompt .wfm-ts-output { flex: 1; min-height: 120px; resize: none; }
 .wfm-ts-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--wfm-border, #444); border-radius: var(--wfm-radius, 6px); background: var(--wfm-surface, transparent); min-height: 0; }
 .wfm-ts-panel h4 { margin: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wfm-ts-panel-grow { flex: 1; }

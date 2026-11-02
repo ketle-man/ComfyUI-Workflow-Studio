@@ -113,10 +113,12 @@ function renderShell() {
                     <h4 id="wfm-ts-list-title">${escapeHtml(t("tsNeighborsTitle"))}</h4>
                     <div id="wfm-ts-list" class="wfm-ts-list"></div>
                 </section>
-                <section class="wfm-ts-panel">
+            </aside>
+            <aside class="wfm-ts-side wfm-ts-side-prompt">
+                <section class="wfm-ts-panel wfm-ts-panel-grow">
                     <h4>${escapeHtml(t("tsBuilderTitle"))}</h4>
                     <div id="wfm-ts-chips" class="wfm-ts-chips"></div>
-                    <textarea id="wfm-ts-output" class="wfm-input wfm-ts-output" rows="4" readonly></textarea>
+                    <textarea id="wfm-ts-output" class="wfm-input wfm-ts-output" rows="8" readonly></textarea>
                     <div class="wfm-ts-actions">
                         <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-ts-send">${escapeHtml(t("tsSend"))}</button>
                         <button class="wfm-btn wfm-btn-sm" id="wfm-ts-copy">${escapeHtml(t("tsCopy"))}</button>
