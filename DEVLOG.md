@@ -32,6 +32,7 @@
   - 新出典 `tagger_auto`（「Tagger補完」、黄緑）。背景点は `tag_src: prompt|tagger` を持ち、Tagger 由来はツールチップ/詳細に「（Tagger補完）」。進み具合に実行先（CUDA/CPU）を表示。
   - **環境の問題（再発）**: ComfyUI_5 の venv で `onnxruntime` 1.31.0（CPU）と `onnxruntime-gpu` 1.30.0 が共存し CUDA が無効。CPU では wd-v1-4-convnext 465ms/枚・wd-v1-4-vit 641ms/枚（全画像なら約1.5時間）。修復は ComfyUI 停止→`fix_onnxruntime_gpu.bat`（外側リポジトリ、v0.8.10 と同じ）。今回は未実施。
   - 検証（CPU）: Gallery点600・Gallery点のみ・convnext で 288枚を142秒（0.49秒/枚）、全600点にタグ（プロンプト312・Tagger 288・なし0）。`tagger_auto` を含むタグ571件（うち補完でしか出ないもの180件: 1boy, multiple girls, scenery 等）。キャッシュで再構築17秒。UI（選択欄の有効/無効、凡例、「（Tagger補完）」表示、クリックで1チップ）とコンソールエラー0を確認。確認後は Gallery点4000・補完OFFで作り直し済み。
+  - GPU 修復後（利用者が `fix_onnxruntime_gpu.bat` を実行、`onnxruntime-gpu` 1.30.0 のみ・CUDA/TensorRT 有効）: Gallery点4000・Gallery点のみ・convnext で 1,918枚を約136秒（約0.07秒/枚、画像読み込み込み。CPU の約7倍）、全4000点にタグ（プロンプト2,082・Tagger 1,918）。全画像（10,652枚）なら約12〜13分の見込み。
 
 ### Gallery セマンティック検索: EmbeddingGemma 2 を ONNX から Ollama へ移行
 
