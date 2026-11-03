@@ -824,7 +824,7 @@ async function runSearch(query) {
     if (state.probe) flyTo(state.probe);
 }
 
-/** 選択中のGallery画像から選んだタグ(プロンプトの順)で空間を検索する */
+/** 選択中のカード・Gallery画像から選んだタグ(プロンプトの順)で空間を検索する */
 function searchPicked() {
     const it = state.items.get(state.selected);
     if (!it || state.picked.id !== it.id) return;
@@ -851,9 +851,14 @@ function renderDetail() {
     const inChips = state.chips.some((c) => c.id === it.id);
     if (state.picked.id !== it.id) state.picked = { id: it.id, tags: new Set() };
     const thumb = it.kind !== "tag" ? `<img class="wfm-ts-detail-thumb" data-ts-zoom="${escapeHtml(it.id)}" src="${API.thumb(it.id, 240)}" alt="">` : "";
-    const body = it.kind === "card" ? `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div><div class="wfm-ts-muted">${escapeHtml(it.category)}</div>`
+    // カードはタグ(作成 / 更新で付く。古い空間には無い)を選べるようにし、プロンプト全文は折りたたむ
+    const body = it.kind === "card" ? (it.tags?.length
+            ? `${tagPicker(it)}<details class="wfm-ts-full"><summary>${escapeHtml(t("tsFullPrompt"))}</summary>` +
+              `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div></details>`
+            : `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div>`) +
+          `<div class="wfm-ts-muted">${escapeHtml(it.category)}</div>`
         : it.kind === "tag" ? `<div class="wfm-ts-muted">${escapeHtml(sourcesText(it))}</div>`
-        : (it.tags?.length ? imageTagPicker(it) : `<div class="wfm-ts-detail-text">${escapeHtml(t("tsImageNoTags"))}</div>`) +
+        : (it.tags?.length ? tagPicker(it) : `<div class="wfm-ts-detail-text">${escapeHtml(t("tsImageNoTags"))}</div>`) +
           `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
     const btn = !canAdd(it) ? ""
         : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(t(inChips ? "tsRemove" : "tsAdd"))}</button>`;
@@ -862,8 +867,8 @@ function renderDetail() {
         `<span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></span>${btn}</div>${thumb}${body}`;
 }
 
-/** Gallery画像のプロンプトのタグ: クリックで選び、選んだタグで空間検索する */
-function imageTagPicker(it) {
+/** カード・Gallery画像のプロンプトのタグ: クリックで選び、選んだタグで空間検索する */
+function tagPicker(it) {
     const sel = state.picked.tags;
     const n = it.tags.filter((tg) => sel.has(tg)).length;
     const chips = it.tags.map((tg) => `<button type="button" class="wfm-ts-pick${sel.has(tg) ? " on" : ""}" ` +

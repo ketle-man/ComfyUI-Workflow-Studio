@@ -233,7 +233,9 @@ class TagSpaceService:
                 continue
             rel = Path(ap).resolve().relative_to(base).parts[:-1]
             folders = [p for p in rel if p.lower() not in _VAULT_THUMB_DIRS]
+            # tags: 詳細パネルでタグを選んで空間検索するための、プロンプトを分解したタグ(Gallery点の tags と同じ正規化)
             cards.append({"id": ap, "kind": "card", "label": name.split(".")[0], "prompt": prompt.strip(),
+                          "tags": list(dict.fromkeys(split_tags(prompt))),
                           "category": "/".join(folders[-2:]) or "(root)", "group": folders[0] if folders else "(root)"})
             used.append((name, ap, size, mtime))
         return cards, used
