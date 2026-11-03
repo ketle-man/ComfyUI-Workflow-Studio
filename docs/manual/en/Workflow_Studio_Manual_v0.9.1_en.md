@@ -2,12 +2,12 @@
 
 Don't Be Afraid of Nodes - Generate Images More Easily and Keep Them Organized
 
-- Covers: Workflow Studio v0.9.0
+- Covers: Workflow Studio v0.9.1
 - Author: ketle-man
 - (c) 2026 ketle-man
 
 This is the **text-only edition** (without screenshots) of the Kindle book.
-Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.9.0_en.md`.
+Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.9.1_en.md`.
 Screen examples are omitted, so please use the book together with Workflow Studio's Help tab.
 
 ---
@@ -143,7 +143,7 @@ It is written so that you can follow it if you know basic computer operations (c
 
 ## Version and environment covered
 
-- **Workflow Studio**: v0.9.0
+- **Workflow Studio**: v0.9.1
 - **ComfyUI**: the latest version at the time of writing
 - **OS**: Windows (screen examples are from Windows)
 
