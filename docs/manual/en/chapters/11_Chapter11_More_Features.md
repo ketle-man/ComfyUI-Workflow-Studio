@@ -313,6 +313,10 @@ Click tags to choose them (click again to deselect) and press **Search with sele
 This helps when you want to find things close to, say, only the hairstyle and clothing of an image.
 While tags are selected, the **Add** button in **Selection** becomes **Add selected (N)** and adds only those tags to the prompt area.
 With no tags selected it adds the whole item as before (a card's whole prompt, or all tags of a Gallery point).
+
+When a Gallery point is selected, **Selection** also shows an **Open in Gallery** button.
+It switches to the Gallery tab, selects the image's folder, and selects the image in the list (its details open on the right).
+So that the image is sure to appear, the Gallery's search, favorite, tag and group filters are cleared.
 A card's whole prompt can be read under **Full prompt**.
 
 ---

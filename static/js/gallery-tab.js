@@ -2146,6 +2146,85 @@ function openCompare(paths) {
     overlay.querySelectorAll("video, audio").forEach(applyStoredVideoVolume);
 }
 
+// ── 他のタブから画像を表示する ────────────────────────────────
+
+const _normPath = (p) => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+
+/**
+ * Output サブタブで path の画像を表示する(TagSpace の Gallery 点から呼ぶ)。
+ * 絞り込み(検索・お気に入り・タグ・グループ・類似表示)を解除し、フォルダツリーを
+ * 親から順に展開してフォルダを選び、一覧でその画像を選択して詳細を開く。
+ * 戻り値: 表示できたら true(出力フォルダ外・一覧に無いときは false)
+ */
+export async function revealInGallery(path) {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    document.querySelector('.wfm-tab[data-tab="gallery"]')?.click();   // 初回はここで出力フォルダとツリーを読み込む
+    document.querySelector('.wfm-gallery-subtab-btn[data-gallery-subtab="output"]')?.click();
+    for (let i = 0; i < 100 && !state.folderTree; i++) await wait(100);
+    if (!state.folderTree) return false;
+
+    const target = _normPath(path);
+    const folder = target.slice(0, target.lastIndexOf("/"));
+    // ツリーの根から目的のフォルダまでのノードを集める
+    const chain = [];
+    let node = state.folderTree;
+    if (folder !== _normPath(node.abs_path) && !folder.startsWith(_normPath(node.abs_path) + "/")) return false;
+    while (node) {
+        chain.push(node);
+        if (_normPath(node.abs_path) === folder) break;
+        node = (node.children || []).find((c) => folder === _normPath(c.abs_path) || folder.startsWith(_normPath(c.abs_path) + "/"));
+    }
+    const leaf = chain[chain.length - 1];
+    if (_normPath(leaf.abs_path) !== folder) return false;
+
+    // 絞り込みの解除(「Clear filters」ボタンと同じ。再読み込みは下で1回だけ行う)
+    clearTimeout(_searchDebounceTimer);
+    state.search = "";
+    state.favoriteOnly = false;
+    state.tagFilter = "";
+    state.groupFilter = "";
+    const searchInput = document.getElementById("wfm-gallery-search");
+    if (searchInput) searchInput.value = "";
+    const tagSel = document.getElementById("wfm-gallery-tag-filter");
+    if (tagSel) tagSel.value = "";
+    const groupSel = document.getElementById("wfm-gallery-group-filter");
+    if (groupSel) groupSel.value = "";
+    document.getElementById("wfm-gallery-fav-btn")?.classList.remove("active");
+    exitSimilarMode();
+
+    // ツリーを親から順に展開(子ノードは展開時に描画される)
+    const itemOf = (abs) => [...document.querySelectorAll(".wfm-gallery-tree-item")].find((el) => _normPath(el.dataset.path) === _normPath(abs));
+    for (const n of chain.slice(0, -1)) {
+        const arrow = itemOf(n.abs_path)?.querySelector(".wfm-gallery-tree-arrow");
+        if (arrow && arrow.dataset.expanded !== "true" && arrow.style.visibility !== "hidden") arrow.click();
+    }
+    const item = itemOf(leaf.abs_path);
+    document.querySelectorAll(".wfm-gallery-tree-item.selected").forEach((el) => el.classList.remove("selected"));
+    item?.classList.add("selected");
+    item?.scrollIntoView({ block: "nearest" });
+    state.currentFolder = leaf.abs_path;
+    state.selectedImages.clear();
+    state.lastSelectionIndex = -1;
+    updateBulkBar();
+    await loadImages();
+
+    const idx = state.images.findIndex((img) => _normPath(img.path) === target);
+    if (idx === -1) return false;
+    // サムネイル表示は50件ずつ描くので、目的の画像まで描き足す
+    const grid = document.getElementById("wfm-gallery-grid");
+    if (state.viewMode === "thumb" && _renderedCount <= idx) {
+        while (_renderedCount <= idx) _appendNextPage(grid);
+        // 無限スクロールの目印を末尾へ戻す(全件描いたら外す)。_attachScrollSentinel と同じ扱い
+        if (_renderedCount >= state.images.length) _disconnectScrollObserver();
+        else { const s = document.getElementById("wfm-gallery-scroll-sentinel"); if (s) grid.appendChild(s); }
+    }
+    const el = [...grid.querySelectorAll("[data-path]")].find((e) => _normPath(e.dataset.path) === target);
+    if (!el) return false;
+    el.click();   // 通常のクリックと同じ選択・詳細表示
+    el.scrollIntoView({ block: "center" });
+    return true;
+}
+
 // ── outputパス取得 ────────────────────────────────────────────
 
 async function detectOutputPath() {

@@ -12,6 +12,7 @@ import { escapeHtml } from "./util.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { semanticErrorMessage } from "./gallery-semantic.js";
+import { revealInGallery } from "./gallery-tab.js";
 
 const API = {
     status:    "/wfm/tagspace/status",
@@ -204,6 +205,12 @@ function bindShell() {
     $("wfm-ts-detail").addEventListener("click", (e) => {
         const id = e.target.closest("[data-ts-toggle]")?.dataset.tsToggle;
         if (id) return toggleChip(id, pickedTags(state.items.get(id)));
+        const reveal = e.target.closest("[data-ts-reveal]")?.dataset.tsReveal;
+        if (reveal) {
+            hideZoom();
+            revealInGallery(reveal).then((ok) => { if (!ok) showToast(t("tsRevealFailed"), "error"); });
+            return;
+        }
         const tag = e.target.closest("[data-ts-pick]")?.dataset.tsPick;
         if (tag != null) {
             const set = state.picked.tags;
@@ -865,9 +872,12 @@ function renderDetail() {
     const btnLabel = inChips ? t("tsRemove") : nPicked ? t("tsAddPicked", nPicked) : t("tsAdd");
     const btn = !canAdd(it) ? ""
         : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(btnLabel)}</button>`;
+    // Gallery点は、ギャラリータブでその画像を表示するボタンも置く
+    const reveal = it.kind === "image"
+        ? `<button class="wfm-btn wfm-btn-sm" data-ts-reveal="${escapeHtml(it.id)}">${escapeHtml(t("tsOpenInGallery"))}</button>` : "";
     // 追加/削除ボタンは見出し行に置く(本文が長くてもスクロールせずに押せる)
     box.innerHTML = `<div class="wfm-ts-detail-head"><span class="wfm-ts-detail-title"><b>${escapeHtml(itemTitle(it))}</b> ` +
-        `<span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></span>${btn}</div>${thumb}${body}`;
+        `<span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></span>${reveal}${btn}</div>${thumb}${body}`;
 }
 
 /** カード・Gallery画像のプロンプトのタグ: クリックで選び、選んだタグで空間検索する */
