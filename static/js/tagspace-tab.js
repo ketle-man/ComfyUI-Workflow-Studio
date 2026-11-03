@@ -203,7 +203,7 @@ function bindShell() {
     });
     $("wfm-ts-detail").addEventListener("click", (e) => {
         const id = e.target.closest("[data-ts-toggle]")?.dataset.tsToggle;
-        if (id) return toggleChip(id);
+        if (id) return toggleChip(id, pickedTags(state.items.get(id)));
         const tag = e.target.closest("[data-ts-pick]")?.dataset.tsPick;
         if (tag != null) {
             const set = state.picked.tags;
@@ -860,8 +860,11 @@ function renderDetail() {
         : it.kind === "tag" ? `<div class="wfm-ts-muted">${escapeHtml(sourcesText(it))}</div>`
         : (it.tags?.length ? tagPicker(it) : `<div class="wfm-ts-detail-text">${escapeHtml(t("tsImageNoTags"))}</div>`) +
           `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
+    // タグを選んでいるときは「選択したタグを追加」(選んだタグだけ)、選んでいなければ全体を追加する
+    const nPicked = pickedTags(it).length;
+    const btnLabel = inChips ? t("tsRemove") : nPicked ? t("tsAddPicked", nPicked) : t("tsAdd");
     const btn = !canAdd(it) ? ""
-        : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(t(inChips ? "tsRemove" : "tsAdd"))}</button>`;
+        : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(btnLabel)}</button>`;
     // 追加/削除ボタンは見出し行に置く(本文が長くてもスクロールせずに押せる)
     box.innerHTML = `<div class="wfm-ts-detail-head"><span class="wfm-ts-detail-title"><b>${escapeHtml(itemTitle(it))}</b> ` +
         `<span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></span>${btn}</div>${thumb}${body}`;
@@ -950,18 +953,33 @@ function canAdd(it) {
     return !!it && (it.kind !== "image" || it.tags?.length > 0);
 }
 
-function chipText(it) {
-    return it.kind === "card" ? it.prompt : it.kind === "image" ? it.tags.join(", ") : it.label;
+/** タグをプロンプトに入れる形にする。タグは分解時にエスケープを外しているので、
+ * カッコを \( \) に戻す(そのままだと "rapunzel (disney)" の (disney) が強調指定になる) */
+function promptTag(tag) {
+    return tag.replace(/[()]/g, "\\$&");
 }
 
-function toggleChip(id) {
+function chipText(it) {
+    return it.kind === "card" ? it.prompt : it.kind === "image" ? it.tags.map(promptTag).join(", ") : promptTag(it.label);
+}
+
+/** 選択中パネルで選んだタグ(プロンプトの順)。その要素のものでなければ空 */
+function pickedTags(it) {
+    if (!it || state.picked.id !== it.id || !it.tags?.length) return [];
+    return it.tags.filter((tg) => state.picked.tags.has(tg));
+}
+
+/** チップの追加/削除。tags を渡すと、全体ではなくそのタグだけを1つのチップとして追加する */
+function toggleChip(id, tags = []) {
     const i = state.chips.findIndex((c) => c.id === id);
     if (i >= 0) {
         state.chips.splice(i, 1);
     } else {
         const it = state.items.get(id);
         if (!canAdd(it)) return;
-        state.chips.push({ id, kind: it.kind, label: itemTitle(it), text: chipText(it) });
+        state.chips.push(tags.length
+            ? { id, kind: it.kind, label: t("tsChipPicked", itemTitle(it), tags.length), text: tags.map(promptTag).join(", ") }
+            : { id, kind: it.kind, label: itemTitle(it), text: chipText(it) });
     }
     refreshChips();
 }

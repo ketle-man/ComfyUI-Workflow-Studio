@@ -2961,6 +2961,8 @@ Choose the settings in the toolbar and press **Build / Update**.
 When you select a card or Gallery point, its prompt tags are shown as buttons under **Selection**.
 Click tags to choose them (click again to deselect) and press **Search with selected** to search the space with them.
 This helps when you want to find things close to, say, only the hairstyle and clothing of an image.
+While tags are selected, the **Add** button in **Selection** becomes **Add selected (N)** and adds only those tags to the prompt area.
+With no tags selected it adds the whole item as before (a card's whole prompt, or all tags of a Gallery point).
 A card's whole prompt can be read under **Full prompt**.
 
 ---
