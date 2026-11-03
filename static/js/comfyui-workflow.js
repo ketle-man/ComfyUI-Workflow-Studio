@@ -2,6 +2,11 @@
  * ComfyUI Workflow - Format detection, conversion, and analysis
  */
 
+// Video all-in-one nodes (MiniMaxH3ImageToVideo, MiniMaxH3ReferenceToVideo, ...): hold their own
+// "prompt" and build the conditioning + latent themselves. Matched by class-name pattern so other
+// models sharing this shape work without a code change.
+const VIDEO_ALL_IN_ONE_RE = /ImageToVideo|TextToVideo|ReferenceToVideo/;
+
 // Cache for /object_info (loaded once, shared)
 let _objectInfoCache = null;
 
@@ -1141,6 +1146,12 @@ export const comfyWorkflow = {
                 if (Array.isArray(inputs.positive)) samplerPositiveRef[inputs.positive[0]] = true;
                 if (Array.isArray(inputs.negative)) samplerNegativeRef[inputs.negative[0]] = true;
             }
+            // Video all-in-one nodes whose "prompt" is wired from a separate text node (FastH3
+            // OmniRef's MiniMaxH3ReferenceToVideo <- PrimitiveStringMultiline) — always positive
+            // (no negative counterpart), so seed the role on the source directly.
+            if (VIDEO_ALL_IN_ONE_RE.test(ct) && Array.isArray(inputs.prompt)) {
+                samplerPositiveRef[inputs.prompt[0]] = true;
+            }
         }
 
         // === Pass 1b: Expand refs through CONDITIONING graph (BFS, 5 iterations) ===
@@ -1259,7 +1270,9 @@ export const comfyWorkflow = {
                 // TextEncodeQwenImage21 — fixed roles (the node feeds both guider inputs): a linked
                 // "prompt" (prompt-enhancer switch chain, Qwen Image 2.1 Turbo) is the positive text,
                 // a linked "negative_prompt" the negative.
-                if (ct === "TextEncodeQwenImage21") {
+                // TextEncodeFibo2 (Fibo 2.0 Edit) has the same shape, its prompt arriving via a
+                // PreviewAny -> prompt-enhancer switch chain.
+                if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2") {
                     if (Array.isArray(inputs.prompt)) samplerPositiveRef[inputs.prompt[0]] = true;
                     if (Array.isArray(inputs.negative_prompt)) samplerNegativeRef[inputs.negative_prompt[0]] = true;
                 }
@@ -1504,7 +1517,9 @@ export const comfyWorkflow = {
             // with no images connected the node behaves as pure T2I). The reference images
             // themselves need no special handling here — they arrive as ordinary LoadImage
             // nodes already picked up generically by the load_image_nodes pass below.
-            if (ct === "TextEncodeQwenImage21") {
+            // TextEncodeFibo2 (Fibo 2.0) — same prompt/negative_prompt/images.image_N shape; its
+            // negative_prompt is a structured VGL JSON caption (edited as plain text here).
+            if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2") {
                 if (typeof inputs.prompt === "string") {
                     result.prompt_nodes.push({
                         id, type: ct, title: `${title} [positive]`, role: "positive",
@@ -1612,11 +1627,11 @@ export const comfyWorkflow = {
 
             // Video all-in-one nodes (e.g. MiniMaxH3ImageToVideo) — hold their own "prompt"
             // widget directly instead of going through a separate CLIPTextEncode, and have
-            // no negative counterpart. Matched generically by class name (ImageToVideo /
-            // TextToVideo) rather than a fixed list so future models sharing this pattern
+            // no negative counterpart. Matched generically by class name (VIDEO_ALL_IN_ONE_RE)
+            // rather than a fixed list so future models sharing this pattern
             // (WAN, HunyuanVideo, etc.) work without a code change — same detection metadata-tab.js
             // and node_sets_menu.js already use for prompt extraction (see extractPromptsAPI).
-            if ((ct.includes("ImageToVideo") || ct.includes("TextToVideo")) && typeof inputs.prompt === "string") {
+            if (VIDEO_ALL_IN_ONE_RE.test(ct) && typeof inputs.prompt === "string") {
                 result.prompt_nodes.push({
                     id, type: ct, title, role: "positive",
                     text: inputs.prompt, textKey: "prompt",
@@ -1686,7 +1701,8 @@ export const comfyWorkflow = {
             // width/height are commonly wired to a ResolutionSelector-style helper node
             // (array link ref) rather than a direct number — leave those as undefined so
             // the settings-tab UI falls back to its default instead of rendering a link ref.
-            if (ct === "TextEncodeMageFlowEdit") {
+            // TextEncodeFibo2 likewise (0 = Fibo 2.0's trained size for the first image's aspect).
+            if (ct === "TextEncodeMageFlowEdit" || ct === "TextEncodeFibo2") {
                 result.latent_nodes.push({
                     id, type: ct, title,
                     width: typeof inputs.width === "number" ? inputs.width : undefined,
@@ -1864,7 +1880,7 @@ export const comfyWorkflow = {
     // generation timeout (video generation runs far longer than a still image) — see
     // generate-tab.js _coreGenerate and lab-tab.js _runLabBatch.
     isVideoWorkflow(analysis) {
-        if ((analysis?.prompt_nodes || []).some((n) => /ImageToVideo|TextToVideo/.test(n.type))) return true;
+        if ((analysis?.prompt_nodes || []).some((n) => VIDEO_ALL_IN_ONE_RE.test(n.type))) return true;
         // LTX-2.5/Wan2.2: no all-in-one *ToVideo node — detected instead via their
         // EmptyHunyuanLatentVideo/EmptyLTXVLatentVideo latent node (see analyzeWorkflow)
         // or a SaveVideo/CreateVideo node anywhere in the flattened graph.
@@ -1959,6 +1975,7 @@ function _getWidgetMapping(nodeType) {
         ImpactWildcardEncode: ["wildcard_text"],
         WFS_PromptText: ["positive", "negative"],
         TextEncodeQwenImage21: ["prompt", "negative_prompt", "resolution"],
+        TextEncodeFibo2: ["prompt", "negative_prompt", "width", "height", "batch_size"],
         TextEncodeMingImageEdit: ["prompt"],
         EmptyQwenImageLayeredLatentImage: ["width", "height", "layers", "batch_size"],
     };

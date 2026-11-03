@@ -624,9 +624,12 @@ function extractPromptsAPI(wf) {
         // 自ノードの"prompt"入力に直接テキストを持つ(positive/negativeの区別も無い)ため、
         // isTextEncoderNode判定を通さずtextMapへ直接投入する(fallbackのtextsに載る)。
         // Gemini系の画像生成ノード(Nano Banana等)も同様に自ノードの"prompt"入力を持つ。
-        if (typeof n.inputs?.prompt === "string" && /ImageToVideo|TextToVideo|^Gemini(Image|NanoBanana)/i.test(ct)) {
-            textMap.set(id, n.inputs.prompt);
-            continue;
+        // FastH3 OmniRef(MiniMaxH3ReferenceToVideo)のように"prompt"が別ノードから配線される場合はリンク先を解決する。
+        if (/ImageToVideo|TextToVideo|ReferenceToVideo|^Gemini(Image|NanoBanana)/i.test(ct)) {
+            const pv = n.inputs?.prompt;
+            const txt = typeof pv === "string" ? pv : Array.isArray(pv) ? resolveLinkedText(wf, pv[0], pv[1] ?? 0) : null;
+            if (txt) textMap.set(id, txt);
+            if (pv !== undefined) continue;
         }
         if (!isTextEncoderNode(ct)) continue;
         // "prompt" — TextEncodeQwenImageEdit(Plus)/TextEncodeBooguEdit and similar Image Edit
@@ -667,8 +670,11 @@ function extractPromptsAPI(wf) {
             // negative_prompt directly, so textMap (single text per node) can't represent both
             // roles.
             const srcNode = wf[String(val[0])];
-            if (srcNode?.class_type === "TextEncodeMageFlowEdit" || srcNode?.class_type === "TextEncodeBooguEdit") {
-                const text = isPos ? srcNode.inputs?.prompt : srcNode.inputs?.negative_prompt;
+            // TextEncodeFibo2(Fibo 2.0)も同形。promptはPreviewAny→プロンプト強化スイッチ経由でリンクされる。
+            if (srcNode?.class_type === "TextEncodeMageFlowEdit" || srcNode?.class_type === "TextEncodeBooguEdit"
+                || srcNode?.class_type === "TextEncodeFibo2") {
+                const raw = isPos ? srcNode.inputs?.prompt : srcNode.inputs?.negative_prompt;
+                const text = Array.isArray(raw) ? resolveLinkedText(wf, raw[0], raw[1] ?? 0) : raw;
                 if (text && typeof text === "string") { if (isPos) pos.add(text); else neg.add(text); }
                 continue;
             }
