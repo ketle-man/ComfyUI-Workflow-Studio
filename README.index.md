@@ -73,7 +73,7 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 ### Tagger Tab (v0.3.38)
 3 sub-tabs, Model support, Threshold sliders, VLM tagging, Single tab, Single output options, Batch tab, DB tab, Dependencies
 
-### TagSpace Tab (unreleased)
+### TagSpace Tab (v0.9.0)
 Choose tags visually in a 3D latent space, Build / Update, Choosing tags, Explore, Search with a card's or Gallery image's tags, Make a prompt, Tagger fill, Glow / Twinkle, Hover preview, Requirements
 
 ### Image Edit Tab (v0.3.65)

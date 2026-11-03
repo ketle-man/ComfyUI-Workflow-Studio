@@ -2,7 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
-- **未リリース（2026-11-03）** — マニュアル（画像なし配布版）を v0.9.0 に改訂
+- **v0.9.0（2026-11-03）** — マニュアル（画像なし配布版）を v0.9.0 に改訂
 - **v0.8.14（2026-11-03）** — Fibo 2.0 Edit / FastH3 OmniRef / Pika-H3-Flex 対応（GenerateUI・Metadata・Videoタブ）
 - **v0.8.13（2026-10-27）** — Edit in Mask Editor One: 送信画像をノードへ永続化（Mask Editor One v0.1.12 対応）
 - **v0.8.12（2026-10-27）** — Comic Creator向け複数画像I2Iブリッジ + GenerateUI Inputタブ: Prompt/Image統合・Raw JSON折りたたみ
