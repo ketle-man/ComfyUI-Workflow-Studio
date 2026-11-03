@@ -153,6 +153,9 @@ function _locateFastH3Nodes(workflow) {
         firstFrameSlot, lastFrameSlot, promptIdx, durationIdx,
         widthIdx, heightIdx, noiseSeedIdx: hasRandomNoise ? 0 : -1,
         turboModeIdx: -1, turboStrengthIdx: -1, turboStepsIdx: -1, promptEnhanceIdx: -1,
+        // 参照画像は任意(0枚でも可)。PlanでNone/Clearにした欄は、テンプレートのLoadImageが
+        // 接続されていても外す — 外さないとUI上は未指定なのにテンプレートの画像が使われてしまう。
+        disconnectUnsetFrames: true,
     };
 }
 
@@ -282,6 +285,23 @@ export function readTemplateDefaults(nodes) {
     };
 }
 
+// instanceNodeのtargetSlot入力の接続を外す(リンク削除+両端の参照を解除)。配線元が
+// LoadImageで他に出力先が無くなった場合は、生成記録に未使用の画像が残らないようノードごと除く。
+function _disconnectInput(clone, instanceNode, targetSlot) {
+    const inp = instanceNode.inputs?.[targetSlot];
+    if (!inp || inp.link == null) return;
+    const linkId = inp.link;
+    const link = clone.links.find((l) => l[0] === linkId);
+    const src = link ? clone.nodes.find((n) => n.id === link[1]) : null;
+    const out = src?.outputs?.[link?.[2]];
+    if (Array.isArray(out?.links)) out.links = out.links.filter((id) => id !== linkId);
+    clone.links = clone.links.filter((l) => l[0] !== linkId);
+    inp.link = null;
+    if (src?.type === "LoadImage" && !(src.outputs || []).some((o) => o.links?.length)) {
+        clone.nodes = clone.nodes.filter((n) => n !== src);
+    }
+}
+
 // first_frame/last_frameが未接続のワークフローに対して、画像が指定された時だけ
 // LoadImageノードを新規注入する共通ヘルパー。ノードID/リンクIDはclone内の実際の
 // 最大値+1で採番するため、重複ID/リンクID不整合は起きない
@@ -326,7 +346,8 @@ export function injectFrameNode(clone, instanceNode, targetSlot, filename) {
 // touched when a filename is actually given: an existing LoadImage node gets
 // its widget overwritten, a missing one gets injected on demand, and leaving
 // both unset keeps the slot disconnected (bypassed) exactly like the
-// template's own clean state.
+// template's own clean state. Reference-to-Video templates (disconnectUnsetFrames)
+// additionally drop a template-wired LoadImage when its field is left unset.
 export function applyBlockToWorkflow(clone, nodes, params) {
     const {
         instanceNode, promptNode, durationNode, durationAsFrames, resolutionNode, loadImageNode, lastLoadImageNode,
@@ -363,6 +384,8 @@ export function applyBlockToWorkflow(clone, nodes, params) {
         } else if (firstFrameSlot !== -1) {
             injectFrameNode(clone, instanceNode, firstFrameSlot, params.firstImageFilename);
         }
+    } else if (nodes.disconnectUnsetFrames && firstFrameSlot !== -1) {
+        _disconnectInput(clone, instanceNode, firstFrameSlot);
     }
     if (params.lastImageFilename) {
         if (lastLoadImageNode) {
@@ -371,5 +394,7 @@ export function applyBlockToWorkflow(clone, nodes, params) {
         } else if (lastFrameSlot !== -1) {
             injectFrameNode(clone, instanceNode, lastFrameSlot, params.lastImageFilename);
         }
+    } else if (nodes.disconnectUnsetFrames && lastFrameSlot !== -1) {
+        _disconnectInput(clone, instanceNode, lastFrameSlot);
     }
 }
