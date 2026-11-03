@@ -195,8 +195,8 @@ If you run without a key, a message says that partner API authentication failed 
 
 ### How to use
 1. In the Workflow tab, load the Nano Banana sample (`ws_nano_banana_2_1_t2i`) into GenerateUI.
-2. Edit the prompt in the **Prompt** subtab and press **Apply**.
-3. To use reference images, specify them on the image cards in the **Image** subtab.
+2. Edit the prompt on the left side (Prompt) of the **Input** subtab and press **Apply**.
+3. To use reference images, specify them on the image cards on the right side (Image) of the **Input** subtab.
 4. Press **Generate**.
 
 > **Tip**
@@ -211,6 +211,8 @@ The workflows you can use in GenerateUI have increased as follows. They are used
 - **Qwen Image 2.1 Turbo** - ComfyUI's official templates for text to image (T2I) and image to image (I2I). Edits also carry over to the prompt enhancer's input (the feature that expands your prompt automatically).
 - **Flux.3 Klein** - the four official templates (T2I and Image Edit, for Klein and Klein SD).
 - **MOSS-Image** - Base/SFT T2I, and the bounding-box versions that specify positions with frames.
+- **Fibo 2.0 Edit** (v0.8.14 and later) - an image-editing workflow. With the prompt enhancer (PE) setup, edits in the prompt area apply whether PE is on or off. The negative area holds a VGL-format (JSON) description as is. Width and height (Settings) of 0 mean automatic.
+- **FastH3 OmniRef / Pika-H3-Flex** (v0.8.14 and later) - MiniMax H3 reference to video. Treated as video workflows, and also usable in the Video tab (Chapter 11).
 - **Native LoRA stack** - ComfyUI v0.40's nodes that load several LoRAs at once (LoadLoraModel / LoadLoraTextEncoder). Apply, bypass and the Metadata display are supported.
 
 > **Caution**

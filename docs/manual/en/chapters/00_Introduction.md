@@ -83,6 +83,7 @@ Together with the supporting features, it makes moving between the two screens s
 - **Image Edit** - simple layer-based editing, and redrawing parts with a mask (inpainting)
 - **Local AI integration** - translating prompts from Japanese, creating prompts and tags from images
 - **Tagger and Video** - automatic tag generation from images, and video generation with simple editing
+- **TagSpace** - lays out your own prompts, tags and generated images in a 3D space by closeness of meaning, so you can browse it and pick tags
 
 ---
 
@@ -128,7 +129,7 @@ It is written so that you can follow it if you know basic computer operations (c
 
 ## Version and environment covered
 
-- **Workflow Studio**: v0.8.9
+- **Workflow Studio**: v0.9.0
 - **ComfyUI**: the latest version at the time of writing
 - **OS**: Windows (screen examples are from Windows)
 

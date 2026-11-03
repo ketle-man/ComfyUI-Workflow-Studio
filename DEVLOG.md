@@ -4,6 +4,13 @@
 
 ## 未リリース（2026-11-03）
 
+### マニュアル（画像なし配布版）を v0.9.0 に改訂
+
+- 日本語・英語の `docs/manual/` を v0.8.9 → v0.9.0 に更新（全章まとめ・ZIP・README を作り直し、v0.8.9 のファイルは削除）。
+- 反映した変更: TagSpace タブ（第11章に 11-7 を新設、第3章のタブ一覧・付録の用語集・第12章のトラブル表）、Gallery セマンティック検索の Ollama 化（第8章 8-6・第2章・第12章。ONNX の GPU 設定の記述を Tagger 側へ移動）、Tagger の PixAI 対応と GPU 確認（第11章 11-2・第12章）、GenerateUI の Input タブ横並び・Raw JSON 折りたたみ（第5章）、Fibo 2.0 Edit／FastH3 OmniRef／Pika-H3-Flex（第5章 5-9）、Video Plan の Reference Image（第11章 11-4）、Comic Creator からの複数参照画像の実行（第11章 11-6）。
+- 前回の全章まとめは v0.8.11 の章ファイル修正（Send CC）を取り込んでいなかった。今回は章ファイルから全章まとめを作り直したので解消。
+- 英語版の Raw JSON 折りたたみボタンは、実際の表示（»）ではなく ASCII の `>>` と書いた。
+
 ### TagSpace タブ新設（latenttag-3d の WFS 統合）
 
 - **目的**: latenttag-3d（単独アプリは別途継続）を WFS に組み込み、WFS のデータだけでタグを視覚的に選んでプロンプトを作る。

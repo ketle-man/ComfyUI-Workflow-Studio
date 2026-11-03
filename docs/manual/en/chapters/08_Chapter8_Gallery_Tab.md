@@ -239,7 +239,7 @@ You can also bring up a list of **similar images** to the one you choose.
 | Model | Characteristics | Preparation |
 | --- | --- | --- |
 | Gemini Embedding 2 | Computed on Google's service. Fast. Images are sent to Google | Get an API key, write `GEMINI_API_KEY=key` in the plugin's `.env`, and restart ComfyUI |
-| EmbeddingGemma 2 | Computed inside your computer (local). Nothing is sent outside | No extra preparation. The model is downloaded automatically only the first time |
+| EmbeddingGemma 2 | Computed inside your computer with **Ollama** (local, free). Nothing is sent outside | Install and start Ollama, then run `ollama pull embeddinggemma-2:740m` (or the lighter `embeddinggemma-2:440m`). On the Model tab, choose the **Ollama URL** (usually unchanged) and the **Model size** |
 
 > **Caution: when using Gemini**
 > Images are sent to Google's service. Content sent under the free tier may be used by Google to improve its products.
@@ -251,13 +251,14 @@ You can also bring up a list of **similar images** to the one you choose.
 2. Choose "new only" or "rebuild all" and start. Progress is shown, and you can stop partway.
 3. The index is one shared across all folders. You may build it a little at a time, folder by folder.
 
-When you change the model, the vector dimension or the image precision, a **rebuild of everything** is needed.
+When you change the model or the vector dimension, a **rebuild of everything** is needed.
 
 ### Speed guidelines and settings
-- The local EmbeddingGemma 2 runs on the CPU by default and takes a few seconds per image.
-  Setting the **image precision** to "standard" or "light" makes it faster (rebuild everything after changing it).
-  Reducing the **number of CPU threads** lightens the computer's load while generating images.
-- If you have an NVIDIA GPU, installing `onnxruntime-gpu` into ComfyUI's Python brings it to about 0.1 second per image (the fix is in Chapter 12, section 12-5).
+- Since v0.8.14 the local EmbeddingGemma 2 runs in Ollama (the earlier way of running it in ComfyUI's Python was removed).
+  On an NVIDIA GPU it takes about 0.1 to 0.2 second per image. When indexing finishes, the model is unloaded from GPU memory automatically.
+- Ollama must be running while you build the index and while you search.
+- The 740m (text + image + audio) and 440m (text + image, lighter) model sizes return the same results, so switching does not need a rebuild.
+  Indexes made with v0.8.13 or earlier keep working as they are.
 - In the **Search** tab, you can decide the "minimum score" for similar-image and text search, and the maximum number of results.
   Because the score level differs by model, it is saved per model.
 

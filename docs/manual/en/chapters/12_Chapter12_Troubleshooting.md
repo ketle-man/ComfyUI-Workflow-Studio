@@ -143,6 +143,11 @@ You need to set the environment variable `WFS_ALLOWED_BACKEND_HOSTS` (Chapter 10
 - Check that a `.onnx` file (and `selected_tags.csv`) is in the `ComfyUI/models/tagger/(model name)/` folder.
 - Check that the extra Python package (onnxruntime) is installed in **the Python that ComfyUI uses** (Chapter 11, section 11-2).
 
+### Tagger is very slow (the GPU is not used)
+If ComfyUI's Python has both the CPU package `onnxruntime` and the GPU package `onnxruntime-gpu`, the GPU stops being used.
+(Installing other custom nodes can bring in the CPU package.)
+Stop ComfyUI, then in ComfyUI's Python run `pip uninstall -y onnxruntime onnxruntime-gpu` followed by `pip install onnxruntime-gpu`, and restart ComfyUI (DirectML is not supported).
+
 ### PSD-related features give an error
 An extra Python package (psd-tools) is needed.
 Run the installation command shown in the error message in the Python that ComfyUI uses, then restart ComfyUI.
@@ -150,9 +155,18 @@ Run the installation command shown in the error message in the Python that Comfy
 ### Semantic search (Gallery) does not work well
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| The GPU is not detected (settings say no GPU detected, or runs on the CPU) | The onnxruntime in ComfyUI's Python is the CPU version | Stop ComfyUI, then in ComfyUI's Python run `pip uninstall -y onnxruntime onnxruntime-gpu` followed by `pip install onnxruntime-gpu`, and restart ComfyUI (DirectML is not supported) |
+| "Cannot reach Ollama" is shown | Ollama is not running, or the Ollama URL is wrong | Start Ollama (it is needed while indexing and searching). Check the Ollama URL on the gear button's Model tab |
+| "The Ollama model is not downloaded" is shown | EmbeddingGemma 2 has not been downloaded | Run `ollama pull embeddinggemma-2:740m` (or `embeddinggemma-2:440m`) |
+| Indexing sometimes fails with "connection was forcibly closed" or similar | Security software (such as AdGuard) is intercepting Ollama's traffic | Exclude Ollama from filtering. Failed images are processed again by the next "New / changed images only" run |
 | Gemini says "GEMINI_API_KEY is not set", or the key is rejected | There is no key in `.env`, or the line starts with `#` | Write `GEMINI_API_KEY=key` in the plugin's `.env` (copy `.env.example`) and restart ComfyUI. `.env` is only read at startup |
-| Search or Similar gives no results | The selected folder has no indexed images | Build the index with the gear button. Choose a folder with a green dot. When you change the model or precision, "rebuild all" |
+| Search or Similar gives no results | The selected folder has no indexed images | Build the index with the gear button. Choose a folder with a green dot. When you change the model or vector dimension, "rebuild all" |
+
+### The TagSpace space cannot be built
+| Symptom | Cause | What to do |
+| --- | --- | --- |
+| "EmbeddingGemma 2 in Ollama is required" is shown | Ollama is not running, or the model is missing | Prepare the same way as for semantic search (table above) |
+| "The Gallery semantic index was made with ..." is shown | The Gallery index was made with Gemini | Choose EmbeddingGemma 2 in the Gallery's semantic settings and rebuild all |
+| Building takes a very long time | The first build reads image prompts and prepares new tags | Later builds are faster. When using Tagger fill, check that Tagger runs on the GPU ("Tagger is very slow" above) |
 
 ### A partner API (Nano Banana) says authentication failed
 The cause is a missing Comfy API key in `.env`. Write `COMFY_API_KEY=your key` (issued at platform.comfy.org) in the plugin's `.env` and restart ComfyUI (Chapter 5, section 5-8).

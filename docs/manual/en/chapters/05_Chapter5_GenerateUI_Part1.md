@@ -72,6 +72,9 @@ To the right of Input, Model and Settings, the contents of the workflow are show
 When you change values in the form, they are reflected here too.
 Until you are used to it, treat this as "view only".
 
+On the Input subtab, the **>>** button at the top of the Raw JSON folds it into a thin strip at the right edge (v0.8.12 and later),
+which gives the prompt and image areas more room. Press it again to unfold it; the folded state is remembered.
+
 ---
 
 ## 5-3 Generating your first image
@@ -79,7 +82,7 @@ Until you are used to it, treat this as "view only".
 Now, to generate. At minimum, you check and set these three things.
 
 1. Which model to draw with (Model)
-2. What to draw (Input -> Prompt)
+2. What to draw (Input)
 3. Generate (Generate)
 
 ### Step 1: Choose a model (Model)
@@ -112,7 +115,9 @@ Now, to generate. At minimum, you check and set these three things.
 > Items that are not green have no effect on this workflow even if you change them.
 
 ### Step 2: Write a prompt (Input)
-1. Open the **Input** subtab and choose **Prompt** inside it.
+1. Open the **Input** subtab.
+   The prompt area (Prompt) is on the left and the input image area (Image) is on the right (v0.8.12 and later; before that you switched between Prompt and Image).
+   When the screen is narrow, the Image area moves below the prompts.
 2. In the **Positive Prompt** field, enter in English what you want drawn.
 
    ```

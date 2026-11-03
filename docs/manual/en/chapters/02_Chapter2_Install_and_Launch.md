@@ -19,7 +19,8 @@ The basic features of Workflow Studio work with no extra preparation as long as 
 ### Later, as needed
 The following are needed only when you use particular features. You can ignore them at first.
 
-- **Ollama, LM Studio and similar** - AI support features such as prompt translation and AI chat (Chapter 10)
+- **Ollama, LM Studio and similar** - AI support features such as prompt translation and AI chat (Chapter 10).
+  **Ollama** is also needed for local semantic search in the Gallery (Chapter 8) and for the TagSpace tab (Chapter 11)
 - **Eagle** - a feature that automatically saves generated images to the image-management software Eagle (Chapter 8)
 - **Extra Python packages** - Tagger (tag generation from images), PSD export and the like (Chapter 11)
 

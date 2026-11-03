@@ -24,6 +24,7 @@ It is enough to learn the tabs marked with a star under "Often used" first.
 | Image Edit | Simple image editing, making masks | | Chapter 11 |
 | Video | Video generation and video editing | | Chapter 11 |
 | Tagger | Automatically generating tags (prompts) from images | | Chapter 11 |
+| TagSpace | Showing tags, prompts and generated images in 3D by closeness of meaning, and picking tags | | Chapter 11 |
 | Settings | Language, theme, folders and other settings | | This chapter, Chapter 11 |
 | Help | Feature list, shortcuts, troubleshooting | | This chapter |
 | AI TOOL | Translation, chat and image analysis with local AI | | Chapter 10 |
@@ -35,7 +36,7 @@ If the number of tabs makes you lose your way, it helps to think of them in thes
   Tabs that list your materials so they are easy to find.
 - **Create** - GenerateUI / Image Edit / Video
   Tabs for actually making images and videos, or touching them up.
-- **Support** - AI TOOL / Tagger / Settings / Help
+- **Support** - AI TOOL / Tagger / TagSpace / Settings / Help
   Tabs that help with work in other tabs, or hold overall settings.
 
 > **Tip**

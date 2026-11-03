@@ -2,12 +2,12 @@
 
 Don't Be Afraid of Nodes - Generate Images More Easily and Keep Them Organized
 
-- Covers: Workflow Studio v0.8.9
+- Covers: Workflow Studio v0.9.0
 - Author: ketle-man
 - (c) 2026 ketle-man
 
 This is the **text-only edition** (without screenshots) of the Kindle book.
-Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.8.9_en.md`.
+Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.9.0_en.md`.
 Screen examples are omitted, so please use the book together with Workflow Studio's Help tab.
 
 ---
@@ -97,6 +97,7 @@ Together with the supporting features, it makes moving between the two screens s
 - **Image Edit** - simple layer-based editing, and redrawing parts with a mask (inpainting)
 - **Local AI integration** - translating prompts from Japanese, creating prompts and tags from images
 - **Tagger and Video** - automatic tag generation from images, and video generation with simple editing
+- **TagSpace** - lays out your own prompts, tags and generated images in a 3D space by closeness of meaning, so you can browse it and pick tags
 
 ---
 
@@ -142,7 +143,7 @@ It is written so that you can follow it if you know basic computer operations (c
 
 ## Version and environment covered
 
-- **Workflow Studio**: v0.8.9
+- **Workflow Studio**: v0.9.0
 - **ComfyUI**: the latest version at the time of writing
 - **OS**: Windows (screen examples are from Windows)
 
@@ -355,7 +356,8 @@ The basic features of Workflow Studio work with no extra preparation as long as 
 ### Later, as needed
 The following are needed only when you use particular features. You can ignore them at first.
 
-- **Ollama, LM Studio and similar** - AI support features such as prompt translation and AI chat (Chapter 10)
+- **Ollama, LM Studio and similar** - AI support features such as prompt translation and AI chat (Chapter 10).
+  **Ollama** is also needed for local semantic search in the Gallery (Chapter 8) and for the TagSpace tab (Chapter 11)
 - **Eagle** - a feature that automatically saves generated images to the image-management software Eagle (Chapter 8)
 - **Extra Python packages** - Tagger (tag generation from images), PSD export and the like (Chapter 11)
 
@@ -616,6 +618,7 @@ It is enough to learn the tabs marked with a star under "Often used" first.
 | Image Edit | Simple image editing, making masks | | Chapter 11 |
 | Video | Video generation and video editing | | Chapter 11 |
 | Tagger | Automatically generating tags (prompts) from images | | Chapter 11 |
+| TagSpace | Showing tags, prompts and generated images in 3D by closeness of meaning, and picking tags | | Chapter 11 |
 | Settings | Language, theme, folders and other settings | | This chapter, Chapter 11 |
 | Help | Feature list, shortcuts, troubleshooting | | This chapter |
 | AI TOOL | Translation, chat and image analysis with local AI | | Chapter 10 |
@@ -627,7 +630,7 @@ If the number of tabs makes you lose your way, it helps to think of them in thes
   Tabs that list your materials so they are easy to find.
 - **Create** - GenerateUI / Image Edit / Video
   Tabs for actually making images and videos, or touching them up.
-- **Support** - AI TOOL / Tagger / Settings / Help
+- **Support** - AI TOOL / Tagger / TagSpace / Settings / Help
   Tabs that help with work in other tabs, or hold overall settings.
 
 > **Tip**
@@ -1121,6 +1124,9 @@ To the right of Input, Model and Settings, the contents of the workflow are show
 When you change values in the form, they are reflected here too.
 Until you are used to it, treat this as "view only".
 
+On the Input subtab, the **>>** button at the top of the Raw JSON folds it into a thin strip at the right edge (v0.8.12 and later),
+which gives the prompt and image areas more room. Press it again to unfold it; the folded state is remembered.
+
 ---
 
 ## 5-3 Generating your first image
@@ -1128,7 +1134,7 @@ Until you are used to it, treat this as "view only".
 Now, to generate. At minimum, you check and set these three things.
 
 1. Which model to draw with (Model)
-2. What to draw (Input -> Prompt)
+2. What to draw (Input)
 3. Generate (Generate)
 
 ### Step 1: Choose a model (Model)
@@ -1161,7 +1167,9 @@ Now, to generate. At minimum, you check and set these three things.
 > Items that are not green have no effect on this workflow even if you change them.
 
 ### Step 2: Write a prompt (Input)
-1. Open the **Input** subtab and choose **Prompt** inside it.
+1. Open the **Input** subtab.
+   The prompt area (Prompt) is on the left and the input image area (Image) is on the right (v0.8.12 and later; before that you switched between Prompt and Image).
+   When the screen is narrow, the Image area moves below the prompts.
 2. In the **Positive Prompt** field, enter in English what you want drawn.
 
    ```
@@ -1479,8 +1487,8 @@ If you run without a key, a message says that partner API authentication failed 
 
 ### How to use
 1. In the Workflow tab, load the Nano Banana sample (`ws_nano_banana_2_1_t2i`) into GenerateUI.
-2. Edit the prompt in the **Prompt** subtab and press **Apply**.
-3. To use reference images, specify them on the image cards in the **Image** subtab.
+2. Edit the prompt on the left side (Prompt) of the **Input** subtab and press **Apply**.
+3. To use reference images, specify them on the image cards on the right side (Image) of the **Input** subtab.
 4. Press **Generate**.
 
 > **Tip**
@@ -1495,6 +1503,8 @@ The workflows you can use in GenerateUI have increased as follows. They are used
 - **Qwen Image 2.1 Turbo** - ComfyUI's official templates for text to image (T2I) and image to image (I2I). Edits also carry over to the prompt enhancer's input (the feature that expands your prompt automatically).
 - **Flux.3 Klein** - the four official templates (T2I and Image Edit, for Klein and Klein SD).
 - **MOSS-Image** - Base/SFT T2I, and the bounding-box versions that specify positions with frames.
+- **Fibo 2.0 Edit** (v0.8.14 and later) - an image-editing workflow. With the prompt enhancer (PE) setup, edits in the prompt area apply whether PE is on or off. The negative area holds a VGL-format (JSON) description as is. Width and height (Settings) of 0 mean automatic.
+- **FastH3 OmniRef / Pika-H3-Flex** (v0.8.14 and later) - MiniMax H3 reference to video. Treated as video workflows, and also usable in the Video tab (Chapter 11).
 - **Native LoRA stack** - ComfyUI v0.40's nodes that load several LoRAs at once (LoadLoraModel / LoadLoraTextEncoder). Apply, bypass and the Metadata display are supported.
 
 > **Caution**
@@ -2109,7 +2119,8 @@ You can also use a Gallery image as an "input image" for generation.
 | Send GenUI Image | Sets the chosen image as the input image (LoadImage node) of the GenerateUI workflow |
 | Send to LI node | Sets the chosen image on the image-loading node currently selected on ComfyUI's node screen |
 | Image Edit | Opens the chosen image in the Image Edit tab (Chapter 11) |
-| Send CC | Sends the chosen image to a panel in Comic Creator (shown only when the Gallery is opened inside Comic Creator; Chapter 11, section 11-6) |
+| Send CC Layout | Sends the chosen image to Comic Creator's Layout tab (the selected panel / overlay) (shown only when the Gallery is opened inside Comic Creator; Chapter 11, section 11-6) |
+| Send CC Image | Sends the chosen image to Comic Creator's Image tab (as a new layer if a document is open, otherwise as a new canvas; videos are not supported; shown under the same condition as Send CC Layout) |
 
 Handy when redrawing a generated image further with an I2I (image to image) workflow.
 
@@ -2194,7 +2205,7 @@ You can also bring up a list of **similar images** to the one you choose.
 | Model | Characteristics | Preparation |
 | --- | --- | --- |
 | Gemini Embedding 2 | Computed on Google's service. Fast. Images are sent to Google | Get an API key, write `GEMINI_API_KEY=key` in the plugin's `.env`, and restart ComfyUI |
-| EmbeddingGemma 2 | Computed inside your computer (local). Nothing is sent outside | No extra preparation. The model is downloaded automatically only the first time |
+| EmbeddingGemma 2 | Computed inside your computer with **Ollama** (local, free). Nothing is sent outside | Install and start Ollama, then run `ollama pull embeddinggemma-2:740m` (or the lighter `embeddinggemma-2:440m`). On the Model tab, choose the **Ollama URL** (usually unchanged) and the **Model size** |
 
 > **Caution: when using Gemini**
 > Images are sent to Google's service. Content sent under the free tier may be used by Google to improve its products.
@@ -2206,13 +2217,14 @@ You can also bring up a list of **similar images** to the one you choose.
 2. Choose "new only" or "rebuild all" and start. Progress is shown, and you can stop partway.
 3. The index is one shared across all folders. You may build it a little at a time, folder by folder.
 
-When you change the model, the vector dimension or the image precision, a **rebuild of everything** is needed.
+When you change the model or the vector dimension, a **rebuild of everything** is needed.
 
 ### Speed guidelines and settings
-- The local EmbeddingGemma 2 runs on the CPU by default and takes a few seconds per image.
-  Setting the **image precision** to "standard" or "light" makes it faster (rebuild everything after changing it).
-  Reducing the **number of CPU threads** lightens the computer's load while generating images.
-- If you have an NVIDIA GPU, installing `onnxruntime-gpu` into ComfyUI's Python brings it to about 0.1 second per image (the fix is in Chapter 12, section 12-5).
+- Since v0.8.14 the local EmbeddingGemma 2 runs in Ollama (the earlier way of running it in ComfyUI's Python was removed).
+  On an NVIDIA GPU it takes about 0.1 to 0.2 second per image. When indexing finishes, the model is unloaded from GPU memory automatically.
+- Ollama must be running while you build the index and while you search.
+- The 740m (text + image + audio) and 440m (text + image, lighter) model sizes return the same results, so switching does not need a rebuild.
+  Indexes made with v0.8.13 or earlier keep working as they are.
 - In the **Search** tab, you can decide the "minimum score" for similar-image and text search, and the maximum number of results.
   Because the score level differs by model, it is saved per model.
 
@@ -2692,6 +2704,9 @@ To use Tagger, you need the following preparation.
 
 1. Put a **model for tagging** (such as WD Tagger) in ComfyUI's `models/tagger/(model name)/` folder.
    Put a `.onnx` file and `selected_tags.csv` in the folder.
+   **PixAI Tagger v1.0** (v0.8.10 and later) also works. From the community conversion on Hugging Face (`Mexes/pixai-tagger-v1.0-onnx-fp32-fp16-int8`),
+   put one `.onnx` file (`model_fp16.onnx` is recommended for a GPU) together with `selected_tags.csv` and `preprocess.json` in one folder, and it is detected automatically.
+   When you choose a PixAI model, the threshold sliders switch to PixAI's recommended values (0.17 / 0.27).
 2. Install the **extra Python packages**.
    Use the `requirements.txt` in the Workflow Studio folder.
 
@@ -2706,6 +2721,10 @@ To use Tagger, you need the following preparation.
 > Installing into the Python that was already on your computer cannot be used from ComfyUI.
 > Always install into **the Python that ComfyUI uses**.
 > If you are not sure, there is also a method of installing packages with a ComfyUI Manager feature.
+
+> **Caution: check that it runs on the GPU**
+> On an NVIDIA GPU, Tagger takes less than a second per image, but on the CPU, PixAI takes about 20 seconds per image.
+> If it is very slow, check that the GPU package is installed correctly (Chapter 12, section 12-5).
 
 > **Tip**
 > You can also combine it with the local AI image reading (VLM) from Chapter 10 to make tags that combine both results.
@@ -2757,6 +2776,7 @@ The **Video** tab is a dedicated screen for making short videos from images or t
 - **MiniMax H3** (image to video)
 - **LTX-2.5** (text to video, image to video, and video from specified first and last images)
 - **Wan2.2** (text to video)
+- **FastH3 OmniRef / Pika-H3-Flex** (MiniMax H3 reference to video, v0.8.14 and later)
 
 You load a matching workflow with **Load in Video** in the Workflow tab and use it (Chapter 4, section 4-6).
 
@@ -2779,6 +2799,19 @@ There are also the **Frame** feature, which saves a favorite scene of a video as
   If you check the option to carry over the embedded prompt/workflow tags, the original video's information is kept in formats that can hold tags (such as FLAC).
 
 - The Video Source panel is a little wider, the file name shows on one line, and the buttons sit in a single row.
+
+### Reference to video (FastH3 OmniRef / Pika-H3-Flex) (v0.8.14 and later)
+These workflows make a video from **reference images** instead of a first and last frame,
+so the image fields in the Plan subtab are renamed:
+
+- **Reference Image** - the first reference image (the usual First Image field)
+- **Reference Image 2 (optional)** - the second reference image (the usual Last Image field)
+
+- Prompt, duration (seconds), aspect ratio and so on work the same as for other video workflows.
+- A block whose image field is left empty with **None** or **Clear** is generated without that image, even if the workflow has a reference image wired in.
+  Blocks added with "+ Block" start with empty images, so set an image on each block that needs a reference.
+- Choosing **Use previous block's last frame** makes the last frame of the video actually generated by the previous block the first reference image of that block.
+- The Asset subtab buttons also change to "Set as Reference Image" and "Set as Reference Image 2".
 
 > **Caution**
 > Video generation uses far more GPU memory and time than image generation.
@@ -2847,11 +2880,12 @@ It is software you install separately from Workflow Studio, but if you install b
 If you install both, the following integrations are possible.
 
 - **Use Workflow Studio's Gallery inside Comic Creator**
-  Workflow Studio's Gallery appears inside Comic Creator, and you can choose generated images and send them to panels with the **Send CC** button.
-  (The Send CC button is shown only in a Gallery opened inside Comic Creator)
+  Workflow Studio's Gallery appears inside Comic Creator, and you can choose generated images and send them to panels with **Send CC Layout** (Layout tab panel / overlay) or to the Image tab with **Send CC Image**.
+  (The Send CC buttons are shown only in a Gallery opened inside Comic Creator)
 - **Generate images from Comic Creator**
   From the Comic Creator screen, through Workflow Studio (GenerateUI), you can generate images to put in panels (T2I),
   or redraw based on a rough you drew or an image you placed (I2I and inpainting).
+  From Comic Creator's Nanobanana+ tab (local mode), you can also run image-editing workflows that use several reference images (Flux.3 Klein, Qwen Image 2.1 and so on) (v0.8.12 and later).
 
 With the flow "make images in Workflow Studio -> put them together as manga in Comic Creator",
 you can go from image generation to finished manga entirely inside ComfyUI.
@@ -2873,6 +2907,64 @@ you can go from image generation to finished manga entirely inside ComfyUI.
 
 ---
 
+## 11-7 TagSpace - picking tags and prompts from a "map of meaning" (v0.9.0 and later)
+
+The **TagSpace** tab lays out the prompts, tags and generated images inside Workflow Studio in a 3D space
+according to **closeness of meaning**. Things close together mean similar things, so you can browse the space
+("which tags are close to this mood?") and pick tags to build a prompt.
+
+### What is in the space
+- **Cards** - the sample images of the Gallery's **ImagePrompt** (Chapter 8, section 8-4) with their prompts, shown as thumbnails
+- **Tags** - words taken (split at commas) from ImagePrompt prompts, prompts embedded in generated images, wildcards, the Tagger DB and the Prompt library, shown as dots colored by source
+- **Gallery points** - some of your generated images, shown as faint dots (each carries the tags of its own prompt)
+
+### Preparation
+As with the Gallery's semantic search (Chapter 8, section 8-6), **Ollama** and **EmbeddingGemma 2** are needed.
+If the Gallery's semantic index was made with Gemini Embedding 2, rebuild it with EmbeddingGemma 2 first.
+
+### Building the space
+Choose the settings in the toolbar and press **Build / Update**.
+
+- **Tags** - how many tags to include. The sources take turns, each in order of how often a tag is used
+- **All tags** - when on, every candidate tag is used instead of the Tags number (up to 20,000)
+- **Min uses** - leaves out tags used fewer times than this. 2 removes one-off spelling variants and the like
+- **Wildcards** - whether wildcards are used as a tag source
+- **Gallery points** - how many generated images to show (0 = none)
+- **Tagger fill** - tags generated images whose prompt cannot be read, using a Tagger model (OFF / a model name; choose "Gallery points only" or "All images without a prompt")
+
+- The first build takes a few minutes to read image prompts and prepare tags. Later builds reuse the previous results and finish in seconds to tens of seconds.
+- The status line shows the numbers of cards, tags and Gallery points. When only part of the candidates is used, "(of N candidates)" is shown.
+
+> **Tip**
+> Most distinct tags are words that only appear in wildcards.
+> Turning "Wildcards" off and "All tags" on lays out every tag you have actually used (about 10,000 in testing).
+
+> **Caution**
+> Tagger fill takes about 0.5 second per image on the CPU. Before choosing "All images without a prompt", check that Tagger runs on the GPU (Chapter 12, section 12-5).
+
+### Looking and searching
+- **Drag** to rotate, **right-drag** to pan, and use the **wheel** to zoom.
+- Hovering over a point shows its name, thumbnail and prompt or sources.
+- The toolbar checkboxes switch Cards, Thumbnails, Tags and Gallery on or off, as well as **Glow** (stars shining in a night sky) and **Twinkle**.
+  The checkboxes for each source show or hide tags by source.
+- Type words or a sentence in the search box at the top right and press **Enter** (any language). A white mark is placed at that meaning, and nearby cards and tags are listed.
+
+### Picking tags to build a prompt
+1. Click a card or tag to select it. Cards and tags close in meaning are listed under **Nearby** on the right.
+   (Clicking a Gallery point also lists similar generated images)
+2. **Double-click** what you want in the prompt, or press **Add** in **Selection**, or the **+** in the list.
+   A card adds its whole prompt, a tag adds the tag itself, and a Gallery point adds that image's tags to the **Prompt** area at the far right.
+3. **Add to GenerateUI (Positive)** appends it to the positive prompt of the workflow loaded in GenerateUI (load a workflow in GenerateUI first).
+   You can also **Copy** it to the clipboard.
+
+### Searching with the tags of a card or generated image
+When you select a card or Gallery point, its prompt tags are shown as buttons under **Selection**.
+Click tags to choose them (click again to deselect) and press **Search with selected** to search the space with them.
+This helps when you want to find things close to, say, only the hairstyle and clothing of an image.
+A card's whole prompt can be read under **Full prompt**.
+
+---
+
 > **Summary of this chapter**
 > - In the Nodes tab you can list and organize installed nodes, and use them in the WS Library
 > - Tagger automatically generates tags from images. A model and extra packages must be prepared
@@ -2880,6 +2972,7 @@ you can go from image generation to finished manga entirely inside ComfyUI.
 > - In the Video tab, you can make videos with supported video-generation models and do simple editing
 > - "Default Checkpoint" and "Data Management (backup)" in the Settings tab are especially handy
 > - Combined with Comic Creator by the same author, you can make manga from generated images
+> - TagSpace lays out your tags, prompts and generated images in 3D by closeness of meaning, so you can browse it and pick tags for a prompt
 
 ---
 
@@ -3028,6 +3121,11 @@ You need to set the environment variable `WFS_ALLOWED_BACKEND_HOSTS` (Chapter 10
 - Check that a `.onnx` file (and `selected_tags.csv`) is in the `ComfyUI/models/tagger/(model name)/` folder.
 - Check that the extra Python package (onnxruntime) is installed in **the Python that ComfyUI uses** (Chapter 11, section 11-2).
 
+### Tagger is very slow (the GPU is not used)
+If ComfyUI's Python has both the CPU package `onnxruntime` and the GPU package `onnxruntime-gpu`, the GPU stops being used.
+(Installing other custom nodes can bring in the CPU package.)
+Stop ComfyUI, then in ComfyUI's Python run `pip uninstall -y onnxruntime onnxruntime-gpu` followed by `pip install onnxruntime-gpu`, and restart ComfyUI (DirectML is not supported).
+
 ### PSD-related features give an error
 An extra Python package (psd-tools) is needed.
 Run the installation command shown in the error message in the Python that ComfyUI uses, then restart ComfyUI.
@@ -3035,9 +3133,18 @@ Run the installation command shown in the error message in the Python that Comfy
 ### Semantic search (Gallery) does not work well
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| The GPU is not detected (settings say no GPU detected, or runs on the CPU) | The onnxruntime in ComfyUI's Python is the CPU version | Stop ComfyUI, then in ComfyUI's Python run `pip uninstall -y onnxruntime onnxruntime-gpu` followed by `pip install onnxruntime-gpu`, and restart ComfyUI (DirectML is not supported) |
+| "Cannot reach Ollama" is shown | Ollama is not running, or the Ollama URL is wrong | Start Ollama (it is needed while indexing and searching). Check the Ollama URL on the gear button's Model tab |
+| "The Ollama model is not downloaded" is shown | EmbeddingGemma 2 has not been downloaded | Run `ollama pull embeddinggemma-2:740m` (or `embeddinggemma-2:440m`) |
+| Indexing sometimes fails with "connection was forcibly closed" or similar | Security software (such as AdGuard) is intercepting Ollama's traffic | Exclude Ollama from filtering. Failed images are processed again by the next "New / changed images only" run |
 | Gemini says "GEMINI_API_KEY is not set", or the key is rejected | There is no key in `.env`, or the line starts with `#` | Write `GEMINI_API_KEY=key` in the plugin's `.env` (copy `.env.example`) and restart ComfyUI. `.env` is only read at startup |
-| Search or Similar gives no results | The selected folder has no indexed images | Build the index with the gear button. Choose a folder with a green dot. When you change the model or precision, "rebuild all" |
+| Search or Similar gives no results | The selected folder has no indexed images | Build the index with the gear button. Choose a folder with a green dot. When you change the model or vector dimension, "rebuild all" |
+
+### The TagSpace space cannot be built
+| Symptom | Cause | What to do |
+| --- | --- | --- |
+| "EmbeddingGemma 2 in Ollama is required" is shown | Ollama is not running, or the model is missing | Prepare the same way as for semantic search (table above) |
+| "The Gallery semantic index was made with ..." is shown | The Gallery index was made with Gemini | Choose EmbeddingGemma 2 in the Gallery's semantic settings and rebuild all |
+| Building takes a very long time | The first build reads image prompts and prepares new tags | Later builds are faster. When using Tagger fill, check that Tagger runs on the GPU ("Tagger is very slow" above) |
 
 ### A partner API (Nano Banana) says authentication failed
 The cause is a missing Comfy API key in `.env`. Write `COMFY_API_KEY=your key` (issued at platform.comfy.org) in the plugin's `.env` and restart ComfyUI (Chapter 5, section 5-8).
@@ -3123,6 +3230,7 @@ The main terms that appear in this book, in alphabetical order.
 | Steps | The number of times drawing is repeated | Chapter 5 |
 | Style | A mood template added to a prompt | Chapter 7 |
 | T2I (Text to Image) | Making an image from text (a prompt) | Chapter 5 |
+| TagSpace | A tab that lays out tags, prompts and generated images in 3D by closeness of meaning | Chapter 11 |
 | Trigger word | A word to put in the prompt to bring out a LoRA's effect | Chapter 6 |
 | VAE | The model that finishes an image's colors and fine details | Chapter 6 |
 | VLM | An AI model that can read images | Chapter 10 |

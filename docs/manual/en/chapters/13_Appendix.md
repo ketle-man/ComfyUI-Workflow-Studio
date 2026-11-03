@@ -44,6 +44,7 @@ The main terms that appear in this book, in alphabetical order.
 | Steps | The number of times drawing is repeated | Chapter 5 |
 | Style | A mood template added to a prompt | Chapter 7 |
 | T2I (Text to Image) | Making an image from text (a prompt) | Chapter 5 |
+| TagSpace | A tab that lays out tags, prompts and generated images in 3D by closeness of meaning | Chapter 11 |
 | Trigger word | A word to put in the prompt to bring out a LoRA's effect | Chapter 6 |
 | VAE | The model that finishes an image's colors and fine details | Chapter 6 |
 | VLM | An AI model that can read images | Chapter 10 |
