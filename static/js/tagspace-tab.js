@@ -693,19 +693,53 @@ function sourcesText(tag) {
 
 // ── ポインター操作 ───────────────────────────────────────────
 
+const PICK_PX = 8;   // カーソルからこの距離(画面上のpx)以内の点を当たりとする
+
+/**
+ * カーソル位置の要素。Raycaster の点の当たり幅は3D空間の固定値で、しかも結果はカメラに近い順なので、
+ * そのままだとズームして点群の中に入ったとき手前の1点が画面の広い範囲で当たり続けた。
+ * 候補を広めに取ってから各点を画面へ投影し、カーソルに最も近い点を選ぶ
+ * (拡大で大きく描かれた点は、見た目の半径までを当たりとする)。
+ */
 function pick(clientX, clientY) {
     const rect = view.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     view.raycaster.setFromCamera(ndc, view.camera);
-    view.raycaster.params.Points.threshold = 0.12;
+    const tanHalf = Math.tan((view.camera.fov * Math.PI) / 360);
     const targets = [view.layers.cardSprites, view.layers.cards, view.layers.tags, view.layers.background].filter((o) => o?.visible);
+    // 候補の当たり幅: 注視点の3倍の奥行きで PICK_PX になる幅と、描かれた点の3D上の半径(≒size×tan)の大きい方
+    const depthRef = view.camera.position.distanceTo(view.controls.target) * 3;
+    const maxSize = Math.max(0, ...targets.filter((o) => o.isPoints).map((o) => o.material.size));
+    view.raycaster.params.Points.threshold = Math.max((2 * depthRef * tanHalf / rect.height) * PICK_PX, maxSize * tanHalf);
     const hits = view.raycaster.intersectObjects(targets, true);
+    const v = new THREE.Vector3();
+    let best = null, bestPx = Infinity;
     for (const h of hits) {
-        if (h.object.isSprite) return h.object.userData.item;
-        const items = h.object.userData.items;
-        if (items && h.index != null) return items[h.index];
+        let item;
+        if (h.object.isSprite) {
+            item = h.object.userData.item;
+            h.object.getWorldPosition(v);
+        } else {
+            const items = h.object.userData.items;
+            if (!items || h.index == null) continue;
+            item = items[h.index];
+            v.fromBufferAttribute(h.object.geometry.attributes.position, h.index).applyMatrix4(h.object.matrixWorld);
+        }
+        const depth = v.clone().applyMatrix4(view.camera.matrixWorldInverse).z * -1;
+        if (depth <= 0) continue;
+        v.project(view.camera);
+        const px = Math.hypot((v.x - ndc.x) * rect.width / 2, (v.y - ndc.y) * rect.height / 2);
+        if (!h.object.isSprite) {
+            // sizeAttenuation の点の直径(px)は size × (高さ/2) / 奥行き。発光時は芯の大きさで判定する
+            const core = h.object.material.size / (state.opts.glow ? GLOW_SCALE : 1);
+            if (px > Math.max(PICK_PX, (core * rect.height) / 4 / depth)) continue;
+        }
+        if (px < bestPx) {
+            bestPx = px;
+            best = item;
+        }
     }
-    return null;
+    return best;
 }
 
 function bindPointer(canvas) {
