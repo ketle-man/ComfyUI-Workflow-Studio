@@ -202,6 +202,10 @@ function _updateFieldHighlights() {
     const hasTurboSteps = nodes.turboStepsIdx !== -1;
     const hasPromptEnhance = nodes.promptEnhanceIdx !== -1;
 
+    // FastH3 OmniRef(Reference to Video)では先頭フレームではなく参照画像(ref_image_0)として渡る。
+    const firstLabel = document.getElementById("wfm-video-block-first-label");
+    if (firstLabel) firstLabel.textContent = nodes.family === "fasth3" ? "Reference Image" : "First Image";
+
     _setFieldActive("wfm-video-block-prompt-label", true);
     _setFieldActive("wfm-video-block-duration-label", true);
     _setFieldActive("wfm-video-block-first-label", nodes.firstFrameSlot !== -1);

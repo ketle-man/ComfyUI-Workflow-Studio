@@ -1,7 +1,7 @@
 /**
  * Video workflow helpers — model-family detection and node manipulation for
  * MiniMax H3 / LTX-2.5 (Text・Image・First&Last-Frame to Video) / Wan2.2 (Text
- * to Video) workflows. Pure functions operating on UI-format workflow JSON,
+ * to Video) / FastH3 OmniRef (MiniMax H3 Reference to Video) workflows. Pure functions operating on UI-format workflow JSON,
  * with no DOM/state dependency, so both the Plan tab's per-block batch loop
  * and (previously) the single-shot form can share the exact same logic.
  */
@@ -23,10 +23,24 @@ function _widgetIndexOf(node, inputDef) {
     return widgetInputs.indexOf(inputDef);
 }
 
+// inputs[]にwidget定義を持たない形式で保存されたノード（FastH3 OmniRefテンプレートの
+// ResolutionSelector/LoadImageなど）向けの、widgets_valuesの既定の並び順。
+const _DEFAULT_WIDGET_ORDER = {
+    ResolutionSelector: ["aspect_ratio", "megapixels", "multiple"],
+    LoadImage: ["image", "upload"],
+    PrimitiveStringMultiline: ["value"],
+    PrimitiveString: ["value"],
+    PrimitiveFloat: ["value"],
+    PrimitiveInt: ["value"],
+};
+
 // 上と同じ並び順ルールで、名前から直接インデックスを引く版（ResolutionSelectorや
 // LoadImageなど、モデルファミリー間で入力名が揺れないノードに使う）。
 export function widgetIndex(node, name) {
     const widgetInputs = (node?.inputs || []).filter((inp) => inp.widget);
+    if (!widgetInputs.length && node && Array.isArray(node.widgets_values)) {
+        return (_DEFAULT_WIDGET_ORDER[node.type] || []).indexOf(name);
+    }
     return widgetInputs.findIndex((inp) => inp.name === name);
 }
 
@@ -65,7 +79,80 @@ function _detectVideoSubgraph(workflow) {
     return null;
 }
 
+// MiniMax H3の長さ(フレーム数)は24fpsで17k+5のグリッドに乗る — FastH3テンプレートの
+// ComfyMathExpressionと同じ式で秒数から変換する。
+function _durationToFrames(seconds) {
+    const f = Math.max(5, Math.round((Number(seconds) || 0) * 24));
+    return f + (5 - (f % 17) + 17) % 17;
+}
+
+// FastH3 OmniRef(MiniMaxH3ReferenceToVideo)はサブグラフを使わないフラット構成で、
+// prompt/width/height/lengthは別ノード(PrimitiveStringMultiline / ResolutionSelector /
+// PrimitiveFloat→ComfyMathExpression)から配線される。そのためサブグラフの公開入力ではなく、
+// 各入力の配線元ノードを書き込み先として特定する(未配線ならモデルノード自身のwidget)。
+function _locateFastH3Nodes(workflow) {
+    const instanceNode = workflow.nodes.find((n) => n.type === "MiniMaxH3ReferenceToVideo" && n.mode !== 4 && n.mode !== 2);
+    if (!instanceNode || !Array.isArray(instanceNode.widgets_values)) return null;
+
+    const nodeById = (id) => workflow.nodes.find((n) => n.id === id) || null;
+    const sourceOf = (node, inputName) => {
+        const inp = (node?.inputs || []).find((i) => i.name === inputName);
+        if (!inp || inp.link == null) return null;
+        const link = workflow.links.find((l) => l[0] === inp.link);
+        return link ? nodeById(link[1]) : null;
+    };
+
+    // prompt — 配線元がPrimitiveString(Multiline)ならその値を、未配線なら自ノードのwidgetを書く。
+    let promptNode = instanceNode, promptIdx = widgetIndex(instanceNode, "prompt");
+    const promptSrc = sourceOf(instanceNode, "prompt");
+    if (promptSrc) {
+        if (promptSrc.type !== "PrimitiveStringMultiline" && promptSrc.type !== "PrimitiveString") return null;
+        promptNode = promptSrc;
+        promptIdx = widgetIndex(promptSrc, "value");
+    }
+
+    // length — 秒数のPrimitiveFloat(→ComfyMathExpressionでフレーム数へ変換)が配線元なら
+    // そこへ秒数を書く。未配線なら自ノードのlength widgetへフレーム数に変換して書く。
+    let durationNode = instanceNode, durationIdx = widgetIndex(instanceNode, "length"), durationAsFrames = true;
+    let lengthSrc = sourceOf(instanceNode, "length");
+    if (lengthSrc?.type === "ComfyMathExpression") lengthSrc = sourceOf(lengthSrc, "values.a");
+    if (lengthSrc) {
+        if (lengthSrc.type !== "PrimitiveFloat" && lengthSrc.type !== "PrimitiveInt") return null;
+        durationNode = lengthSrc;
+        durationIdx = widgetIndex(lengthSrc, "value");
+        durationAsFrames = false;
+    }
+    if (promptIdx === -1 || durationIdx === -1) return null;
+
+    const widthSrc = sourceOf(instanceNode, "width");
+    const resolutionNode = widthSrc?.type === "ResolutionSelector" ? widthSrc : null;
+    const widthIdx = widthSrc ? -1 : widgetIndex(instanceNode, "width");
+    const heightIdx = sourceOf(instanceNode, "height") ? -1 : widgetIndex(instanceNode, "height");
+
+    // 参照画像はPlanの"First Image"欄で1枚目(ref_image_0)だけを扱う。最終フレームの概念は
+    // 無いためLast Imageは非対応。前ブロックの最終フレーム連結(chain_previous)は、その
+    // フレームを次ブロックの参照画像として渡す形になる。
+    const firstFrameSlot = instanceNode.inputs.findIndex((i) => i.name === "ref_images.ref_image_0");
+    const rawLoadImageNode = sourceOf(instanceNode, "ref_images.ref_image_0");
+    const loadImageNode = rawLoadImageNode?.type === "LoadImage" ? rawLoadImageNode : null;
+
+    // noise_seedはcomfyUI.generate()が全ノード一括で上書きする(applyBlockToWorkflow参照)ため、
+    // ここではUI上の有効表示のためにRandomNoiseの有無だけを見る。
+    const hasRandomNoise = workflow.nodes.some((n) => n.type === "RandomNoise" && n.mode !== 4 && n.mode !== 2);
+
+    return {
+        family: "fasth3", sgDef: null, instanceNode, promptNode, durationNode, durationAsFrames,
+        loadImageNode, lastLoadImageNode: null, resolutionNode,
+        firstFrameSlot, lastFrameSlot: -1, promptIdx, durationIdx,
+        widthIdx, heightIdx, noiseSeedIdx: hasRandomNoise ? 0 : -1,
+        turboModeIdx: -1, turboStrengthIdx: -1, turboStepsIdx: -1, promptEnhanceIdx: -1,
+    };
+}
+
 export function locateVideoModelNodes(workflow) {
+    if (!Array.isArray(workflow?.nodes) || !Array.isArray(workflow?.links)) return null;
+    if (workflow.nodes.some((n) => n.type === "MiniMaxH3ReferenceToVideo")) return _locateFastH3Nodes(workflow);
+
     const detected = _detectVideoSubgraph(workflow);
     if (!detected) return null;
     const { family, sgDef } = detected;
@@ -138,7 +225,8 @@ export function locateVideoModelNodes(workflow) {
     const heightIdx = resolutionNode ? -1 : _widgetIndexOf(instanceNode, heightInput);
 
     return {
-        family, sgDef, instanceNode, loadImageNode, lastLoadImageNode, resolutionNode,
+        family, sgDef, instanceNode, promptNode: instanceNode, durationNode: instanceNode, durationAsFrames: false,
+        loadImageNode, lastLoadImageNode, resolutionNode,
         firstFrameSlot, lastFrameSlot, promptIdx, durationIdx,
         widthIdx, heightIdx, noiseSeedIdx, turboModeIdx, turboStrengthIdx, turboStepsIdx, promptEnhanceIdx,
     };
@@ -149,17 +237,20 @@ export function locateVideoModelNodes(workflow) {
 // fields from whatever the workflow file already had.
 export function readTemplateDefaults(nodes) {
     const {
-        instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx,
+        family, instanceNode, promptNode, durationNode, durationAsFrames, resolutionNode, loadImageNode, lastLoadImageNode,
+        promptIdx, durationIdx,
         widthIdx, heightIdx, noiseSeedIdx, turboModeIdx, turboStrengthIdx, turboStepsIdx, promptEnhanceIdx,
     } = nodes;
+    const rawDuration = durationNode.widgets_values[durationIdx];
     const arIdx = widgetIndex(resolutionNode, "aspect_ratio");
     const mpIdx = widgetIndex(resolutionNode, "megapixels");
     const multIdx = widgetIndex(resolutionNode, "multiple");
     const fnIdx = widgetIndex(loadImageNode, "image");
     const lastFnIdx = widgetIndex(lastLoadImageNode, "image");
     return {
-        prompt: instanceNode.widgets_values[promptIdx] ?? "",
-        duration: instanceNode.widgets_values[durationIdx] ?? 2,
+        prompt: promptNode.widgets_values[promptIdx] ?? "",
+        // durationAsFrames(FastH3でlengthが未配線)の場合はフレーム数を24fpsで秒数へ戻す。
+        duration: rawDuration == null ? 2 : (durationAsFrames ? Math.round((rawDuration / 24) * 10) / 10 : rawDuration),
         hasResolution: !!resolutionNode,
         aspectRatio: (resolutionNode && arIdx !== -1) ? resolutionNode.widgets_values[arIdx] : null,
         megapixels: (resolutionNode && mpIdx !== -1) ? resolutionNode.widgets_values[mpIdx] : null,
@@ -172,7 +263,7 @@ export function readTemplateDefaults(nodes) {
         width: widthIdx !== -1 ? instanceNode.widgets_values[widthIdx] : null,
         height: heightIdx !== -1 ? instanceNode.widgets_values[heightIdx] : null,
         hasNoiseSeed: noiseSeedIdx !== -1,
-        noiseSeed: noiseSeedIdx !== -1 ? instanceNode.widgets_values[noiseSeedIdx] : null,
+        noiseSeed: (noiseSeedIdx !== -1 && family !== "fasth3") ? instanceNode.widgets_values[noiseSeedIdx] : null,
         hasTurboMode: turboModeIdx !== -1,
         turboMode: turboModeIdx !== -1 ? instanceNode.widgets_values[turboModeIdx] : null,
         hasTurboStrength: turboStrengthIdx !== -1,
@@ -231,12 +322,13 @@ export function injectFrameNode(clone, instanceNode, targetSlot, filename) {
 // template's own clean state.
 export function applyBlockToWorkflow(clone, nodes, params) {
     const {
-        instanceNode, resolutionNode, loadImageNode, lastLoadImageNode, promptIdx, durationIdx, firstFrameSlot, lastFrameSlot,
+        instanceNode, promptNode, durationNode, durationAsFrames, resolutionNode, loadImageNode, lastLoadImageNode,
+        promptIdx, durationIdx, firstFrameSlot, lastFrameSlot,
         widthIdx, heightIdx, turboModeIdx, turboStrengthIdx, turboStepsIdx, promptEnhanceIdx,
     } = nodes;
 
-    instanceNode.widgets_values[promptIdx] = params.prompt || "";
-    instanceNode.widgets_values[durationIdx] = params.duration;
+    promptNode.widgets_values[promptIdx] = params.prompt || "";
+    durationNode.widgets_values[durationIdx] = durationAsFrames ? _durationToFrames(params.duration) : params.duration;
 
     const arIdx = widgetIndex(resolutionNode, "aspect_ratio");
     const mpIdx = widgetIndex(resolutionNode, "megapixels");
