@@ -2,7 +2,20 @@
 
 ---
 
-## 未リリース（2026-11-02）
+## v0.8.14（2026-11-03）
+
+### Fibo 2.0 Edit / FastH3 OmniRef / Pika-H3-Flex 対応（GenerateUI・Metadata・Videoタブ）
+
+- **GenerateUI解析**（`comfyui-workflow.js`）: `TextEncodeFibo2` を `TextEncodeQwenImage21` と同じ固定ロール扱いに（prompt は PreviewAny → プロンプト強化スイッチ経由でリンクされるので配線元へ positive を伝播、negative_prompt は VGL JSON のままプロンプト欄に出す、width/height/batch_size を設定タブへ。0 は自動サイズ）。動画オールインワンノードの判定を `VIDEO_ALL_IN_ONE_RE`（`ImageToVideo|TextToVideo|ReferenceToVideo`）に集約し、`MiniMaxH3ReferenceToVideo` の prompt が別ノード（PrimitiveStringMultiline）から配線されていれば配線元を positive にする。
+- **Metadata / サイドパネルIタブ**: 動画ノードの prompt がリンクなら配線元テキストを解決。Fibo2 は MageFlow/Boogu と同じく1ノードで positive/negative を分けて取り出す。
+- **Videoタブ（Plan）**: 既存の MiniMax H3 / LTX-2.5 / Wan2.2 はサブグラフの公開入力1ノードに書く方式だが、FastH3 系はサブグラフ無しのフラット構成。新ファミリー `fasth3` として、各入力の**配線元ノード**を書き込み先にした（prompt → PrimitiveStringMultiline、duration → PrimitiveFloat（length が未配線なら自ノードの length へ 24fps・17k+5 グリッドのフレーム数で書く）、解像度 → ResolutionSelector）。First Image / Last Image 欄を **Reference Image / Reference Image 2**（`ref_images.ref_image_0` / `ref_image_1`）として流用し、Asset タブのボタン表記・トーストも切り替える。
+- **未指定の参照画像は接続を外す**: FastH3 系のみ、None / Clear の参照画像はテンプレートの LoadImage が繋がっていても切断し、使われなくなった LoadImage はノードごと除く（外さないと UI 上は未指定なのにテンプレートの画像で生成される）。他ファミリーは従来通り。
+- **chain_previous**: Reference Image 2 は「前ブロックの最終フレーム」として扱わず、常に生成された最終フレームを抽出して次ブロックの1枚目の参照画像にする。
+- **罠**: FastH3 テンプレートの PrimitiveString/Float・ResolutionSelector・LoadImage は `inputs[]` に widget 定義を持たない形式で保存されており、`widgetIndex` が -1 を返して何も書けなかった。ノード型ごとの既定の並び順にフォールバックするようにした。
+- **ノード側の仕様**: `MiniMaxH3ReferenceToVideo` は `ref_images.values()` を順に使うだけなので、1枚目が欠けて2枚目だけでも動く（その画像が `<Picture 1>` になる）。
+- **検証**: Node 上で実コード＋ ComfyUI_5（8189）の object_info を使い、3種のワークフローの変換・解析・抽出と、参照画像の差し替え／注入／切断を確認（既存 minimax / ltx25 テンプレートは結果不変）。Playwright で Video タブを実操作（ラベル・既定値・Clear・＋Block・ドロップ・Asset 表記）。Pika-H3-Flex を Plan から実生成（2ブロック×2秒・0.2MP → 352×608・56フレーム・音声付き、約160秒）し、chain_previous でブロック1の最終フレームがブロック2の参照画像になって自然に繋がることを確認。
+- **未対応**: 参照画像の3枚目以降・参照動画・参照音声はワークフロー側の設定のまま。Pika は ManualSigmas のため GenerateUI の Steps は効かない（linked 表示）。
+
 
 ### Gallery セマンティック検索: EmbeddingGemma 2 を ONNX から Ollama へ移行
 
