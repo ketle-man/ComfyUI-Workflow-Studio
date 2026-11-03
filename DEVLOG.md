@@ -45,6 +45,12 @@
   - 追加/削除ボタンを「選択中」の名前の行（`position: sticky`）へ移動。本文をスクロールしても押せる。
   - クリックは選択のみ（`e.detail > 1` は無視）、ダブルクリックで追加/削除。「追加」ボタンと一覧の＋は従来どおり。ヒント・空欄の案内・ヘルプ（英/日/中）・README を更新し、ヘルプに表示の項目（tagspace-8）を追加。
 
+- **追加: ワイルドカード YAML をパーサーで読む**
+  - 従来は「`- ` で始まる行」を1項目として読んでいたため、`- >-` 等のブロックスカラー（本文が次行以降）は `>-` だけになり本文を取りこぼしていた（billions_of_all_in_one.yaml、corn-flakes-doll.yaml）。二重引用符内の `’` もエスケープのまま残っていた。
+  - PyYAML（ComfyUI 本体の依存）の `CSafeLoader`（無ければ `SafeLoader`）で読み、文字列の葉だけを取る（キー＝カテゴリ名、yes/no・数値に変換された葉は除く）。YAML として読めないファイルは従来の行読みにフォールバック。4.2万行で 0.19 秒（純 Python の safe_load は 1.86 秒）。
+  - 実測（ワイルドカード7ファイル）: 異なるタグ 28,861 → 30,130（+1,269。female / wings / dress / lace 等）。他5ファイルは不変。
+  - 実機（ComfyUI_5 再起動後、2000タグ・背景20000で再構築）: ワイルドカード由来 748 → 762、入れ替わり22件（male / benevolent / pointed ears 等が入り、出典を順番に取る方式なので他出典の下位が抜ける）。female の出現数 164 → 208 等。
+
 ### Gallery セマンティック検索: EmbeddingGemma 2 を ONNX から Ollama へ移行
 
 - **背景**: latenttag-3d（Ollama の `embeddinggemma-2` でタグを埋め込む）と Gallery 索引を共通の空間で使いたい。ONNX 版（`semantic_local.py`、q4）は onnxruntime-gpu の入れ替え問題も抱えていた。

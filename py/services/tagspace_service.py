@@ -19,6 +19,7 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 from . import semantic_ollama as ollama
 from .semantic_service import LOCAL_MODEL, SemanticError
@@ -71,6 +72,35 @@ def normalize_tag(raw: str) -> str:
 
 def split_tags(text: str) -> list[str]:
     return [t for t in (normalize_tag(p) for p in _SPLIT.split(text or "")) if t]
+
+
+# C実装があれば使う(4万行のワイルドカードYAMLで 1.9秒 → 0.2秒)。どちらも任意のPythonオブジェクトは作らない
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def _yaml_leaves(node):
+    """YAMLを読んだ値から文字列の葉だけを取り出す(キーはカテゴリ名なので除く。
+    yes/no 等が真偽値・数値に変換された葉はタグにならないので除く)"""
+    if isinstance(node, dict):
+        for v in node.values():
+            yield from _yaml_leaves(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _yaml_leaves(v)
+    elif isinstance(node, str):
+        yield node
+
+
+def _wildcard_yaml_texts(text: str):
+    """ワイルドカードYAMLの項目。`- >-` 等のブロックスカラー(複数行)やエスケープもYAMLとして解釈する。
+    YAMLとして読めないファイルは、従来どおり "- " で始まる行を1項目として読む"""
+    try:
+        yield from _yaml_leaves(yaml.load(text, Loader=_YAML_LOADER))
+    except yaml.YAMLError:
+        for ln in text.splitlines():
+            s = ln.strip()
+            if s.startswith("- "):
+                yield s[2:].strip().strip("\"'")
 
 
 def _upstream_texts(graph: dict, node_id: str, seen: set) -> list[str]:
@@ -207,10 +237,7 @@ class TagSpaceService:
                 lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
                 yield from (ln for ln in lines if ln.strip() and not ln.lstrip().startswith("#"))
             elif p.suffix.lower() in (".yaml", ".yml"):
-                for ln in p.read_text(encoding="utf-8", errors="replace").splitlines():
-                    s = ln.strip()
-                    if s.startswith("- "):
-                        yield s[2:].strip().strip("\"'")
+                yield from _wildcard_yaml_texts(p.read_text(encoding="utf-8", errors="replace"))
 
     def _tagger_texts(self):
         db = self.data_dir / "tagger.db"
