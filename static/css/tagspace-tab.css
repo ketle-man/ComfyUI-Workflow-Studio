@@ -38,6 +38,12 @@
 .wfm-ts-detail-head .wfm-btn { flex: none; }
 .wfm-ts-detail-thumb { max-width: 100%; max-height: 140px; object-fit: contain; align-self: flex-start; border-radius: 4px; }
 .wfm-ts-detail-text { white-space: pre-wrap; word-break: break-word; }
+.wfm-ts-pick-list { display: flex; flex-wrap: wrap; gap: 3px; }
+.wfm-ts-pick { padding: 1px 7px; border-radius: 10px; font-size: 11px; cursor: pointer; color: inherit; background: var(--wfm-bg-secondary, #333); border: 1px solid var(--wfm-border, #444); }
+.wfm-ts-pick:hover { border-color: #f472b6; }
+.wfm-ts-pick.on { background: #f472b6; border-color: #f472b6; color: #1a1a1a; }
+/* タグが多くても検索ボタンが見えるよう、詳細パネルの下端に固定する */
+.wfm-ts-pick-actions { position: sticky; bottom: 0; order: 10; display: flex; gap: 6px; padding-top: 4px; background: var(--wfm-surface, #222); }
 .wfm-ts-path { word-break: break-all; }
 .wfm-ts-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
 .wfm-ts-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; font-size: 12px; cursor: pointer; }

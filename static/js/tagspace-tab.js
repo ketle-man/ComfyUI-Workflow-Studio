@@ -45,6 +45,7 @@ const state = {
     items: new Map(),      // id -> card/tag/background item (xyz, kind, ...)
     chips: [],             // [{id, kind, label, text}]
     selected: null,        // 詳細表示中のid
+    picked: { id: null, tags: new Set() },   // 詳細表示中のGallery画像で、空間検索用に選んだタグ
     list: { title: "", rows: [] },   // 近傍 or 検索結果 [{id, score}]
     probe: null,           // 検索点 [x,y,z]
     hover: null,
@@ -202,7 +203,18 @@ function bindShell() {
     });
     $("wfm-ts-detail").addEventListener("click", (e) => {
         const id = e.target.closest("[data-ts-toggle]")?.dataset.tsToggle;
-        if (id) toggleChip(id);
+        if (id) return toggleChip(id);
+        const tag = e.target.closest("[data-ts-pick]")?.dataset.tsPick;
+        if (tag != null) {
+            const set = state.picked.tags;
+            if (set.has(tag)) set.delete(tag); else set.add(tag);
+            return renderDetail();
+        }
+        if (e.target.closest("[data-ts-pick-clear]")) {
+            state.picked.tags.clear();
+            return renderDetail();
+        }
+        if (e.target.closest("[data-ts-pick-search]")) searchPicked();
     });
 }
 
@@ -812,6 +824,16 @@ async function runSearch(query) {
     if (state.probe) flyTo(state.probe);
 }
 
+/** 選択中のGallery画像から選んだタグ(プロンプトの順)で空間を検索する */
+function searchPicked() {
+    const it = state.items.get(state.selected);
+    if (!it || state.picked.id !== it.id) return;
+    const query = (it.tags || []).filter((tg) => state.picked.tags.has(tg)).join(", ");
+    if (!query) return;
+    $("wfm-ts-search").value = query;
+    runSearch(query);
+}
+
 function clearSearch() {
     state.probe = null;
     state.list = { title: "", rows: [] };
@@ -827,16 +849,30 @@ function renderDetail() {
         return;
     }
     const inChips = state.chips.some((c) => c.id === it.id);
+    if (state.picked.id !== it.id) state.picked = { id: it.id, tags: new Set() };
     const thumb = it.kind !== "tag" ? `<img class="wfm-ts-detail-thumb" data-ts-zoom="${escapeHtml(it.id)}" src="${API.thumb(it.id, 240)}" alt="">` : "";
     const body = it.kind === "card" ? `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div><div class="wfm-ts-muted">${escapeHtml(it.category)}</div>`
         : it.kind === "tag" ? `<div class="wfm-ts-muted">${escapeHtml(sourcesText(it))}</div>`
-        : `<div class="wfm-ts-detail-text">${escapeHtml(it.tags?.length ? it.tags.join(", ") + taggerMark(it) : t("tsImageNoTags"))}</div>` +
+        : (it.tags?.length ? imageTagPicker(it) : `<div class="wfm-ts-detail-text">${escapeHtml(t("tsImageNoTags"))}</div>`) +
           `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
     const btn = !canAdd(it) ? ""
         : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(t(inChips ? "tsRemove" : "tsAdd"))}</button>`;
     // 追加/削除ボタンは見出し行に置く(本文が長くてもスクロールせずに押せる)
     box.innerHTML = `<div class="wfm-ts-detail-head"><span class="wfm-ts-detail-title"><b>${escapeHtml(itemTitle(it))}</b> ` +
         `<span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></span>${btn}</div>${thumb}${body}`;
+}
+
+/** Gallery画像のプロンプトのタグ: クリックで選び、選んだタグで空間検索する */
+function imageTagPicker(it) {
+    const sel = state.picked.tags;
+    const n = it.tags.filter((tg) => sel.has(tg)).length;
+    const chips = it.tags.map((tg) => `<button type="button" class="wfm-ts-pick${sel.has(tg) ? " on" : ""}" ` +
+        `data-ts-pick="${escapeHtml(tg)}">${escapeHtml(tg)}</button>`).join("");
+    return `<div class="wfm-ts-pick-list" title="${escapeHtml(t("tsPickHint"))}">${chips}</div>` +
+        (taggerMark(it) ? `<div class="wfm-ts-muted">${escapeHtml(taggerMark(it).trim())}</div>` : "") +
+        `<div class="wfm-ts-pick-actions">` +
+        `<button type="button" class="wfm-btn wfm-btn-sm wfm-btn-primary" data-ts-pick-search ${n ? "" : "disabled"}>${escapeHtml(t("tsPickSearch", n))}</button>` +
+        `<button type="button" class="wfm-btn wfm-btn-sm" data-ts-pick-clear ${n ? "" : "disabled"}>${escapeHtml(t("tsPickClear"))}</button></div>`;
 }
 
 /** 画像の拡大表示: サイド列の左側(3Dビューの上)に出す */
