@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_TAGS = 2000
 MAX_TAGS_LIMIT = 6000
+ALL_TAGS_LIMIT = 20000        # 「全タグ」(max_tags=0)でも超えない上限(ワイルドカード込み・出現1回以上だと約5万種になるため)
+MIN_COUNT_LIMIT = 10
 DEFAULT_BG = 4000
 BG_LIMIT = 20000
 _EMBED_BATCH = 32
@@ -47,6 +49,8 @@ _SKIP_INPUTS = {"negative", "negative_prompt", "neg"}
 _SPLIT = re.compile(r"[,\n|{}]+|\bBREAK\b")
 _WEIGHT = re.compile(r":\s*-?\d+(?:\.\d+)?\s*$")
 _DP_WEIGHT = re.compile(r"^\s*\d+(?:\.\d+)?\s*::")     # Dynamic Prompts の "2::option"
+_JSON_KEY = re.compile(r'"\s*:')                     # "key": の形
+_MODEL_FILE = re.compile(r"\.(safetensors|ckpt|pt|pth|bin|gguf)\b", re.I)
 _HAS_WORD = re.compile(r"[a-z぀-ヿ一-鿿]")
 _STOP = {"break", "and", "or", "the", "a", "an"}
 
@@ -56,6 +60,10 @@ def normalize_tag(raw: str) -> str:
     s = _DP_WEIGHT.sub("", raw).strip()
     if not s or "<" in s or "__" in s or s.lower().startswith(("embedding:", "rating:")):
         return ""
+    # プロンプトに埋め込まれたJSON(MOSS-Image のレイアウト指定 bbox / 文字入れ text 等)の断片と、モデルのファイル名
+    if _JSON_KEY.search(s) or _MODEL_FILE.search(s):
+        return ""
+    s = s.replace('"', "")   # 分割で片側だけ残った引用符(blue" / "pink)
     s = s.replace("\\(", "\x00").replace("\\)", "\x01")   # danbooruのエスケープ括弧は残す
     for _ in range(3):
         while len(s) > 1 and s[0] in "([" and s[-1] in ")]":
@@ -66,6 +74,8 @@ def normalize_tag(raw: str) -> str:
     s = s.replace("\x00", "(").replace("\x01", ")").replace("_", " ")
     s = re.sub(r"\s+", " ", s).lower()
     if len(s) < 2 or len(s) > 40 or len(s.split()) > 5 or s in _STOP or not _HAS_WORD.search(s):
+        return ""
+    if s.startswith(("embedding:", "rating:")):   # (embedding:xxx:1) のように括弧を外してから現れる形
         return ""
     return s
 
@@ -363,18 +373,28 @@ class TagSpaceService:
             tmp.replace(self._prompt_file)
         return out
 
-    def collect_tags(self, cards: list[dict], max_tags: int, gallery_texts=(), tagger_texts=()) -> list[dict]:
-        """全ソースのタグを数えて上位 max_tags 件を返す。
+    def collect_tags(self, cards: list[dict], max_tags: int, gallery_texts=(), tagger_texts=(),
+                     min_count: int = 1, wildcard: bool = True) -> tuple[list[dict], int]:
+        """全ソースのタグを数えて上位 max_tags 件を返す(max_tags=0 は全件、ただし ALL_TAGS_LIMIT まで)。
         ソースごとに出現数の多い順に並べ、ソースを順番に1件ずつ取る(数の多いGalleryだけで埋まらないように)。
-        出現数は「そのタグを含む文の数」で数える。"""
+        出現数は「そのタグを含む文の数」で数え、全出典の合計が min_count 未満のタグは候補から外す。
+        wildcard=False ならワイルドカードは材料にしない(ワイルドカードにしか無い語がタグの種類の大半を占めるため)。
+        戻り値: (タグ, 候補数)"""
         per_src: dict[str, Counter] = {s: Counter() for s in SOURCES}
         feeds = {"image_prompt": (c["prompt"] for c in cards), "gallery": iter(gallery_texts),
                  "tagger_auto": iter(tagger_texts), "tagger": self._tagger_texts(), "prompt_library": self._library_texts(),
-                 "wildcard": self._wildcard_texts()}
+                 "wildcard": self._wildcard_texts() if wildcard else iter(())}
         for src, texts in feeds.items():
             for text in texts:
                 per_src[src].update(set(split_tags(text)))
-        queues = {s: sorted(c, key=lambda t, c=c: (-c[t], t)) for s, c in per_src.items() if c}
+        total = Counter()
+        for c in per_src.values():
+            total.update(c)
+        ok = {t for t, n in total.items() if n >= min_count}
+        if not max_tags:
+            max_tags = ALL_TAGS_LIMIT
+        queues = {s: sorted((t for t in c if t in ok), key=lambda t, c=c: (-c[t], t)) for s, c in per_src.items()}
+        queues = {s: q for s, q in queues.items() if q}
         picked: list[str] = []
         seen: set = set()
         pos = dict.fromkeys(queues, 0)
@@ -392,8 +412,8 @@ class TagSpaceService:
                 if len(picked) >= max_tags:
                     break
         return [{"id": f"tag:{t}", "kind": "tag", "label": t,
-                 "count": sum(per_src[s][t] for s in SOURCES),
-                 "sources": [s for s in SOURCES if per_src[s][t]]} for t in picked]
+                 "count": total[t],
+                 "sources": [s for s in SOURCES if per_src[s][t]]} for t in picked], len(ok)
 
     # ── タグベクトルのキャッシュ ───────────────────────────
 
@@ -421,7 +441,9 @@ class TagSpaceService:
 
     # ── 構築ジョブ ─────────────────────────────────────────
 
-    def start_build(self, max_tags: int, bg: int, tagger_model: str = "", tagger_scope: str = "background") -> None:
+    def start_build(self, max_tags: int, bg: int, tagger_model: str = "", tagger_scope: str = "background",
+                    min_count: int = 1, wildcard: bool = True) -> None:
+        """max_tags=0 は全タグ(ALL_TAGS_LIMIT まで)"""
         if tagger_model and tagger_model not in self.tagger_models():
             raise SemanticError("tagspace_tagger_model", tagger_model)
         if tagger_scope not in TAGGER_SCOPES:
@@ -440,7 +462,9 @@ class TagSpaceService:
             self._cancel.clear()
             self._job = self._idle_job()
             self._job.update(running=True, phase="cards")
-        args = (max(50, min(int(max_tags), MAX_TAGS_LIMIT)), max(0, min(int(bg), BG_LIMIT)), tagger_model, tagger_scope)
+        max_tags = 0 if int(max_tags) == 0 else max(50, min(int(max_tags), MAX_TAGS_LIMIT))
+        args = (max_tags, max(0, min(int(bg), BG_LIMIT)), tagger_model, tagger_scope,
+                max(1, min(int(min_count), MIN_COUNT_LIMIT)), bool(wildcard))
         threading.Thread(target=self._run_build, args=args, daemon=True).start()
 
     def cancel(self) -> None:
@@ -448,7 +472,8 @@ class TagSpaceService:
         if self._job.get("phase") == "index":
             self.semantic.cancel()
 
-    def _run_build(self, max_tags: int, bg: int, tagger_model: str = "", tagger_scope: str = "background") -> None:
+    def _run_build(self, max_tags: int, bg: int, tagger_model: str = "", tagger_scope: str = "background",
+                   min_count: int = 1, wildcard: bool = True) -> None:
         job = self._job
         try:
             cards, entries = self._cards()
@@ -499,7 +524,8 @@ class TagSpaceService:
 
             # 5. タグを集めて未キャッシュ分を埋め込む
             job.update(phase="tags", done=0, total=0, note="")
-            tags = self.collect_tags(cards, max_tags, gallery_prompts.values(), tagger_tags.values())
+            tags, available = self.collect_tags(cards, max_tags, gallery_prompts.values(), tagger_tags.values(),
+                                                min_count, wildcard)
             cache = self._tag_vectors()
             todo = [t["label"] for t in tags if t["label"] not in cache]
             job.update(total=len(todo))
@@ -524,7 +550,8 @@ class TagSpaceService:
             # 6. 投影
             job.update(phase="project", done=0, total=0)
             self._project(cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts, tagger_tags,
-                          tagger_model if tagger_tags else "")
+                          tagger_model if tagger_tags else "",
+                          {"max_tags": max_tags, "min_count": min_count, "wildcard": wildcard, "tags_available": available})
         except SemanticError as e:
             job["error_code"], job["error"] = e.code, str(e)
         except Exception as e:
@@ -544,7 +571,7 @@ class TagSpaceService:
         return m / np.where(n > 0, n, 1)
 
     def _project(self, cards, card_vecs, tags, cache, dim, bg_paths, bg_mat, gallery_prompts=None,
-                 tagger_tags=None, tagger_model: str = "") -> None:
+                 tagger_tags=None, tagger_model: str = "", tag_meta: dict | None = None) -> None:
         img = self._unit(np.stack([card_vecs[c["id"]] for c in cards]), dim) if cards else np.zeros((0, dim), np.float32)
         txt = self._unit(np.stack([cache[t["label"]] for t in tags]), dim) if tags else np.zeros((0, dim), np.float32)
         if len(img) + len(txt) < 3:
@@ -585,7 +612,7 @@ class TagSpaceService:
         meta = {"built_at": time.strftime("%Y-%m-%d %H:%M:%S"), "cards": len(cards), "tags": len(tags),
                 "background": len(bg_items), "gallery_prompts": len(gp), "tagger_images": len(tt),
                 "tagger_model": tagger_model, "dim": dim, "model": LOCAL_MODEL,
-                "explained": [round(float(v), 4) for v in var[:3]]}
+                "explained": [round(float(v), 4) for v in var[:3]], **(tag_meta or {})}
         space = {"meta": meta, "cards": cards, "tags": tags, "background": bg_items}
 
         ids = [c["id"] for c in cards] + [t["id"] for t in tags]

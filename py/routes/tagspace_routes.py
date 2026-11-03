@@ -7,7 +7,7 @@ import logging
 from aiohttp import web
 
 from ..config import DATA_DIR
-from ..services.tagspace_service import TagSpaceService, DEFAULT_MAX_TAGS, DEFAULT_BG
+from ..services.tagspace_service import TagSpaceService, DEFAULT_MAX_TAGS, DEFAULT_BG, MAX_TAGS_LIMIT, MIN_COUNT_LIMIT
 from ..services.semantic_service import SemanticError
 from .gallery_routes import _service as _gallery, _semantic, _semantic_error, _num, _json_body
 from .tagger_routes import _svc as _tagger
@@ -47,13 +47,17 @@ async def tagspace_space(request: web.Request) -> web.Response:
 async def tagspace_build(request: web.Request) -> web.Response:
     body = await _json_body(request)
     try:
-        max_tags = _num(body, "max_tags", DEFAULT_MAX_TAGS, 50, 6000)
+        # max_tags=0 は全タグ(サービス側で ALL_TAGS_LIMIT まで)
+        max_tags = _num(body, "max_tags", DEFAULT_MAX_TAGS, 0, MAX_TAGS_LIMIT)
         bg = _num(body, "background", DEFAULT_BG, 0, 20000)
+        min_count = _num(body, "min_count", 1, 1, MIN_COUNT_LIMIT)
     except SemanticError as e:
         return _semantic_error(e)
     tagger_model = str(body.get("tagger_model", "") or "")
     tagger_scope = str(body.get("tagger_scope", "background") or "background")
-    return await _call(lambda: (_tagspace.start_build(max_tags, bg, tagger_model, tagger_scope), {"ok": True})[1])
+    wildcard = body.get("wildcard", True) is not False
+    return await _call(lambda: (_tagspace.start_build(max_tags, bg, tagger_model, tagger_scope, min_count, wildcard),
+                                {"ok": True})[1])
 
 
 async def tagspace_cancel(request: web.Request) -> web.Response:

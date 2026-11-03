@@ -33,6 +33,10 @@ QUERY_PREFIX = "task: search result | query: "
 BATCH = 4                 # 1リクエストで送る画像数(1枚ずつより約1.8倍速い)
 _TIMEOUT = 120
 _RETRIES = 5              # Ollama内部の接続切断(HTTP 400 "forcibly closed"等)は再試行で回復する
+# Ollama はテキストごとに内部のランナーへ新しい接続を張るため、数千件を続けて埋め込むと
+# Windows の一時ポートが TIME_WAIT で埋まり "Only one usage of each socket address" で失敗する
+# (実測: ループバックの TIME_WAIT 14,228 / 16,384)。ポートが空くまで長めに待って再試行する
+_PORT_WAIT = 30.0
 _TAGS_TTL = 5.0           # /api/tags の結果をキャッシュする秒数(進捗ポーリングのたびに問い合わせない)
 
 _opts = {"url": DEFAULT_URL, "tag": DEFAULT_TAG}
@@ -82,7 +86,13 @@ def _transient(code: int, msg: str) -> bool:
         return False   # 壊れた画像。再試行しても直らない
     if code >= 500:
         return True
-    return code == 400 and any(k in low for k in ("forcibly closed", "wsarecv", "connection", "eof"))
+    return code == 400 and (_ports_exhausted(msg)
+                            or any(k in low for k in ("forcibly closed", "wsarecv", "connection", "eof")))
+
+
+def _ports_exhausted(msg: str) -> bool:
+    low = msg.lower()
+    return "only one usage of each socket address" in low or "wsaeaddrinuse" in low
 
 
 def installed_tags(force: bool = False) -> tuple[list[str] | None, str]:
@@ -152,6 +162,10 @@ def _embed(inputs: list) -> list[np.ndarray]:
                 raise OllamaError("ollama_model_missing", model)
             if not _transient(e.code, msg) or attempt >= _RETRIES:
                 raise OllamaError("local_error", last)
+            if _ports_exhausted(msg):
+                logger.warning("Ollama: local ports exhausted, waiting %.0fs before retry", _PORT_WAIT)
+                time.sleep(_PORT_WAIT)
+                continue
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last = str(getattr(e, "reason", e))
             if attempt >= _RETRIES:

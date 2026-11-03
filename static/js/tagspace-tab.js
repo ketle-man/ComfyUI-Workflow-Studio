@@ -53,7 +53,7 @@ const state = {
 };
 
 function loadOpts() {
-    const def = { cards: true, tags: true, background: true, thumbs: true, glow: true, twinkle: true, maxTags: 2000, bg: 4000, srcOff: [], taggerModel: "", taggerScope: "background" };
+    const def = { cards: true, tags: true, background: true, thumbs: true, glow: true, twinkle: true, maxTags: 2000, allTags: false, minCount: 1, wildcard: true, bg: 4000, srcOff: [], taggerModel: "", taggerScope: "background" };
     try {
         return { ...def, ...(JSON.parse(localStorage.getItem(LS_VIEW) || "{}") || {}) };
     } catch {
@@ -92,7 +92,11 @@ function renderShell() {
         <div class="wfm-ts-toolbar">
             <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-ts-build">${escapeHtml(t("tsBuild"))}</button>
             <button class="wfm-btn wfm-btn-sm" id="wfm-ts-cancel" style="display:none;">${escapeHtml(t("tsCancel"))}</button>
-            <label class="wfm-ts-num">${escapeHtml(t("tsMaxTags"))}<input type="number" id="wfm-ts-max-tags" class="wfm-input" min="50" max="6000" step="50" value="${o.maxTags}"></label>
+            <label class="wfm-ts-num">${escapeHtml(t("tsMaxTags"))}<input type="number" id="wfm-ts-max-tags" class="wfm-input" min="50" max="6000" step="50" value="${o.maxTags}" ${o.allTags ? "disabled" : ""}></label>
+            <label class="wfm-ts-check" title="${escapeHtml(t("tsAllTagsHint"))}"><input type="checkbox" id="wfm-ts-all-tags" ${o.allTags ? "checked" : ""}>${escapeHtml(t("tsAllTags"))}</label>
+            <label class="wfm-ts-num" title="${escapeHtml(t("tsMinCountHint"))}">${escapeHtml(t("tsMinCount"))}
+                <select id="wfm-ts-min-count" class="wfm-select">${[1, 2, 3, 5].map((n) => `<option value="${n}" ${o.minCount === n ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+            <label class="wfm-ts-check" title="${escapeHtml(t("tsWildcardHint"))}"><input type="checkbox" id="wfm-ts-wildcard" ${o.wildcard ? "checked" : ""}>${escapeHtml(t("tsWildcard"))}</label>
             <label class="wfm-ts-num">${escapeHtml(t("tsBackground"))}<input type="number" id="wfm-ts-bg" class="wfm-input" min="0" max="20000" step="500" value="${o.bg}"></label>
             <label class="wfm-ts-num" title="${escapeHtml(t("tsTaggerHint"))}">${escapeHtml(t("tsTagger"))}
                 <select id="wfm-ts-tagger-model" class="wfm-select"><option value="">${escapeHtml(t("tsTaggerOff"))}</option></select>
@@ -145,6 +149,13 @@ function bindShell() {
     $("wfm-ts-build").addEventListener("click", startBuild);
     $("wfm-ts-cancel").addEventListener("click", () => postJson(API.cancel).catch(() => {}));
     $("wfm-ts-max-tags").addEventListener("change", (e) => { state.opts.maxTags = parseInt(e.target.value, 10) || 2000; saveOpts(); });
+    $("wfm-ts-all-tags").addEventListener("change", (e) => {
+        state.opts.allTags = e.target.checked;
+        $("wfm-ts-max-tags").disabled = e.target.checked;
+        saveOpts();
+    });
+    $("wfm-ts-min-count").addEventListener("change", (e) => { state.opts.minCount = parseInt(e.target.value, 10) || 1; saveOpts(); });
+    $("wfm-ts-wildcard").addEventListener("change", (e) => { state.opts.wildcard = e.target.checked; saveOpts(); });
     $("wfm-ts-bg").addEventListener("change", (e) => { state.opts.bg = Math.max(0, parseInt(e.target.value, 10) || 0); saveOpts(); });
     $("wfm-ts-tagger-model").addEventListener("change", (e) => { state.opts.taggerModel = e.target.value; saveOpts(); updateTaggerScope(); });
     $("wfm-ts-tagger-scope").addEventListener("change", (e) => { state.opts.taggerScope = e.target.value; saveOpts(); });
@@ -224,7 +235,9 @@ async function refreshStatus(loadIfBuilt) {
         setStatus(errorMessage({ code: job.error_code, message: job.error }), true);
     } else if (st.built) {
         const m = st.meta || {};
-        setStatus(t("tsBuilt", m.cards || 0, m.tags || 0, m.background || 0, m.built_at || "", (m.explained || []).reduce((a, b) => a + b, 0)));
+        // 上限や件数指定で候補の一部だけを使ったときは候補数も出す
+        const avail = m.tags_available > (m.tags || 0) ? t("tsTagsAvailable", m.tags_available) : "";
+        setStatus(t("tsBuilt", m.cards || 0, m.tags || 0, m.background || 0, m.built_at || "", (m.explained || []).reduce((a, b) => a + b, 0)) + avail);
     } else {
         setStatus(st.ollama && !st.ollama.ready ? t("tsNeedOllama") : t("tsNotBuilt"), !st.ollama?.ready);
         showEmpty(t("tsNotBuilt"));
@@ -262,7 +275,8 @@ function setStatus(text, isError = false) {
 async function startBuild() {
     try {
         await postJson(API.build, {
-            max_tags: state.opts.maxTags, background: state.opts.bg,
+            max_tags: state.opts.allTags ? 0 : state.opts.maxTags, background: state.opts.bg,
+            min_count: state.opts.minCount, wildcard: state.opts.wildcard,
             tagger_model: state.opts.taggerModel, tagger_scope: state.opts.taggerScope,
         });
     } catch (e) {
