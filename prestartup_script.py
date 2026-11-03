@@ -52,6 +52,15 @@ def _maybe_use_selector_event_loop():
         print("[Workflow Studio] Using WindowsSelectorEventLoopPolicy (windows_selector_event_loop enabled)")
     except Exception as e:
         print(f"[WARNING] Workflow Studio: failed to switch to selector event loop: {e}")
+        return
+    # Selector方式ではloop.sendfileがasyncioの_sendfile_fallbackになるが、これは16KBバッファを
+    # 使い回しつつ未送信分をコピーせずトランスポートに積むため、送信が詰まると後続ブロックで
+    # 上書きされ画像等が壊れて届く(Python 3.12で確認)。aiohttpのsendfileを無効化し、
+    # チャンクごとに新しいbytesを読む自前フォールバックを使わせる
+    os.environ["AIOHTTP_NOSENDFILE"] = "1"
+    fileresponse = sys.modules.get("aiohttp.web_fileresponse")
+    if fileresponse is not None:
+        fileresponse.NOSENDFILE = True
 
 
 _maybe_use_selector_event_loop()
