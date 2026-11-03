@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/wfm_static/css/image-edit-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/lab-tab.css">
     <link rel="stylesheet" href="/wfm_static/css/video-tab.css">
+    <link rel="stylesheet" href="/wfm_static/css/tagspace-tab.css">
 </head>
 <body>
     <!-- Header -->
@@ -28,6 +29,7 @@
             <button class="wfm-tab" data-tab="image-edit">Image Edit</button>
             <button class="wfm-tab" data-tab="video">Video</button>
             <button class="wfm-tab" data-tab="tagger">Tagger</button>
+            <button class="wfm-tab" data-tab="tagspace">TagSpace</button>
             <button class="wfm-tab" data-tab="settings">Settings</button>
             <button class="wfm-tab" data-tab="help">Help</button>
             <button class="wfm-tab" data-tab="ai">AI TOOL</button>
@@ -1354,6 +1356,7 @@
                         <button class="wfm-help-nav-item" data-help-page="sidepanel">Library (Side Panel)</button>
                         <button class="wfm-help-nav-item" data-help-page="aitool">AI TOOL Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="tagger">Tagger Tab</button>
+                        <button class="wfm-help-nav-item" data-help-page="tagspace">TagSpace Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="imageedit">Image Edit Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="video">Video Tab</button>
                         <button class="wfm-help-nav-item" data-help-page="shortcuts">Keyboard Shortcuts</button>
@@ -1996,6 +1999,33 @@
                             <ul>
                                 <li id="wfm-help-tagger-7">Batch tab: enter a folder path, configure WD Tagger and enable VLM tagging (uses the same &#9881; Settings as the Single tab); output options: Save to DB (default on), Write to File (EXIF/PNG metadata), Write .txt (creates &lt;filename&gt;.txt alongside each image); click Start Batch to process all images in the folder; progress bar and log are updated in real time; Stop cancels after the current image</li>
                                 <li id="wfm-help-tagger-8">DB tab: searchable database of all tagged images; click a row to open the edit panel and modify WD Tags / VLM Tags; Save updates the record, Delete removes it; Export CSV downloads all records as a CSV file</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="wfm-help-page" id="wfm-help-page-tagspace">
+                        <div class="wfm-help-article-header">
+                            <h2 id="wfm-help-tagspace-title">TagSpace Tab</h2>
+                            <button type="button" class="wfm-btn wfm-btn-sm wfm-help-jump-btn" data-jump-tab="tagspace">Open tab &rarr;</button>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagspace-card-overview-title">Overview &amp; Building the Space</h3>
+                            <ul>
+                                <li id="wfm-help-tagspace-1">TagSpace places WFS's own data in the EmbeddingGemma 2 vector space and shows it in 3D: Cards (ImagePrompt images with their prompt, shown as thumbnails), Tags (words split out of ImagePrompt prompts, the positive prompts embedded in Gallery images, wildcards, the Tagger DB and the Prompt library, colored by source) and Gallery points (a sample of indexed Gallery images as a faint background, each carrying the tags from its own prompt). Nearby items have similar meanings</li>
+                                <li id="wfm-help-tagspace-2">Requirements: Ollama running with EmbeddingGemma 2 (Gallery &gt; Semantic settings &gt; Model). If the Gallery semantic index was made with Gemini, rebuild it with EmbeddingGemma 2 first</li>
+                                <li id="wfm-help-tagspace-3">Build / Update: collects the cards, adds card images that are not yet indexed to the Gallery semantic index, reads the positive prompt embedded in each indexed Gallery image (followed upstream from the sampler's positive input, never the negative; cached in tagspace_prompts.json so only new or changed images are read again), embeds new tags with Ollama (cached in tagspace_tags.npz) and projects everything to 3D with PCA. Tags: how many tags to keep — each source is ranked by how many prompts use a tag and the sources take turns, so the many Gallery prompts do not crowd out the other sources; Gallery points: how many Gallery images to show (0 = none). Prompts are split only at commas (and | { } BREAK), not at spaces; long sentences (over 5 words) are skipped. Images and text are centered separately before PCA so cards and their matching tags overlap. The first build took about 2.5 minutes for the cards plus about 3 minutes to read the prompts of 29,000 Gallery images; rebuilds with caches take seconds</li>
+                                <li id="wfm-help-tagspace-9">Choosing how many tags: &quot;All tags&quot; uses every candidate tag instead of the Tags number (up to 20,000). &quot;Min uses&quot; drops tags used in fewer prompts than this, counted over all sources — 2 removes one-off typos and fragments. &quot;Wildcards&quot; turns wildcard files on or off as a tag source: words found only in wildcards make up most of the distinct tags (about 37,000 of 47,600 in testing), so turning it off with All tags gives about 10,400 tags (about 6,800 with Min uses 2). The status line shows the number of candidates when only part of them is used. New tags are embedded once (the first build with many new tags takes a few extra minutes)</li>
+                            </ul>
+                        </div>
+                        <div class="wfm-help-card">
+                            <h3 id="wfm-help-tagspace-card-use-title">Choosing Tags &amp; Making a Prompt</h3>
+                            <ul>
+                                <li id="wfm-help-tagspace-4">Navigation: drag to rotate, right-drag to pan, wheel to zoom. Hover shows the name, thumbnail and prompt/sources; the checkboxes show or hide Cards, Thumbnails, Tags and Gallery. The source checkboxes (ImagePrompt / Gallery prompts / Tagger DB / Prompt library / Wildcards) show or hide tags by where they came from — a tag stays visible while any of its sources is on and takes the color of its first visible source; hidden tags are also left out of the nearby and search lists. The choices are remembered</li>
+                                <li id="wfm-help-tagspace-5">Click a card or tag to select it and list nearby items (clicking only selects — it does not change the prompt). To add it to the Prompt panel, double-click it, press Add next to its name under Selection, or press + in the list (double-click / press again to remove) — cards and tags are ranked separately and listed alternately, so a card also shows its closest tags. Adding a Gallery point adds all tags from that image's prompt as one chip (images without readable tags cannot be added); clicking one lists similar Gallery images (round thumbnails) together with nearby tags and cards; selecting a card or tag, or searching, never lists Gallery images. Use + in the list to add, click a row to move to it. The search box (Enter, any language) places a white marker for the text and lists the nearest items</li>
+                                <li id="wfm-help-tagspace-10">Search with a card's or Gallery image's tags: when a card or Gallery point is selected, its prompt tags are shown as buttons (a card's full prompt is under &quot;Full prompt&quot;; card tags appear after Build / Update). Click tags to choose them (click again to deselect) and press &quot;Search with selected&quot; to search the space with those tags joined in prompt order — the same as typing them into the search box. The choice is kept until another item is selected</li>
+                                <li id="wfm-help-tagspace-6">Prompt panel: a card adds its whole prompt, a tag adds the tag, a Gallery image adds its prompt tags. The text joins them with duplicates removed (case and spacing ignored). "Add to GenerateUI (Positive)" appends it to the positive prompt of the workflow loaded in GenerateUI; Copy puts it on the clipboard</li>
+                                <li id="wfm-help-tagspace-7">Tagger fill: about a third of Gallery images have no readable positive prompt (imported or edited images, prompts made only of LoRA tags or long sentences). Choose a Tagger model (ONNX models from the Tagger tab) next to "Tagger fill" to tag those images on Build / Update: "Gallery points only" tags just the sampled Gallery points, "All images without a prompt" tags every indexed image that lacks prompt tags. Default thresholds are used (WD 0.35 / character 0.85, PixAI its recommended values) and rating labels are dropped. Results are cached in tagspace_tagger.json per image and model, so later builds only tag new images; stopping keeps what was done. The tags become the "Tagger fill" source (shown/hidden like the others) and the tags of those Gallery points, marked "(Tagger fill)". The status shows whether the model runs on CUDA or CPU — on the CPU it takes about 0.5 s per image, so check that onnxruntime-gpu is active (see Troubleshooting) before tagging all images</li>
+                                <li id="wfm-help-tagspace-8">Display: "Glow" draws points as glowing stars on a night-sky background (dense areas brighten; Gallery points are drawn dimmer so they don't wash out to white) — turn it off for the plain dots and the normal background. "Twinkle" (works with Glow) makes tags, cards and Gallery points slowly twinkle, each with its own rhythm; the selection and nearby highlights stay steady. Hover over the image under Selection or the thumbnails in the Nearby list to see an enlarged preview (clicking a list row changes the selection, so hovering lets you check images first). The Add / Remove button sits on the title row of Selection and stays visible while the text scrolls</li>
                             </ul>
                         </div>
                     </div>
@@ -3394,6 +3424,9 @@
                 </div>
             </div>
         </section>
+
+        <!-- TagSpace Tab (内容は tagspace-tab.js が生成) -->
+        <section id="wfm-tab-tagspace" class="wfm-tab-content"></section>
 
         <!-- AI Tab -->
         <section id="wfm-tab-ai" class="wfm-tab-content">

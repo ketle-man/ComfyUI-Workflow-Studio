@@ -1,0 +1,1046 @@
+/**
+ * TagSpace タブ
+ * ImagePromptカード・タグ・Gallery画像を EmbeddingGemma 2 の潜在空間で3D表示し、
+ * クリックで選んだカード/タグからプロンプトを組み立てて GenerateUI へ送る。
+ * 座標(PCA)と近傍・検索はサーバー側(tagspace_service.py)で計算する。
+ * three.js はタブを初めて開いたときに読み込む(static/lib/three)。
+ */
+
+import { showToast } from "./app.js";
+import { t } from "./i18n.js";
+import { escapeHtml } from "./util.js";
+import { comfyUI } from "./comfyui-client.js";
+import { comfyEditor } from "./comfyui-editor.js";
+import { semanticErrorMessage } from "./gallery-semantic.js";
+
+const API = {
+    status:    "/wfm/tagspace/status",
+    space:     "/wfm/tagspace/space",
+    build:     "/wfm/tagspace/build",
+    cancel:    "/wfm/tagspace/cancel",
+    search:    "/wfm/tagspace/search",
+    neighbors: "/wfm/tagspace/neighbors",
+    thumb:     (path, w = 96) => `/wfm/gallery/image/thumb?path=${encodeURIComponent(path)}&w=${w}`,
+};
+const THREE_URL = "/wfm_static/lib/three/three-tagspace.min.js";
+const LS_VIEW = "wfm_tagspace_view";
+const SOURCE_COLORS = { image_prompt: "#f59e0b", gallery: "#f472b6", tagger_auto: "#84cc16", tagger: "#10b981", prompt_library: "#3b82f6", wildcard: "#a855f7" };
+const NEAR_K = 20;
+const LABEL_MAX = 24;          // 同時に出すラベル数の上限(選択・近傍・検索結果・ホバー)
+const THUMB_CONCURRENCY = 6;
+const ZOOM_SIZE = 360;        // 選択中・近傍一覧の画像にマウスを乗せたときの拡大表示(px)
+const ADDITIVE_BLENDING = 2;  // THREE.AdditiveBlending(同梱サブセットに未エクスポート)
+const GLOW_SCALE = 2.4;       // 発光時の点サイズ倍率(テクスチャの芯が通常の点と同じ大きさになる)
+const NIGHT_SKY = "#05070d";
+
+let THREE = null;
+const view = {
+    renderer: null, scene: null, camera: null, controls: null, raycaster: null,
+    layers: {},            // cards(Points) / cardSprites(Group) / tags(Points) / background(Points)
+    highlight: null, probe: null, probeLines: null,
+    dotTexture: null, glowTexture: null, twinkleTime: { value: 0 }, running: false, fly: null,
+};
+const state = {
+    space: null,
+    items: new Map(),      // id -> card/tag/background item (xyz, kind, ...)
+    chips: [],             // [{id, kind, label, text}]
+    selected: null,        // 詳細表示中のid
+    picked: { id: null, tags: new Set() },   // 詳細表示中のGallery画像で、空間検索用に選んだタグ
+    list: { title: "", rows: [] },   // 近傍 or 検索結果 [{id, score}]
+    probe: null,           // 検索点 [x,y,z]
+    hover: null,
+    pollTimer: null,
+    opts: loadOpts(),
+};
+
+function loadOpts() {
+    const def = { cards: true, tags: true, background: true, thumbs: true, glow: true, twinkle: true, maxTags: 2000, allTags: false, minCount: 1, wildcard: true, bg: 4000, srcOff: [], taggerModel: "", taggerScope: "background" };
+    try {
+        return { ...def, ...(JSON.parse(localStorage.getItem(LS_VIEW) || "{}") || {}) };
+    } catch {
+        return def;
+    }
+}
+function saveOpts() {
+    try { localStorage.setItem(LS_VIEW, JSON.stringify(state.opts)); } catch { /* 保存できなくても動作に影響しない */ }
+}
+
+async function postJson(url, body) {
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+    let data = {};
+    try { data = await res.json(); } catch { /* 本文なし */ }
+    if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { code: data.code || "" });
+    return data;
+}
+
+function errorMessage(e) {
+    if (e?.code?.startsWith("tagspace_")) return t(`ts_err_${e.code}`, e.message);
+    return semanticErrorMessage(e);
+}
+
+// ── DOM ──────────────────────────────────────────────────────
+
+const $ = (id) => document.getElementById(id);
+
+function renderShell() {
+    const root = $("wfm-tab-tagspace");
+    const o = state.opts;
+    const layer = (key, label, color) =>
+        `<label class="wfm-ts-check"><input type="checkbox" data-ts-layer="${key}" ${o[key] ? "checked" : ""}>` +
+        `${color ? `<span class="wfm-ts-swatch" style="background:${color}"></span>` : ""}${escapeHtml(label)}</label>`;
+    root.innerHTML = `
+    <div class="wfm-ts">
+        <div class="wfm-ts-toolbar">
+            <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-ts-build">${escapeHtml(t("tsBuild"))}</button>
+            <button class="wfm-btn wfm-btn-sm" id="wfm-ts-cancel" style="display:none;">${escapeHtml(t("tsCancel"))}</button>
+            <label class="wfm-ts-num">${escapeHtml(t("tsMaxTags"))}<input type="number" id="wfm-ts-max-tags" class="wfm-input" min="50" max="6000" step="50" value="${o.maxTags}" ${o.allTags ? "disabled" : ""}></label>
+            <label class="wfm-ts-check" title="${escapeHtml(t("tsAllTagsHint"))}"><input type="checkbox" id="wfm-ts-all-tags" ${o.allTags ? "checked" : ""}>${escapeHtml(t("tsAllTags"))}</label>
+            <label class="wfm-ts-num" title="${escapeHtml(t("tsMinCountHint"))}">${escapeHtml(t("tsMinCount"))}
+                <select id="wfm-ts-min-count" class="wfm-select">${[1, 2, 3, 5].map((n) => `<option value="${n}" ${o.minCount === n ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+            <label class="wfm-ts-check" title="${escapeHtml(t("tsWildcardHint"))}"><input type="checkbox" id="wfm-ts-wildcard" ${o.wildcard ? "checked" : ""}>${escapeHtml(t("tsWildcard"))}</label>
+            <label class="wfm-ts-num">${escapeHtml(t("tsBackground"))}<input type="number" id="wfm-ts-bg" class="wfm-input" min="0" max="20000" step="500" value="${o.bg}"></label>
+            <label class="wfm-ts-num" title="${escapeHtml(t("tsTaggerHint"))}">${escapeHtml(t("tsTagger"))}
+                <select id="wfm-ts-tagger-model" class="wfm-select"><option value="">${escapeHtml(t("tsTaggerOff"))}</option></select>
+                <select id="wfm-ts-tagger-scope" class="wfm-select">
+                    ${["background", "all"].map((k) => `<option value="${k}" ${o.taggerScope === k ? "selected" : ""}>${escapeHtml(t(`tsScope_${k}`))}</option>`).join("")}
+                </select></label>
+            <span class="wfm-ts-sep"></span>
+            ${layer("cards", t("tsLayerCards"))}${layer("thumbs", t("tsThumbs"))}${layer("tags", t("tsLayerTags"))}${layer("background", t("tsLayerGallery"))}${layer("glow", t("tsGlow"))}${layer("twinkle", t("tsTwinkle"))}
+            <span class="wfm-ts-legend" title="${escapeHtml(t("tsSourceFilterHint"))}">${Object.entries(SOURCE_COLORS).map(([k, c]) =>
+                `<label class="wfm-ts-check"><input type="checkbox" data-ts-source="${k}" ${o.srcOff.includes(k) ? "" : "checked"}>` +
+                `<span class="wfm-ts-swatch" style="background:${c}"></span>${escapeHtml(t(`tsSrc_${k}`))}</label>`).join("")}</span>
+            <input type="search" id="wfm-ts-search" class="wfm-input wfm-ts-search" placeholder="${escapeHtml(t("tsSearchPlaceholder"))}">
+        </div>
+        <div class="wfm-ts-status" id="wfm-ts-status"></div>
+        <div class="wfm-ts-main">
+            <div class="wfm-ts-view" id="wfm-ts-view">
+                <div class="wfm-ts-labels" id="wfm-ts-labels"></div>
+                <div class="wfm-ts-tooltip" id="wfm-ts-tooltip" style="display:none;"></div>
+                <div class="wfm-ts-empty" id="wfm-ts-empty">${escapeHtml(t("tsLoading"))}</div>
+                <div class="wfm-ts-hint">${escapeHtml(t("tsHint"))}</div>
+            </div>
+            <div class="wfm-ts-zoom" id="wfm-ts-zoom" style="display:none;"><img alt=""></div>
+            <aside class="wfm-ts-side">
+                <section class="wfm-ts-panel">
+                    <h4>${escapeHtml(t("tsDetailTitle"))}</h4>
+                    <div id="wfm-ts-detail" class="wfm-ts-detail"><span class="wfm-ts-muted">${escapeHtml(t("tsDetailEmpty"))}</span></div>
+                </section>
+                <section class="wfm-ts-panel wfm-ts-panel-grow">
+                    <h4 id="wfm-ts-list-title">${escapeHtml(t("tsNeighborsTitle"))}</h4>
+                    <div id="wfm-ts-list" class="wfm-ts-list"></div>
+                </section>
+            </aside>
+            <aside class="wfm-ts-side wfm-ts-side-prompt">
+                <section class="wfm-ts-panel wfm-ts-panel-grow">
+                    <h4>${escapeHtml(t("tsBuilderTitle"))}</h4>
+                    <div id="wfm-ts-chips" class="wfm-ts-chips"></div>
+                    <textarea id="wfm-ts-output" class="wfm-input wfm-ts-output" rows="8" readonly></textarea>
+                    <div class="wfm-ts-actions">
+                        <button class="wfm-btn wfm-btn-sm wfm-btn-primary" id="wfm-ts-send">${escapeHtml(t("tsSend"))}</button>
+                        <button class="wfm-btn wfm-btn-sm" id="wfm-ts-copy">${escapeHtml(t("tsCopy"))}</button>
+                        <button class="wfm-btn wfm-btn-sm" id="wfm-ts-clear">${escapeHtml(t("tsClear"))}</button>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </div>`;
+}
+
+function bindShell() {
+    $("wfm-ts-build").addEventListener("click", startBuild);
+    $("wfm-ts-cancel").addEventListener("click", () => postJson(API.cancel).catch(() => {}));
+    $("wfm-ts-max-tags").addEventListener("change", (e) => { state.opts.maxTags = parseInt(e.target.value, 10) || 2000; saveOpts(); });
+    $("wfm-ts-all-tags").addEventListener("change", (e) => {
+        state.opts.allTags = e.target.checked;
+        $("wfm-ts-max-tags").disabled = e.target.checked;
+        saveOpts();
+    });
+    $("wfm-ts-min-count").addEventListener("change", (e) => { state.opts.minCount = parseInt(e.target.value, 10) || 1; saveOpts(); });
+    $("wfm-ts-wildcard").addEventListener("change", (e) => { state.opts.wildcard = e.target.checked; saveOpts(); });
+    $("wfm-ts-bg").addEventListener("change", (e) => { state.opts.bg = Math.max(0, parseInt(e.target.value, 10) || 0); saveOpts(); });
+    $("wfm-ts-tagger-model").addEventListener("change", (e) => { state.opts.taggerModel = e.target.value; saveOpts(); updateTaggerScope(); });
+    $("wfm-ts-tagger-scope").addEventListener("change", (e) => { state.opts.taggerScope = e.target.value; saveOpts(); });
+    document.querySelectorAll("[data-ts-layer]").forEach((cb) => cb.addEventListener("change", () => {
+        state.opts[cb.dataset.tsLayer] = cb.checked;
+        saveOpts();
+        if (cb.dataset.tsLayer === "glow" || cb.dataset.tsLayer === "twinkle") {
+            applySky();
+            if (state.space) buildScene();
+        } else {
+            applyLayerVisibility();
+        }
+    }));
+    document.querySelectorAll("[data-ts-source]").forEach((cb) => cb.addEventListener("change", () => {
+        state.opts.srcOff = Object.keys(SOURCE_COLORS).filter(
+            (k) => !document.querySelector(`[data-ts-source="${k}"]`).checked);
+        saveOpts();
+        rebuildTagLayer();
+        renderList();
+        updateHighlight();
+    }));
+    $("wfm-ts-search").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") runSearch(e.target.value);
+    });
+    $("wfm-ts-search").addEventListener("search", (e) => { if (!e.target.value) clearSearch(); });
+    $("wfm-ts-send").addEventListener("click", sendToGenerate);
+    $("wfm-ts-copy").addEventListener("click", copyPrompt);
+    $("wfm-ts-clear").addEventListener("click", () => { state.chips = []; refreshChips(); });
+    $("wfm-ts-list").addEventListener("click", onListClick);
+    // 画像はクリックすると選択が変わるので、マウスを乗せたときに拡大表示する
+    for (const id of ["wfm-ts-detail", "wfm-ts-list"]) {
+        $(id).addEventListener("mouseover", (e) => {
+            const img = e.target.closest("[data-ts-zoom]");
+            if (img) showZoom(img);
+        });
+        $(id).addEventListener("mouseout", (e) => {
+            if (e.target.closest("[data-ts-zoom]") && !e.relatedTarget?.closest?.("[data-ts-zoom]")) hideZoom();
+        });
+        $(id).addEventListener("click", hideZoom);
+    }
+    $("wfm-ts-chips").addEventListener("click", (e) => {
+        const id = e.target.closest("[data-ts-remove]")?.dataset.tsRemove;
+        if (id) toggleChip(id);
+    });
+    $("wfm-ts-detail").addEventListener("click", (e) => {
+        const id = e.target.closest("[data-ts-toggle]")?.dataset.tsToggle;
+        if (id) return toggleChip(id);
+        const tag = e.target.closest("[data-ts-pick]")?.dataset.tsPick;
+        if (tag != null) {
+            const set = state.picked.tags;
+            if (set.has(tag)) set.delete(tag); else set.add(tag);
+            return renderDetail();
+        }
+        if (e.target.closest("[data-ts-pick-clear]")) {
+            state.picked.tags.clear();
+            return renderDetail();
+        }
+        if (e.target.closest("[data-ts-pick-search]")) searchPicked();
+    });
+}
+
+// ── 状態・構築 ───────────────────────────────────────────────
+
+const PHASES = ["cards", "index", "prompts", "tagger", "tags", "project"];
+
+async function refreshStatus(loadIfBuilt) {
+    let st;
+    try {
+        const res = await fetch(API.status);
+        st = await res.json();
+        if (!res.ok) throw new Error(st.error || `HTTP ${res.status}`);
+    } catch (e) {
+        setStatus(t("errorWithMsg", e.message), true);
+        return;
+    }
+    const job = st.job || {};
+    fillTaggerModels(st.tagger_models || []);
+    $("wfm-ts-build").disabled = !!job.running;
+    $("wfm-ts-cancel").style.display = job.running ? "" : "none";
+    if (job.running) {
+        const phase = PHASES.includes(job.phase) ? job.phase : "cards";
+        setStatus(t(`tsPhase_${phase}`, job.done || 0, job.total || 0, job.note || ""));
+        clearTimeout(state.pollTimer);
+        state.pollTimer = setTimeout(() => refreshStatus(true), 1000);
+        return;
+    }
+    if (job.finished && job.error_code) {
+        setStatus(errorMessage({ code: job.error_code, message: job.error }), true);
+    } else if (st.built) {
+        const m = st.meta || {};
+        // 上限や件数指定で候補の一部だけを使ったときは候補数も出す
+        const avail = m.tags_available > (m.tags || 0) ? t("tsTagsAvailable", m.tags_available) : "";
+        setStatus(t("tsBuilt", m.cards || 0, m.tags || 0, m.background || 0, m.built_at || "", (m.explained || []).reduce((a, b) => a + b, 0)) + avail);
+    } else {
+        setStatus(st.ollama && !st.ollama.ready ? t("tsNeedOllama") : t("tsNotBuilt"), !st.ollama?.ready);
+        showEmpty(t("tsNotBuilt"));
+    }
+    if (st.built && loadIfBuilt && (!state.space || state.space.meta?.built_at !== st.meta?.built_at)) {
+        await loadSpace();
+    }
+}
+
+/** Tagger補完のモデル選択肢(サーバーが返すONNXモデル)。保存済みの選択が無くなっていればOFFにする */
+function fillTaggerModels(models) {
+    const sel = $("wfm-ts-tagger-model");
+    if (!sel || sel.dataset.filled === models.join("|")) return;
+    sel.dataset.filled = models.join("|");
+    sel.innerHTML = `<option value="">${escapeHtml(t("tsTaggerOff"))}</option>` +
+        models.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+    if (!models.includes(state.opts.taggerModel)) {
+        state.opts.taggerModel = "";
+        saveOpts();
+    }
+    sel.value = state.opts.taggerModel;
+    updateTaggerScope();
+}
+
+function updateTaggerScope() {
+    $("wfm-ts-tagger-scope").disabled = !state.opts.taggerModel;
+}
+
+function setStatus(text, isError = false) {
+    const el = $("wfm-ts-status");
+    el.textContent = text;
+    el.classList.toggle("wfm-ts-status-error", !!isError);
+}
+
+async function startBuild() {
+    try {
+        await postJson(API.build, {
+            max_tags: state.opts.allTags ? 0 : state.opts.maxTags, background: state.opts.bg,
+            min_count: state.opts.minCount, wildcard: state.opts.wildcard,
+            tagger_model: state.opts.taggerModel, tagger_scope: state.opts.taggerScope,
+        });
+    } catch (e) {
+        showToast(errorMessage(e), "error");
+        return;
+    }
+    refreshStatus(true);
+}
+
+async function loadSpace() {
+    try {
+        const res = await fetch(API.space);
+        const data = await res.json();
+        if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { code: data.code || "" });
+        state.space = data;
+    } catch (e) {
+        showEmpty(errorMessage(e));
+        return;
+    }
+    state.items.clear();
+    for (const c of state.space.cards) state.items.set(c.id, c);
+    for (const g of state.space.tags) state.items.set(g.id, g);
+    for (const b of state.space.background) {
+        b.kind = "image";   // 3Dの点(userData.items)と同じオブジェクトに付ける
+        state.items.set(b.id, b);
+    }
+    // 再構築で消えた要素はチップから外す
+    state.chips = state.chips.filter((c) => state.items.has(c.id));
+    state.selected = state.items.has(state.selected) ? state.selected : null;
+    state.list = { title: "", rows: [] };
+    state.probe = null;
+    buildScene();
+    refreshChips();
+    renderDetail();
+    renderList();
+    showEmpty("");
+}
+
+function showEmpty(text) {
+    const el = $("wfm-ts-empty");
+    if (!el) return;
+    el.textContent = text;
+    el.style.display = text ? "" : "none";
+}
+
+// ── three.js シーン ───────────────────────────────────────────
+
+function cssColor(name, fallback) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function groupColor(group) {
+    let h = 0;
+    for (const ch of group || "") h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return new THREE.Color().setHSL((h % 360) / 360, 0.55, 0.6);
+}
+
+function makeDotTexture() {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    g.beginPath();
+    g.arc(32, 32, 28, 0, Math.PI * 2);
+    g.fillStyle = "#fff";
+    g.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+/** 星のような発光用: 明るい芯 + 柔らかいにじみ */
+function makeGlowTexture() {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.12, "rgba(255,255,255,0.95)");
+    grad.addColorStop(0.28, "rgba(255,255,255,0.4)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.1)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+function applySky() {
+    if (view.scene) view.scene.background = new THREE.Color(state.opts.glow ? NIGHT_SKY : cssColor("--wfm-bg", "#111318"));
+}
+
+/** またたき: 点ごとの位相・速さで明るさを揺らす(PointsMaterialのシェーダーに差し込む) */
+function twinkleBeforeCompile(shader) {
+    shader.uniforms.uTwinkleTime = view.twinkleTime;
+    shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute vec2 twinkle;\nuniform float uTwinkleTime;")
+        .replace("#include <color_vertex>", "#include <color_vertex>\nvColor.rgb *= 0.15 + 1.1 * pow(0.5 + 0.5 * sin(uTwinkleTime * twinkle.y + twinkle.x), 2.0);");
+}
+
+function twinkleAttribute(n) {
+    const tw = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+        // 添字から決まる疑似乱数(再構築しても同じ点は同じリズムで瞬く)
+        const r1 = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
+        const r2 = Math.abs(Math.sin(i * 78.233) * 12345.6789) % 1;
+        tw[i * 2] = r1 * Math.PI * 2;
+        tw[i * 2 + 1] = 0.6 + r2 * 1.6;
+    }
+    return new THREE.Float32BufferAttribute(tw, 2);
+}
+
+function makePoints(items, colorOf, size, opacity = 1, twinkle = false) {
+    const pos = new Float32Array(items.length * 3);
+    const col = new Float32Array(items.length * 3);
+    items.forEach((it, i) => {
+        pos.set(it.xyz, i * 3);
+        const c = colorOf(it);
+        col.set([c.r, c.g, c.b], i * 3);
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    const mat = state.opts.glow
+        ? new THREE.PointsMaterial({
+            size: size * GLOW_SCALE, vertexColors: true, map: view.glowTexture, blending: ADDITIVE_BLENDING,
+            transparent: true, opacity, sizeAttenuation: true, depthWrite: false,
+        })
+        : new THREE.PointsMaterial({
+            size, vertexColors: true, map: view.dotTexture, alphaTest: 0.5,
+            transparent: opacity < 1, opacity, sizeAttenuation: true, depthWrite: opacity >= 1,
+        });
+    if (twinkle && state.opts.glow && state.opts.twinkle) {
+        geo.setAttribute("twinkle", twinkleAttribute(items.length));
+        mat.onBeforeCompile = twinkleBeforeCompile;
+    }
+    const pts = new THREE.Points(geo, mat);
+    pts.userData.items = items;
+    return pts;
+}
+
+function disposeObject(obj) {
+    if (!obj) return;
+    view.scene.remove(obj);
+    obj.traverse?.((o) => {
+        o.geometry?.dispose();
+        if (o.material) {
+            o.material.map && o.material.map !== view.dotTexture && o.material.map !== view.glowTexture && o.material.map.dispose();
+            o.material.dispose();
+        }
+    });
+}
+
+function buildScene() {
+    for (const key of Object.keys(view.layers)) disposeObject(view.layers[key]);
+    view.layers = {};
+    const { cards, tags, background } = state.space;
+    // 発光時は加算合成で重なりが白く飛ぶので、数の多いGallery点は控えめにする
+    view.layers.background = makePoints(background, () => new THREE.Color("#9aa3b2"), 0.1, state.opts.glow ? 0.3 : 0.55, true);
+    view.layers.tags = makeTagPoints(tags);
+    view.layers.cards = makePoints(cards, (c) => groupColor(c.group), 0.22, 1, true);
+    // サムネイル表示用のスプライト(テクスチャは順次読み込む)
+    const group = new THREE.Group();
+    for (const c of cards) {
+        const mat = new THREE.SpriteMaterial({ color: groupColor(c.group), map: view.dotTexture, alphaTest: 0.5 });
+        const sp = new THREE.Sprite(mat);
+        sp.position.set(...c.xyz);
+        sp.scale.set(0.5, 0.5, 1);
+        sp.userData.item = c;
+        group.add(sp);
+    }
+    view.layers.cardSprites = group;
+    Object.values(view.layers).forEach((o) => view.scene.add(o));
+    applyLayerVisibility();
+    updateHighlight();
+}
+
+/** 出典の表示ON/OFF: 有効な出典を1つでも持つタグを表示し、色は有効な出典のうち最初のもの */
+function tagSources(tag) {
+    const off = state.opts.srcOff || [];
+    return (tag.sources || []).filter((s) => !off.includes(s));
+}
+
+function tagColor(tag) {
+    return SOURCE_COLORS[tagSources(tag)[0] || tag.sources?.[0]] || "#cccccc";
+}
+
+function isShown(it) {
+    return it.kind !== "tag" || tagSources(it).length > 0;
+}
+
+/** 近傍・検索結果のうち、存在して表示中のもの */
+function listRows() {
+    return state.list.rows.filter((r) => state.items.has(r.id) && isShown(state.items.get(r.id)));
+}
+
+function makeTagPoints(tags) {
+    return makePoints(tags.filter(isShown), (g) => new THREE.Color(tagColor(g)), 0.16, 1, true);
+}
+
+function rebuildTagLayer() {
+    if (!view.layers.tags || !state.space) return;
+    disposeObject(view.layers.tags);
+    view.layers.tags = makeTagPoints(state.space.tags);
+    view.scene.add(view.layers.tags);
+    applyLayerVisibility();
+}
+
+function applyLayerVisibility() {
+    const o = state.opts;
+    if (!view.layers.cards) return;
+    view.layers.background.visible = o.background;
+    view.layers.tags.visible = o.tags;
+    view.layers.cards.visible = o.cards && !o.thumbs;
+    view.layers.cardSprites.visible = o.cards && o.thumbs;
+    if (o.cards && o.thumbs) loadThumbnails();
+}
+
+function loadThumbnails() {
+    const queue = view.layers.cardSprites.children.filter((s) => !s.userData.thumbQueued);
+    queue.forEach((s) => { s.userData.thumbQueued = true; });
+    const loader = new THREE.TextureLoader();
+    const next = () => {
+        const sp = queue.shift();
+        if (!sp) return;
+        if (!sp.parent) return next();   // 再構築で捨てられたスプライト
+        loader.load(API.thumb(sp.userData.item.id), (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            sp.material.map = tex;
+            sp.material.color.set("#ffffff");
+            sp.material.alphaTest = 0;
+            sp.material.needsUpdate = true;
+            const img = tex.image;
+            const aspect = img?.width && img?.height ? img.width / img.height : 1;
+            sp.scale.set(0.6 * Math.min(aspect, 1.6), 0.6, 1);
+            next();
+        }, undefined, next);
+    };
+    for (let i = 0; i < THUMB_CONCURRENCY; i++) next();
+}
+
+/** 選択(チップ)・近傍・検索結果を目立たせる重ね描き */
+function updateHighlight() {
+    if (!view.scene) return;
+    disposeObject(view.highlight);
+    disposeObject(view.probe);
+    disposeObject(view.probeLines);
+    view.highlight = view.probe = view.probeLines = null;
+    const accent = new THREE.Color(cssColor("--wfm-primary", "#6366f1"));
+    const near = new THREE.Color("#22d3ee");
+    const chipIds = new Set(state.chips.map((c) => c.id));
+    const marks = [];
+    for (const id of chipIds) if (state.items.has(id)) marks.push({ xyz: state.items.get(id).xyz, color: accent });
+    for (const r of listRows().slice(0, NEAR_K)) {
+        if (!chipIds.has(r.id)) marks.push({ xyz: state.items.get(r.id).xyz, color: near });
+    }
+    if (marks.length) {
+        view.highlight = makePoints(marks, (m) => m.color, 0.42);
+        view.highlight.material.depthTest = false;
+        view.highlight.renderOrder = 10;
+        view.scene.add(view.highlight);
+    }
+    if (state.probe) {
+        view.probe = makePoints([{ xyz: state.probe }], () => new THREE.Color("#ffffff"), 0.6);
+        view.probe.material.depthTest = false;
+        view.probe.renderOrder = 11;
+        view.scene.add(view.probe);
+        const seg = [];
+        for (const r of listRows().slice(0, 10)) {
+            const it = state.items.get(r.id);
+            if (it) seg.push(...state.probe, ...it.xyz);
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(seg, 3));
+        view.probeLines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45 }));
+        view.scene.add(view.probeLines);
+    }
+}
+
+async function initThree() {
+    THREE = await import(THREE_URL);
+    const host = $("wfm-ts-view");
+    view.scene = new THREE.Scene();
+    view.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 500);
+    view.camera.position.set(0, 4, 22);
+    view.renderer = new THREE.WebGLRenderer({ antialias: true });
+    view.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    host.prepend(view.renderer.domElement);
+    view.controls = new THREE.OrbitControls(view.camera, view.renderer.domElement);
+    view.controls.enableDamping = true;
+    view.controls.dampingFactor = 0.08;
+    view.raycaster = new THREE.Raycaster();
+    view.dotTexture = makeDotTexture();
+    view.glowTexture = makeGlowTexture();
+    applySky();
+    new ResizeObserver(resize).observe(host);
+    resize();
+    bindPointer(view.renderer.domElement);
+}
+
+function resize() {
+    const host = $("wfm-ts-view");
+    if (!view.renderer || !host.clientWidth || !host.clientHeight) return;
+    view.renderer.setSize(host.clientWidth, host.clientHeight);
+    view.camera.aspect = host.clientWidth / host.clientHeight;
+    view.camera.updateProjectionMatrix();
+}
+
+function tabActive() {
+    return $("wfm-tab-tagspace")?.classList.contains("active");
+}
+
+function loop() {
+    if (!tabActive()) {
+        view.running = false;   // 非表示中は描画を止める(タブを開いたときに再開)
+        return;
+    }
+    requestAnimationFrame(loop);
+    if (view.fly) stepFly();
+    view.twinkleTime.value = performance.now() / 1000;
+    view.controls.update();
+    view.renderer.render(view.scene, view.camera);
+    updateLabels();
+}
+
+function startLoop() {
+    if (view.running || !view.renderer) return;
+    view.running = true;
+    resize();
+    requestAnimationFrame(loop);
+}
+
+/** 指定の点へ注視点を移動する(カメラとの位置関係は保つ) */
+function flyTo(xyz) {
+    const to = new THREE.Vector3(...xyz);
+    const offset = view.camera.position.clone().sub(view.controls.target);
+    if (offset.length() > 9) offset.setLength(9);
+    view.fly = { t0: performance.now(), fromT: view.controls.target.clone(), fromC: view.camera.position.clone(), toT: to, toC: to.clone().add(offset) };
+}
+
+function stepFly() {
+    const f = view.fly;
+    const k = Math.min(1, (performance.now() - f.t0) / 450);
+    const e = k * (2 - k);
+    view.controls.target.lerpVectors(f.fromT, f.toT, e);
+    view.camera.position.lerpVectors(f.fromC, f.toC, e);
+    if (k >= 1) view.fly = null;
+}
+
+// ── ラベル・ツールチップ ─────────────────────────────────────
+
+function screenPos(xyz) {
+    const v = new THREE.Vector3(...xyz).project(view.camera);
+    if (v.z > 1) return null;
+    const el = view.renderer.domElement;
+    return { x: (v.x + 1) / 2 * el.clientWidth, y: (1 - v.y) / 2 * el.clientHeight };
+}
+
+function updateLabels() {
+    const box = $("wfm-ts-labels");
+    const ids = [];
+    const seen = new Set();
+    const push = (id, cls) => {
+        if (id && !seen.has(id) && state.items.has(id) && ids.length < LABEL_MAX) {
+            seen.add(id);
+            ids.push([id, cls]);
+        }
+    };
+    state.chips.forEach((c) => push(c.id, "chip"));
+    listRows().slice(0, 12).forEach((r) => push(r.id, "near"));
+    if (state.hover) push(state.hover, "hover");
+    let html = "";
+    for (const [id, cls] of ids) {
+        const it = state.items.get(id);
+        const p = screenPos(it.xyz);
+        if (!p) continue;
+        html += `<span class="wfm-ts-label wfm-ts-label-${cls}" style="transform:translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)">${escapeHtml(itemTitle(it))}</span>`;
+    }
+    if (box.dataset.html !== html) {
+        box.innerHTML = html;
+        box.dataset.html = html;
+    }
+}
+
+function itemTitle(it) {
+    return it.kind === "image" ? it.id.split("/").pop() : it.label;
+}
+
+function showTooltip(it, x, y) {
+    const tip = $("wfm-ts-tooltip");
+    if (!it) {
+        tip.style.display = "none";
+        return;
+    }
+    const thumb = it.kind !== "tag" ? `<img src="${API.thumb(it.id, 160)}" alt="">` : "";
+    const body = it.kind === "card" ? escapeHtml(it.prompt.slice(0, 160))
+        : it.kind === "tag" ? escapeHtml(sourcesText(it))
+        : escapeHtml(it.tags?.length ? it.tags.slice(0, 20).join(", ") + taggerMark(it) : t("tsImageNoTags"));
+    tip.innerHTML = `${thumb}<div><b>${escapeHtml(itemTitle(it))}</b> <span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span>` +
+        `${body ? `<div class="wfm-ts-tip-body">${body}</div>` : ""}</div>`;
+    tip.style.display = "";
+    const host = $("wfm-ts-view");
+    tip.style.left = `${Math.min(x + 14, host.clientWidth - tip.offsetWidth - 6)}px`;
+    tip.style.top = `${Math.min(y + 14, host.clientHeight - tip.offsetHeight - 6)}px`;
+}
+
+function taggerMark(it) {
+    return it.tag_src === "tagger" ? ` ${t("tsTagsFromTagger")}` : "";
+}
+
+function sourcesText(tag) {
+    return `${t("tsSources")} ${(tag.sources || []).map((s) => t(`tsSrc_${s}`)).join(", ")} · ×${tag.count}`;
+}
+
+// ── ポインター操作 ───────────────────────────────────────────
+
+const PICK_PX = 8;   // カーソルからこの距離(画面上のpx)以内の点を当たりとする
+
+/**
+ * カーソル位置の要素。Raycaster の点の当たり幅は3D空間の固定値で、しかも結果はカメラに近い順なので、
+ * そのままだとズームして点群の中に入ったとき手前の1点が画面の広い範囲で当たり続けた。
+ * 候補を広めに取ってから各点を画面へ投影し、カーソルに最も近い点を選ぶ
+ * (拡大で大きく描かれた点は、見た目の半径までを当たりとする)。
+ */
+function pick(clientX, clientY) {
+    const rect = view.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    view.raycaster.setFromCamera(ndc, view.camera);
+    const tanHalf = Math.tan((view.camera.fov * Math.PI) / 360);
+    const targets = [view.layers.cardSprites, view.layers.cards, view.layers.tags, view.layers.background].filter((o) => o?.visible);
+    // 候補の当たり幅: 注視点の3倍の奥行きで PICK_PX になる幅と、描かれた点の3D上の半径(≒size×tan)の大きい方
+    const depthRef = view.camera.position.distanceTo(view.controls.target) * 3;
+    const maxSize = Math.max(0, ...targets.filter((o) => o.isPoints).map((o) => o.material.size));
+    view.raycaster.params.Points.threshold = Math.max((2 * depthRef * tanHalf / rect.height) * PICK_PX, maxSize * tanHalf);
+    const hits = view.raycaster.intersectObjects(targets, true);
+    const v = new THREE.Vector3();
+    let best = null, bestPx = Infinity;
+    for (const h of hits) {
+        let item;
+        if (h.object.isSprite) {
+            item = h.object.userData.item;
+            h.object.getWorldPosition(v);
+        } else {
+            const items = h.object.userData.items;
+            if (!items || h.index == null) continue;
+            item = items[h.index];
+            v.fromBufferAttribute(h.object.geometry.attributes.position, h.index).applyMatrix4(h.object.matrixWorld);
+        }
+        const depth = v.clone().applyMatrix4(view.camera.matrixWorldInverse).z * -1;
+        if (depth <= 0) continue;
+        v.project(view.camera);
+        const px = Math.hypot((v.x - ndc.x) * rect.width / 2, (v.y - ndc.y) * rect.height / 2);
+        if (!h.object.isSprite) {
+            // sizeAttenuation の点の直径(px)は size × (高さ/2) / 奥行き。発光時は芯の大きさで判定する
+            const core = h.object.material.size / (state.opts.glow ? GLOW_SCALE : 1);
+            if (px > Math.max(PICK_PX, (core * rect.height) / 4 / depth)) continue;
+        }
+        if (px < bestPx) {
+            bestPx = px;
+            best = item;
+        }
+    }
+    return best;
+}
+
+function bindPointer(canvas) {
+    let down = null;
+    let raf = 0;
+    canvas.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; });
+    canvas.addEventListener("pointermove", (e) => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+            raf = 0;
+            if (!state.space || (down && e.buttons)) return;
+            const it = pick(e.clientX, e.clientY);
+            state.hover = it ? it.id : null;
+            const rect = canvas.getBoundingClientRect();
+            showTooltip(it, e.clientX - rect.left, e.clientY - rect.top);
+            canvas.style.cursor = it ? "pointer" : "";
+        });
+    });
+    canvas.addEventListener("pointerleave", () => { state.hover = null; showTooltip(null); });
+    canvas.addEventListener("pointerup", (e) => {
+        const moved = down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4;
+        down = null;
+        if (moved || e.button !== 0 || !state.space || e.detail > 1) return;
+        // クリックは選択(確認)だけ。プロンプトへの追加はダブルクリック・追加ボタン・一覧の＋で行う
+        const it = pick(e.clientX, e.clientY);
+        if (it) select(it.id);
+    });
+    canvas.addEventListener("dblclick", (e) => {
+        if (!state.space) return;
+        const it = pick(e.clientX, e.clientY);
+        if (it && canAdd(it)) toggleChip(it.id);
+    });
+}
+
+// ── 選択・近傍・検索 ─────────────────────────────────────────
+
+async function select(id) {
+    state.selected = id;
+    renderDetail();
+    const it = state.items.get(id);
+    if (!it) return;
+    try {
+        // Gallery画像を選んだときは、似たGallery画像も一覧に入る(タグ・カードのときは入らない)
+        const data = await postJson(API.neighbors, { id, k: NEAR_K });
+        if (state.selected !== id) return;
+        state.probe = null;
+        state.list = { title: t("tsNeighborsOf", itemTitle(it)), rows: data };
+    } catch (e) {
+        showToast(errorMessage(e), "error");
+        return;
+    }
+    renderList();
+    updateHighlight();
+}
+
+async function runSearch(query) {
+    query = (query || "").trim();
+    if (!query) return clearSearch();
+    if (!state.space) return;
+    try {
+        const data = await postJson(API.search, { query, k: NEAR_K });
+        state.probe = data.probe;
+        state.list = { title: t("tsSearchTitle", query), rows: data.matches || [] };
+    } catch (e) {
+        showToast(errorMessage(e), "error");
+        return;
+    }
+    renderList();
+    updateHighlight();
+    if (state.probe) flyTo(state.probe);
+}
+
+/** 選択中のカード・Gallery画像から選んだタグ(プロンプトの順)で空間を検索する */
+function searchPicked() {
+    const it = state.items.get(state.selected);
+    if (!it || state.picked.id !== it.id) return;
+    const query = (it.tags || []).filter((tg) => state.picked.tags.has(tg)).join(", ");
+    if (!query) return;
+    $("wfm-ts-search").value = query;
+    runSearch(query);
+}
+
+function clearSearch() {
+    state.probe = null;
+    state.list = { title: "", rows: [] };
+    renderList();
+    updateHighlight();
+}
+
+function renderDetail() {
+    const box = $("wfm-ts-detail");
+    const it = state.items.get(state.selected);
+    if (!it) {
+        box.innerHTML = `<span class="wfm-ts-muted">${escapeHtml(t("tsDetailEmpty"))}</span>`;
+        return;
+    }
+    const inChips = state.chips.some((c) => c.id === it.id);
+    if (state.picked.id !== it.id) state.picked = { id: it.id, tags: new Set() };
+    const thumb = it.kind !== "tag" ? `<img class="wfm-ts-detail-thumb" data-ts-zoom="${escapeHtml(it.id)}" src="${API.thumb(it.id, 240)}" alt="">` : "";
+    // カードはタグ(作成 / 更新で付く。古い空間には無い)を選べるようにし、プロンプト全文は折りたたむ
+    const body = it.kind === "card" ? (it.tags?.length
+            ? `${tagPicker(it)}<details class="wfm-ts-full"><summary>${escapeHtml(t("tsFullPrompt"))}</summary>` +
+              `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div></details>`
+            : `<div class="wfm-ts-detail-text">${escapeHtml(it.prompt)}</div>`) +
+          `<div class="wfm-ts-muted">${escapeHtml(it.category)}</div>`
+        : it.kind === "tag" ? `<div class="wfm-ts-muted">${escapeHtml(sourcesText(it))}</div>`
+        : (it.tags?.length ? tagPicker(it) : `<div class="wfm-ts-detail-text">${escapeHtml(t("tsImageNoTags"))}</div>`) +
+          `<div class="wfm-ts-muted wfm-ts-path">${escapeHtml(it.id)}</div>`;
+    const btn = !canAdd(it) ? ""
+        : `<button class="wfm-btn wfm-btn-sm ${inChips ? "" : "wfm-btn-primary"}" data-ts-toggle="${escapeHtml(it.id)}">${escapeHtml(t(inChips ? "tsRemove" : "tsAdd"))}</button>`;
+    // 追加/削除ボタンは見出し行に置く(本文が長くてもスクロールせずに押せる)
+    box.innerHTML = `<div class="wfm-ts-detail-head"><span class="wfm-ts-detail-title"><b>${escapeHtml(itemTitle(it))}</b> ` +
+        `<span class="wfm-ts-muted">${escapeHtml(t(`tsKind_${it.kind}`))}</span></span>${btn}</div>${thumb}${body}`;
+}
+
+/** カード・Gallery画像のプロンプトのタグ: クリックで選び、選んだタグで空間検索する */
+function tagPicker(it) {
+    const sel = state.picked.tags;
+    const n = it.tags.filter((tg) => sel.has(tg)).length;
+    const chips = it.tags.map((tg) => `<button type="button" class="wfm-ts-pick${sel.has(tg) ? " on" : ""}" ` +
+        `data-ts-pick="${escapeHtml(tg)}">${escapeHtml(tg)}</button>`).join("");
+    return `<div class="wfm-ts-pick-list" title="${escapeHtml(t("tsPickHint"))}">${chips}</div>` +
+        (taggerMark(it) ? `<div class="wfm-ts-muted">${escapeHtml(taggerMark(it).trim())}</div>` : "") +
+        `<div class="wfm-ts-pick-actions">` +
+        `<button type="button" class="wfm-btn wfm-btn-sm wfm-btn-primary" data-ts-pick-search ${n ? "" : "disabled"}>${escapeHtml(t("tsPickSearch", n))}</button>` +
+        `<button type="button" class="wfm-btn wfm-btn-sm" data-ts-pick-clear ${n ? "" : "disabled"}>${escapeHtml(t("tsPickClear"))}</button></div>`;
+}
+
+/** 画像の拡大表示: サイド列の左側(3Dビューの上)に出す */
+function showZoom(img) {
+    const box = $("wfm-ts-zoom");
+    const big = box.querySelector("img");
+    const id = img.dataset.tsZoom;
+    if (box.dataset.id !== id) {
+        box.dataset.id = id;
+        big.src = img.src;   // 読み込み済みの小さい画像を先に出し、大きい画像に差し替える
+        const hi = new Image();
+        hi.onload = () => { if (box.dataset.id === id) big.src = hi.src; };
+        hi.src = API.thumb(id, ZOOM_SIZE * 2);
+    }
+    const r = img.getBoundingClientRect();
+    const side = img.closest(".wfm-ts-side")?.getBoundingClientRect() || r;
+    box.style.display = "";
+    const top = Math.min(Math.max(8, r.top + r.height / 2 - ZOOM_SIZE / 2), window.innerHeight - ZOOM_SIZE - 8);
+    box.style.left = `${Math.max(8, side.left - ZOOM_SIZE - 12)}px`;
+    box.style.top = `${top}px`;
+}
+
+function hideZoom() {
+    const box = $("wfm-ts-zoom");
+    if (box) box.style.display = "none";
+}
+
+function renderList() {
+    $("wfm-ts-list-title").textContent = state.list.title || t("tsNeighborsTitle");
+    const chipIds = new Set(state.chips.map((c) => c.id));
+    const rows = listRows();
+    if (!rows.length) {
+        $("wfm-ts-list").innerHTML = `<span class="wfm-ts-muted">${escapeHtml(t("tsListEmpty"))}</span>`;
+        return;
+    }
+    $("wfm-ts-list").innerHTML = rows.map((r) => {
+        const it = state.items.get(r.id);
+        const icon = it.kind !== "tag"
+            ? `<img class="${it.kind === "image" ? "wfm-ts-row-image" : ""}" data-ts-zoom="${escapeHtml(it.id)}" src="${API.thumb(it.id, 64)}" alt="" loading="lazy">`
+            : `<span class="wfm-ts-dot" style="background:${tagColor(it)}"></span>`;
+        const on = chipIds.has(it.id);
+        // タグの無いGallery画像は追加できない(ボタンの代わりに空き)
+        const btn = canAdd(it)
+            ? `<button class="wfm-ts-row-add${on ? " on" : ""}" data-ts-add="${escapeHtml(it.id)}" title="${escapeHtml(t(on ? "tsRemove" : "tsAdd"))}">${on ? "✓" : "+"}</button>`
+            : `<span class="wfm-ts-row-add-none"></span>`;
+        return `<div class="wfm-ts-row" data-ts-go="${escapeHtml(it.id)}" title="${escapeHtml(t(`tsKind_${it.kind}`))}">${icon}` +
+            `<span class="wfm-ts-row-label">${escapeHtml(itemTitle(it))}</span>` +
+            `<span class="wfm-ts-muted">${r.score.toFixed(2)}</span>${btn}</div>`;
+    }).join("");
+}
+
+function onListClick(e) {
+    const add = e.target.closest("[data-ts-add]")?.dataset.tsAdd;
+    if (add) {
+        toggleChip(add);
+        return;
+    }
+    const go = e.target.closest("[data-ts-go]")?.dataset.tsGo;
+    if (go && state.items.has(go)) {
+        state.selected = go;
+        renderDetail();
+        flyTo(state.items.get(go).xyz);
+    }
+}
+
+// ── プロンプト組み立て ───────────────────────────────────────
+
+/** カード・タグと、プロンプト由来のタグを持つGallery画像はチップにできる */
+function canAdd(it) {
+    return !!it && (it.kind !== "image" || it.tags?.length > 0);
+}
+
+function chipText(it) {
+    return it.kind === "card" ? it.prompt : it.kind === "image" ? it.tags.join(", ") : it.label;
+}
+
+function toggleChip(id) {
+    const i = state.chips.findIndex((c) => c.id === id);
+    if (i >= 0) {
+        state.chips.splice(i, 1);
+    } else {
+        const it = state.items.get(id);
+        if (!canAdd(it)) return;
+        state.chips.push({ id, kind: it.kind, label: itemTitle(it), text: chipText(it) });
+    }
+    refreshChips();
+}
+
+/** チップの文をカンマで分けて重複(大文字小文字・空白の違いを無視)を除き、順番を保って連結する */
+export function composePrompt(chips) {
+    const seen = new Set();
+    const out = [];
+    for (const c of chips) {
+        for (const part of c.text.split(",")) {
+            const s = part.trim();
+            const key = s.toLowerCase().replace(/\s+/g, " ");
+            if (s && !seen.has(key)) {
+                seen.add(key);
+                out.push(s);
+            }
+        }
+    }
+    return out.join(", ");
+}
+
+function refreshChips() {
+    $("wfm-ts-chips").innerHTML = state.chips.length
+        ? state.chips.map((c) => `<span class="wfm-ts-chip wfm-ts-chip-${c.kind}" title="${escapeHtml(c.text)}">${escapeHtml(c.label)}` +
+            `<button data-ts-remove="${escapeHtml(c.id)}" title="${escapeHtml(t("tsRemove"))}">×</button></span>`).join("")
+        : `<span class="wfm-ts-muted">${escapeHtml(t("tsChipsEmpty"))}</span>`;
+    $("wfm-ts-output").value = composePrompt(state.chips);
+    renderDetail();
+    renderList();
+    updateHighlight();
+}
+
+function sendToGenerate() {
+    const text = $("wfm-ts-output").value.trim();
+    if (!text) return;
+    if (!comfyUI.currentWorkflow) {
+        showToast(t("tsNoWorkflow"), "error");
+        return;
+    }
+    comfyEditor.appendEmbeddingToPrompt(text, "positive");
+    showToast(t("tsSent"), "success");
+}
+
+async function copyPrompt() {
+    const text = $("wfm-ts-output").value.trim();
+    if (!text) return;
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast(t("tsCopied"), "success");
+    } catch (e) {
+        showToast(t("errorWithMsg", e.message), "error");
+    }
+}
+
+// ── 初期化 ───────────────────────────────────────────────────
+
+let _opened = false;
+
+async function onOpen() {
+    if (!_opened) {
+        _opened = true;
+        try {
+            await initThree();
+        } catch (e) {
+            showEmpty(t("errorWithMsg", e.message));
+            return;
+        }
+        await refreshStatus(true);
+    }
+    startLoop();
+}
+
+export function initTagSpaceTab() {
+    if (!$("wfm-tab-tagspace")) return;
+    renderShell();
+    bindShell();
+    refreshChips();
+    document.querySelector('.wfm-tab[data-tab="tagspace"]')?.addEventListener("click", () => {
+        // タブの表示切替(app.js)の後に初期化・描画を始める
+        setTimeout(onOpen, 0);
+    });
+}

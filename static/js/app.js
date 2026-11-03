@@ -112,7 +112,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", "image-edit": "tabImageEdit", video: "tabVideo", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", "image-edit": "tabImageEdit", video: "tabVideo", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger", tagspace: "tabTagSpace" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -592,6 +592,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-card-styleprompt-title": "helpGalleryCardStyleprompt",
         "wfm-help-gallery-card-stylecatalog-title": "helpGalleryCardStylecatalog",
         "wfm-help-tagger-title": "helpTaggerTitle",
+        "wfm-help-tagspace-title": "helpTagSpaceTitle", "wfm-help-tagspace-card-overview-title": "helpTagSpaceCardOverview", "wfm-help-tagspace-card-use-title": "helpTagSpaceCardUse", "wfm-help-tagspace-1": "helpTagSpace1", "wfm-help-tagspace-2": "helpTagSpace2", "wfm-help-tagspace-3": "helpTagSpace3", "wfm-help-tagspace-4": "helpTagSpace4", "wfm-help-tagspace-5": "helpTagSpace5", "wfm-help-tagspace-6": "helpTagSpace6", "wfm-help-tagspace-7": "helpTagSpace7", "wfm-help-tagspace-8": "helpTagSpace8", "wfm-help-tagspace-9": "helpTagSpace9", "wfm-help-tagspace-10": "helpTagSpace10",
         "wfm-help-tagger-1": "helpTagger1", "wfm-help-tagger-2": "helpTagger2",
         "wfm-help-tagger-3": "helpTagger3", "wfm-help-tagger-4": "helpTagger4",
         "wfm-help-tagger-5": "helpTagger5", "wfm-help-tagger-6": "helpTagger6",
@@ -845,6 +846,7 @@ import { initGalleryTab } from "./gallery-tab.js";
 import { initMetadataTab } from "./metadata-tab.js";
 import { initAiTab } from "./ai-tab.js";
 import { initTaggerTab } from "./tagger-tab.js";
+import { initTagSpaceTab } from "./tagspace-tab.js";
 import { imageEditTab } from "./image-edit-tab.js";
 import { initVideoTab } from "./video-tab.js";
 
@@ -897,6 +899,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initGalleryTab();
     initAiTab();
     initTaggerTab();
+    initTagSpaceTab();
     imageEditTab.init();
     initVideoTab();
 

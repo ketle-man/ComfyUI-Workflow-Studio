@@ -417,6 +417,22 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 </details>
 
 <details>
+<summary><h3>TagSpace Tab (unreleased)</h3></summary>
+
+- **Choose tags visually in a 3D latent space** — WFS's own data is placed in the EmbeddingGemma 2 vector space and shown in 3D (three.js, bundled): **Cards** (ImagePrompt images with their prompt, drawn as thumbnails), **Tags** (words split out of ImagePrompt prompts, the positive prompts embedded in Gallery images, wildcards, the Tagger DB and the Prompt library, colored by source) and **Gallery points** (a sample of indexed Gallery images as a faint background, each carrying the tags from its own prompt). Nearby items have similar meanings
+- **Build / Update** — collects the cards, adds card images that are not yet indexed to the Gallery semantic index, reads the positive prompt embedded in each indexed Gallery image (followed upstream from the sampler's `positive` input, never the negative; cached in `tagspace_prompts.json`, deleted images are skipped), embeds new tags with Ollama (cached in `tagspace_tags.npz`) and projects everything to 3D with PCA. Prompts are split only at commas (and `|` `{}` `BREAK`), not at spaces; phrases over 5 words are dropped. **Tags** sets how many tags are kept — each source is ranked by how many prompts use a tag and the sources take turns, so the many Gallery prompts do not crowd out the others; **Gallery points** sets how many Gallery images are shown. Images and text form two separate clusters in the same space (modality gap), so each is centered on its own mean (images: the cards) before PCA, which makes cards and their matching tags overlap. First build: about 2.5 min for ~1,000 cards plus about 2 min to read the prompts of 29,000 Gallery images (64% had a readable positive prompt); rebuilds with caches: about 15 s
+- **Choosing tags** — **All tags** uses every candidate tag instead of the Tags number (up to 20,000); **Min uses** drops tags used in fewer prompts than that (all sources combined); **Wildcards** turns wildcard files on or off as a tag source. Words found only in wildcards are most of the distinct tags (about 37,000 of 47,600 in testing), so All tags without wildcards gives about 10,400 tags (about 6,800 with Min uses 2); ~32,000 points still render at 60 fps. Wildcard YAML is read with a YAML parser, so multi-line (`- >-`) items are included; JSON fragments embedded in prompts (e.g. MOSS-Image bbox layouts) and model file names are not turned into tags
+- **Explore** — drag to rotate, right-drag to pan, wheel to zoom; hover shows name, thumbnail and prompt/sources; layer checkboxes for Cards / Thumbnails / Tags / Gallery, and source checkboxes (ImagePrompt / Gallery prompts / Tagger DB / Prompt library / Wildcards) that show or hide tags by origin — a tag stays visible while any of its sources is on, and hidden tags are left out of the nearby/search lists. The search box (Enter, any language) places a marker for the text and lists the nearest items
+- **Search with a card's or Gallery image's tags** — a selected card or Gallery point lists its prompt tags as buttons; pick some and search the space with them (joined in prompt order)
+- **Make a prompt** — click a card or tag to select it and list nearby items (clicking does not change the prompt); double-click it, press **Add** next to its name under Selection, or press **+** in the list to add it (again to remove); cards and tags are ranked separately and interleaved, so a card also shows its closest tags. Adding a Gallery point adds all tags from that image's prompt as one chip (images without readable tags cannot be added); clicking one lists similar Gallery images together with nearby tags and cards (cards, tags and searches never list Gallery images). The prompt joins the chips with duplicates removed; **Add to GenerateUI (Positive)** appends it to the loaded workflow's positive prompt, **Copy** puts it on the clipboard
+- **Tagger fill** — Gallery images without a readable prompt (about a third) can be tagged with a Tagger model (ONNX models from the Tagger tab) during Build / Update — either only the sampled Gallery points or every indexed image without prompt tags. Default thresholds, rating labels dropped, results cached per image and model in `tagspace_tagger.json` (stopping keeps finished images). The tags form the **Tagger fill** source and become the tags of those Gallery points. The status shows CUDA/CPU: on the CPU it is about 0.5 s per image, so make sure `onnxruntime-gpu` is active before tagging everything
+- **Glow / Twinkle** — points are drawn as glowing stars on a night-sky background (Gallery points dimmed so dense areas don't wash out); **Twinkle** makes tags, cards and Gallery points twinkle slowly with individual rhythms (selection/nearby highlights stay steady). Both are toolbar toggles; turning Glow off restores the plain dots
+- **Hover preview** — hovering the image under Selection or a thumbnail in the Nearby list shows an enlarged preview without changing the selection; the Add / Remove button sits on Selection's title row so it stays reachable while the text scrolls
+- **Requirements** — Ollama with EmbeddingGemma 2 (Gallery > Semantic settings > Model); a Gallery semantic index built with Gemini must be rebuilt with EmbeddingGemma 2 first
+
+</details>
+
+<details>
 <summary><h3>Image Edit Tab (v0.3.65)</h3></summary>
 
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG or a fully layered PSD
@@ -664,7 +680,8 @@ ComfyUI-Workflow-Studio/
 │   │   ├── settings_routes.py   # Settings API
 │   │   ├── ollama_routes.py     # Ollama proxy API
 │   │   ├── eagle_routes.py      # Eagle integration API
-│   │   └── gallery_routes.py    # Gallery tab API (Output + ImagePrompt + Style_Catalog sub-tabs)
+│   │   ├── gallery_routes.py    # Gallery tab API (Output + ImagePrompt + Style_Catalog sub-tabs)
+│   │   └── tagspace_routes.py   # TagSpace tab API (build / space / search / neighbors)
 │   └── services/
 │       ├── workflow_service.py  # Workflow file operations
 │       ├── nodes_service.py     # Node metadata & node sets

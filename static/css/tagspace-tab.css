@@ -1,0 +1,67 @@
+/* TagSpace タブ */
+#wfm-tab-tagspace.active { overflow: hidden; }
+.wfm-ts { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.wfm-ts-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--wfm-border, #444); }
+.wfm-ts-num { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--wfm-text-secondary, #aaa); }
+.wfm-ts-num input { width: 72px; }
+.wfm-ts-sep { width: 1px; height: 18px; background: var(--wfm-border, #444); }
+.wfm-ts-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
+.wfm-ts-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; }
+.wfm-ts-legend { display: inline-flex; gap: 10px; font-size: 11px; color: var(--wfm-text-secondary, #aaa); }
+.wfm-ts-search { margin-left: auto; width: 240px; max-width: 100%; }
+.wfm-ts-status { padding: 4px 12px; font-size: 12px; color: var(--wfm-text-secondary, #aaa); min-height: 22px; }
+.wfm-ts-status-error { color: var(--wfm-danger, #ef4444); }
+.wfm-ts-main { flex: 1; display: flex; min-height: 0; }
+.wfm-ts-view { position: relative; flex: 1; min-width: 0; overflow: hidden; background: var(--wfm-bg, #111); }
+.wfm-ts-view canvas { display: block; width: 100%; height: 100%; }
+.wfm-ts-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.wfm-ts-label { position: absolute; left: 0; top: 0; margin: -22px 0 0 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; background: rgba(0, 0, 0, 0.6); color: #fff; }
+.wfm-ts-label-chip { background: var(--wfm-primary, #6366f1); }
+.wfm-ts-label-near { background: rgba(8, 145, 178, 0.85); }
+.wfm-ts-label-hover { background: rgba(255, 255, 255, 0.92); color: #111; }
+.wfm-ts-tooltip { position: absolute; z-index: 2; display: flex; gap: 8px; max-width: 360px; padding: 6px 8px; border-radius: 6px; font-size: 12px; pointer-events: none; background: var(--wfm-surface, #222); border: 1px solid var(--wfm-border, #444); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); }
+.wfm-ts-tooltip img { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; flex: none; }
+.wfm-ts-tip-body { margin-top: 2px; color: var(--wfm-text-secondary, #aaa); }
+.wfm-ts-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--wfm-text-secondary, #aaa); pointer-events: none; }
+.wfm-ts-hint { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: var(--wfm-text-secondary, #aaa); opacity: 0.8; pointer-events: none; }
+.wfm-ts-side { width: 300px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; border-left: 1px solid var(--wfm-border, #444); }
+/* プロンプト列(右端): チップは中身の高さ(最大40%)、出力欄が残りの高さいっぱいに伸びる */
+.wfm-ts-side-prompt .wfm-ts-chips { flex: 0 1 auto; max-height: 40%; align-content: flex-start; }
+.wfm-ts-side-prompt .wfm-ts-output { flex: 1; min-height: 120px; resize: none; }
+.wfm-ts-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--wfm-border, #444); border-radius: var(--wfm-radius, 6px); background: var(--wfm-surface, transparent); min-height: 0; }
+.wfm-ts-panel h4 { margin: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfm-ts-panel-grow { flex: 1; }
+.wfm-ts-muted { color: var(--wfm-text-secondary, #aaa); font-size: 11px; }
+.wfm-ts-detail { display: flex; flex-direction: column; gap: 4px; font-size: 12px; max-height: 260px; overflow: auto; }
+.wfm-ts-detail-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding-bottom: 2px; background: var(--wfm-surface, #222); }
+.wfm-ts-detail-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfm-ts-detail-head .wfm-btn { flex: none; }
+.wfm-ts-detail-thumb { max-width: 100%; max-height: 140px; object-fit: contain; align-self: flex-start; border-radius: 4px; }
+.wfm-ts-detail-text { white-space: pre-wrap; word-break: break-word; }
+.wfm-ts-pick-list { display: flex; flex-wrap: wrap; gap: 3px; }
+.wfm-ts-full summary { cursor: pointer; color: var(--wfm-text-secondary, #999); font-size: 11px; }
+.wfm-ts-pick { padding: 1px 7px; border-radius: 10px; font-size: 11px; cursor: pointer; color: inherit; background: var(--wfm-bg-secondary, #333); border: 1px solid var(--wfm-border, #444); }
+.wfm-ts-pick:hover { border-color: #f472b6; }
+.wfm-ts-pick.on { background: #f472b6; border-color: #f472b6; color: #1a1a1a; }
+/* タグが多くても検索ボタンが見えるよう、詳細パネルの下端に固定する */
+.wfm-ts-pick-actions { position: sticky; bottom: 0; order: 10; display: flex; gap: 6px; padding-top: 4px; background: var(--wfm-surface, #222); }
+.wfm-ts-path { word-break: break-all; }
+.wfm-ts-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.wfm-ts-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+.wfm-ts-row:hover { background: var(--wfm-surface-hover, rgba(255, 255, 255, 0.06)); }
+.wfm-ts-row img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; flex: none; }
+.wfm-ts-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; margin: 0 9px; }
+.wfm-ts-row-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfm-ts-row-add { flex: none; width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--wfm-border, #444); background: transparent; color: var(--wfm-text, #ddd); cursor: pointer; }
+.wfm-ts-row-add.on { background: var(--wfm-primary, #6366f1); color: #fff; border-color: transparent; }
+.wfm-ts-row-add-none { flex: none; width: 22px; }
+.wfm-ts-row img.wfm-ts-row-image { border-radius: 50%; }
+.wfm-ts-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 110px; overflow: auto; }
+.wfm-ts-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 7px; border-radius: 10px; font-size: 11px; background: var(--wfm-bg-secondary, #333); border: 1px solid var(--wfm-border, #444); }
+.wfm-ts-chip-card { border-color: var(--wfm-primary, #6366f1); }
+.wfm-ts-chip-image { border-color: #f472b6; }
+.wfm-ts-chip button { border: none; background: transparent; color: inherit; cursor: pointer; padding: 0 4px; font-size: 12px; }
+.wfm-ts-output { width: 100%; resize: vertical; font-size: 12px; box-sizing: border-box; }
+.wfm-ts-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.wfm-ts-zoom { position: fixed; z-index: 1000; width: 360px; height: 360px; display: flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; pointer-events: none; border-radius: 8px; background: var(--wfm-surface, #222); border: 1px solid var(--wfm-border, #444); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+.wfm-ts-zoom img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
