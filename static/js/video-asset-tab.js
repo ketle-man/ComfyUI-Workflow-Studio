@@ -13,7 +13,7 @@ import { setSourcePreview } from "./video-preview.js";
 import { showToast } from "./app.js";
 import { t } from "./i18n.js";
 import { addClipFromFile, setBgmFromFile, addPipFromFile, addSoundFromFile } from "./video-edit-tab.js";
-import { setBlockImageFromFile } from "./video-plan-tab.js";
+import { setBlockImageFromFile, isReferenceImagePlan } from "./video-plan-tab.js";
 
 // Sentinel for the "All Video Assets" option — not a real backend group, since
 // Gallery's group filter only ever matches one group at a time. Selecting it
@@ -249,8 +249,8 @@ function _renderDetail(img) {
         <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-bgm" style="width:100%;margin-top:${isAudioFile(img) ? "12" : "6"}px;display:${isVideoFile(img) || isAudioFile(img) ? "block" : "none"};">${t("videoAssetSetAsBgm")}</button>
         <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-add-sound" style="width:100%;margin-top:6px;display:${isAudioFile(img) ? "block" : "none"};">${t("videoAssetAddAsSound")}</button>
         <div id="wfm-video-asset-set-plan-image-row" style="display:${isVideoFile(img) || isAudioFile(img) ? "none" : "flex"};gap:6px;margin-top:6px;">
-            <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-first" style="flex:1;">${t("videoAssetSetAsFirst")}</button>
-            <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-last" style="flex:1;">${t("videoAssetSetAsLast")}</button>
+            <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-first" style="flex:1;">${t(isReferenceImagePlan() ? "videoAssetSetAsRef1" : "videoAssetSetAsFirst")}</button>
+            <button type="button" class="wfm-btn wfm-btn-sm" id="wfm-video-asset-set-last" style="flex:1;">${t(isReferenceImagePlan() ? "videoAssetSetAsRef2" : "videoAssetSetAsLast")}</button>
         </div>
         <button type="button" class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-video-asset-open-gallery" style="width:100%;margin-top:6px;">Open in Gallery</button>
     `;
@@ -353,7 +353,11 @@ function _renderDetail(img) {
             const file = new File([blob], img.filename, { type: blob.type || "image/png" });
             await setBlockImageFromFile(which, file);
             document.querySelector('.wfm-video-center-panel .wfm-video-subtab-btn[data-video-subtab="plan"]')?.click();
-            showToast(t(which === "first" ? "videoAssetSetAsFirstDone" : "videoAssetSetAsLastDone", img.filename), "success");
+            const ref = isReferenceImagePlan();
+            const doneKey = which === "first"
+                ? (ref ? "videoAssetSetAsRef1Done" : "videoAssetSetAsFirstDone")
+                : (ref ? "videoAssetSetAsRef2Done" : "videoAssetSetAsLastDone");
+            showToast(t(doneKey, img.filename), "success");
         } catch (err) {
             showToast(t("errorWithMsg", err.message), "error");
         }

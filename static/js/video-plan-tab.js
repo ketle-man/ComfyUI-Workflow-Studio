@@ -202,9 +202,13 @@ function _updateFieldHighlights() {
     const hasTurboSteps = nodes.turboStepsIdx !== -1;
     const hasPromptEnhance = nodes.promptEnhanceIdx !== -1;
 
-    // FastH3 OmniRef(Reference to Video)では先頭フレームではなく参照画像(ref_image_0)として渡る。
+    // FastH3 OmniRef / Pika-H3-Flex(Reference to Video)では先頭/最終フレームではなく
+    // 参照画像(ref_image_0/ref_image_1)として渡る。
+    const isRef = nodes.family === "fasth3";
     const firstLabel = document.getElementById("wfm-video-block-first-label");
-    if (firstLabel) firstLabel.textContent = nodes.family === "fasth3" ? "Reference Image" : "First Image";
+    if (firstLabel) firstLabel.textContent = isRef ? "Reference Image" : "First Image";
+    const lastLabel = document.getElementById("wfm-video-block-last-label");
+    if (lastLabel) lastLabel.textContent = isRef ? "Reference Image 2 (optional)" : "Last Image (optional)";
 
     _setFieldActive("wfm-video-block-prompt-label", true);
     _setFieldActive("wfm-video-block-duration-label", true);
@@ -321,6 +325,17 @@ async function _handleBlockImageUpload(which, file) {
         if (statusEl) { statusEl.textContent = `✗ ${err.message}`; statusEl.style.color = "var(--wfm-danger)"; }
         return false;
     }
+}
+
+// True when the loaded template is a Reference-to-Video workflow (FastH3 OmniRef /
+// Pika-H3-Flex), whose First/Last Image fields are reference images 1/2 — lets
+// video-asset-tab.js label its "Set as First/Last Image" buttons accordingly.
+export function isReferenceImagePlan() {
+    return _isReferenceTemplate();
+}
+
+function _isReferenceTemplate() {
+    return !!_templateWorkflow && locateVideoModelNodes(_templateWorkflow)?.family === "fasth3";
 }
 
 // Exported so other modules (video-asset-tab.js's "Set as First/Last Image"
@@ -665,11 +680,13 @@ function _setRunUiState(running) {
 // last_image_filename on the previous block always wins (it's already a known
 // input image — no extraction needed); otherwise the previous block's actual
 // generated last frame is used (extracted client-side after that block ran).
+// Reference-to-Video templates store Reference Image 2 in last_image_filename, which
+// is not the previous clip's last frame, so it never short-circuits the extraction.
 async function _resolveFirstImage(block, i, prevGeneratedLastFrameRef) {
     if (block.first_image_mode === "explicit") return block.first_image_filename || null;
     if (block.first_image_mode === "chain_previous" && i > 0) {
         const prevBlock = _plan.blocks[i - 1];
-        if (prevBlock.last_image_filename) return prevBlock.last_image_filename;
+        if (prevBlock.last_image_filename && !_isReferenceTemplate()) return prevBlock.last_image_filename;
         return prevGeneratedLastFrameRef;
     }
     return null;
@@ -757,7 +774,7 @@ async function _runVideoPlanBatch() {
                 // skip the extraction entirely when this block already has its own
                 // explicit last_image_filename (that value is used directly instead).
                 prevGeneratedLastFrameRef = null;
-                if (!block.last_image_filename) {
+                if (!block.last_image_filename || _isReferenceTemplate()) {
                     const vid = outputMedia.find((m) => isVideoFilename(m.filename));
                     if (vid) {
                         try {

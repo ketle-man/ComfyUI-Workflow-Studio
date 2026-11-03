@@ -129,12 +129,19 @@ function _locateFastH3Nodes(workflow) {
     const widthIdx = widthSrc ? -1 : widgetIndex(instanceNode, "width");
     const heightIdx = sourceOf(instanceNode, "height") ? -1 : widgetIndex(instanceNode, "height");
 
-    // 参照画像はPlanの"First Image"欄で1枚目(ref_image_0)だけを扱う。最終フレームの概念は
-    // 無いためLast Imageは非対応。前ブロックの最終フレーム連結(chain_previous)は、その
-    // フレームを次ブロックの参照画像として渡す形になる。
-    const firstFrameSlot = instanceNode.inputs.findIndex((i) => i.name === "ref_images.ref_image_0");
-    const rawLoadImageNode = sourceOf(instanceNode, "ref_images.ref_image_0");
-    const loadImageNode = rawLoadImageNode?.type === "LoadImage" ? rawLoadImageNode : null;
+    // 参照画像はPlanの"First Image"/"Last Image"欄を流用し、1枚目(ref_image_0)/2枚目
+    // (ref_image_1)として扱う(UI上は"Reference Image"/"Reference Image 2"表記)。最終フレームの
+    // 概念は無いため、前ブロックの最終フレーム連結(chain_previous)は生成された最終フレームを
+    // 次ブロックの1枚目の参照画像として渡す形になる(video-plan-tab.js _resolveFirstImage参照)。
+    const refSlot = (name) => instanceNode.inputs.findIndex((i) => i.name === name);
+    const refLoadImage = (name) => {
+        const src = sourceOf(instanceNode, name);
+        return src?.type === "LoadImage" ? src : null;
+    };
+    const firstFrameSlot = refSlot("ref_images.ref_image_0");
+    const loadImageNode = refLoadImage("ref_images.ref_image_0");
+    const lastFrameSlot = refSlot("ref_images.ref_image_1");
+    const lastLoadImageNode = refLoadImage("ref_images.ref_image_1");
 
     // noise_seedはcomfyUI.generate()が全ノード一括で上書きする(applyBlockToWorkflow参照)ため、
     // ここではUI上の有効表示のためにRandomNoiseの有無だけを見る。
@@ -142,8 +149,8 @@ function _locateFastH3Nodes(workflow) {
 
     return {
         family: "fasth3", sgDef: null, instanceNode, promptNode, durationNode, durationAsFrames,
-        loadImageNode, lastLoadImageNode: null, resolutionNode,
-        firstFrameSlot, lastFrameSlot: -1, promptIdx, durationIdx,
+        loadImageNode, lastLoadImageNode, resolutionNode,
+        firstFrameSlot, lastFrameSlot, promptIdx, durationIdx,
         widthIdx, heightIdx, noiseSeedIdx: hasRandomNoise ? 0 : -1,
         turboModeIdx: -1, turboStrengthIdx: -1, turboStepsIdx: -1, promptEnhanceIdx: -1,
     };
