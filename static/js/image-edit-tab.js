@@ -6,6 +6,7 @@
 
 import { LayerManager, Layer } from "./image-edit/LayerManager.js";
 import { DrawTool }            from "./image-edit/DrawTool.js";
+import { DrawPalette }         from "./image-edit/DrawPalette.js";
 import { TextTool, TEXT_FONTS } from "./image-edit/TextTool.js";
 import { SelectTool }          from "./image-edit/SelectTool.js";
 import { ShapeTool }           from "./image-edit/ShapeTool.js";
@@ -20,9 +21,21 @@ import { MaskEditorOneBridge } from "./image-edit/MaskEditorOneBridge.js";
 import { InpaintI2IActions }   from "./image-edit/InpaintI2IActions.js";
 import { FileExport }          from "./image-edit/FileExport.js";
 import { showToast }           from "./app.js";
+import { t as tr }              from "./i18n.js";
 import { comfyUI }             from "./comfyui-client.js";
 import { comfyEditor }         from "./comfyui-editor.js";
 import { comfyWorkflow }       from "./comfyui-workflow.js";
+
+// Draw Tool: スポイト（Eyedropper）アイコン。ボタンとカスタムカーソルの両方で使い回す。
+const EYEDROPPER_ICON_PATH = "M20.71 5.63l-2.34-2.34a1 1 0 0 0-1.41 0L14.7 5.55 12 8.24 3 17.24V21h3.76l9-9 2.69-2.69 2.26-2.26a1 1 0 0 0 0-1.41zM6.34 19H5v-1.34l8.06-8.06 1.41 1.41L6.34 19z";
+const EYEDROPPER_ICON_SVG =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="${EYEDROPPER_ICON_PATH}"/></svg>`;
+
+function _eyedropperCursorCss() {
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'>`
+        + `<path d='${EYEDROPPER_ICON_PATH}' fill='%23ffffff' stroke='%23000000' stroke-width='1'/></svg>`;
+    return `url("data:image/svg+xml,${svg}") 2 22, crosshair`;
+}
 
 const TOOL_DEFS = [
     { id: "select",   icon: "▲",  label: "Select",    ready: true  },
@@ -49,6 +62,11 @@ class ImageEditTab {
         this._layerMgr      = null;
         this._activeTool    = "select";
         this._drawTool      = new DrawTool(null);
+        this._eyedropperActive = false; // Drawツールのスポイト（色抽出）モード
+        this._drawPalette   = new DrawPalette({
+            onColorChange: hex => this._setDrawColor(hex),
+            toast: showToast,
+        });
         this._textTool      = new TextTool(null);
         this._selectTool    = new SelectTool();
         this._zoom          = 1.0;
@@ -196,6 +214,7 @@ class ImageEditTab {
     _updateBrushCursor(e) {
         const el = this._brushCursorEl;
         if (!el) return;
+        this._lastBrushCursorEvent = e; // キー操作でサイズを変えたときに再描画するため保持
         const tool = this._activeTool;
         const size = tool === "draw"
             ? this._drawTool?.brushSize
@@ -226,6 +245,79 @@ class ImageEditTab {
         if (this._brushCursorEl) this._brushCursorEl.style.display = "none";
     }
 
+    // ── Draw: スポイト（Eyedropper） ─────────────────
+
+    _setEyedropperActive(active) {
+        this._eyedropperActive = active;
+        const drawCanvas = document.getElementById("ie-canvas-draw");
+        const overlay    = document.getElementById("ie-canvas-overlay");
+        const cursor = active ? _eyedropperCursorCss() : "";
+        if (drawCanvas) drawCanvas.style.cursor = cursor;
+        if (overlay)    overlay.style.cursor    = cursor;
+        if (active) this._hideBrushCursor();
+        document.getElementById("ie-draw-eyedropper")?.classList.toggle("ie-opt-active", active);
+    }
+
+    _pickColorAt(x, y) {
+        const canvas = document.getElementById("ie-canvas-draw");
+        const px = Math.floor(x), py = Math.floor(y);
+        if (!canvas || px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) {
+            this._setEyedropperActive(false);
+            return;
+        }
+        try {
+            // 見えている色を拾うため、アクティブレイヤーのみの表示なら合成し直す
+            if (!this._compositeMode) this._updateCompositeView();
+            const [r, g, b] = canvas.getContext("2d").getImageData(px, py, 1, 1).data;
+            const hex = "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
+            this._setDrawColor(hex);
+            this._drawPalette.syncColor(hex);
+        } catch {
+            showToast(tr("imageEditPixelColorFail"), "error");
+        }
+        this._setEyedropperActive(false);
+    }
+
+    _setDrawMode(mode) {
+        this._drawTool.mode   = mode;
+        this._drawTool._stamp = null;
+        this._renderDrawProps();
+    }
+
+    _setDrawBrushSize(size) {
+        this._drawTool.brushSize = size;
+        this._drawTool._stamp    = null;
+        const slider = document.getElementById("ie-draw-size");
+        if (slider) slider.value = size;
+        const label = document.getElementById("ie-draw-size-lbl");
+        if (label) label.textContent = size + "px";
+        if (this._lastBrushCursorEvent && !this._eyedropperActive) {
+            this._updateBrushCursor(this._lastBrushCursorEvent);
+        }
+    }
+
+    /** [ / ] キー: サイズが大きいほど刻みを粗くする */
+    _stepDrawBrushSize(direction) {
+        const size = this._drawTool.brushSize;
+        const base = direction < 0 ? size - 1 : size;
+        const step = base < 10 ? 1 : base < 50 ? 5 : 10;
+        this._setDrawBrushSize(Math.min(200, Math.max(1, size + direction * step)));
+    }
+
+    /** Drawツール中のBキー: ブラシ選択モーダルを開閉する */
+    _toggleDrawBrushPicker() {
+        if (this._abrAvailable) this._openAbrBrushPickerForDraw();
+        else showToast(tr("imageEditNoAbrBrushes"), "info");
+    }
+
+    _setDrawColor(hex) {
+        this._drawTool.color     = hex;
+        this._drawTool._stamp    = null;
+        this._drawTool._imgStamp = null;
+        const input = document.getElementById("ie-draw-color");
+        if (input) input.value = hex;
+    }
+
     // ── ツールボタン ──────────────────────────────
 
     _setupToolButtons() {
@@ -240,6 +332,7 @@ class ImageEditTab {
 
     _setActiveTool(toolId) {
         this._hideBrushCursor();
+        if (this._eyedropperActive) this._setEyedropperActive(false);
         if (this._activeTool === "draw")   this._drawTool?.deactivate();
         if (this._activeTool === "text")   this._textTool?.deactivate();
         if (this._activeTool === "select") this._selectTool?.deactivate();
@@ -306,6 +399,7 @@ class ImageEditTab {
     _renderToolOptions(toolId) {
         const el = document.getElementById("ie-tool-options");
         if (!el) return;
+        this._drawPalette.closeMenu();
         el.innerHTML = "";
 
         if (toolId === "select" && this._selectTool) {
@@ -355,6 +449,7 @@ class ImageEditTab {
 
         } else if (toolId === "draw" && this._drawTool) {
             el.innerHTML = "";
+            this._drawPalette.render(el);
             this._renderDrawProps();
 
         } else if (toolId === "fill" && this._fillTool) {
@@ -873,18 +968,22 @@ class ImageEditTab {
             <div class="ie-props-row">
                 <label>Mode</label>
                 <div style="display:flex;gap:4px;">
-                    <button class="wfm-btn wfm-btn-sm${t.mode === "draw"  ? " ie-opt-active" : ""}" id="ie-draw-mode-draw"  style="flex:1;">Draw</button>
-                    <button class="wfm-btn wfm-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-draw-mode-erase" style="flex:1;">Erase</button>
+                    <button class="wfm-btn wfm-btn-sm${t.mode === "draw"  ? " ie-opt-active" : ""}" id="ie-draw-mode-draw"  title="Draw (D)"  style="flex:1;">Draw</button>
+                    <button class="wfm-btn wfm-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-draw-mode-erase" title="Erase (E)" style="flex:1;">Erase</button>
                 </div>
             </div>
             <div class="ie-props-row">
                 <label>Color</label>
-                <input type="color" id="ie-draw-color" value="${t.color}"
-                    style="width:36px;height:24px;padding:0;border:1px solid var(--wfm-border);cursor:pointer;border-radius:3px;flex-shrink:0;">
+                <div style="display:flex;gap:4px;align-items:center;">
+                    <input type="color" id="ie-draw-color" value="${t.color}"
+                        style="width:36px;height:24px;padding:0;border:1px solid var(--wfm-border);cursor:pointer;border-radius:3px;flex-shrink:0;">
+                    <button class="wfm-btn wfm-btn-sm${this._eyedropperActive ? " ie-opt-active" : ""}" id="ie-draw-eyedropper"
+                        title="Eyedropper" style="flex-shrink:0;width:auto;height:24px;padding:2px 6px;display:flex;align-items:center;justify-content:center;">${EYEDROPPER_ICON_SVG}</button>
+                </div>
             </div>
             <div class="ie-props-row">
-                <label>Size</label>
-                <input type="range" id="ie-draw-size" min="1" max="200" value="${t.brushSize}">
+                <label title="[ / ]">Size</label>
+                <input type="range" id="ie-draw-size" min="1" max="200" value="${t.brushSize}" title="[ / ]">
                 <span id="ie-draw-size-lbl">${t.brushSize}px</span>
             </div>
             <div class="ie-props-row">
@@ -906,7 +1005,7 @@ class ImageEditTab {
                 <label>Brush</label>
                 <span style="font-size:11px;color:var(--wfm-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                     title="${t.brushName ?? "Circle"}">${t.brushName ?? "Circle"}</span>
-                <button class="wfm-btn wfm-btn-sm" id="ie-draw-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;" ${this._abrAvailable ? "" : "disabled"}>Select</button>
+                <button class="wfm-btn wfm-btn-sm" id="ie-draw-select-brush" title="B" style="font-size:10px;padding:1px 6px;flex-shrink:0;" ${this._abrAvailable ? "" : "disabled"}>Select</button>
                 ${t.brushImage ? `<button class="wfm-btn wfm-btn-sm" id="ie-draw-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
             </div>
             ${t.brushImage ? `
@@ -933,25 +1032,17 @@ class ImageEditTab {
             </div>` : ""}
         `;
 
-        document.getElementById("ie-draw-mode-draw")?.addEventListener("click", () => {
-            this._drawTool.mode = "draw";
-            this._drawTool._stamp = null;
-            this._renderDrawProps();
-        });
-        document.getElementById("ie-draw-mode-erase")?.addEventListener("click", () => {
-            this._drawTool.mode = "erase";
-            this._drawTool._stamp = null;
-            this._renderDrawProps();
-        });
+        document.getElementById("ie-draw-mode-draw")?.addEventListener("click", () => this._setDrawMode("draw"));
+        document.getElementById("ie-draw-mode-erase")?.addEventListener("click", () => this._setDrawMode("erase"));
         document.getElementById("ie-draw-color")?.addEventListener("input", e => {
-            this._drawTool.color = e.target.value;
-            this._drawTool._stamp = null;
-            this._drawTool._imgStamp = null;
+            this._setDrawColor(e.target.value);
+            this._drawPalette.syncColor(e.target.value);
+        });
+        document.getElementById("ie-draw-eyedropper")?.addEventListener("click", () => {
+            this._setEyedropperActive(!this._eyedropperActive);
         });
         document.getElementById("ie-draw-size")?.addEventListener("input", e => {
-            this._drawTool.brushSize = parseInt(e.target.value);
-            document.getElementById("ie-draw-size-lbl").textContent = e.target.value + "px";
-            this._drawTool._stamp = null;
+            this._setDrawBrushSize(parseInt(e.target.value));
         });
         document.getElementById("ie-draw-hard")?.addEventListener("input", e => {
             this._drawTool.hardness = parseInt(e.target.value) / 100;
@@ -1461,7 +1552,9 @@ class ImageEditTab {
             }
             // Draw/Mask: update brush cursor and continue stroke outside canvas
             const tool = this._activeTool;
-            if (tool === "draw" || tool === "mask") {
+            if (this._eyedropperActive) {
+                this._hideBrushCursor();
+            } else if (tool === "draw" || tool === "mask") {
                 this._updateBrushCursor(e);
                 const isDrawing = tool === "draw"
                     ? this._drawTool?._drawing
@@ -1513,6 +1606,11 @@ class ImageEditTab {
         const pos      = DrawTool.getCanvasPos(refCanvas, e);
         // PointerEvent.pressure: pen -> actual pressure, mouse -> 0.5 while a button is held.
         const pressure = e.pressure || 0.5;
+
+        if (this._eyedropperActive) {
+            this._pickColorAt(pos.x, pos.y);
+            return;
+        }
 
         if (this._activeTool === "draw" && this._drawTool) {
             const activeLayer = this._layerMgr.activeLayer;
@@ -1781,6 +1879,7 @@ class ImageEditTab {
 
     // 現在のドキュメントを閉じ、未保存の変更を破棄してプレースホルダー表示に戻す
     _closeDocument() {
+        if (this._eyedropperActive) this._setEyedropperActive(false);
         if (!this._layerMgr) return;
         if (!confirm("Close the current document? Unsaved changes will be lost.")) return;
 
@@ -1848,6 +1947,8 @@ class ImageEditTab {
         this._layerMgr.on("change", () => this._refreshLayerList());
 
         this._drawTool = new DrawTool(null);
+        // 新規ドキュメントでも選択中の色を引き継ぐ（パレットを色の正とする）
+        this._drawTool.color = this._drawPalette.currentColor;
         this._drawTool.onChange(() => {
             // layer.canvas に直接描くため sync 不要
             this._updateCompositeView();
@@ -2458,6 +2559,9 @@ class ImageEditTab {
                 const wrap = document.getElementById("ie-canvas-wrap");
                 if (wrap && !this._panning) wrap.style.cursor = "grab";
             }
+            if (e.key === "Escape" && this._eyedropperActive) this._setEyedropperActive(false);
+            const brushPicker = document.getElementById("wfm-abr-picker-overlay");
+            if (e.key === "Escape") brushPicker?.remove();
             if (e.ctrlKey && e.key === "z") { e.preventDefault(); this._undo(); }
             if (e.ctrlKey && e.key === "y") { e.preventDefault(); this._redo(); }
             if (this._activeTool === "mask" && this._maskSubtool === "vector") {
@@ -2465,10 +2569,20 @@ class ImageEditTab {
             }
             if (!e.ctrlKey && !e.target.closest("input, textarea, select")) {
                 if (e.key === "v") this._setActiveTool("select");
-                if (e.key === "b") this._setActiveTool("draw");
+                if (e.key === "b") {
+                    if (this._activeTool === "draw") this._toggleDrawBrushPicker();
+                    else this._setActiveTool("draw");
+                }
                 if (e.key === "t") this._setActiveTool("text");
                 if (e.key === "s") this._setActiveTool("shape");
                 if (e.key === "g") this._setActiveTool("fill");
+                if (this._activeTool === "draw" && !brushPicker && !e.altKey && !e.metaKey) {
+                    if (e.key === "d") this._setDrawMode("draw");
+                    if (e.key === "e") this._setDrawMode("erase");
+                    if (e.key === "x") this._drawPalette.toggleWell();
+                    if (e.key === "[") this._stepDrawBrushSize(-1);
+                    if (e.key === "]") this._stepDrawBrushSize(1);
+                }
                 // Delete/Backspaceで選択オブジェクト削除
                 if ((e.key === "Delete" || e.key === "Backspace") && this._activeTool === "select") {
                     const layer = this._selectTool?.getSelectedLayer();
@@ -2929,7 +3043,7 @@ class ImageEditTab {
             return null;
         };
 
-        const currentColor = this._drawTool?.color ?? "#ff0000";
+        const currentColor = this._drawTool?.color ?? "#000000";
         const hex = currentColor.replace("#", "");
         const cr  = parseInt(hex.slice(0, 2), 16);
         const cg  = parseInt(hex.slice(2, 4), 16);

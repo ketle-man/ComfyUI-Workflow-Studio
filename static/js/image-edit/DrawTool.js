@@ -12,7 +12,7 @@ export class DrawTool {
         this.brushSize   = 20;
         this.hardness    = 0.8;   // 0.0 = very soft, 1.0 = hard edge
         this.opacity     = 1.0;
-        this.color       = "#ff0000";
+        this.color       = "#000000";
         this.mode        = "draw"; // "draw" | "erase"
         this.spacing     = 0.25;   // stamp interval as fraction of brushSize (image brush only)
         this.angle       = 0;      // degrees [0, 359]

@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.8.11-green)
+![Version](https://img.shields.io/badge/version-0.9.3-green)
 
 ## Screenshots
 
@@ -442,7 +442,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **New button** — create a blank canvas with custom dimensions (WxH prompt); clears all existing layers and automatically adds an empty Layer 1 (v0.3.70)
 - **Tools** — Select (V), Draw (B), Text (T), Shape (S), Fill (G), Mask (🎭), Blur (≈), BG Remove (⬚), Filter (★), Inpaint (🩹); tool options bar updates per active tool
   - **Select** — click to select; drag to move; drag corner handles to resize; drag circle handle to rotate; Flip H / Flip V / Rotate angle in the options bar; double-click a text layer to re-edit its content
-  - **Draw** — freehand brush; options: color, brush size, blend mode; paints directly onto the active draw layer while all other layers remain visible; brush cursor shown as a size-accurate circle; strokes can start from outside the canvas margin and continue past the edge; **pen tablet support** (v0.6.2) — brush size and opacity respond to pen pressure (mouse behaves exactly as before); the canvas listens for Pointer Events so pen, touch, and mouse all work through the same code path
+  - **Draw** — freehand brush; options: color, brush size, blend mode; paints directly onto the active draw layer while all other layers remain visible; brush cursor shown as a size-accurate circle; strokes can start from outside the canvas margin and continue past the edge; **pen tablet support** (v0.6.2) — brush size and opacity respond to pen pressure (mouse behaves exactly as before); the canvas listens for Pointer Events so pen, touch, and mouse all work through the same code path; **color palette** on the second row — Color 1/Color 2, 20 basic colors, and 20 custom slots (registered and edited colors are saved in the browser); **eyedropper** button next to Color picks a color from the canvas (`Esc` cancels); shortcuts while Draw is active: `D` Draw, `E` Erase, `X` switch Color 1/2, `[` `]` brush size, `B` open or close the brush picker (`Esc` also closes it)
   - **Text** — click to place; configure font, size, bold/italic, align, and color; placed as an exact-size text layer sized to the measured bounding box; double-click to re-edit
   - **Shape** — drag to draw geometric shapes (Rect / Ellipse / Line / FreeLine); options: shape type, Rounded toggle (Rect/Ellipse), Fill color, Stroke color + width, Opacity; each committed shape becomes an independent draw layer; Stroke None hidden for Line/FreeLine (stroke always active)
   - **Fill** (v0.6.2) — bucket fill; click a contiguous same-color region on the active layer to flood-fill it (scanline-based, ported from the Comic Creator plugin's Image tab); **Properties pane**: Mode (Solid / Gradient) — Solid: Color picker; Gradient: Shape (Linear / Radial), a draggable color-stop Ramp (click a stop to select it, drag to reposition, ＋/－ to add/remove stops, color swatch to edit the selected stop's color), and a Direction dial (drag to set angle/radius); both Tolerance (0–255, color-match threshold) and Opacity apply to either mode; Ramp and Direction dial are pointer-event based with pointer capture, so pen tablets work the same as mouse
