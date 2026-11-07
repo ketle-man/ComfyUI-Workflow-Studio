@@ -59,7 +59,10 @@ _init_allowed_root()
 
 # Windowsのレジストリ依存で音声のMIMEが返らない/不統一なため明示登録する（<audio>の再生に必要）
 for _ext, _mime in ((".wav", "audio/wav"), (".mp3", "audio/mpeg"), (".ogg", "audio/ogg"),
-                    (".opus", "audio/ogg"), (".m4a", "audio/mp4"), (".flac", "audio/flac")):
+                    (".opus", "audio/ogg"), (".m4a", "audio/mp4"), (".flac", "audio/flac"),
+                    (".glb", "model/gltf-binary"), (".vrm", "model/gltf-binary"), (".gltf", "model/gltf+json"),
+                    (".ply", "application/octet-stream"), (".spz", "application/octet-stream"),
+                    (".bin", "application/octet-stream")):
     mimetypes.add_type(_mime, _ext)
 
 
@@ -79,6 +82,8 @@ def setup_routes(app: web.Application):
     app.router.add_get("/wfm/gallery/image/workflow", get_image_workflow)
     app.router.add_get("/wfm/gallery/image/serve", serve_image)
     app.router.add_get("/wfm/gallery/image/thumb", serve_thumb)
+    app.router.add_post("/wfm/gallery/image/thumb3d", save_model3d_thumb)
+    app.router.add_get("/wfm/gallery/model3d/asset", serve_model3d_asset)
     app.router.add_post("/wfm/gallery/image/meta", save_image_meta)
     app.router.add_get("/wfm/gallery/image-prompt/root", get_image_prompt_root)
     app.router.add_post("/wfm/gallery/image/image-prompt", save_image_prompt)
@@ -383,6 +388,37 @@ async def serve_thumb(request: web.Request) -> web.Response:
     return web.FileResponse(thumb_path, headers={
         "Content-Type": content_type,
         "Cache-Control": "max-age=86400",
+    })
+
+
+async def save_model3d_thumb(request: web.Request) -> web.Response:
+    """POST /wfm/gallery/image/thumb3d — ブラウザが描画した3Dモデルのサムネイルを保存する"""
+    try:
+        body = await request.json()
+        path = body.get("path", "")
+        image = body.get("image", "")
+        if not path or not image:
+            return web.json_response({"ok": False, "error": "path and image required"}, status=400)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _service.save_model3d_thumbnail, path, image)
+        return web.json_response(result, status=200 if result.get("ok") else 400)
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def serve_model3d_asset(request: web.Request) -> web.Response:
+    """GET /wfm/gallery/model3d/asset — .gltfが参照する外部ファイル(.bin/テクスチャ)を配信する"""
+    path = request.rel_url.query.get("path", "")
+    uri = request.rel_url.query.get("uri", "")
+    if not path or not uri:
+        return web.Response(status=400)
+    asset = _service.serve_model3d_asset(path, uri)
+    if asset is None:
+        return web.Response(status=404)
+    content_type, _ = mimetypes.guess_type(str(asset))
+    return web.FileResponse(asset, headers={
+        "Content-Type": content_type or "application/octet-stream",
+        "Cache-Control": "max-age=3600",
     })
 
 

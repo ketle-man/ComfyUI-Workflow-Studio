@@ -672,7 +672,7 @@ function extractPromptsAPI(wf) {
             const srcNode = wf[String(val[0])];
             // TextEncodeFibo2(Fibo 2.0)も同形。promptはPreviewAny→プロンプト強化スイッチ経由でリンクされる。
             if (srcNode?.class_type === "TextEncodeMageFlowEdit" || srcNode?.class_type === "TextEncodeBooguEdit"
-                || srcNode?.class_type === "TextEncodeFibo2") {
+                || srcNode?.class_type === "TextEncodeFibo2" || srcNode?.class_type === "PH3ImageConditioning") {
                 const raw = isPos ? srcNode.inputs?.prompt : srcNode.inputs?.negative_prompt;
                 const text = Array.isArray(raw) ? resolveLinkedText(wf, raw[0], raw[1] ?? 0) : raw;
                 if (text && typeof text === "string") { if (isPos) pos.add(text); else neg.add(text); }

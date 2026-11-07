@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.3-green)
+![Version](https://img.shields.io/badge/version-0.9.4-green)
 
 ## Screenshots
 
@@ -133,6 +133,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - **Eagle integration** — auto-save generated images to [Eagle](https://eagle.cool/) with metadata
 - **Qwen Image 2.1 support** (v0.7.3) — `TextEncodeQwenImage21` (the unified T2I/Edit encoder used by Comfy-Org's Qwen-Image-2.1 workflow templates) is now recognized: its `prompt`/`negative_prompt` widgets populate the Input tab's Positive/Negative Prompt textareas and are editable like any other prompt node; its `resolution` (a pixel-budget int, not width/height) is exposed for Raw JSON editing. No extra work was needed for the model's up to 10 reference images (`image_1`…`image_10`, used for image editing) — each one arrives as an ordinary LoadImage node, so it already gets its own card in the Input tab's Image sub-panel via the existing generic LoadImage detection
 - **Ming Image support** (v0.7.5) — `TextEncodeMingImageEdit` (single `prompt` widget, up to 8 optional `images.image_N` reference inputs; role taken from the sampler/guider wiring, so the empty-prompt negative instance in layer-decomposition workflows shows as Negative) and `EmptyQwenImageLayeredLatentImage` (Latent panel; `layers` kept as-is) are recognized in GenerateUI, and Gallery/Metadata/sidepanel I tab now show their prompts as Positive. The Sampler field is disabled (N/A) when the SAMPLER input comes from a node without `sampler_name` (e.g. `SamplerLCM`). **Fix:** top-level nodes whose widgets are converted to wired inputs (e.g. `EmptyLatentImage` width/height fed by `GetImageSize`) keep those values in `widgets_values`; they were not stripped outside subgraphs, shifting later values (`batch_size` became `1024`, KSampler `steps`/`cfg` misread). Also: `BasicGuider`'s `conditioning` is treated as positive, and a linked text input wins over the stale widget text in UI-format metadata
+- **P-H3 Image support** (v0.9.4) — the `PH3ImageConditioning` templates (Image Edit and T2I) load and run from GenerateUI, with the prompt shown on the Input tab and read back by the Metadata tab. Width and height follow the workflow's wiring, and the prompt upsampler runs as set in the workflow
 
 </details>
 
@@ -309,6 +310,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **Output folder configurable** — set the scanned output folder from Settings tab
 - **SVG file support** (v0.3.77) — `.svg` files are browsable, previewable (detail panel and lightbox), and included in favorites/tags/groups/move/delete/export alongside raster formats; served as-is with no rasterized thumbnail, since `<img>` scales vector graphics natively at any size
 - **PSD file support** (v0.6.0) — `.psd` files are browsable alongside other formats; thumbnails and full-size previews show every layer merged together (hidden layers excluded), rendered server-side via `psd-tools` and disk-cached; the underlying PSD file itself is never modified — only the Gallery preview is a flattened rendering
+- **3D model support** (v0.9.4) — `.glb` / `.gltf` / `.vrm` / `.ply` (mesh, point cloud or Gaussian splat) / `.spz` files are browsable alongside images with a **3D** badge and open in a built-in viewer in the detail panel, lightbox and compare view (drag to rotate, right-drag to pan, wheel to zoom). Thumbnails are rendered by your browser the first time a file appears and then kept on the server (files over 128 MB get one when opened). Workflows saved by ComfyUI's SaveGLB are read like an image's. A `.gltf` using separate `.bin` or texture files needs them to stay in place: Move and Delete only affect the `.gltf` itself. KTX2-compressed textures are not supported
 - **Performance** — server-side 256px JPEG thumbnail generation with disk cache (`data/thumb_cache/`); infinite-scroll paging (50 images per page, IntersectionObserver); folder-level mtime cache (60s TTL); bulk operations use single-request API endpoints
 
 </details>

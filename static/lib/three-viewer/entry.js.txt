@@ -1,0 +1,9 @@
+export * as THREE from "three";
+export { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+export { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+export { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+export { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+export { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
+export { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+export { VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
+export const loadSpark = () => import("@sparkjsdev/spark");

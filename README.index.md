@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.3-green)
+![Version](https://img.shields.io/badge/version-0.9.4-green)
 
 ## Features (tab -> feature names)
 
@@ -38,7 +38,7 @@ Thumbnail / Table views, Thumbnail side panel, Badge filtering, Search, Side pan
 One-click capture, Auto-save as thumbnail, Embedded workflow metadata, Auto-import
 
 ### GenerateUI Tab (v0.3.5)
-6-tab layout, Save button, Input tab, Multi-image I2I for Comic Creator, Model tab, Settings tab, Always-visible Raw JSON, Bypass/Mute node handling, One-click generation, Seed control, Style selector, Create Catalog / Catalog buttons, Batch type selector, Batch tab, UI-to-API conversion, Video workflow support, Eagle integration, Qwen Image 2.1 support, Ming Image support
+6-tab layout, Save button, Input tab, Multi-image I2I for Comic Creator, Model tab, Settings tab, Always-visible Raw JSON, Bypass/Mute node handling, One-click generation, Seed control, Style selector, Create Catalog / Catalog buttons, Batch type selector, Batch tab, UI-to-API conversion, Video workflow support, Eagle integration, Qwen Image 2.1 support, Ming Image support, P-H3 Image support
 
 ### Feeder subtab (v0.3.5 / v0.3.42)
 ImageFeeder node control, Image library, Selection management, Presets, Continuous Run loop, Index sync, Seed, WFS_GalleryFeeder node, Node & group selector, Image grid, After Gen modes, Run / Stop controls
@@ -53,7 +53,7 @@ Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column —
 2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, VRAM Management (Ollama), Video Playback Volume, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
 
 ### Gallery Tab (v0.3.44)
-Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, WebM support, Embedded metadata reading fixes, Audio support, File conversion, Move To folder filter, Semantic Search, Audio waveform colors, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Nanobanana tab, Gemini / Nano Banana nodes, MOSS-Image in GenerateUI, Faster GenerateUI Check / conversion, Partner API nodes in GenerateUI, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send to LV node button, Send CC Layout / Send CC Image buttons, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, PSD file support, Performance
+Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, WebM support, Embedded metadata reading fixes, Audio support, File conversion, Move To folder filter, Semantic Search, Audio waveform colors, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Nanobanana tab, Gemini / Nano Banana nodes, MOSS-Image in GenerateUI, Faster GenerateUI Check / conversion, Partner API nodes in GenerateUI, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send to LV node button, Send CC Layout / Send CC Image buttons, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, PSD file support, 3D model support, Performance
 
 ### ImagePrompt Gallery subtab (v0.3.94, renamed from Style/Prompt in v0.3.95)
 Visual prompt library, 3-column layout, Prompt builder (right pane), Plain-text prompt storage, ponyxlWildcardsVault format support, Seed data importer

@@ -2,6 +2,34 @@
 
 ---
 
+## v0.9.4（2026-11-07）
+
+### Gallery: 3Dモデル対応（GLB / glTF / VRM / PLY / SPZ）
+
+- 新規 `static/js/gallery-3d-viewer.js`: three.jsのビューア。詳細パネル・ライトボックス・比較で開き、枠がDOMから外れると自分で破棄する（WebGLコンテキストを解放）。
+- 新規 `static/lib/three-viewer/`: three 0.187 / @pixiv/three-vrm 3.5.5 / @sparkjsdev/spark 2.4.0 のバンドル。Spark(2.8MB)は別チャンクで、スプラットを開くときだけ読む。再ビルド手順は同フォルダのREADME.txt。
+- サムネイル: サーバーに3Dレンダラーが無いため、`/thumb` の404を合図にブラウザが描画し `/wfm/gallery/image/thumb3d` へ保存する。1件ずつ処理し、128MB超は開いたときに保存する。
+- `.gltf` の外部ファイルは `/wfm/gallery/model3d/asset` で配信する（.bin/画像のみ、許可ルート内のみ）。
+- PLYは `f_dc_0`/`scale_0` の有無でスプラットを判定する。`double` 属性はFloat64ArrayになりWebGLが拒否するのでFloat32へ変換する。
+- `asset.extras` からSaveGLBのprompt/workflowを読む（GLBはJSONチャンクのみ読む）。
+- 3DファイルはImage Edit / GenerateUI / Send to LI node / Tagger / Feederへ送れないようにした。
+
+### P-H3 Image対応
+
+- `PH3ImageConditioning` をGenerateUI/Metadata/Iタブに追加（`TextEncodeFibo2` と同じ扱い、negativeなし）。`_unifyPromptEnhancerText` は `TextGenerateV2` も対象にした。
+
+### 修正: TextGenerate系の値ずれ
+
+- `_normalizeLinkedWidgetValues` が、リンク済みpromptの空枠を持つ形式を「枠なし形式」と誤判定していた。値が1つずれても、無効なDynamicComboキーがoptions[0]へフォールバックして枠数が偶然一致するため。Krea-2 / Ernie / LTX-2.5 などでも `sampling_mode:2048` のようにずれていた。選択キーの有効性も判定に加えた。
+
+**検証**: 3Dは実サンプルで描画・自動サムネイル・詳細・拡大・破棄・送信ガード（Image Editボタン）を確認（SPZとスプラットPLYは自作サンプル）。パストラバーサルは全て404。変換は手元の640ワークフローを修正前後で比較し、差分21件は全てTextGenerate系。うち5種類は `widgets_values_named` 等で正しい値と確認した。P-H3は編集（1024x1024、約60秒）とT2I（3360x2496、約40秒）をGenerateUIから実生成（RTX 4070 12GB、モデルロード済み）。
+
+**未確認**: 比較表示、テーブル表示のサムネイル、128MB超のファイル、実データのスプラット、サイドパネルIタブのP-H3、Draco/Meshopt圧縮のモデル。
+
+**補足**: KTX2圧縮テクスチャは未対応。`.gltf` を移動・削除しても外部ファイルは追従しない。GenerateUIにプロンプト強化のオン/オフ切り替えは無い。
+
+---
+
 ## v0.9.3（2026-11-05）
 
 ### Image Edit: Drawツールのカラーパレット・ショートカット・スポイト（Comic Creator v1.67.0 から移植）

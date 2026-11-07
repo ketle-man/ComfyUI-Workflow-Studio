@@ -14,6 +14,7 @@ import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,22 @@ AUDIO_WAVE_COLORS = {
     ".m4a": (251, 113, 133),   # rose
 }
 
-# サポートする画像拡張子（動画・音声はGalleryでは静止画と同じ一覧・配信経路を共有する。
+# 3Dモデル拡張子。表示はブラウザのthree.js(static/js/gallery-3d-viewer.js)で行う。
+# サーバーに3Dレンダラーが無いため、サムネイルはブラウザが描画してアップロードしたものを使う。
+GLTF_EXTENSIONS = {".glb", ".gltf", ".vrm"}  # .vrmの実体はGLB
+MODEL3D_EXTENSIONS = GLTF_EXTENSIONS | {".ply", ".spz"}
+# .gltfが相対URIで参照する外部ファイルとして配信を許可する拡張子
+MODEL3D_ASSET_EXTENSIONS = {".bin", ".png", ".jpg", ".jpeg", ".webp"}
+# glTF JSON部の読み取り上限。base64埋め込みの巨大な.gltfはメタデータ読み取りを諦める
+_GLTF_JSON_MAX = 16 * 1024 * 1024
+_MODEL3D_THUMB_MAX_BYTES = 8 * 1024 * 1024
+_MODEL3D_THUMB_MAX_SIDE = 2048
+_MODEL3D_THUMB_SIZE = 512
+
+# サポートする画像拡張子（動画・音声・3DはGalleryでは静止画と同じ一覧・配信経路を共有する。
 # .psdはブラウザが直接レンダリングできないため、配信時に合成済みPNGへ変換する）
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".psd"} | VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
+IMAGE_EXTENSIONS = ({".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".psd"}
+                    | VIDEO_EXTENSIONS | AUDIO_EXTENSIONS | MODEL3D_EXTENSIONS)
 
 # Canvas2D の globalCompositeOperation 文字列 -> psd_tools.constants.BlendMode 名
 # (Image Edit タブの Layer.blendMode はCanvas2Dの合成モード文字列をそのまま保持している)
@@ -762,6 +776,8 @@ class GalleryService:
             embedded = self._read_mp4_metadata(path)
         elif ext in AUDIO_EXTENSIONS:
             embedded = self._read_audio_metadata(path)
+        elif ext in GLTF_EXTENSIONS:
+            embedded = self._read_gltf_metadata(path)
 
         dims = self._read_media_dimensions(path, ext)
         saved = self.metadata_store.get(str(path))
@@ -935,6 +951,37 @@ class GalleryService:
             logger.debug("Audio metadata read error: %s", e)
         return result
 
+    def _read_gltf_metadata(self, path: Path) -> dict:
+        """glTF/GLB/VRMのasset.extrasを読む。ComfyUIのSaveGLBはここにprompt/workflowを
+        JSON文字列で書き込む。GLBは先頭のJSONチャンクだけ読み、メッシュ本体は読まない。"""
+        try:
+            with open(path, "rb") as f:
+                if path.suffix.lower() == ".gltf":
+                    if path.stat().st_size > _GLTF_JSON_MAX:
+                        return {}
+                    doc = json.loads(f.read())
+                else:
+                    head = f.read(20)
+                    if len(head) < 20 or head[:4] != b"glTF":
+                        return {}
+                    length, chunk_type = struct.unpack("<II", head[12:20])
+                    if chunk_type != 0x4E4F534A or length > _GLTF_JSON_MAX:  # "JSON"
+                        return {}
+                    doc = json.loads(f.read(length))
+            extras = doc.get("asset", {}).get("extras")
+        except (OSError, ValueError, AttributeError) as e:
+            logger.debug("glTF metadata read error: %s", e)
+            return {}
+        if not isinstance(extras, dict):
+            return {}
+        result = {}
+        for k, v in extras.items():
+            if isinstance(v, str):
+                result[k] = v
+            elif k in ("prompt", "workflow") and isinstance(v, dict):
+                result[k] = json.dumps(v)
+        return result
+
     def _read_media_dimensions(self, path: Path, ext: str) -> dict:
         """画像は幅高さ、動画は幅高さ+再生時間（秒）を返す。取得できない項目はNone。"""
         info: dict = {"width": None, "height": None, "duration": None}
@@ -957,7 +1004,7 @@ class GalleryService:
                 from psd_tools import PSDImage
                 psd = PSDImage.open(path)
                 info["width"], info["height"] = psd.width, psd.height
-            elif ext != ".svg":
+            elif ext != ".svg" and ext not in MODEL3D_EXTENSIONS:
                 from PIL import Image
                 with Image.open(path) as img:
                     info["width"], info["height"] = img.size
@@ -989,6 +1036,8 @@ class GalleryService:
             embedded = self._read_mp4_metadata(path)
         elif ext in AUDIO_EXTENSIONS:
             embedded = self._read_audio_metadata(path)
+        elif ext in GLTF_EXTENSIONS:
+            embedded = self._read_gltf_metadata(path)
 
         if embedded:
             key_groups = (("workflow", "Workflow"), ("prompt", "Prompt"))
@@ -1329,8 +1378,8 @@ class GalleryService:
             p = Path(img_path).resolve()
             if not p.is_file() or p.suffix.lower() not in IMAGE_EXTENSIONS:
                 continue
-            if p.suffix.lower() in VIDEO_EXTENSIONS | AUDIO_EXTENSIONS:
-                continue  # 動画・音声はPSDレイヤーにできない
+            if p.suffix.lower() in VIDEO_EXTENSIONS | AUDIO_EXTENSIONS | MODEL3D_EXTENSIONS:
+                continue  # 動画・音声・3DはPSDレイヤーにできない
             if not self._check_path_allowed(p):
                 continue
             try:
@@ -1530,6 +1579,54 @@ class GalleryService:
             return self._get_psd_composite_cache(p)
         return p
 
+    def serve_model3d_asset(self, model_path: str, uri: str) -> Path | None:
+        """.gltfが相対URIで参照する外部ファイル(.bin/テクスチャ)のPathを返す。
+        uriはglTF仕様どおりパーセントエンコードされている。"""
+        try:
+            p = Path(model_path).resolve()
+            if p.suffix.lower() != ".gltf" or not p.is_file() or not self._check_path_allowed(p):
+                return None
+            target = (p.parent / unquote(uri)).resolve()
+            if target.suffix.lower() not in MODEL3D_ASSET_EXTENSIONS or not target.is_file():
+                return None
+        except (OSError, ValueError):
+            return None
+        if not self._check_path_allowed(target):
+            logger.warning("serve_model3d_asset: path not allowed: %s", target)
+            return None
+        return target
+
+    def _model3d_thumb_path(self, p: Path) -> Path:
+        """ブラウザが描画した3Dサムネイル(各サイズの元画像)の保存先。"""
+        mtime = int(p.stat().st_mtime * 1000)
+        cache_dir = self.data_dir / "thumb_cache"
+        cache_dir.mkdir(exist_ok=True)
+        return cache_dir / f"{hashlib.md5(f'{p}:{mtime}:model3d'.encode()).hexdigest()}_m3d.jpg"
+
+    def save_model3d_thumbnail(self, model_path: str, image_data: str) -> dict:
+        """ブラウザが描画した3Dモデルのサムネイルを保存する。"""
+        from io import BytesIO
+        from PIL import Image
+
+        p = Path(model_path).resolve()
+        if not p.is_file() or p.suffix.lower() not in MODEL3D_EXTENSIONS:
+            return {"ok": False, "error": "Not a 3D model"}
+        if not self._check_path_allowed(p):
+            return {"ok": False, "error": "Access denied"}
+        try:
+            raw, _ = _decode_image_data_url(image_data)
+            if len(raw) > _MODEL3D_THUMB_MAX_BYTES:
+                return {"ok": False, "error": "Image too large"}
+            with Image.open(BytesIO(raw)) as im:
+                if max(im.size) > _MODEL3D_THUMB_MAX_SIDE:
+                    return {"ok": False, "error": "Image too large"}
+                im = im.convert("RGB")
+                im.thumbnail((_MODEL3D_THUMB_SIZE, _MODEL3D_THUMB_SIZE), Image.LANCZOS)
+                im.save(self._model3d_thumb_path(p), "JPEG", quality=85, optimize=True)
+        except (OSError, ValueError) as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True}
+
     def _get_psd_composite_cache(self, p: Path) -> Path | None:
         """PSDの全レイヤー合成結果をフル解像度PNGとしてディスクキャッシュし、そのPathを返す。"""
         try:
@@ -1637,6 +1734,22 @@ class GalleryService:
 
         if thumb_path.exists():
             return thumb_path
+
+        # 3Dはブラウザが描画して保存したものを縮小して返す。未保存ならNone(404)を返し、
+        # それを合図にブラウザ側が描画する。
+        if p.suffix.lower() in MODEL3D_EXTENSIONS:
+            source = self._model3d_thumb_path(p)
+            if not source.exists():
+                return None
+            try:
+                from PIL import Image
+                with Image.open(source) as img:
+                    img.thumbnail((width, width), Image.LANCZOS)
+                    img.save(thumb_path, "JPEG", quality=85, optimize=True)
+                return thumb_path
+            except Exception as e:
+                logger.warning("serve_thumbnail: 3D thumbnail failed for %s: %s", p, e)
+                return None
 
         # 音声はPillowで開けない。PyAVでデコードして波形をJPEGに描画しキャッシュする。
         if p.suffix.lower() in AUDIO_EXTENSIONS:

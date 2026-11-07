@@ -237,6 +237,13 @@ function _getDynamicComboSubNames(objectInfo, classType, widgetName, selectedKey
     ];
 }
 
+function _isDynamicComboKey(objectInfo, classType, widgetName, value) {
+    const info = objectInfo[classType];
+    const spec = info?.input?.required?.[widgetName] || info?.input?.optional?.[widgetName];
+    const options = spec?.[1]?.options;
+    return !Array.isArray(options) || options.some((o) => o.key === value);
+}
+
 /**
  * Detect if a widget value is a frontend-only extra (like "control_after_generate").
  * These values appear in widgets_values but are not in object_info inputs.
@@ -371,9 +378,15 @@ function _normalizeLinkedWidgetValues(objectInfo, nodeType, widgetsValues, isLin
     const comboExpander = (name, selectedKey) => _getDynamicComboSubNames(objectInfo, nodeType, name, selectedKey);
 
     // If skipping linked widgets already accounts for every entry, widgets_values is already in
-    // the modern (no dangling linked entries) format — nothing to strip.
+    // the modern (no dangling linked entries) format — nothing to strip. The count alone can match
+    // by accident: TextGenerateV2 ["", 1536, "off", true, true, "auto"] with prompt linked reads
+    // 1536 as sampling_mode, which falls back to the first option and swallows the rest. A selector
+    // that doesn't hold one of its option keys means this reading is misaligned.
     const skipSim = _simulateWidgetValues(widgetNames, widgetTypes, widgetsValues, isLinkedName, true, comboExpander);
-    if (skipSim.consumed === widgetsValues.length) return widgetsValues;
+    const selectorsValid = widgetNames.every((name, i) => widgetTypes[i] !== "COMFY_DYNAMICCOMBO_V3"
+        || skipSim.positions[name] < 0
+        || _isDynamicComboKey(objectInfo, nodeType, name, widgetsValues[skipSim.positions[name]]));
+    if (skipSim.consumed === widgetsValues.length && selectorsValid) return widgetsValues;
 
     // Otherwise it's "legacy full": recompute with every widget present to find exactly which
     // indices the linked ones occupy — including any control_after_generate extra a linked
@@ -1271,8 +1284,9 @@ export const comfyWorkflow = {
                 // "prompt" (prompt-enhancer switch chain, Qwen Image 2.1 Turbo) is the positive text,
                 // a linked "negative_prompt" the negative.
                 // TextEncodeFibo2 (Fibo 2.0 Edit) has the same shape, its prompt arriving via a
-                // PreviewAny -> prompt-enhancer switch chain.
-                if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2") {
+                // PreviewAny -> prompt-enhancer switch chain. PH3ImageConditioning (p-h3-image) too,
+                // without a negative prompt.
+                if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning") {
                     if (Array.isArray(inputs.prompt)) samplerPositiveRef[inputs.prompt[0]] = true;
                     if (Array.isArray(inputs.negative_prompt)) samplerNegativeRef[inputs.negative_prompt[0]] = true;
                 }
@@ -1519,7 +1533,8 @@ export const comfyWorkflow = {
             // nodes already picked up generically by the load_image_nodes pass below.
             // TextEncodeFibo2 (Fibo 2.0) — same prompt/negative_prompt/images.image_N shape; its
             // negative_prompt is a structured VGL JSON caption (edited as plain text here).
-            if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2") {
+            // PH3ImageConditioning (p-h3-image) has prompt and images.image_N, no negative_prompt.
+            if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning") {
                 if (typeof inputs.prompt === "string") {
                     result.prompt_nodes.push({
                         id, type: ct, title: `${title} [positive]`, role: "positive",
@@ -1701,8 +1716,9 @@ export const comfyWorkflow = {
             // width/height are commonly wired to a ResolutionSelector-style helper node
             // (array link ref) rather than a direct number — leave those as undefined so
             // the settings-tab UI falls back to its default instead of rendering a link ref.
-            // TextEncodeFibo2 likewise (0 = Fibo 2.0's trained size for the first image's aspect).
-            if (ct === "TextEncodeMageFlowEdit" || ct === "TextEncodeFibo2") {
+            // TextEncodeFibo2 likewise (0 = Fibo 2.0's trained size for the first image's aspect),
+            // and PH3ImageConditioning (0 = image_1's size, or 2912 without images).
+            if (ct === "TextEncodeMageFlowEdit" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning") {
                 result.latent_nodes.push({
                     id, type: ct, title,
                     width: typeof inputs.width === "number" ? inputs.width : undefined,
@@ -1927,7 +1943,8 @@ function _unifyPromptEnhancerText(api) {
         const tgRef = sw.inputs.on_true;
         if (!Array.isArray(tgRef)) continue;
         const tg = api[String(tgRef[0])];
-        if (tg?.class_type !== "TextGenerate" || tg.inputs.prompt !== sw.inputs.on_false) continue;
+        if ((tg?.class_type !== "TextGenerate" && tg?.class_type !== "TextGenerateV2")
+            || tg.inputs.prompt !== sw.inputs.on_false) continue;
         const primId = `${swId}:wfs_prompt`;
         api[primId] = {
             class_type: "PrimitiveStringMultiline",
@@ -1976,6 +1993,7 @@ function _getWidgetMapping(nodeType) {
         WFS_PromptText: ["positive", "negative"],
         TextEncodeQwenImage21: ["prompt", "negative_prompt", "resolution"],
         TextEncodeFibo2: ["prompt", "negative_prompt", "width", "height", "batch_size"],
+        PH3ImageConditioning: ["prompt", "width", "height"],
         TextEncodeMingImageEdit: ["prompt"],
         EmptyQwenImageLayeredLatentImage: ["width", "height", "layers", "batch_size"],
     };

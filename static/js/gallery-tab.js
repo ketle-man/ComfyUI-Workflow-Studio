@@ -15,6 +15,7 @@ import { callLLM, loadAiSettings, isValidBackendUrl } from "./ai-tab.js";
 import { initImagePromptTab, activateImagePromptTab } from "./image-prompt-tab.js";
 import { initStyleCatalogTab, activateStyleCatalogTab } from "./style-catalog-tab.js";
 import { applyStoredVideoVolume } from "./settings-tab.js";
+import { isModel3dFile, model3dExtLabel, mountModelViewer, ensureModelThumb, saveModelThumb } from "./gallery-3d-viewer.js";
 import { initSemantic, refreshSemanticDots, getSemanticMode, isSemanticOn, fetchSemanticImages, semanticCountLabel, setSemanticCountText, semanticErrorMessage, exitSimilarMode } from "./gallery-semantic.js";
 
 // ── 定数 ─────────────────────────────────────────────────────
@@ -80,9 +81,11 @@ export function isAudioFile(img) {
 }
 
 // プレビュー/ライトボックス/比較用のメディア要素HTML。音声は波形画像＋<audio controls>。
+// 3Dは空の枠だけ返し、挿入後に mountModelViewers() がビューアを起動する。
 function mediaElementHtml(img, { imgClass, videoAttrs = "controls", audioAttrs = "controls", title = "" }) {
     const src = API.serveImage(img.path);
     const titleAttr = title ? ` title="${title}"` : "";
+    if (isModel3dFile(img)) return `<div class="${imgClass} wfm-g3d-box" data-path="${escapeHtml(img.path)}"${titleAttr}></div>`;
     if (isVideoFile(img)) return `<video src="${src}" class="${imgClass}" ${videoAttrs}${titleAttr}></video>`;
     if (isAudioFile(img)) {
         return `<div class="wfm-gallery-audio-box">
@@ -91,6 +94,56 @@ function mediaElementHtml(img, { imgClass, videoAttrs = "controls", audioAttrs =
         </div>`;
     }
     return `<img src="${src}" class="${imgClass}" alt="${escapeHtml(img.filename)}"${titleAttr}>`;
+}
+
+// root内の3D枠でビューアを起動する。枠がDOMから外れるとビューアは自分で破棄される。
+function mountModelViewers(root, imgs) {
+    root.querySelectorAll(".wfm-g3d-box").forEach((box) => {
+        const img = imgs.find((im) => im.path === box.dataset.path);
+        if (!img) return;
+        mountModelViewer(box, img, {
+            onReady: (capture) => {
+                // グリッドの自動描画はサイズ上限があるため、開いたときにも保存しておく
+                if (_modelThumbMissing.delete(img.path)) {
+                    saveModelThumb(img, capture).then((ok) => { if (ok) refreshModelThumb(img.path); });
+                }
+            },
+        });
+    });
+}
+
+// サムネイルが無く、開いたときに保存する3Dファイルのパス
+const _modelThumbMissing = new Set();
+
+function refreshModelThumb(path) {
+    document.querySelectorAll(".wfm-gallery-thumb-img[data-model3d]").forEach((el) => {
+        if (el.dataset.model3d === path) el.dispatchEvent(new CustomEvent("wfm-model3d-thumb"));
+    });
+}
+
+// サムネイル未作成の3Dファイル: プレースホルダーを出し、描画できたら差し替える
+function setupModelThumb(card, imgEl, img) {
+    imgEl.dataset.model3d = img.path;
+    const placeholder = document.createElement("div");
+    placeholder.className = "wfm-gallery-thumb-placeholder";
+    placeholder.textContent = model3dExtLabel(img);
+    const show = () => {
+        placeholder.remove();
+        imgEl.style.display = "";
+        imgEl.src = `${API.thumb(img.path)}&t=${Date.now()}`;
+    };
+    imgEl.addEventListener("wfm-model3d-thumb", show);
+    imgEl.onerror = () => {
+        if (placeholder.isConnected) return;
+        imgEl.style.display = "none";
+        card.insertBefore(placeholder, imgEl.nextSibling);
+        _modelThumbMissing.add(img.path);
+        ensureModelThumb(img, () => card.isConnected).then((ok) => {
+            if (!ok) return;
+            _modelThumbMissing.delete(img.path);
+            refreshModelThumb(img.path);
+        });
+    };
 }
 
 // ComfyUI Comic Creater からiframe越しに画像を受け取り、Generate UIのImage入力スロットへ直接セットする（I2I連携）。
@@ -740,13 +793,16 @@ function createThumbCard(img) {
         placeholder.textContent = "?";
         card.insertBefore(placeholder, imgEl.nextSibling);
     };
+    const isModel3d = isModel3dFile(img);
+    if (isModel3d) setupModelThumb(card, imgEl, img);
     card.appendChild(imgEl);
 
     // 動画ファイルは再生アイコンバッジを重ねて表示（サムネイル自体は先頭フレームのJPEG）
-    if (isVideoFile(img) || isAudioFile(img)) {
+    if (isVideoFile(img) || isAudioFile(img) || isModel3d) {
         const playBadge = document.createElement("div");
         playBadge.className = "wfm-gallery-thumb-video-badge";
-        playBadge.textContent = isAudioFile(img) ? "♪" : "▶";
+        playBadge.textContent = isModel3d ? "3D" : isAudioFile(img) ? "♪" : "▶";
+        playBadge.classList.toggle("wfm-gallery-thumb-video-badge--corner", isModel3d);
         card.appendChild(playBadge);
     }
 
@@ -779,7 +835,7 @@ function createThumbCard(img) {
         e.stopPropagation();
         await toggleFeederGroupInPlace(img, feederBtn);
     });
-    card.appendChild(feederBtn);
+    if (!isModel3d) card.appendChild(feederBtn);  // Feederノードは画像しか読めない
 
     // クリック: 詳細表示 / Ctrl+クリック: 複数選択 / Shift+クリック: 範囲選択 / Alt+クリック: Metadataタブで開く
     card.addEventListener("click", (e) => {
@@ -869,6 +925,18 @@ function createTable(images) {
 
         const tdThumb = document.createElement("td");
         tdThumb.innerHTML = `<img src="${API.thumb(img.path, 128)}" class="wfm-gallery-table-thumb" loading="lazy" alt="">`;
+        if (isModel3dFile(img)) {
+            const thumbEl = tdThumb.firstElementChild;
+            thumbEl.onerror = () => {
+                thumbEl.style.visibility = "hidden";
+                ensureModelThumb(img, () => thumbEl.isConnected).then((ok) => {
+                    if (!ok) return;
+                    thumbEl.onerror = null;
+                    thumbEl.style.visibility = "";
+                    thumbEl.src = `${API.thumb(img.path, 128)}&t=${Date.now()}`;
+                });
+            };
+        }
 
         const tdName = document.createElement("td");
         tdName.className = "wfm-gallery-table-name";
@@ -1074,8 +1142,9 @@ async function loadImageDetail(img) {
             ${mediaElementHtml(img, { imgClass: "wfm-gallery-detail-img", title: "Double-click to enlarge" })}
         </div>
     `;
-    const previewMediaEl = preview.querySelector(isVideo ? "video" : "img");
+    const previewMediaEl = preview.querySelector(isModel3dFile(img) ? ".wfm-g3d-box" : isVideo ? "video" : "img");
     previewMediaEl.addEventListener("dblclick", () => openLightbox(img));
+    mountModelViewers(preview, [img]);
     if (isVideo) applyStoredVideoVolume(previewMediaEl);
     if (isAudio) applyStoredVideoVolume(preview.querySelector("audio"));
 
@@ -1870,6 +1939,13 @@ function imageByPath(path) {
     return map.get(path);
 }
 
+// 画像を前提とする送信先へ3Dファイルを渡さない
+function rejectModel3d() {
+    if (!isModel3dFile(state.selectedImage)) return false;
+    showToast(t("gallery3dNotImage"), "info");
+    return true;
+}
+
 function isConvertible(img) {
     return !!img && (isAudioFile(img) || isVideoFile(img));
 }
@@ -2104,6 +2180,7 @@ function openLightbox(img) {
         }
     });
     document.body.appendChild(overlay);
+    mountModelViewers(overlay, [img]);
     if (isVideoFile(img)) applyStoredVideoVolume(overlay.querySelector("video"));
     if (isAudioFile(img)) applyStoredVideoVolume(overlay.querySelector("audio"));
 }
@@ -2118,7 +2195,7 @@ function openCompare(paths) {
     overlay.className = "wfm-gallery-lightbox wfm-lightbox-compare";
 
     const itemsHtml = imgs.map(img => {
-        const mediaHtml = isAudioFile(img)
+        const mediaHtml = isAudioFile(img) || isModel3dFile(img)
             ? mediaElementHtml(img, { imgClass: "wfm-lightbox-compare-img" })
             : isVideoFile(img)
                 ? `<video src="${API.serveImage(img.path)}" class="wfm-lightbox-compare-img" controls></video>`
@@ -2143,6 +2220,7 @@ function openCompare(paths) {
         }
     });
     document.body.appendChild(overlay);
+    mountModelViewers(overlay, imgs);
     overlay.querySelectorAll("video, audio").forEach(applyStoredVideoVolume);
 }
 
@@ -2307,6 +2385,7 @@ function bindEvents() {
             showToast("Please select an image first", "info");
             return;
         }
+        if (rejectModel3d()) return;
         if (!window._wfmImageEditTab) return;
         const path = state.selectedImage.path;
         const name = (state.selectedImage.filename || "gallery-image").replace(/\.[^.]+$/, "");
@@ -2336,6 +2415,7 @@ function bindEvents() {
             showToast(t("gallerySelectImageFirst"), "info");
             return;
         }
+        if (rejectModel3d()) return;
         if (!comfyUI.currentAnalysis) {
             showToast(t("noWorkflowLoaded"), "info");
             return;
@@ -2373,6 +2453,7 @@ function bindEvents() {
             showToast(t("gallerySelectImageFirst"), "info");
             return;
         }
+        if (rejectModel3d()) return;
         if (!window.opener || typeof window.opener.wfmSendImageToSelectedNode !== "function") {
             showToast(t("sendToLiNodeNoOpener"), "error");
             return;
@@ -2685,7 +2766,7 @@ function bindEvents() {
         if (!window._wfmImageEditTab) return;
 
         const allPaths = [...state.selectedImages];
-        const paths    = allPaths.filter(p => !isVideoFile({ path: p }) && !isAudioFile({ path: p }));
+        const paths    = allPaths.filter(p => !isVideoFile({ path: p }) && !isAudioFile({ path: p }) && !isModel3dFile({ path: p }));
         if (paths.length === 0) {
             showToast(t("editLayersNoImages"), "error");
             return;
@@ -2746,6 +2827,7 @@ function bindEvents() {
             showToast(t("gallerySelectImageFirst"), "error");
             return;
         }
+        if (rejectModel3d()) return;
         const { openImageInTaggerTab } = await import("./tagger-tab.js");
         openImageInTaggerTab(state.selectedImage);
     });
