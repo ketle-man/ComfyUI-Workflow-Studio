@@ -1958,6 +1958,7 @@
                             <h3 id="wfm-help-ai-card-skilltips-title">Writing your own skills</h3>
                             <p id="wfm-help-ai-9">Tips for writing your own skills: give a clear frontmatter name/description so it reads well in the dropdown and tooltip; state the exact output format you want and, if there is a deliverable to extract later (like SVG or another skill file), wrap it in a distinctive fenced code block; write concrete, imperative instructions rather than vague ones - smaller local models follow explicit rules and a short worked example far better than general guidance; state hard constraints (forbidden content, security, length limits) explicitly rather than assuming they are implied; when in doubt, select the "Skill Creator" skill in the dropdown and describe what you want - it will interview you and draft the file for you</p>
                             <p id="wfm-help-ai-10">Skill options and action buttons: under metadata: in a skill's frontmatter you can set output (prompt or svg - the reply is checked automatically, and if the model tried to output one but it is broken - an unclosed or invalid SVG, forbidden elements, prompt lines outside a ```prompt block - the model is asked once to fix it, shown as a dashed notice; replies with no attempt at all, e.g. when you only asked for an explanation, are left alone), tools ([] to never let the model start image generation by itself, [generate_image] to allow it when the image-generation toggle is on), temperature, think (force thinking mode on/off) and context ([workflow] sends a summary of the workflow loaded in GenerateUI - model files, prompt nodes, CFG, resolution, current prompt - with every message); any reply containing a ```prompt block (positive:/negative: lines) gets "Apply to GenerateUI", "Generate with this prompt" and "Copy" buttons</p>
+                            <p id="wfm-help-ai-11">Image check ("Check images" toggle below the chat input): after an image is generated from the chat - by the model's generate_image tool or the "Generate with this prompt" button - the chat model turns your request into 3-7 yes/no requirements, and a vision decision model in Ollama (d3:4b recommended; set it under Settings &gt; Chat Image Check) judges the image and shows each one as ✔ met / ? unclear / ✘ not met with its probability, plus an overall quality rating; "Fix missing items and regenerate" sends only the unmet items back to the chat model, which rewrites the prompt and generates again, and "Automatic fix rounds" (0-3) repeats this without clicking; with the SVG Icon Generator skill the SVG is rendered and checked part by part (from its "Parts:" line) the same way; decision models return calibrated probabilities instead of the chat model's own yes/no, which tends to claim things that are not in the image; the fourth built-in skill "Image to Prompt" writes a prompt that recreates an image attached in the TOOLS pane (needs a vision chat model)</p>
                         </div>
                         <div class="wfm-help-card">
                             <h3 id="wfm-help-ai-card-tools-title">TOOLS pane</h3>
@@ -3509,6 +3510,10 @@
                                 <input type="checkbox" id="wfm-ai-chat-imggen-toggle" checked>
                                 <span id="wfm-ai-chat-imggen-label-text">Allow image generation</span>
                             </label>
+                            <label class="wfm-ai-chat-toggle-label" for="wfm-ai-chat-check-toggle" id="wfm-ai-chat-check-label" title="Check generated images and SVGs with a vision decision model">
+                                <input type="checkbox" id="wfm-ai-chat-check-toggle">
+                                <span id="wfm-ai-chat-check-label-text">Check images</span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -3640,6 +3645,28 @@
                         <div class="wfm-ai-settings-row" id="wfm-ai-chatgen-i2i-dedicated-row" style="display:none;">
                             <select id="wfm-ai-chatgen-i2i-dedicated-select" class="wfm-select">
                                 <option value="">-- select workflow --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="wfm-ai-settings-section">
+                        <div class="wfm-ai-settings-title" id="wfm-ai-settings-check-title">Chat Image Check</div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" id="wfm-ai-judge-model-label">Judge model</label>
+                        </div>
+                        <div class="wfm-ai-settings-row" style="display:flex;gap:6px;">
+                            <select id="wfm-ai-judge-model-select" class="wfm-select" style="flex:1;min-width:0;">
+                                <option value="d3:4b">d3:4b</option>
+                            </select>
+                            <button id="wfm-ai-judge-refresh-btn" class="wfm-btn wfm-btn-sm">Refresh</button>
+                        </div>
+                        <div class="wfm-ai-settings-row" id="wfm-ai-judge-hint" style="font-size:11px;opacity:0.75;"></div>
+                        <div class="wfm-ai-settings-row">
+                            <label class="wfm-ai-label" id="wfm-ai-check-rounds-label">Automatic fix rounds</label>
+                            <select id="wfm-ai-check-rounds-select" class="wfm-select">
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
                             </select>
                         </div>
                     </div>

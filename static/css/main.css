@@ -6062,13 +6062,54 @@ body {
 }
 
 /* Action buttons under a ```prompt block */
-.wfm-ai-chat-actions {
+.wfm-ai-chat-msg-actions {
     margin-top: 6px;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     white-space: normal;
 }
+
+/* Image check result card (chat-image-check.js) */
+.wfm-ai-chat-msg-check {
+    white-space: normal;
+    min-width: 260px;
+}
+.wfm-ai-check-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.wfm-ai-check-head.is-pass { color: #4caf50; }
+.wfm-ai-check-head.is-fail { color: #e5a00d; }
+.wfm-ai-check-meta {
+    font-weight: normal;
+    font-size: 11px;
+    opacity: 0.7;
+    color: var(--wfm-text-secondary);
+}
+.wfm-ai-check-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.wfm-ai-check-item {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    padding: 1px 0;
+    font-size: 12px;
+}
+.wfm-ai-check-icon { width: 14px; text-align: center; font-weight: 700; }
+.wfm-ai-check-item.is-pass .wfm-ai-check-icon { color: #4caf50; }
+.wfm-ai-check-item.is-uncertain .wfm-ai-check-icon { color: #e5a00d; }
+.wfm-ai-check-item.is-fail .wfm-ai-check-icon { color: #e05252; }
+.wfm-ai-check-label { flex: 1; }
+.wfm-ai-check-p { font-size: 11px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.wfm-ai-check-quality { margin-top: 4px; font-size: 11px; opacity: 0.8; }
 
 /* "Built-in" badge in the skill manager list */
 .wfm-ai-skill-badge {

@@ -416,6 +416,20 @@ function applyI18nToHtml() {
     if (aiSaveBtn) aiSaveBtn.textContent = t("aiSettingsSaveBtn");
     const aiChatImgGenLabel = document.getElementById("wfm-ai-chat-imggen-label-text");
     if (aiChatImgGenLabel) aiChatImgGenLabel.textContent = t("aiChatImgGenToggle");
+    const aiChatCheckLabelText = document.getElementById("wfm-ai-chat-check-label-text");
+    if (aiChatCheckLabelText) aiChatCheckLabelText.textContent = t("aiChatCheckToggle");
+    const aiChatCheckLabel = document.getElementById("wfm-ai-chat-check-label");
+    if (aiChatCheckLabel) aiChatCheckLabel.title = t("aiChatCheckToggleTip");
+    const aiCheckTitle = document.getElementById("wfm-ai-settings-check-title");
+    if (aiCheckTitle) aiCheckTitle.textContent = t("aiSettingsCheckTitle");
+    const aiJudgeLabel = document.getElementById("wfm-ai-judge-model-label");
+    if (aiJudgeLabel) aiJudgeLabel.textContent = t("aiJudgeModelLabel");
+    const aiJudgeRefresh = document.getElementById("wfm-ai-judge-refresh-btn");
+    if (aiJudgeRefresh) aiJudgeRefresh.textContent = t("aiJudgeRefresh");
+    const aiRoundsLabel = document.getElementById("wfm-ai-check-rounds-label");
+    if (aiRoundsLabel) aiRoundsLabel.textContent = t("aiCheckRoundsLabel");
+    const aiRoundsManual = document.querySelector("#wfm-ai-check-rounds-select option[value='0']");
+    if (aiRoundsManual) aiRoundsManual.textContent = t("aiCheckRoundsManual");
     const aiChatGenTitle = document.getElementById("wfm-ai-settings-chatgen-title");
     if (aiChatGenTitle) aiChatGenTitle.textContent = t("aiSettingsChatGenTitle");
     const aiChatGenDedicatedLabel = document.getElementById("wfm-ai-chatgen-dedicated-label");
@@ -616,6 +630,7 @@ function applyI18nToHtml() {
         "wfm-help-ai-8": "helpAi8",
         "wfm-help-ai-9": "helpAi9",
         "wfm-help-ai-10": "helpAi10",
+        "wfm-help-ai-11": "helpAi11",
         "wfm-help-ai-card-layout-title": "helpAiCardLayout",
         "wfm-help-ai-card-translate-title": "helpAiCardTranslate",
         "wfm-help-ai-card-chat-title": "helpAiCardChat",

@@ -10,6 +10,10 @@ import { unloadAllOllamaModels } from "./vram-prepare.js";
 import { comfyUI } from "./comfyui-client.js";
 import { comfyEditor } from "./comfyui-editor.js";
 import { comfyWorkflow } from "./comfyui-workflow.js";
+import {
+    getJudgeConfig, listJudgeModels, buildChecklist, judgeImage, failedItems, renderCheckCard,
+    imageUrlToJpegBase64, svgToJpegBase64, parseSvgParts, svgChecklist, DEFAULT_JUDGE_MODEL,
+} from "./chat-image-check.js";
 
 const SETTINGS_KEY = "wfm_ai_settings";
 
@@ -67,6 +71,8 @@ function _applyGenOptions(body, backend, settings) {
         body.think = !!settings?.thinkingMode;
         if (maxTokens > 0) body.options = { ...(body.options || {}), num_predict: maxTokens };
         if (temperature != null) body.options = { ...(body.options || {}), temperature };
+        // JSON Schema 制約付き出力（画像チェックのチェックリスト作成で使用）。Ollama のみ対応
+        if (settings?.format) body.format = settings.format;
     } else {
         if (maxTokens > 0) body.max_tokens = maxTokens;
         if (temperature != null) body.temperature = temperature;
@@ -527,6 +533,32 @@ function initSettingsTab() {
             .catch(() => {});
     }
 
+    // Chat image check — judge model (Ollama decision model with image input) + auto fix rounds
+    const judgeSelect = document.getElementById("wfm-ai-judge-model-select");
+    const judgeHint = document.getElementById("wfm-ai-judge-hint");
+    const roundsSelect = document.getElementById("wfm-ai-check-rounds-select");
+    if (roundsSelect) roundsSelect.value = String(getJudgeConfig(saved).autoRounds);
+    const refreshJudgeModels = async () => {
+        if (!judgeSelect) return;
+        const cfg = getJudgeConfig(loadAiSettings());
+        const wanted = judgeSelect.value || cfg.model;
+        try {
+            const models = await listJudgeModels(cfg.baseUrl);
+            const vision = models.filter((m) => m.vision);
+            const list = vision.length ? vision : models;
+            judgeSelect.innerHTML = list.map((m) =>
+                `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}${m.vision ? "" : " (text only)"}</option>`).join("")
+                || `<option value="${escapeHtml(DEFAULT_JUDGE_MODEL)}">${escapeHtml(DEFAULT_JUDGE_MODEL)}</option>`;
+            judgeSelect.value = list.some((m) => m.name === wanted) ? wanted : (list[0]?.name || DEFAULT_JUDGE_MODEL);
+            if (judgeHint) judgeHint.textContent = vision.length ? t("aiJudgeHint", cfg.baseUrl) : t("aiJudgeNoVision");
+        } catch (e) {
+            if (judgeHint) judgeHint.textContent = t("aiJudgeListFailed", e.message);
+        }
+    };
+    if (judgeSelect) judgeSelect.value = getJudgeConfig(saved).model;
+    document.getElementById("wfm-ai-judge-refresh-btn")?.addEventListener("click", refreshJudgeModels);
+    refreshJudgeModels();
+
     // Save settings
     document.getElementById("wfm-ai-settings-save-btn")?.addEventListener("click", () => {
         const backend = document.querySelector("input[name='wfm-ai-backend']:checked")?.value || "ollama";
@@ -551,6 +583,8 @@ function initSettingsTab() {
             thinkingMode, maxTokens,
             chatGenDedicatedEnabled, chatGenDedicatedFilename,
             chatGenI2IDedicatedEnabled, chatGenI2IDedicatedFilename,
+            chatJudgeModel: judgeSelect?.value || DEFAULT_JUDGE_MODEL,
+            chatCheckAutoRounds: parseInt(roundsSelect?.value, 10) || 0,
         });
         showToast(t("aiToastSettingsSaved"), "success");
     });
@@ -826,7 +860,7 @@ function _extractPromptBlock(text) {
 // プロンプトブロックの下に「GenerateUIに反映」「このプロンプトで生成」「コピー」ボタンを付ける
 function _appendPromptActions(container, block, messagesEl) {
     const row = document.createElement("div");
-    row.className = "wfm-ai-chat-actions";
+    row.className = "wfm-ai-chat-msg-actions";
 
     const applyBtn = document.createElement("button");
     applyBtn.className = "wfm-btn wfm-btn-sm";
@@ -848,8 +882,7 @@ function _appendPromptActions(container, block, messagesEl) {
     genBtn.addEventListener("click", async () => {
         genBtn.disabled = true;
         try {
-            const imageUrls = await generateImageFromChat(block.positive, block.negative || "", {});
-            appendChatBubble(messagesEl, "assistant", "", { imageUrls });
+            await _withChatBusy(() => _generateWithCheck({ prompt: block.positive, negative: block.negative || "", params: {} }));
         } catch (e) {
             showToast(t("aiToastImageGenFailed") + e.message, "error");
         } finally {
@@ -991,6 +1024,230 @@ function _buildWorkflowContext() {
     if (l && l.width && l.height) lines.push(`- Resolution: ${l.width}x${l.height}`);
     if (an.load_image_nodes?.length) lines.push(`- Has ${an.load_image_nodes.length} LoadImage input(s) (image-to-image / edit workflow).`);
     return lines.join("\n");
+}
+
+// ============================================
+// Chat session + image check / refine loop
+// ============================================
+
+// initChatTab と、吹き出し内のボタン（プロンプト生成・画像チェックの修正）で共有する会話状態
+const _chat = {
+    history: [],        // {role, content, images?} — callChat に送る会話履歴
+    lastRequest: "",    // 直近にユーザーが入力した依頼文（チェックリスト作成に使う）
+    messagesEl: null,
+    statusEl: null,
+    sendBtn: null,
+    busy: 0,            // 実行中の処理数（送信・修正ループ）。0 になるまで送信ボタンを無効にする
+};
+
+// 送信ボタンを無効にしたまま fn を実行する（ボタン起点の修正ループと通常送信の重なりを防ぐ）
+async function _withChatBusy(fn) {
+    _chat.busy++;
+    if (_chat.sendBtn) _chat.sendBtn.disabled = true;
+    try {
+        return await fn();
+    } finally {
+        _chat.busy = Math.max(0, _chat.busy - 1);
+        if (_chat.sendBtn) _chat.sendBtn.disabled = _chat.busy > 0;
+    }
+}
+
+function _setChatStatus(text, kind = "working") {
+    if (!_chat.statusEl) return;
+    _chat.statusEl.textContent = text || "";
+    _chat.statusEl.className = text ? `wfm-ai-trans-status wfm-ai-status-${kind}` : "wfm-ai-trans-status";
+}
+
+function _isImageCheckEnabled() {
+    return !!loadAiSettings().chatCheckEnabled;
+}
+
+// 選択中スキル・バックエンド設定を反映した callChat 呼び出しの準備
+async function _prepareChatCall() {
+    const settings = loadAiSettings();
+    const { backend = "ollama", backendUrl, model } = settings;
+    const url = backendUrl || getAiBackendDefaultUrl(backend);
+    if (!isValidBackendUrl(url)) throw new Error(t("aiToastInvalidUrl"));
+    if (!model) throw new Error(t("aiToastNoModel"));
+
+    const skill = await _getActiveSkill();
+    const meta = skill?.meta || {};
+    const chatSettings = { ...settings };
+    if (typeof meta.temperature === "number") chatSettings.temperature = meta.temperature;
+    if (typeof meta.think === "boolean") chatSettings.thinkingMode = meta.think;
+
+    let systemPrompt = skill?.prompt || "";
+    const contexts = Array.isArray(meta.context) ? meta.context : [];
+    if (contexts.includes("workflow")) systemPrompt += `\n\n${_buildWorkflowContext()}`;
+    const buildMessages = () => systemPrompt.trim()
+        ? [{ role: "system", content: systemPrompt.trim() }, ..._chat.history]
+        : _chat.history;
+
+    // スキルを使わない単発呼び出し（チェックリスト作成用）
+    const rawChat = async (messages, extra = {}) => {
+        const reply = await callChat(url, backend, model, messages, undefined, { ...settings, ...extra });
+        return reply.content || "";
+    };
+    return { url, backend, model, settings, chatSettings, meta, buildMessages, rawChat };
+}
+
+// 画像を生成してチャットに表示し、チェックが有効なら判定まで行う。
+// ctx: { prompt, negative, params, round?, items? }（items はラウンド間で使い回すチェックリスト）
+async function _generateWithCheck(ctx) {
+    _setChatStatus(t("aiStatusGeneratingImage"));
+    let imageUrls;
+    try {
+        imageUrls = await generateImageFromChat(ctx.prompt, ctx.negative, ctx.params || {});
+    } finally {
+        _setChatStatus("");
+    }
+    appendChatBubble(_chat.messagesEl, "assistant", "", { imageUrls });
+    if (_isImageCheckEnabled() && imageUrls?.length) {
+        await _runImageCheck({ ...ctx, imageUrl: imageUrls[0] });
+    }
+    return imageUrls;
+}
+
+function _appendCheckCard(card) {
+    const wrap = document.createElement("div");
+    wrap.className = "wfm-ai-chat-msg wfm-ai-chat-msg-assistant wfm-ai-chat-msg-check";
+    wrap.appendChild(card);
+    _chat.messagesEl.appendChild(wrap);
+    _chat.messagesEl.scrollTop = _chat.messagesEl.scrollHeight;
+}
+
+// 生成画像を判定モデルでチェックし、結果カードを表示する。
+// 未達項目があれば「直して再生成」ボタン（自動ラウンドが残っていれば自動実行）。
+async function _runImageCheck(ctx) {
+    const round = ctx.round || 0;
+    const cfg = getJudgeConfig(loadAiSettings());
+    try {
+        _setChatStatus(t("aiStatusChecking"));
+        let items = ctx.items;
+        if (!items?.length) {
+            const call = await _prepareChatCall();
+            items = await buildChecklist(call.rawChat, _chat.lastRequest, ctx.prompt);
+        }
+        const base64 = await imageUrlToJpegBase64(ctx.imageUrl);
+        const result = await judgeImage(base64, items, cfg);
+        _setChatStatus("");
+        const failed = failedItems(result);
+        const next = { ...ctx, items };
+        const autoLeft = round < cfg.autoRounds;
+        const actions = failed.length && !autoLeft ? [{
+            label: t("aiChatCheckRefineBtn"),
+            primary: true,
+            onClick: async (btn) => {
+                btn.disabled = true;
+                await _withChatBusy(() => _refineAndRegenerate(next, result, round + 1));
+            },
+        }] : [];
+        _appendCheckCard(renderCheckCard(result, { model: cfg.model, round, actions }));
+        if (failed.length && autoLeft) {
+            await _refineAndRegenerate(next, result, round + 1);
+        } else if (failed.length && cfg.autoRounds > 0 && round >= cfg.autoRounds) {
+            appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckAutoLimit", cfg.autoRounds));
+        }
+    } catch (e) {
+        _setChatStatus("");
+        appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckError", e.message));
+    }
+}
+
+function _describeCheck(result) {
+    // p は「条件を満たす確率」（expect: no の項目は反転済み）。取り違え確認の項目はその旨を書く
+    const line = (it) => it.expect === "no"
+        ? `- The answer to "${it.question}" must be NO (requirement met: ${Math.round(it.p * 100)}%)`
+        : `- ${it.question} (requirement met: ${Math.round(it.p * 100)}%)`;
+    const failed = result.items.filter((it) => it.status === "fail");
+    const unsure = result.items.filter((it) => it.status === "uncertain");
+    const passed = result.items.filter((it) => it.status === "pass");
+    const parts = [];
+    if (failed.length) parts.push(`NOT met:\n${failed.map(line).join("\n")}`);
+    if (unsure.length) parts.push(`Unclear:\n${unsure.map(line).join("\n")}`);
+    if (passed.length) parts.push(`Met (keep these):\n${passed.map(line).join("\n")}`);
+    return parts.join("\n");
+}
+
+// 未達項目をチャットモデルに伝えてプロンプトを書き直させ、再生成→再チェックする
+async function _refineAndRegenerate(ctx, result, round) {
+    try {
+        const call = await _prepareChatCall();
+        const labels = failedItems(result).map((it) => it.label).join(" / ");
+        appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckRefining", labels));
+        const feedback = `[Workflow Studio image check] An image-judging model checked the image generated from the current prompt.\n${_describeCheck(result)}\n\nCurrent prompt:\npositive: ${ctx.prompt}\nnegative: ${ctx.negative || ""}\n\nRewrite the prompt so every item that is not met becomes clearly visible (state it explicitly and early, be specific about color, count and position) while keeping the met items. Output the complete new prompt in a \`\`\`prompt block with a positive: line and a negative: line.`;
+        _chat.history.push({ role: "user", content: feedback });
+        _setChatStatus(t("aiStatusAutoFixing"));
+        const reply = await callChat(call.url, call.backend, call.model, call.buildMessages(), undefined, call.chatSettings);
+        _setChatStatus("");
+        _chat.history.push({ role: "assistant", content: reply.content || "" });
+        appendChatBubble(_chat.messagesEl, "assistant", reply.content || "");
+        const block = _extractPromptBlock(reply.content);
+        if (!block?.positive) {
+            appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckNoPrompt"));
+            return;
+        }
+        await _generateWithCheck({
+            ...ctx,
+            prompt: block.positive,
+            negative: block.negative ?? ctx.negative,
+            round,
+        });
+    } catch (e) {
+        _setChatStatus("");
+        appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckError", e.message));
+    }
+}
+
+// SVG をレンダリングして判定モデルで「部位が見えるか・依頼の対象に見えるか」をチェックする
+async function _runSvgCheck(svgCode, replyText, round = 0) {
+    const cfg = getJudgeConfig(loadAiSettings());
+    const items = svgChecklist(parseSvgParts(replyText), _chat.lastRequest);
+    if (!items.length) return;
+    try {
+        _setChatStatus(t("aiStatusChecking"));
+        const base64 = await svgToJpegBase64(svgCode);
+        const result = await judgeImage(base64, items, cfg, { withQuality: false });
+        _setChatStatus("");
+        const failed = failedItems(result);
+        const autoLeft = round < cfg.autoRounds;
+        const actions = failed.length && !autoLeft ? [{
+            label: t("aiChatCheckSvgRefineBtn"),
+            primary: true,
+            onClick: async (btn) => {
+                btn.disabled = true;
+                await _withChatBusy(() => _refineSvg(result, round + 1));
+            },
+        }] : [];
+        _appendCheckCard(renderCheckCard(result, { model: cfg.model, round, actions }));
+        if (failed.length && autoLeft) await _refineSvg(result, round + 1);
+        else if (failed.length && cfg.autoRounds > 0 && round >= cfg.autoRounds) {
+            appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckAutoLimit", cfg.autoRounds));
+        }
+    } catch (e) {
+        _setChatStatus("");
+        appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckError", e.message));
+    }
+}
+
+async function _refineSvg(result, round) {
+    try {
+        const call = await _prepareChatCall();
+        const labels = failedItems(result).map((it) => it.label).join(" / ");
+        appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckRefining", labels));
+        const feedback = `[Workflow Studio visual check] Your SVG was rendered and checked by an image-judging model.\n${_describeCheck(result)}\n\nRedraw the SVG so the items that are not met are clearly recognizable (correct shape, size and position relative to the other parts) while keeping what was met. Start with a "Parts:" line, then output the complete SVG in a \`\`\`svg block.`;
+        _chat.history.push({ role: "user", content: feedback });
+        _setChatStatus(t("aiStatusAutoFixing"));
+        const reply = await callChat(call.url, call.backend, call.model, call.buildMessages(), undefined, call.chatSettings);
+        _setChatStatus("");
+        _chat.history.push({ role: "assistant", content: reply.content || "" });
+        appendChatBubble(_chat.messagesEl, "assistant", reply.content || "");
+        const svgCode = _extractSvgCode(reply.content);
+        if (svgCode && _validateSvg(svgCode).length === 0) await _runSvgCheck(svgCode, reply.content, round);
+    } catch (e) {
+        _setChatStatus("");
+        appendChatBubble(_chat.messagesEl, "notice", t("aiChatCheckError", e.message));
+    }
 }
 
 // ============================================
@@ -1290,11 +1547,21 @@ function initChatTab() {
 
     initSkillManager();
 
-    let chatHistory = [];
+    // 会話履歴は吹き出し内ボタン（画像チェックの修正など）からも使うのでモジュール共有の _chat に置く
+    const chatHistory = _chat.history;
+    _chat.messagesEl = messagesEl;
+    _chat.statusEl = statusEl;
+    _chat.sendBtn = sendBtn;
+
+    const checkToggle = document.getElementById("wfm-ai-chat-check-toggle");
+    if (checkToggle) {
+        checkToggle.checked = !!loadAiSettings().chatCheckEnabled;
+        checkToggle.addEventListener("change", () => saveAiSettings({ chatCheckEnabled: checkToggle.checked }));
+    }
 
     async function sendMessage() {
         const text = inputEl.value.trim();
-        if (!text) return;
+        if (!text || _chat.busy > 0) return;
 
         const settings = loadAiSettings();
         const { backend = "ollama", backendUrl, model } = settings;
@@ -1314,8 +1581,10 @@ function initChatTab() {
         const userEntry = { role: "user", content: text };
         if (_toolsImage) userEntry.images = [{ base64: _toolsImage.base64, mimeType: _toolsImage.mimeType }];
         chatHistory.push(userEntry);
+        _chat.lastRequest = text;
         appendChatBubble(messagesEl, "user", text, _toolsImage ? { attachThumb: `data:${_toolsImage.mimeType};base64,${_toolsImage.base64}` } : {});
 
+        _chat.busy++;
         sendBtn.disabled = true;
         statusEl.textContent = t("aiStatusChatting");
         statusEl.className = "wfm-ai-trans-status wfm-ai-status-working";
@@ -1325,23 +1594,12 @@ function initChatTab() {
         const domMark = messagesEl.children.length - 1;
 
         try {
-            const skill = await _getActiveSkill();
-            const meta = skill?.meta || {};
+            const { meta, chatSettings, buildMessages } = await _prepareChatCall();
             // metadata.tools が配列なら、その中に generate_image がある場合だけツールを渡す
             // （トグルがオフなら常に渡さない）。未指定のスキルは従来どおりトグルに従う。
             const imgGenOn = imgGenToggle?.checked !== false;
             const toolsAllowed = Array.isArray(meta.tools) ? meta.tools.includes("generate_image") : true;
             const tools = imgGenOn && toolsAllowed ? IMAGE_GEN_TOOLS : undefined;
-            const chatSettings = { ...settings };
-            if (typeof meta.temperature === "number") chatSettings.temperature = meta.temperature;
-            if (typeof meta.think === "boolean") chatSettings.thinkingMode = meta.think;
-
-            let systemPrompt = skill?.prompt || "";
-            const contexts = Array.isArray(meta.context) ? meta.context : [];
-            if (contexts.includes("workflow")) systemPrompt += `\n\n${_buildWorkflowContext()}`;
-            const buildMessages = () => systemPrompt.trim()
-                ? [{ role: "system", content: systemPrompt.trim() }, ...chatHistory]
-                : chatHistory;
 
             let reply = await callChat(url, backend, model, buildMessages(), tools, chatSettings);
 
@@ -1371,11 +1629,9 @@ function initChatTab() {
                 chatHistory.push({ role: "assistant", content: reply.content || "" });
                 if (reply.content) appendChatBubble(messagesEl, "assistant", reply.content);
 
-                statusEl.textContent = t("aiStatusGeneratingImage");
                 const args = _parseToolArgs(toolCall);
                 try {
-                    const imageUrls = await generateImageFromChat(args.prompt, args.negative_prompt, args);
-                    appendChatBubble(messagesEl, "assistant", "", { imageUrls });
+                    await _generateWithCheck({ prompt: args.prompt, negative: args.negative_prompt, params: args });
                 } catch (genErr) {
                     appendChatBubble(messagesEl, "assistant", `${t("aiToastImageGenFailed")}${genErr.message}`);
                     showToast(t("aiToastImageGenFailed") + genErr.message, "error");
@@ -1383,6 +1639,11 @@ function initChatTab() {
             } else {
                 chatHistory.push({ role: "assistant", content: reply.content });
                 appendChatBubble(messagesEl, "assistant", reply.content);
+                // SVGスキル: 構造チェックに通ったSVGを画像にして、判定モデルで見た目をチェック
+                if (outputType === "svg" && _isImageCheckEnabled()) {
+                    const svgCode = _extractSvgCode(reply.content);
+                    if (svgCode && _validateSvg(svgCode).length === 0) await _runSvgCheck(svgCode, reply.content);
+                }
             }
             statusEl.textContent = "";
             statusEl.className = "wfm-ai-trans-status";
@@ -1394,7 +1655,8 @@ function initChatTab() {
             statusEl.className = "wfm-ai-trans-status wfm-ai-status-error";
             showToast(t("aiToastChatFailed") + err.message, "error");
         } finally {
-            sendBtn.disabled = false;
+            _chat.busy = Math.max(0, _chat.busy - 1);
+            sendBtn.disabled = _chat.busy > 0;
         }
     }
 
@@ -1408,7 +1670,8 @@ function initChatTab() {
     });
 
     clearBtn.addEventListener("click", () => {
-        chatHistory = [];
+        chatHistory.length = 0;
+        _chat.lastRequest = "";
         messagesEl.innerHTML = "";
         statusEl.textContent = "";
         statusEl.className = "wfm-ai-trans-status";
