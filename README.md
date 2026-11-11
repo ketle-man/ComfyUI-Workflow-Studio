@@ -55,9 +55,9 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 | :--------------------------------: | :------------------------------------------: |
 | ![Lab Tab](docs/15_labtab.png) | ![Lab Index Image](docs/16_lab_index.png) |
 
-|        Gallery Tab - Semantic Search ("sunset city street")        |
-| :-----------------------------------------------------------------: |
-| ![Gallery Semantic Search](docs/20_gallery_semantic_search.png) |
+| Gallery Tab - Semantic Search ("sunset city street") | TagSpace Tab - Search ("sunset city street") |
+| :-----------------------------------------------------------------: | :-----------------------------------------: |
+| ![Gallery Semantic Search](docs/20_gallery_semantic_search.png) | ![TagSpace Tab](docs/21_tagspace.png) |
 
 ---
 
