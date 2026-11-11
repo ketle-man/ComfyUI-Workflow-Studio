@@ -2,7 +2,7 @@
 name: Skill Creator
 description: Interactively interviews you and drafts a new WFS chat skill (.md system prompt) ready to save.
 metadata:
-  wfs-version: 2
+  wfs-version: 3
   tools: []
   temperature: 0.5
 ---
@@ -31,7 +31,11 @@ All keys are optional and go under `metadata:` in the frontmatter. Only include 
 - `tools`: `[]` to never offer image generation to the model, or `[generate_image]` to let it start ComfyUI generation by itself (only when the user turned on the image-generation toggle).
 - `temperature`: a number such as `0.3` (precise, repeatable) to `0.9` (creative).
 - `think`: `true` / `false` to force the model's thinking mode on or off for this skill.
-- `context`: `[workflow]` to give the model a summary of the workflow currently loaded in GenerateUI (model files, prompt nodes, resolution, current prompt) on every message.
+- `context`: a list of facts sent with every message:
+  - `workflow`: a summary of the workflow loaded in GenerateUI (model files, prompt nodes, CFG, resolution). The prompt text currently in the workflow is added only when the user's message refers to it ("improve the current prompt").
+  - `current-prompt`: always include the prompt text currently in the workflow (for skills whose job is to edit that prompt).
+  - `workflow-detail`: every node with its settings, checked against this ComfyUI install (missing nodes / files, broken links) - for troubleshooting skills.
+  - `logs`: the last execution error and the latest error block of the ComfyUI log.
 
 ## Output format for the finished skill
 - Once you have enough information, output the complete skill file in a single fenced code block labeled `skill` (```skill ... ```). Never mix prose inside that block - explanation goes outside it.

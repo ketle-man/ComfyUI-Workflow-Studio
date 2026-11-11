@@ -6050,6 +6050,47 @@ body {
     object-fit: cover;
 }
 
+/* Markdown-rendered assistant replies (chat-markdown.js) */
+.wfm-ai-chat-msg.wfm-ai-chat-md { white-space: normal; }
+.wfm-ai-chat-md p { margin: 0 0 6px; }
+.wfm-ai-chat-md p:last-child { margin-bottom: 0; }
+.wfm-ai-chat-md ul, .wfm-ai-chat-md ol { margin: 2px 0 6px; padding-left: 20px; }
+.wfm-ai-chat-md li { margin: 1px 0; }
+.wfm-ai-chat-md .wfm-md-h { margin: 8px 0 4px; font-size: 13px; font-weight: 700; }
+.wfm-ai-chat-md h3.wfm-md-h { font-size: 14px; }
+.wfm-ai-chat-md code {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    background: rgba(127, 127, 127, 0.18);
+    padding: 0 3px;
+    border-radius: 3px;
+}
+.wfm-ai-chat-md .wfm-md-pre {
+    position: relative;
+    margin: 4px 0 6px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--wfm-border);
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre;
+}
+.wfm-ai-chat-md .wfm-md-pre code { background: none; padding: 0; }
+.wfm-ai-chat-md .wfm-md-code-lang {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 10px;
+    opacity: 0.6;
+}
+.wfm-ai-chat-md blockquote {
+    margin: 4px 0;
+    padding-left: 8px;
+    border-left: 3px solid var(--wfm-border);
+    opacity: 0.9;
+}
+.wfm-ai-chat-md hr { border: none; border-top: 1px solid var(--wfm-border); margin: 6px 0; }
+
 /* Skill auto-check notices (metadata.output) */
 .wfm-ai-chat-msg-notice {
     align-self: center;

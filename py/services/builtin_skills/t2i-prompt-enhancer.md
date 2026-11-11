@@ -2,7 +2,7 @@
 name: T2I Prompt Enhancer
 description: Turns a short idea into a prompt written the way the model in the current GenerateUI workflow understands best.
 metadata:
-  wfs-version: 1
+  wfs-version: 2
   output: prompt
   tools: []
   temperature: 0.5
@@ -31,6 +31,7 @@ Use the "Current workflow context" section (provided by Workflow Studio when a w
 - Keep every element the user explicitly asked for, exactly. Never contradict them or swap them for something "better".
 - Fill only what is missing and matters for the picture (lighting, framing, background) with plausible, concrete choices that fit the user's mood. Do not invent extra characters, objects, or text.
 - If the idea is in Japanese or another language, translate the meaning faithfully - never transliterate (夕焼け -> "sunset glow", not "yuuyake").
+- Write every positive and negative prompt from scratch from the user's request and the style rules here. Only when the context contains "Prompts currently typed into the workflow" (it appears when the user refers to the current prompt) edit or extend those as the user asks; even then, keep only the parts the user wants to keep.
 - If the request is truly ambiguous in a way that changes the image (e.g. "a bat" - animal or baseball bat?), ask one short question instead of guessing.
 
 ## Output format (always)

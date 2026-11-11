@@ -167,6 +167,15 @@ export function refreshLabLiveDefaults() {
     _renderAllColumns();
 }
 
+// Loads plan data built elsewhere (AI TOOL Chat's ```labplan block → Storyboard) into the Lab
+// tab as an unsaved plan, then switches to GenerateUI > Lab so the user can review and Run it.
+// The user saves it with Lab's own Save button (which also builds the index thumbnail).
+export function openLabPlanData(data) {
+    _applyPlanData(null, data);
+    document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
+    document.querySelector('.wfm-gen-subtab-btn[data-subtab="lab"]')?.click();
+}
+
 function _initDropZone() {
     const dropZone = document.getElementById("wfm-lab-drop-zone");
     const fileInput = document.getElementById("wfm-lab-file-input");
@@ -679,12 +688,18 @@ function _cellLabel(col, kf) {
         return `<span class="wfm-lab-cell-prompt-line">P: ${escapeHtml(p)}</span><span class="wfm-lab-cell-prompt-line">N: ${escapeHtml(n)}</span>`;
     }
     if (col === "ksampler") {
+        // Same six fields _isEmptyValue checks — a keyframe that only sets the seed (e.g. a
+        // Storyboard plan's fixed seed) or the sampler/scheduler used to read "(workflow
+        // default)" even though Run does apply it.
         const v = kf.value || {};
-        if (v.steps == null && v.cfg == null && v.denoise == null) return t("labUseWorkflowDefault");
         const parts = [];
         if (v.steps != null) parts.push(`Step${v.steps}`);
         if (v.cfg != null) parts.push(`CFG${v.cfg}`);
         if (v.denoise != null) parts.push(`Denoise${v.denoise}`);
+        if (v.sampler_name) parts.push(v.sampler_name);
+        if (v.scheduler) parts.push(v.scheduler);
+        if (v.seed != null) parts.push(`Seed ${v.seed}`);
+        if (!parts.length) return t("labUseWorkflowDefault");
         return escapeHtml(parts.join(" / "));
     }
     return "";

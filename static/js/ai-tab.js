@@ -14,6 +14,9 @@ import {
     getJudgeConfig, listJudgeModels, buildChecklist, judgeImage, failedItems, renderCheckCard,
     imageUrlToJpegBase64, svgToJpegBase64, parseSvgParts, svgChecklist, DEFAULT_JUDGE_MODEL,
 } from "./chat-image-check.js";
+import { renderMarkdown } from "./chat-markdown.js";
+import { buildWorkflowDetailContext, buildLogsContext } from "./chat-context.js";
+import { openLabPlanData } from "./lab-tab.js";
 
 const SETTINGS_KEY = "wfm_ai_settings";
 
@@ -629,6 +632,11 @@ const IMAGE_GEN_TOOLS = [{
 // バックエンドごとのワイヤーフォーマットへ変換する（callVLM() と同じ規約）
 function _formatMessagesForBackend(messages, backend) {
     return messages.map((m) => {
+        // ツール呼び出し（read_skill_file）の往復は、各バックエンドの形式で保存済みなのでそのまま送る
+        if (m.role === "tool" || m.tool_calls) {
+            const { images, ...rest } = m;
+            return rest;
+        }
         if (!m.images?.length) return { role: m.role, content: m.content };
         if (backend === "ollama") {
             return { role: m.role, content: m.content, images: m.images.map((i) => i.base64) };
@@ -907,6 +915,100 @@ function _appendPromptActions(container, block, messagesEl) {
 }
 
 // ============================================
+// ```labplan block (Storyboard skill) — parse, convert to a Lab plan, buttons
+// ============================================
+
+const LABPLAN_MAX_SCENES = 32;
+
+// ```labplan フェンス内の JSON を取り出す。戻り値: { data } / { error } / null（ブロック無し）
+function _extractLabPlanBlock(text) {
+    if (!text) return null;
+    const m = text.match(/```labplan[^\n]*\n([\s\S]*?)```/i);
+    if (!m) return null;
+    const body = m[1];
+    const start = body.indexOf("{");
+    const end = body.lastIndexOf("}");
+    if (start < 0 || end <= start) return { error: "The ```labplan block does not contain a JSON object." };
+    try {
+        return { data: JSON.parse(body.slice(start, end + 1)) };
+    } catch (e) {
+        return { error: "The ```labplan block is not valid JSON: " + e.message };
+    }
+}
+
+// Storyboard JSON の検証。問題（英語、LLMへのフィードバック用）の配列を返す。
+function _validateStoryboard(sb) {
+    if (!sb || typeof sb !== "object") return ["The labplan JSON must be an object."];
+    const scenes = Array.isArray(sb.scenes) ? sb.scenes : null;
+    if (!scenes || scenes.length === 0) return ['The labplan JSON needs a non-empty "scenes" array.'];
+    const problems = [];
+    if (scenes.length > LABPLAN_MAX_SCENES) problems.push(`Use at most ${LABPLAN_MAX_SCENES} scenes (got ${scenes.length}).`);
+    scenes.forEach((sc, i) => {
+        if (!sc || typeof sc.positive !== "string" || !sc.positive.trim()) problems.push(`Scene ${i + 1} has no "positive" prompt.`);
+    });
+    if (sb.seed != null && !Number.isInteger(sb.seed)) problems.push('"seed" must be an integer or null.');
+    return problems;
+}
+
+// Storyboard（scenes の配列）→ Lab の Plan JSON。1シーン = 1イテレーション、
+// プロンプト列にシーンごとのキーフレーム、KSampler 列の1行目に固定 seed（指定時）。
+function _storyboardToLabPlan(sb) {
+    const scenes = sb.scenes.slice(0, LABPLAN_MAX_SCENES);
+    const row = (atIteration, value) => ({ atIteration, value, revertToBase: false, bypassed: false });
+    const seed = Number.isInteger(sb.seed) ? sb.seed : null;
+    const noteLines = [String(sb.note || "").trim(), ...scenes.map((sc, i) => `${i + 1}. ${String(sc.title || "").trim() || `Scene ${i + 1}`}`)];
+    return {
+        name: String(sb.name || "storyboard").slice(0, 60),
+        note: noteLines.filter(Boolean).join("\n"),
+        batch_count: scenes.length,
+        chain_image: false,
+        t2i_mode: true,
+        save_index_on_run: true,
+        source_image: null,
+        workflow_filename: null,
+        columns: {
+            checkpoint: [row(1, "")],
+            lora: [row(1, { name: "", strengthModel: 1.0, strengthClip: 1.0, nodeBypass: false, applyToPrompt: false })],
+            vae: [row(1, "")],
+            prompt: scenes.map((sc, i) => row(i + 1, {
+                positive: String(sc.positive || "").trim(),
+                negative: String(sc.negative ?? sb.negative ?? "").trim(),
+                styleApplied: false,
+                styleName: "",
+            })),
+            ksampler: [row(1, { steps: null, cfg: null, sampler_name: "", scheduler: "", denoise: null, seed })],
+        },
+        results: { images: [] },
+    };
+}
+
+function _appendLabPlanActions(container, sb) {
+    const row = document.createElement("div");
+    row.className = "wfm-ai-chat-msg-actions";
+    const openBtn = document.createElement("button");
+    openBtn.className = "wfm-btn wfm-btn-sm wfm-btn-primary";
+    openBtn.textContent = t("aiChatOpenInLab", sb.scenes.length);
+    openBtn.title = t("aiChatOpenInLabTip");
+    openBtn.addEventListener("click", () => {
+        openLabPlanData(_storyboardToLabPlan(sb));
+        showToast(t("aiChatLabPlanOpened"), "success");
+    });
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "wfm-btn wfm-btn-sm";
+    copyBtn.textContent = t("aiChatCopyLabPlan");
+    copyBtn.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(JSON.stringify(_storyboardToLabPlan(sb), null, 2));
+            showToast(t("aiChatPromptCopied"), "success");
+        } catch (e) {
+            showToast(t("errorWithMsg", e.message), "error");
+        }
+    });
+    row.append(openBtn, copyBtn);
+    container.appendChild(row);
+}
+
+// ============================================
 // Skill output auto-check (metadata.output)
 // ============================================
 
@@ -966,11 +1068,19 @@ function _checkSkillOutput(outputType, content) {
         }
         if (!block.positive) return ["The ```prompt block has an empty 'positive:' line."];
     }
+    if (outputType === "labplan") {
+        const block = _extractLabPlanBlock(text);
+        if (!block) return [];
+        if (block.error) return [block.error];
+        return _validateStoryboard(block.data);
+    }
     return [];
 }
 
 function _autoCheckFeedback(problems, outputType) {
-    const what = outputType === "svg" ? "the complete corrected SVG in a ```svg block" : "the complete corrected ```prompt block";
+    const what = outputType === "svg" ? "the complete corrected SVG in a ```svg block"
+        : outputType === "labplan" ? "the complete corrected JSON in a ```labplan block"
+        : "the complete corrected ```prompt block";
     return `[Workflow Studio auto-check] Your last answer has these problems:\n- ${problems.join("\n- ")}\nReply with ${what}. Do not apologize or explain at length.`;
 }
 
@@ -978,9 +1088,17 @@ function _autoCheckFeedback(problems, outputType) {
 // Workflow context (metadata.context: [workflow])
 // ============================================
 
+// ユーザーの発言が「今のプロンプト」に触れているか（そのときだけ現在のプロンプト文を文脈に入れる）
+const CURRENT_PROMPT_RE = /(今の|現在の|いまの|既存の|このワークフローの|入って(い)?る)\s*(ポジティブ|ネガティブ)?\s*プロンプト|プロンプトを(改善|直|修正|書き直|手直|整え|翻訳|短く|長く)|(current|existing|loaded)\s+(positive\s+|negative\s+)?prompt|(improve|fix|rewrite|edit|refine)\s+(the|my|this)\s+(positive\s+|negative\s+)?prompt|当前.{0,4}提示词|现有.{0,4}提示词|改进.{0,4}提示词/i;
+
+function _mentionsCurrentPrompt(text) {
+    return CURRENT_PROMPT_RE.test(String(text || ""));
+}
+
 // GenerateUIで読み込み中のワークフローを短い英語の要約にする（system promptへ注入）。
 // 送信のたびに作り直す（ワークフローは会話中に差し替わり得るため）。
-function _buildWorkflowContext() {
+// includePrompts: 現在のプロンプト文も入れるか（スキルの context: [current-prompt]、または発言が今のプロンプトに触れたとき）
+function _buildWorkflowContext({ includePrompts = false } = {}) {
     const wf = comfyUI.currentWorkflow;
     const an = comfyUI.currentAnalysis;
     if (!wf || !an) {
@@ -1007,10 +1125,16 @@ function _buildWorkflowContext() {
     const prompts = (an.prompt_nodes || []).slice(0, 4);
     if (prompts.length) {
         lines.push(`- Prompt nodes: ${prompts.map((p) => `${p.type} (${p.role || "unknown"})`).join(", ")}`);
+        // 今入っているプロンプト文は includePrompts のときだけ渡す。「参考情報なので写さない」と
+        // 明記しても小型モデルは新しいプロンプト（特にネガティブ）へ混ぜ込んだため（2026-11-11 実測:
+        // 注意書きの有無にかかわらず 6/6 回で "pink wear" が混入）、既定では文自体を渡さない。
         const pos = prompts.find((p) => p.role === "positive" && p.text);
-        if (pos) lines.push(`- Current positive prompt: "${String(pos.text).replace(/\s+/g, " ").slice(0, 400)}"`);
         const neg = prompts.find((p) => p.role === "negative" && p.text);
-        if (neg) lines.push(`- Current negative prompt: "${String(neg.text).replace(/\s+/g, " ").slice(0, 200)}"`);
+        if (includePrompts && (pos || neg)) {
+            lines.push("- Prompts currently typed into the workflow (the user is asking about these):");
+            if (pos) lines.push(`  - current positive: "${String(pos.text).replace(/\s+/g, " ").slice(0, 400)}"`);
+            if (neg) lines.push(`  - current negative: "${String(neg.text).replace(/\s+/g, " ").slice(0, 200)}"`);
+        }
     }
     const s = an.sampler_nodes?.[0];
     if (s) {
@@ -1078,7 +1202,18 @@ async function _prepareChatCall() {
 
     let systemPrompt = skill?.prompt || "";
     const contexts = Array.isArray(meta.context) ? meta.context : [];
-    if (contexts.includes("workflow")) systemPrompt += `\n\n${_buildWorkflowContext()}`;
+    // workflow: 要約（モデル系統の判別用） / workflow-detail: 全ノードと検査結果（診断用） / logs: 実行エラーとログ
+    if (contexts.includes("workflow-detail")) systemPrompt += `\n\n${await buildWorkflowDetailContext()}`;
+    else if (contexts.includes("workflow") || contexts.includes("current-prompt")) {
+        const includePrompts = contexts.includes("current-prompt") || _mentionsCurrentPrompt(_chat.lastRequest);
+        systemPrompt += `\n\n${_buildWorkflowContext({ includePrompts })}`;
+    }
+    if (contexts.includes("logs")) systemPrompt += `\n\n${await buildLogsContext()}`;
+    // フォルダ形式スキル: 参照ファイルは一覧だけを伝え、中身は必要なときにツールで読ませる（progressive disclosure）
+    const skillTools = skill?.folder && skill.resources.length ? _readSkillFileTool(skill.resources) : [];
+    if (skillTools.length) {
+        systemPrompt += `\n\n## Skill reference files\nThis skill comes with these files. When the instructions point to one, or you need its details, call the read_skill_file tool with its path instead of guessing its content:\n${skill.resources.map((r) => `- ${r}`).join("\n")}`;
+    }
     const buildMessages = () => systemPrompt.trim()
         ? [{ role: "system", content: systemPrompt.trim() }, ..._chat.history]
         : _chat.history;
@@ -1088,7 +1223,57 @@ async function _prepareChatCall() {
         const reply = await callChat(url, backend, model, messages, undefined, { ...settings, ...extra });
         return reply.content || "";
     };
-    return { url, backend, model, settings, chatSettings, meta, buildMessages, rawChat };
+    return { url, backend, model, settings, chatSettings, meta, buildMessages, rawChat, skill, skillTools };
+}
+
+function _readSkillFileTool(resources) {
+    return [{
+        type: "function",
+        function: {
+            name: "read_skill_file",
+            description: "Read one reference file that belongs to the active skill. Use it when the skill instructions refer to a file or you need details from it.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: { type: "string", enum: resources.slice(0, 50), description: "Relative path of the file, exactly as listed." },
+                },
+                required: ["path"],
+            },
+        },
+    }];
+}
+
+const MAX_SKILL_FILE_READS = 3;
+const MAX_TOOL_RESULT_CHARS = 12000;
+
+// read_skill_file の呼び出しを処理して会話を続ける（最大 MAX_SKILL_FILE_READS 回）。
+// 他のツール（generate_image）が呼ばれた応答や、ツール無しの応答になった時点で返す。
+async function _resolveSkillFileReads(reply, call, tools) {
+    let reads = 0;
+    while (reads < MAX_SKILL_FILE_READS) {
+        const calls = (reply.toolCalls || []).filter((tc) => (tc.function?.name || tc.name) === "read_skill_file");
+        if (!calls.length || !call.skill?.folder) return reply;
+        _chat.history.push({ role: "assistant", content: reply.content || "", tool_calls: reply.toolCalls });
+        for (const tc of calls) {
+            const path = String(_parseToolArgs(tc).path || "");
+            let content;
+            try {
+                const res = await fetch(`/api/wfm/skills/resource?skill=${encodeURIComponent(call.skill.folder)}&path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                content = String(data.content || "").slice(0, MAX_TOOL_RESULT_CHARS);
+                appendChatBubble(_chat.messagesEl, "notice", t("aiChatSkillFileRead", path));
+            } catch (e) {
+                content = `Error: could not read "${path}": ${e.message}`;
+            }
+            _chat.history.push(call.backend === "ollama"
+                ? { role: "tool", content, tool_name: "read_skill_file" }
+                : { role: "tool", content, tool_call_id: tc.id });
+        }
+        reads++;
+        reply = await callChat(call.url, call.backend, call.model, call.buildMessages(), tools, call.chatSettings);
+    }
+    return reply;
 }
 
 // 画像を生成してチャットに表示し、チェックが有効なら判定まで行う。
@@ -1317,7 +1502,7 @@ function skillRenderList() {
         item.innerHTML = `
             <div class="wfm-wc-file-item-info">
                 <span class="wfm-wc-file-name" title="${escapeHtml(f.description || "")}">${escapeHtml(f.name)}</span>
-                <span class="wfm-wc-file-ext">.md</span>
+                <span class="wfm-wc-file-ext">${f.folder ? escapeHtml(t("aiSkillFolderBadge", f.resources?.length || 0)) : ".md"}</span>
                 ${f.builtin ? `<span class="wfm-ai-skill-badge" title="${escapeHtml(t("aiSkillBuiltinTip"))}">${escapeHtml(t("aiSkillBuiltin"))}</span>` : ""}
             </div>
             <div class="wfm-wc-file-item-actions">
@@ -1355,6 +1540,8 @@ function skillOpenEditor(filename, content) {
 
     if (!editor) return;
     nameInput.value = filename || "";
+    // フォルダ形式スキル（<folder>/SKILL.md）はファイル名を変えられない
+    nameInput.readOnly = !!(filename && filename.includes("/"));
     contentTA.value = content || "";
     deleteBtn.style.display = filename ? "" : "none";
     editor.style.display = "";
@@ -1397,8 +1584,13 @@ async function _getActiveSkill() {
         const content = _stripSkillFrontmatter(raw || "");
         _activeSkillCache = { filename, content };
     }
-    const meta = skillFiles.find((f) => f.filename === filename)?.metadata || {};
-    return { prompt: _activeSkillCache.content, meta };
+    const entry = skillFiles.find((f) => f.filename === filename) || {};
+    return {
+        prompt: _activeSkillCache.content,
+        meta: entry.metadata || {},
+        folder: entry.folder || null,
+        resources: Array.isArray(entry.resources) ? entry.resources : [],
+    };
 }
 
 async function skillRestoreBuiltin(filename) {
@@ -1443,6 +1635,26 @@ function initSkillManager() {
         if (panel) panel.style.display = "none";
     });
 
+    // スキルの取り込み（Agent Skills のフォルダを zip にしたもの、または .md 単体）
+    document.getElementById("wfm-ai-skill-import-input")?.addEventListener("change", async (e) => {
+        const input = e.target;
+        const file = input.files?.[0];
+        input.value = "";
+        if (!file) return;
+        try {
+            const form = new FormData();
+            form.append("file", file, file.name);
+            const res = await fetch("/api/wfm/skills/import", { method: "POST", body: form });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const skipped = data.skipped?.length || 0;
+            showToast(t("aiSkillImported", data.skill?.name || file.name, skipped), "success");
+            await skillRefreshFiles();
+        } catch (err) {
+            showToast(t("aiSkillImportFailed", err.message), "error");
+        }
+    });
+
     newBtn?.addEventListener("click", () => {
         skillOpenEditor(null, "---\nname: \ndescription: \n---\n\n");
     });
@@ -1454,8 +1666,11 @@ function initSkillManager() {
         const content = contentTA?.value || "";
 
         if (!filename) { showToast(t("pleaseEnterFilename"), "error"); return; }
-        if (!/\.md$/i.test(filename)) filename += ".md";
-        if (!/^[\w\-. ]+\.md$/i.test(filename)) { showToast(t("invalidPathFormat"), "error"); return; }
+        const isFolderSkill = !!(skillEditingFilename && skillEditingFilename.includes("/") && filename === skillEditingFilename);
+        if (!isFolderSkill) {
+            if (!/\.md$/i.test(filename)) filename += ".md";
+            if (!/^[\w\-. ]+\.md$/i.test(filename)) { showToast(t("invalidPathFormat"), "error"); return; }
+        }
 
         const saved = await skillSaveFile(filename, content);
         if (saved) {
@@ -1472,7 +1687,10 @@ function initSkillManager() {
 
     deleteBtn?.addEventListener("click", async () => {
         if (!skillEditingFilename) return;
-        if (!confirm(`Delete "${skillEditingFilename}"?`)) return;
+        const confirmMsg = skillEditingFilename.includes("/")
+            ? t("aiSkillDeleteFolderConfirm", skillEditingFilename.split("/")[0])
+            : `Delete "${skillEditingFilename}"?`;
+        if (!confirm(confirmMsg)) return;
         await skillDeleteFile(skillEditingFilename);
         showToast(t("deletedName", skillEditingFilename), "success");
         if (selectEl.value === skillEditingFilename) {
@@ -1489,7 +1707,16 @@ function initSkillManager() {
 function appendChatBubble(messagesEl, role, content, opts = {}) {
     const div = document.createElement("div");
     div.className = `wfm-ai-chat-msg wfm-ai-chat-msg-${role}`;
-    if (content) div.textContent = content;
+    if (content) {
+        // アシスタント応答は Markdown として表示（全体をエスケープしてから整形するので安全）。
+        // 抽出処理（SVG / prompt / skill ブロック）は元のテキスト content に対して行う。
+        if (role === "assistant") {
+            div.classList.add("wfm-ai-chat-md");
+            div.innerHTML = renderMarkdown(content);
+        } else {
+            div.textContent = content;
+        }
+    }
     if (opts.imageUrl) {
         const img = document.createElement("img");
         img.src = opts.imageUrl;
@@ -1517,6 +1744,8 @@ function appendChatBubble(messagesEl, role, content, opts = {}) {
         if (skillBlock) _appendSkillSaveButton(div, skillBlock);
         const promptBlock = _extractPromptBlock(content);
         if (promptBlock?.positive) _appendPromptActions(div, promptBlock, messagesEl);
+        const labBlock = _extractLabPlanBlock(content);
+        if (labBlock?.data && _validateStoryboard(labBlock.data).length === 0) _appendLabPlanActions(div, labBlock.data);
     }
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1594,14 +1823,17 @@ function initChatTab() {
         const domMark = messagesEl.children.length - 1;
 
         try {
-            const { meta, chatSettings, buildMessages } = await _prepareChatCall();
+            const call = await _prepareChatCall();
+            const { meta, chatSettings, buildMessages } = call;
             // metadata.tools が配列なら、その中に generate_image がある場合だけツールを渡す
             // （トグルがオフなら常に渡さない）。未指定のスキルは従来どおりトグルに従う。
             const imgGenOn = imgGenToggle?.checked !== false;
             const toolsAllowed = Array.isArray(meta.tools) ? meta.tools.includes("generate_image") : true;
-            const tools = imgGenOn && toolsAllowed ? IMAGE_GEN_TOOLS : undefined;
+            const toolList = [...(imgGenOn && toolsAllowed ? IMAGE_GEN_TOOLS : []), ...call.skillTools];
+            const tools = toolList.length ? toolList : undefined;
 
             let reply = await callChat(url, backend, model, buildMessages(), tools, chatSettings);
+            reply = await _resolveSkillFileReads(reply, call, tools);
 
             // metadata.output があれば応答を検証し、問題があれば具体的なエラーを添えて1回だけ再依頼する
             const outputType = typeof meta.output === "string" ? meta.output.toLowerCase() : "";

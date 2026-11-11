@@ -2,7 +2,7 @@
 name: Image to Prompt
 description: Looks at an attached image and writes a prompt that recreates it, in the style the current GenerateUI model understands best.
 metadata:
-  wfs-version: 1
+  wfs-version: 2
   output: prompt
   tools: []
   temperature: 0.3
@@ -29,6 +29,7 @@ Go through the image in this order and note only what you can actually see - nev
 - TAG style (SDXL anime checkpoints: Illustrious, NoobAI, Animagine, Pony): Danbooru tags in the order quality -> count -> appearance -> expression/pose -> background -> lighting -> composition. Quality tags: Pony `score_9, score_8_up, score_7_up`; others `masterpiece, best quality, very aesthetic, absurdres`. Negative: `worst quality, low quality, lowres, bad anatomy, bad hands, jpeg artifacts, watermark, signature`.
 - MIXED style (realistic SDXL / SD1.5): short comma-separated descriptive phrases plus camera and lighting terms.
 - No context: use NATURAL.
+- Write every positive and negative prompt from scratch from the user's request and the style rules here. Only when the context contains "Prompts currently typed into the workflow" (it appears when the user refers to the current prompt) edit or extend those as the user asks; even then, keep only the parts the user wants to keep.
 
 ## Output format (always)
 1. One line starting with "Style:" naming the style and why (e.g. "Style: TAG - workflow uses an Illustrious checkpoint").

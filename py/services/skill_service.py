@@ -24,10 +24,13 @@ while a user-edited one is left alone (and flagged ``update_available``).
 """
 
 import hashlib
+import io
 import json
 import logging
 import re
-from pathlib import Path
+import shutil
+import zipfile
+from pathlib import Path, PurePosixPath
 
 try:
     import yaml  # PyYAML ships with ComfyUI
@@ -37,6 +40,18 @@ except Exception:  # pragma: no cover - fallback parser below
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXTS = {"md"}
+
+# Folder skills (Agent Skills / SKILL.md standard): <skills_dir>/<folder>/SKILL.md plus optional
+# reference files.  Only text resources are kept and served - Workflow Studio never runs a
+# skill's scripts, so script files are skipped on import.
+SKILL_MD = "SKILL.md"
+RESOURCE_EXTS = {"md", "txt", "json", "yaml", "yml", "csv"}
+MAX_RESOURCES = 50
+MAX_RESOURCE_BYTES = 200 * 1024        # per file served to the chat model
+MAX_IMPORT_FILE_BYTES = 1024 * 1024    # per file inside an imported zip
+MAX_IMPORT_TOTAL_BYTES = 5 * 1024 * 1024
+MAX_IMPORT_ENTRIES = 300
+_FOLDER_RE = re.compile(r"^[A-Za-z0-9][\w.\- ]{0,63}$")
 
 BUILTIN_DIR = Path(__file__).parent / "builtin_skills"
 STATE_FILENAME = ".builtin_state.json"
@@ -242,13 +257,18 @@ class SkillService:
     # ------------------------------------------------------------------
 
     def list_skills(self) -> list[dict]:
-        """Return sorted list of skill files with parsed frontmatter metadata."""
+        """Return sorted list of flat skill files and folder skills with parsed metadata."""
         if not self.skills_dir.exists():
             return []
         builtins = self._builtins()
         state = self._load_state()
         files = []
         for path in sorted(self.skills_dir.glob("*")):
+            if path.is_dir():
+                info = self._folder_skill_info(path)
+                if info:
+                    files.append(info)
+                continue
             if not (path.is_file() and path.suffix.lstrip(".").lower() in ALLOWED_EXTS):
                 continue
             try:
@@ -269,6 +289,59 @@ class SkillService:
             files.append(info)
         return files
 
+    def _folder_skill_info(self, folder: Path) -> dict | None:
+        if folder.name.startswith(".") or not _FOLDER_RE.match(folder.name):
+            return None
+        skill_md = folder / SKILL_MD
+        if not skill_md.is_file():
+            return None
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except Exception:
+            content = ""
+        info = _skill_info(f"{folder.name}/{SKILL_MD}", content, skill_md.stat().st_size)
+        if info["name"] == SKILL_MD.rsplit(".", 1)[0]:
+            info["name"] = folder.name
+        info["folder"] = folder.name
+        info["resources"] = self.list_resources(folder.name)
+        info["builtin"] = False
+        info["update_available"] = False
+        return info
+
+    def list_resources(self, folder: str) -> list[str]:
+        """Readable reference files of a folder skill (relative POSIX paths, SKILL.md excluded)."""
+        base = self._folder_path(folder)
+        if base is None or not base.is_dir():
+            return []
+        out = []
+        for path in sorted(base.rglob("*")):
+            if len(out) >= MAX_RESOURCES:
+                break
+            if not path.is_file() or path.is_symlink():
+                continue
+            rel = path.relative_to(base).as_posix()
+            if rel == SKILL_MD or any(part.startswith(".") for part in rel.split("/")):
+                continue
+            if path.suffix.lstrip(".").lower() in RESOURCE_EXTS:
+                out.append(rel)
+        return out
+
+    def get_resource(self, folder: str, rel_path: str) -> str:
+        """Read one reference file of a folder skill (used by the chat's read_skill_file tool)."""
+        base = self._folder_path(folder)
+        if base is None or not base.is_dir():
+            raise FileNotFoundError(f"Skill folder not found: {folder}")
+        rel = PurePosixPath(str(rel_path or "").replace("\\", "/"))
+        if rel.is_absolute() or ".." in rel.parts or not rel.parts or rel.as_posix() == SKILL_MD:
+            raise ValueError(f"Invalid resource path: {rel_path}")
+        if rel.suffix.lstrip(".").lower() not in RESOURCE_EXTS:
+            raise ValueError(f"Unsupported resource type: {rel_path}")
+        path = (base / rel).resolve()
+        if base.resolve() not in path.parents or not path.is_file():
+            raise FileNotFoundError(f"Resource not found: {rel_path}")
+        data = path.read_bytes()[:MAX_RESOURCE_BYTES]
+        return data.decode("utf-8", errors="replace")
+
     def get_content(self, filename: str) -> str:
         path = self._safe_path(filename)
         if path is None:
@@ -281,24 +354,149 @@ class SkillService:
         path = self._safe_path(filename)
         if path is None:
             raise ValueError(f"Invalid filename: {filename}")
+        if path.name == SKILL_MD and not path.parent.is_dir():
+            raise FileNotFoundError(f"Skill folder not found: {filename}")
         path.write_text(content, encoding="utf-8")
-        return _skill_info(path.name, content, path.stat().st_size)
+        rel = path.relative_to(self.skills_dir).as_posix()
+        return _skill_info(rel, content, path.stat().st_size)
 
     def delete_file(self, filename: str) -> None:
         path = self._safe_path(filename)
         if path is None:
             raise ValueError(f"Invalid filename: {filename}")
+        if path.name == SKILL_MD and path.parent != self.skills_dir:
+            # A folder skill is deleted as a whole (SKILL.md + its reference files).
+            if path.parent.is_dir():
+                shutil.rmtree(path.parent)
+            return
         if path.is_file():
             path.unlink()
 
+    # ------------------------------------------------------------------
+    # Import (Agent Skills zip or a single .md)
+    # ------------------------------------------------------------------
+
+    def import_skill(self, upload_name: str, data: bytes) -> dict:
+        """Import an uploaded skill.
+
+        - ``*.md``: saved as a flat skill (``<slug>.md``; SKILL.md uploads are named after their
+          frontmatter name).
+        - ``*.zip``: an Agent Skills folder - SKILL.md at the zip root or inside exactly one top
+          folder.  Only text resources are extracted; scripts and binaries are skipped.
+        Returns ``{"skill": info, "skipped": [paths]}``.  Never overwrites: a numeric suffix is
+        added when the name is taken.
+        """
+        name = (upload_name or "").strip()
+        lower = name.lower()
+        if lower.endswith(".md"):
+            text = data.decode("utf-8", errors="replace")
+            meta = _parse_frontmatter(text)
+            stem = Path(name).stem if Path(name).name != SKILL_MD else str(meta.get("name") or "imported-skill")
+            filename = self._unique_name(_slugify(stem), ".md")
+            (self.skills_dir / filename).write_text(text, encoding="utf-8")
+            return {"skill": _skill_info(filename, text, len(data)), "skipped": []}
+        if not lower.endswith(".zip"):
+            raise ValueError("Only .zip (Agent Skills folder) or .md files can be imported")
+        return self._import_zip(data)
+
+    def _import_zip(self, data: bytes) -> dict:
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile as e:
+            raise ValueError(f"Not a valid zip file: {e}") from e
+        infos = [i for i in zf.infolist() if not i.is_dir()]
+        if len(infos) > MAX_IMPORT_ENTRIES:
+            raise ValueError(f"Too many files in the zip ({len(infos)} > {MAX_IMPORT_ENTRIES})")
+
+        def parts_of(info):
+            p = PurePosixPath(info.filename.replace("\\", "/"))
+            if p.is_absolute() or ".." in p.parts or any(":" in part for part in p.parts):
+                raise ValueError(f"Unsafe path in zip: {info.filename}")
+            return p.parts
+
+        all_parts = [(i, parts_of(i)) for i in infos]
+        # Ignore OS junk (__MACOSX/, .DS_Store) when locating SKILL.md.
+        all_parts = [(i, ps) for i, ps in all_parts if ps and ps[0] != "__MACOSX" and not ps[-1].startswith(".")]
+        skill_md_parts = [ps for _, ps in all_parts if ps[-1] == SKILL_MD and len(ps) <= 2]
+        if len(skill_md_parts) != 1:
+            raise ValueError("The zip must contain exactly one SKILL.md at its root or in one top-level folder")
+        prefix = skill_md_parts[0][:-1]  # () or (top_folder,)
+
+        skill_text = zf.read("/".join(skill_md_parts[0])).decode("utf-8", errors="replace")
+        meta = _parse_frontmatter(skill_text)
+        base_name = prefix[0] if prefix else str(meta.get("name") or "imported-skill")
+        folder = self._unique_name(_slugify(base_name), "")
+        target = self.skills_dir / folder
+        target.mkdir(parents=True)
+
+        written, skipped, total = 0, [], 0
+        try:
+            for info, ps in all_parts:
+                if tuple(ps[: len(prefix)]) != prefix:
+                    skipped.append(info.filename)
+                    continue
+                rel = PurePosixPath(*ps[len(prefix):])
+                is_skill_md = rel.as_posix() == SKILL_MD
+                ext = rel.suffix.lstrip(".").lower()
+                if not is_skill_md and ext not in RESOURCE_EXTS:
+                    skipped.append(info.filename)
+                    continue
+                if info.file_size > MAX_IMPORT_FILE_BYTES:
+                    skipped.append(info.filename)
+                    continue
+                total += info.file_size
+                if total > MAX_IMPORT_TOTAL_BYTES:
+                    raise ValueError("The zip's text files exceed 5 MB in total")
+                content = zf.read(info)[:MAX_IMPORT_FILE_BYTES]
+                out = (target / rel).resolve()
+                if target.resolve() not in out.parents:
+                    raise ValueError(f"Unsafe path in zip: {info.filename}")
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(content)
+                written += 1
+        except Exception:
+            shutil.rmtree(target, ignore_errors=True)
+            raise
+        logger.info("[WFS] Imported skill folder %s (%d files, %d skipped)", folder, written, len(skipped))
+        return {"skill": self._folder_skill_info(target), "skipped": skipped}
+
+    def _unique_name(self, stem: str, suffix: str) -> str:
+        candidate = f"{stem}{suffix}"
+        n = 2
+        while (self.skills_dir / candidate).exists():
+            candidate = f"{stem}-{n}{suffix}"
+            n += 1
+        return candidate
+
+    # ------------------------------------------------------------------
+    # Path safety
+    # ------------------------------------------------------------------
+
+    def _folder_path(self, folder: str) -> Path | None:
+        name = (folder or "").strip()
+        if not _FOLDER_RE.match(name) or name.startswith("."):
+            return None
+        return self.skills_dir / name
+
     def _safe_path(self, filename: str) -> Path | None:
+        """Flat ``name.md`` or a folder skill's ``<folder>/SKILL.md`` - nothing else."""
         if not filename or not filename.strip():
             return None
-        # Skills are a flat directory - reject any path separator (no subfolders).
-        name = filename.strip()
-        if "/" in name or "\\" in name or name in (".", "..") or name.startswith("."):
+        name = filename.strip().replace("\\", "/")
+        if "/" in name:
+            folder, _, leaf = name.partition("/")
+            if leaf != SKILL_MD:
+                return None
+            base = self._folder_path(folder)
+            return base / SKILL_MD if base is not None else None
+        if name in (".", "..") or name.startswith("."):
             return None
         ext = Path(name).suffix.lstrip(".").lower()
         if ext not in ALLOWED_EXTS:
             return None
         return self.skills_dir / name
+
+
+def _slugify(text: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-").lower()[:48]
+    return slug or "imported-skill"

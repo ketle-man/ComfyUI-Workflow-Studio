@@ -430,6 +430,10 @@ function applyI18nToHtml() {
     if (aiRoundsLabel) aiRoundsLabel.textContent = t("aiCheckRoundsLabel");
     const aiRoundsManual = document.querySelector("#wfm-ai-check-rounds-select option[value='0']");
     if (aiRoundsManual) aiRoundsManual.textContent = t("aiCheckRoundsManual");
+    const aiSkillImportText = document.getElementById("wfm-ai-skill-import-text");
+    if (aiSkillImportText) aiSkillImportText.textContent = t("aiSkillImportText");
+    const aiSkillImportLabel = document.getElementById("wfm-ai-skill-import-label");
+    if (aiSkillImportLabel) aiSkillImportLabel.title = t("aiSkillImportTip");
     const aiChatGenTitle = document.getElementById("wfm-ai-settings-chatgen-title");
     if (aiChatGenTitle) aiChatGenTitle.textContent = t("aiSettingsChatGenTitle");
     const aiChatGenDedicatedLabel = document.getElementById("wfm-ai-chatgen-dedicated-label");
@@ -631,6 +635,7 @@ function applyI18nToHtml() {
         "wfm-help-ai-9": "helpAi9",
         "wfm-help-ai-10": "helpAi10",
         "wfm-help-ai-11": "helpAi11",
+        "wfm-help-ai-12": "helpAi12",
         "wfm-help-ai-card-layout-title": "helpAiCardLayout",
         "wfm-help-ai-card-translate-title": "helpAiCardTranslate",
         "wfm-help-ai-card-chat-title": "helpAiCardChat",
