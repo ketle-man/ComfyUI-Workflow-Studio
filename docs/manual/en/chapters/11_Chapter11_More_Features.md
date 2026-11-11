@@ -103,6 +103,22 @@ You can put text on a generated image, or make a mask for redrawing part of it.
 - Save the edited image with **Save PNG** (download), **Save to Gallery** and so on.
 - Undo with **Ctrl + Z**, redo with **Ctrl + Y**.
 
+### Draw colors and shortcuts (v0.9.3+)
+When you choose **Draw**, a **color palette** appears in the second row of the tool options.
+
+- It shows **Color 1 / Color 2**, 20 basic colors and 20 custom slots. Click a color to paint with it.
+- Click **+** or an empty slot to register the current color as a custom color. Right-click a color to register, edit or delete it (basic colors can be changed too, and returned to their original color).
+  Registered colors are saved per browser.
+- The **eyedropper** button next to **Color** on the right picks a color from the canvas (Esc cancels).
+- The starting colors are black (Color 1) and white (Color 2).
+
+| Key (while Draw is active) | What it does |
+| --- | --- |
+| D / E | Draw / Erase |
+| X | Swap Color 1 and Color 2 |
+| [ / ] | Make the brush smaller / larger |
+| B | Open or close the brush picker (Esc also closes it) |
+
 ### Inpainting (redrawing part of an image)
 The handiest use of Image Edit is **inpainting**.
 It is for when "I want to redraw only the face" or "I want to fix only the place where the hand broke".

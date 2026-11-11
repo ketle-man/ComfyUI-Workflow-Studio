@@ -27,7 +27,7 @@ It is enough to learn the tabs marked with a star under "Often used" first.
 | TagSpace | Showing tags, prompts and generated images in 3D by closeness of meaning, and picking tags | | Chapter 11 |
 | Settings | Language, theme, folders and other settings | | This chapter, Chapter 11 |
 | Help | Feature list, shortcuts, troubleshooting | | This chapter |
-| AI TOOL | Translation, chat and image analysis with local AI | | Chapter 10 |
+| AI TOOL | Translation, chat, image analysis and text reading (OCR) with local AI | | Chapter 10 |
 
 ### Think of the tabs in three groups: "organize", "create" and "support"
 If the number of tabs makes you lose your way, it helps to think of them in these three groups.

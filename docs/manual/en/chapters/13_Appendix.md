@@ -16,6 +16,7 @@ The main terms that appear in this book, in alphabetical order.
 | Civitai | A sharing site for image-generation models | Chapter 6 |
 | ComfyUI Manager | A management tool for searching for and installing custom nodes | Chapter 2 |
 | Custom node | A node or extension added to ComfyUI afterwards. Workflow Studio is one of them | Chapter 1 |
+| Decision model | An AI model that answers questions with numbers such as the probability of "yes". Used to judge image checks | Chapter 10 |
 | Denoise | How strongly to redraw the original image | Chapter 5 |
 | Embedding | A small file that teaches a particular word a meaning | Chapter 6 |
 | Hash value | A "fingerprint"-like value computed from a file's contents. Used to look up models on Civitai | Chapter 6 |
@@ -31,6 +32,7 @@ The main terms that appear in this book, in alphabetical order.
 | Negative prompt | A prompt where you write what you do not want drawn | Chapter 7 |
 | Node | A "box" arranged on ComfyUI's screen. It handles one process | Chapter 1 |
 | Node set | Several nodes and their connections saved together | Chapter 9 |
+| OCR | Reading the text shown in an image | Chapter 10 |
 | Ollama | Software for running local AI easily | Chapter 10 |
 | Port number | A number for distinguishing which software to communicate with inside one computer | Chapter 2 |
 | Positive prompt | A prompt where you write what you want drawn | Chapter 7 |
@@ -41,6 +43,7 @@ The main terms that appear in this book, in alphabetical order.
 | Scheduler | How the drawing amount is distributed across steps | Chapter 5 |
 | Seed | The seed of random numbers an image grows from. If the same, you get almost the same image | Chapter 5 |
 | Semantic search | Searching images by the "meaning" of a sentence or image. Used with the Gallery's S button | Chapter 8 |
+| Skill | Instructions that tell the AI TOOL chat its role and how to answer. Picking one switches what it is good at | Chapter 10 |
 | Steps | The number of times drawing is repeated | Chapter 5 |
 | Style | A mood template added to a prompt | Chapter 7 |
 | T2I (Text to Image) | Making an image from text (a prompt) | Chapter 5 |
@@ -95,6 +98,10 @@ The main terms that appear in this book, in alphabetical order.
 | Mouse wheel | Zoom in and out |
 | Space + drag | Move the view position |
 | Delete | Delete the selected layer (when there are two or more layers) |
+| D / E (while Draw is active) | Draw / Erase |
+| X (while Draw is active) | Swap Color 1 and Color 2 |
+| [ / ] (while Draw is active) | Make the brush smaller / larger |
+| B (while Draw is active) | Open or close the brush picker |
 
 ---
 

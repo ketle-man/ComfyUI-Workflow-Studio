@@ -163,6 +163,8 @@ Until the next keyframe arrives, the previous setting is carried over.
 4. Decide the number of generations (Batch).
 5. In each of the Model, Prompt and KSampler columns, press **+** to add a keyframe,
    then double-click the keyframe and enter "from which run" and "to which setting".
+   Cells in the KSampler column show the items you set (Step, CFG, Denoise, sampler, scheduler, Seed).
+   A cell with nothing set shows "(workflow default)".
 6. Press **Run**.
 
 Results are listed in the **Results** panel.
@@ -172,6 +174,8 @@ Results are listed in the **Results** panel.
   You can make a series of images that change little by little.
 - **Plan Save** - lets you save the settings (the plan). When saved, an overview image summarizing the results is also made,
   and dropping that image lets you load the same plan again.
+- **Making a plan from a story** (v0.9.5+) - with the **Storyboard to Lab** skill in the AI TOOL chat,
+  a story is split into one prompt per scene and the **Open in Lab** button loads the plan here (Chapter 10, section 10-5).
 
 ---
 
@@ -214,6 +218,7 @@ The workflows you can use in GenerateUI have increased as follows. They are used
 - **Fibo 2.0 Edit** (v0.8.14 and later) - an image-editing workflow. With the prompt enhancer (PE) setup, edits in the prompt area apply whether PE is on or off. The negative area holds a VGL-format (JSON) description as is. Width and height (Settings) of 0 mean automatic.
 - **FastH3 OmniRef / Pika-H3-Flex** (v0.8.14 and later) - MiniMax H3 reference to video. Treated as video workflows, and also usable in the Video tab (Chapter 11).
 - **Native LoRA stack** - ComfyUI v0.40's nodes that load several LoRAs at once (LoadLoraModel / LoadLoraTextEncoder). Apply, bypass and the Metadata display are supported.
+- **P-H3 Image** (v0.9.4+) - the image-edit and T2I templates. The prompt is shown on the Input tab and can be read by the Metadata tab; there is no negative prompt field. Width and height follow the workflow's wiring, and the prompt upsampler runs as set in the workflow.
 
 > **Caution**
 > The native LoRA stack nodes are supported **only in API-format workflows**.

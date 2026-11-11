@@ -135,6 +135,21 @@ For Ollama, download the model with `ollama pull (model name)`, then press **Ref
 For safety, by default it connects only to AI software inside the same computer.
 You need to set the environment variable `WFS_ALLOWED_BACKEND_HOSTS` (Chapter 10, section 10-4).
 
+### The judge model for image checks, or the OCR model, does not appear in the list
+- The judge model list shows only Ollama **decision models** that can read images; normal chat models are not shown.
+  Update Ollama, `ollama pull` a decision model, then press **Refresh** (Chapter 10, section 10-6).
+- The OCR model list shows only Ollama models whose name contains "ocr". Press ↻ after getting one (Chapter 10, section 10-8).
+- Both look at Ollama at the AI TOOL backend address when the backend is Ollama, otherwise at `http://localhost:11434`.
+
+### Image checks never pass no matter how often it fixes
+- How well the redraw works depends on the chat model. Make your request shorter and more concrete, or try another model.
+- The check itself can be wrong too. Look at the image yourself as well.
+- Too many automatic fix rounds keep using generation time and GPU memory. "0 (fix by button)" is recommended at first.
+
+### The AI does not read a skill's reference files, or does not generate images from the chat
+Reading the reference files of an imported skill and generating images from the chat only work with
+**a model that supports tool calling**. Switch to such a model.
+
 ---
 
 ## 12-5 Troubles with other features
@@ -171,6 +186,15 @@ Run the installation command shown in the error message in the Python that Comfy
 ### A partner API (Nano Banana) says authentication failed
 The cause is a missing Comfy API key in `.env`. Write `COMFY_API_KEY=your key` (issued at platform.comfy.org) in the plugin's `.env` and restart ComfyUI (Chapter 5, section 5-8).
 `.env` is read only at startup.
+
+### ComfyUI freezes (no tab responds)
+On Windows, ComfyUI can stop responding (generation included), for example after switching a Models tab list with many preview images.
+In the Settings tab, under **Windows Stability (Event Loop)**, turn on **Use the Selector event loop on Windows (restart required)** and restart ComfyUI.
+
+### Part of a Gallery image looks broken, as if mixed with another image
+With the **Selector event loop** above turned on, up to v0.9.1 part of an image received by the Gallery preview or Download could be corrupted
+(the file in the output folder itself is fine). This is fixed in v0.9.2.
+After updating Workflow Studio, broken images may remain in the browser cache, so reload with **Ctrl + F5**.
 
 ### Images do not appear in the Gallery
 - Press **Refresh** in the Gallery.

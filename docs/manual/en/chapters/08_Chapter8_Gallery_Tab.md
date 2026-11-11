@@ -6,7 +6,7 @@ and to solve "how did I make this image?".
 
 Images generated in ComfyUI have information about the workflow and prompt used for generation (**metadata**) embedded in them.
 The Gallery tab reads this information so that you can reproduce the same settings right away.
-Videos (MP4 and WebM) and audio files (WAV, MP3, OGG, M4A, FLAC and Opus) can also be handled in the same list as images.
+Videos (MP4 and WebM), audio files (WAV, MP3, OGG, M4A, FLAC and Opus) and 3D models (GLB, glTF, VRM, PLY and SPZ) can also be handled in the same list as images.
 
 ---
 
@@ -296,6 +296,30 @@ When you choose a video, only the audio track is extracted and saved.
 > **Tip: use in the Video tab**
 > In the Asset subtab of Video, you can set an audio file as "Set as BGM" or "Add as sound" (Chapter 11, section 11-4).
 
+---
+
+## 8-8 Viewing 3D models (v0.9.4+)
+
+The results of ComfyUI workflows that make 3D models (such as image to 3D) can also be checked in the Gallery.
+Supported formats are GLB, glTF, VRM, PLY (mesh, point cloud or Gaussian splat) and SPZ.
+
+- They are listed with a "**3D**" badge. The thumbnail is drawn by your browser the first time the file appears in the list and is then kept on the server
+  (files over 128 MB get one when opened).
+- When selected, the file is shown in 3D in the built-in viewer of the detail panel on the right. Double-click to enlarge it.
+
+| Action | What it does |
+| --- | --- |
+| Drag | Rotate |
+| Right-drag | Move (pan) |
+| Mouse wheel | Zoom in / out |
+| ⟲ (reset) button | Return to the starting view |
+
+- For a model saved with ComfyUI's **SaveGLB**, the workflow can be read just like an image's (sections 8-2 and 8-3).
+
+> **Caution**
+> - 3D files cannot be sent to Image Edit, GenerateUI, Tagger or Feeder.
+> - Some `.gltf` files refer to separate `.bin` or image files. Moving or deleting in the Gallery only affects the `.gltf` itself, so do not change where those files are.
+
 > **Summary of this chapter**
 > - In the Gallery's Output, you can look back at generated images folder by folder. You can also search by words in the prompt
 > - The detail panel's Prompt tab shows right away the prompt used to generate the image
@@ -304,3 +328,4 @@ When you choose a video, only the audio track is extracted and saved.
 > - If you drop an image onto the Metadata subtab, you can examine the models, LoRAs and prompt in detail
 > - With the S button you can search by the meaning of a sentence or by "similar images" (semantic search)
 > - Audio files can also be listed, played and converted
+> - 3D models (GLB, glTF, VRM, PLY, SPZ) can also be turned around and checked in the Gallery (8-8)

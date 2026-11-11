@@ -597,10 +597,10 @@ Samples for the Feeder tab: `ws_sdxl_image_feeder_i2i` / `ws_dwpose_image_feeder
 
 ## Manual
 
-A beginner-oriented manual (covers v0.9.1, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
+A beginner-oriented manual (covers v0.9.5, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
 
-- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.9.1_en.zip`
-- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.9.1.zip`
+- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.9.5_en.zip`
+- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.9.5.zip`
 
 ---
 
