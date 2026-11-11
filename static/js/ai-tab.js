@@ -61,11 +61,15 @@ function fileToBase64(file) {
 // <think>タグ除去でも担保する（stripThinkingTagsを参照）。
 function _applyGenOptions(body, backend, settings) {
     const maxTokens = parseInt(settings?.maxTokens, 10);
+    // temperature はスキルの metadata.temperature から渡される（未指定ならモデル既定値のまま）
+    const temperature = typeof settings?.temperature === "number" ? settings.temperature : null;
     if (backend === "ollama") {
         body.think = !!settings?.thinkingMode;
         if (maxTokens > 0) body.options = { ...(body.options || {}), num_predict: maxTokens };
-    } else if (maxTokens > 0) {
-        body.max_tokens = maxTokens;
+        if (temperature != null) body.options = { ...(body.options || {}), temperature };
+    } else {
+        if (maxTokens > 0) body.max_tokens = maxTokens;
+        if (temperature != null) body.temperature = temperature;
     }
     return body;
 }
@@ -788,6 +792,208 @@ function _appendSkillSaveButton(container, skillContent) {
 }
 
 // ============================================
+// ```prompt block (T2I Prompt Enhancer etc.) — parse + action buttons
+// ============================================
+
+// ```prompt フェンス内の "positive:" / "negative:" を取り出す。
+// 各キーは次のキー行までを値とみなす（複数行にも対応）。キーが無い場合は全体を positive とする。
+function _extractPromptBlock(text) {
+    if (!text) return null;
+    const m = text.match(/```prompt[^\n]*\n([\s\S]*?)```/i);
+    if (!m) return null;
+    const body = m[1];
+    const result = { positive: "", negative: null };
+    const keyRe = /^\s*(positive|negative)\s*(?:prompt)?\s*:\s*/i;
+    let current = null;
+    const buf = { positive: [], negative: [] };
+    for (const line of body.split(/\r?\n/)) {
+        const km = line.match(keyRe);
+        if (km) {
+            current = km[1].toLowerCase();
+            buf[current].push(line.slice(km[0].length));
+        } else if (current) {
+            buf[current].push(line);
+        } else if (line.trim()) {
+            current = "positive";
+            buf.positive.push(line);
+        }
+    }
+    result.positive = buf.positive.join(" ").replace(/\s+/g, " ").trim();
+    if (buf.negative.length) result.negative = buf.negative.join(" ").replace(/\s+/g, " ").trim();
+    return result;
+}
+
+// プロンプトブロックの下に「GenerateUIに反映」「このプロンプトで生成」「コピー」ボタンを付ける
+function _appendPromptActions(container, block, messagesEl) {
+    const row = document.createElement("div");
+    row.className = "wfm-ai-chat-actions";
+
+    const applyBtn = document.createElement("button");
+    applyBtn.className = "wfm-btn wfm-btn-sm";
+    applyBtn.textContent = t("aiChatApplyPrompt");
+    applyBtn.title = t("aiChatApplyPromptTip");
+    applyBtn.addEventListener("click", () => {
+        if (!comfyUI.currentWorkflow || !comfyUI.currentAnalysis) {
+            showToast(t("aiChatNoWorkflowLoaded"), "error");
+            return;
+        }
+        comfyEditor.setPromptText("positive", block.positive);
+        if (block.negative != null) comfyEditor.setPromptText("negative", block.negative);
+        showToast(t("aiChatPromptApplied"), "success");
+    });
+
+    const genBtn = document.createElement("button");
+    genBtn.className = "wfm-btn wfm-btn-sm wfm-btn-primary";
+    genBtn.textContent = t("aiChatGenerateWithPrompt");
+    genBtn.addEventListener("click", async () => {
+        genBtn.disabled = true;
+        try {
+            const imageUrls = await generateImageFromChat(block.positive, block.negative || "", {});
+            appendChatBubble(messagesEl, "assistant", "", { imageUrls });
+        } catch (e) {
+            showToast(t("aiToastImageGenFailed") + e.message, "error");
+        } finally {
+            genBtn.disabled = false;
+        }
+    });
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "wfm-btn wfm-btn-sm";
+    copyBtn.textContent = t("aiChatCopyPrompt");
+    copyBtn.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(block.positive);
+            showToast(t("aiChatPromptCopied"), "success");
+        } catch (e) {
+            showToast(t("errorWithMsg", e.message), "error");
+        }
+    });
+
+    row.append(applyBtn, genBtn, copyBtn);
+    container.appendChild(row);
+}
+
+// ============================================
+// Skill output auto-check (metadata.output)
+// ============================================
+
+// SVGを検証し、問題点（英語、LLMへのフィードバック用）の配列を返す。空配列なら合格。
+function _validateSvg(svgCode) {
+    if (!svgCode) return [];
+    const problems = [];
+    const doc = new DOMParser().parseFromString(svgCode, "image/svg+xml");
+    const err = doc.querySelector("parsererror");
+    if (err) {
+        const detail = (err.textContent || "").replace(/\s+/g, " ").trim().slice(0, 300);
+        return [`The SVG is not well-formed XML: ${detail}`];
+    }
+    const root = doc.documentElement;
+    if (!root || root.localName !== "svg") return ["The root element must be <svg>."];
+    if (!root.getAttribute("viewBox")) problems.push("The <svg> element has no viewBox attribute.");
+    if (root.namespaceURI !== "http://www.w3.org/2000/svg") problems.push('The <svg> element is missing xmlns="http://www.w3.org/2000/svg".');
+    const forbidden = new Set();
+    for (const el of [root, ...root.querySelectorAll("*")]) {
+        const name = el.localName.toLowerCase();
+        if (name === "script" || name === "foreignobject") forbidden.add(`<${el.localName}>`);
+        for (const attr of el.attributes) {
+            const an = attr.name.toLowerCase();
+            if (an.startsWith("on")) forbidden.add(`${attr.name} attribute`);
+            if ((an === "href" || an === "xlink:href") && /^\s*(https?:|javascript:|data:)/i.test(attr.value)) {
+                forbidden.add(`external ${attr.name}`);
+            }
+        }
+    }
+    if (forbidden.size) problems.push(`Remove forbidden content: ${[...forbidden].join(", ")}.`);
+    const drawables = root.querySelectorAll("path,circle,ellipse,rect,polygon,polyline,line,text,use");
+    if (drawables.length === 0) problems.push("The SVG contains no visible shapes.");
+    return problems;
+}
+
+// スキルの metadata.output に応じて応答を検証する。問題が無ければ空配列。
+// 「成果物を出そうとして壊れている」場合だけを問題とする。成果物が全く無い応答
+// （説明だけ頼まれた・確認の質問をしている等）はユーザーの意図を優先して再依頼しない。
+function _checkSkillOutput(outputType, content) {
+    const text = content || "";
+    if (outputType === "svg") {
+        const svgCode = _extractSvgCode(text);
+        if (!svgCode) {
+            return /<svg[\s>]/i.test(text)
+                ? ["The <svg> element is not closed. Output one complete <svg>...</svg> element inside a ```svg code block."]
+                : [];
+        }
+        return _validateSvg(svgCode);
+    }
+    if (outputType === "prompt") {
+        const block = _extractPromptBlock(text);
+        if (!block) {
+            // ```prompt フェンスを付け忘れて "positive:" 行だけ書いた場合（小型モデルで多い）
+            return /^[\s*_#>-]*positive(\s+prompt)?[\s*_]*:/im.test(text)
+                ? ["The prompt is not inside a fenced block. Put the 'positive:' and 'negative:' lines inside a code block labeled prompt (```prompt ... ```)."]
+                : [];
+        }
+        if (!block.positive) return ["The ```prompt block has an empty 'positive:' line."];
+    }
+    return [];
+}
+
+function _autoCheckFeedback(problems, outputType) {
+    const what = outputType === "svg" ? "the complete corrected SVG in a ```svg block" : "the complete corrected ```prompt block";
+    return `[Workflow Studio auto-check] Your last answer has these problems:\n- ${problems.join("\n- ")}\nReply with ${what}. Do not apologize or explain at length.`;
+}
+
+// ============================================
+// Workflow context (metadata.context: [workflow])
+// ============================================
+
+// GenerateUIで読み込み中のワークフローを短い英語の要約にする（system promptへ注入）。
+// 送信のたびに作り直す（ワークフローは会話中に差し替わり得るため）。
+function _buildWorkflowContext() {
+    const wf = comfyUI.currentWorkflow;
+    const an = comfyUI.currentAnalysis;
+    if (!wf || !an) {
+        return "## Current workflow context\nNo workflow is loaded in GenerateUI. If the target model matters, ask the user or assume a NATURAL-language model.";
+    }
+    const modelKeys = ["ckpt_name", "unet_name", "model_name", "clip_name", "clip_name1", "clip_name2", "clip_name3", "clip_name4", "vae_name", "lora_name"];
+    const models = new Set();
+    const loaderTypes = new Set();
+    for (const node of Object.values(wf)) {
+        if (!node?.class_type) continue;
+        const inputs = node.inputs || {};
+        let isLoader = false;
+        for (const k of modelKeys) {
+            if (typeof inputs[k] === "string" && inputs[k] && inputs[k] !== "None") {
+                models.add(`${k}=${inputs[k]}`);
+                isLoader = true;
+            }
+        }
+        if (isLoader || /Loader|TextEncode|CLIP/i.test(node.class_type)) loaderTypes.add(node.class_type);
+    }
+    const lines = ["## Current workflow context (auto-generated by Workflow Studio)"];
+    if (models.size) lines.push(`- Model files: ${[...models].slice(0, 12).join("; ")}`);
+    if (loaderTypes.size) lines.push(`- Loader / text-encoder node types: ${[...loaderTypes].slice(0, 12).join(", ")}`);
+    const prompts = (an.prompt_nodes || []).slice(0, 4);
+    if (prompts.length) {
+        lines.push(`- Prompt nodes: ${prompts.map((p) => `${p.type} (${p.role || "unknown"})`).join(", ")}`);
+        const pos = prompts.find((p) => p.role === "positive" && p.text);
+        if (pos) lines.push(`- Current positive prompt: "${String(pos.text).replace(/\s+/g, " ").slice(0, 400)}"`);
+        const neg = prompts.find((p) => p.role === "negative" && p.text);
+        if (neg) lines.push(`- Current negative prompt: "${String(neg.text).replace(/\s+/g, " ").slice(0, 200)}"`);
+    }
+    const s = an.sampler_nodes?.[0];
+    if (s) {
+        const parts = [];
+        if (s.steps != null) parts.push(`steps ${s.steps}`);
+        if (s.cfg != null) parts.push(`CFG ${s.cfg}`);
+        if (s.sampler_name) parts.push(`sampler ${s.sampler_name}`);
+        if (parts.length) lines.push(`- Sampler: ${parts.join(", ")}`);
+    }
+    const l = an.latent_nodes?.[0];
+    if (l && l.width && l.height) lines.push(`- Resolution: ${l.width}x${l.height}`);
+    if (an.load_image_nodes?.length) lines.push(`- Has ${an.load_image_nodes.length} LoadImage input(s) (image-to-image / edit workflow).`);
+    return lines.join("\n");
+}
+
+// ============================================
 // AI skills (Chat system prompt library)
 // ============================================
 
@@ -855,8 +1061,10 @@ function skillRenderList() {
             <div class="wfm-wc-file-item-info">
                 <span class="wfm-wc-file-name" title="${escapeHtml(f.description || "")}">${escapeHtml(f.name)}</span>
                 <span class="wfm-wc-file-ext">.md</span>
+                ${f.builtin ? `<span class="wfm-ai-skill-badge" title="${escapeHtml(t("aiSkillBuiltinTip"))}">${escapeHtml(t("aiSkillBuiltin"))}</span>` : ""}
             </div>
             <div class="wfm-wc-file-item-actions">
+                ${f.update_available ? `<button class="wfm-pm-action-btn wfm-ai-skill-update-btn" title="${escapeHtml(t("aiSkillUpdateTip"))}">&#8635;</button>` : ""}
                 <button class="wfm-pm-action-btn wfm-ai-skill-edit-btn" title="Edit">&#9998;</button>
             </div>
         `;
@@ -864,6 +1072,17 @@ function skillRenderList() {
             e.stopPropagation();
             const content = await skillFetchContent(f.filename);
             skillOpenEditor(f.filename, content ?? "");
+        });
+        item.querySelector(".wfm-ai-skill-update-btn")?.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!confirm(t("aiSkillUpdateConfirm", f.name))) return;
+            if (await skillRestoreBuiltin(f.filename)) {
+                showToast(t("aiSkillUpdated", f.name), "success");
+                _activeSkillCache = null;
+                await skillRefreshFiles();
+            } else {
+                showToast(t("saveFailed"), "error");
+            }
         });
         list.appendChild(item);
     }
@@ -910,16 +1129,31 @@ async function skillRefreshFiles() {
     skillPopulateSelect();
 }
 
-// 選択中スキルの本文を取得（system prompt注入用、選択が変わるまでキャッシュ）
-async function _getActiveSkillSystemPrompt() {
+// 選択中スキルの本文と metadata を取得（system prompt注入用、選択が変わるまでキャッシュ）
+// 戻り値: null（スキル未選択）または { prompt, meta }
+async function _getActiveSkill() {
     const sel = document.getElementById("wfm-ai-chat-skill-select");
     const filename = sel?.value || "";
     if (!filename) return null;
-    if (_activeSkillCache?.filename === filename) return _activeSkillCache.content;
-    const raw = await skillFetchContent(filename);
-    const content = _stripSkillFrontmatter(raw || "");
-    _activeSkillCache = { filename, content };
-    return content;
+    if (_activeSkillCache?.filename !== filename) {
+        const raw = await skillFetchContent(filename);
+        const content = _stripSkillFrontmatter(raw || "");
+        _activeSkillCache = { filename, content };
+    }
+    const meta = skillFiles.find((f) => f.filename === filename)?.metadata || {};
+    return { prompt: _activeSkillCache.content, meta };
+}
+
+async function skillRestoreBuiltin(filename) {
+    try {
+        const res = await fetch("/api/wfm/skills/restore-builtin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename }),
+        });
+        const data = await res.json();
+        return data.status === "ok";
+    } catch { return false; }
 }
 
 function initSkillManager() {
@@ -1024,6 +1258,8 @@ function appendChatBubble(messagesEl, role, content, opts = {}) {
         if (svgCode) _appendSvgPreview(div, svgCode);
         const skillBlock = _extractSkillBlock(content);
         if (skillBlock) _appendSkillSaveButton(div, skillBlock);
+        const promptBlock = _extractPromptBlock(content);
+        if (promptBlock?.positive) _appendPromptActions(div, promptBlock, messagesEl);
     }
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1084,13 +1320,49 @@ function initChatTab() {
         statusEl.textContent = t("aiStatusChatting");
         statusEl.className = "wfm-ai-trans-status wfm-ai-status-working";
 
+        // 失敗時にこの送信で追加した履歴・吹き出しをまとめて取り消すための位置
+        const historyMark = chatHistory.length - 1;
+        const domMark = messagesEl.children.length - 1;
+
         try {
-            const tools = imgGenToggle?.checked !== false ? IMAGE_GEN_TOOLS : undefined;
-            const skillPrompt = await _getActiveSkillSystemPrompt();
-            const messagesToSend = skillPrompt
-                ? [{ role: "system", content: skillPrompt }, ...chatHistory]
+            const skill = await _getActiveSkill();
+            const meta = skill?.meta || {};
+            // metadata.tools が配列なら、その中に generate_image がある場合だけツールを渡す
+            // （トグルがオフなら常に渡さない）。未指定のスキルは従来どおりトグルに従う。
+            const imgGenOn = imgGenToggle?.checked !== false;
+            const toolsAllowed = Array.isArray(meta.tools) ? meta.tools.includes("generate_image") : true;
+            const tools = imgGenOn && toolsAllowed ? IMAGE_GEN_TOOLS : undefined;
+            const chatSettings = { ...settings };
+            if (typeof meta.temperature === "number") chatSettings.temperature = meta.temperature;
+            if (typeof meta.think === "boolean") chatSettings.thinkingMode = meta.think;
+
+            let systemPrompt = skill?.prompt || "";
+            const contexts = Array.isArray(meta.context) ? meta.context : [];
+            if (contexts.includes("workflow")) systemPrompt += `\n\n${_buildWorkflowContext()}`;
+            const buildMessages = () => systemPrompt.trim()
+                ? [{ role: "system", content: systemPrompt.trim() }, ...chatHistory]
                 : chatHistory;
-            const reply = await callChat(url, backend, model, messagesToSend, tools, settings);
+
+            let reply = await callChat(url, backend, model, buildMessages(), tools, chatSettings);
+
+            // metadata.output があれば応答を検証し、問題があれば具体的なエラーを添えて1回だけ再依頼する
+            const outputType = typeof meta.output === "string" ? meta.output.toLowerCase() : "";
+            if (outputType && meta["auto-check"] !== false && !reply.toolCalls?.length) {
+                const problems = _checkSkillOutput(outputType, reply.content);
+                if (problems.length) {
+                    chatHistory.push({ role: "assistant", content: reply.content });
+                    appendChatBubble(messagesEl, "assistant", reply.content);
+                    const feedback = _autoCheckFeedback(problems, outputType);
+                    chatHistory.push({ role: "user", content: feedback });
+                    appendChatBubble(messagesEl, "notice", t("aiChatAutoCheckRetry", problems.join(" / ")));
+                    statusEl.textContent = t("aiStatusAutoFixing");
+                    reply = await callChat(url, backend, model, buildMessages(), undefined, chatSettings);
+                    const remaining = _checkSkillOutput(outputType, reply.content);
+                    if (remaining.length) {
+                        appendChatBubble(messagesEl, "notice", t("aiChatAutoCheckStillFailing", remaining.join(" / ")));
+                    }
+                }
+            }
             const toolCall = reply.toolCalls?.find(
                 (tc) => (tc.function?.name || tc.name) === "generate_image"
             );
@@ -1115,8 +1387,8 @@ function initChatTab() {
             statusEl.textContent = "";
             statusEl.className = "wfm-ai-trans-status";
         } catch (err) {
-            chatHistory.pop();
-            if (messagesEl.lastChild) messagesEl.removeChild(messagesEl.lastChild);
+            chatHistory.length = Math.max(0, historyMark);
+            while (messagesEl.children.length > Math.max(0, domMark)) messagesEl.removeChild(messagesEl.lastChild);
             inputEl.value = text;
             statusEl.textContent = `${t("aiStatusConnectFail")}${err.message}`;
             statusEl.className = "wfm-ai-trans-status wfm-ai-status-error";

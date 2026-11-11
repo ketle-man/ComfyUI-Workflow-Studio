@@ -6050,6 +6050,36 @@ body {
     object-fit: cover;
 }
 
+/* Skill auto-check notices (metadata.output) */
+.wfm-ai-chat-msg-notice {
+    align-self: center;
+    max-width: 95%;
+    background: transparent;
+    border: 1px dashed var(--wfm-border);
+    color: var(--wfm-text-secondary, var(--wfm-text));
+    font-size: 11px;
+    opacity: 0.85;
+}
+
+/* Action buttons under a ```prompt block */
+.wfm-ai-chat-actions {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    white-space: normal;
+}
+
+/* "Built-in" badge in the skill manager list */
+.wfm-ai-skill-badge {
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 3px;
+    border: 1px solid var(--wfm-border);
+    font-size: 10px;
+    opacity: 0.75;
+}
+
 .wfm-ai-chat-svg-wrapper {
     margin-top: 6px;
     display: flex;

@@ -18,6 +18,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/api/wfm/skills/content", handle_get_content)
     app.router.add_post("/api/wfm/skills/save", handle_save)
     app.router.add_post("/api/wfm/skills/delete", handle_delete)
+    app.router.add_post("/api/wfm/skills/restore-builtin", handle_restore_builtin)
 
 
 async def handle_list(request: web.Request) -> web.Response:
@@ -61,4 +62,18 @@ async def handle_delete(request: web.Request) -> web.Response:
         return web.json_response({"status": "ok"})
     except Exception as e:
         logger.error("Error deleting skill: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_restore_builtin(request: web.Request) -> web.Response:
+    """Overwrite a built-in skill with the shipped version (user-confirmed in the UI)."""
+    try:
+        body = await request.json()
+        filename = body.get("filename", "")
+        result = await asyncio.to_thread(_service.restore_builtin, filename)
+        return web.json_response({"status": "ok", "file": result})
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except Exception as e:
+        logger.error("Error restoring built-in skill: %s", e)
         return web.json_response({"error": str(e)}, status=500)

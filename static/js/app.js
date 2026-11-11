@@ -615,6 +615,7 @@ function applyI18nToHtml() {
         "wfm-help-ai-7": "helpAi7",
         "wfm-help-ai-8": "helpAi8",
         "wfm-help-ai-9": "helpAi9",
+        "wfm-help-ai-10": "helpAi10",
         "wfm-help-ai-card-layout-title": "helpAiCardLayout",
         "wfm-help-ai-card-translate-title": "helpAiCardTranslate",
         "wfm-help-ai-card-chat-title": "helpAiCardChat",
