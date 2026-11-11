@@ -5,8 +5,6 @@ const BUTTON_TOOLTIP = "Launch Workflow Studio (Shift+Click opens in new window)
 const SNAPSHOT_TOOLTIP = "Save workflow canvas image as thumbnail";
 const WFM_PATH = "/wfm";
 const NEW_WINDOW_FEATURES = "width=1400,height=900,resizable=yes,scrollbars=yes,status=yes";
-const MAX_ATTACH_ATTEMPTS = 120;
-const BUTTON_GROUP_CLASS = "wfm-top-menu-group";
 
 const MIN_VERSION_FOR_ACTION_BAR = [1, 33, 9];
 
@@ -423,121 +421,6 @@ const getSnapshotIcon = () => {
             <path d="M8 5 L9 3 L15 3 L16 5"/>
         </svg>
     `;
-};
-
-// ============================================
-// Button Creation
-// ============================================
-
-const createTopMenuButton = async () => {
-    const { ComfyButton } = await import("../../scripts/ui/components/button.js");
-
-    const button = new ComfyButton({
-        icon: "wfm",
-        tooltip: BUTTON_TOOLTIP,
-        app,
-        enabled: true,
-        classList: "comfyui-button comfyui-menu-mobile-collapse primary",
-    });
-
-    button.element.setAttribute("aria-label", BUTTON_TOOLTIP);
-    button.element.title = BUTTON_TOOLTIP;
-
-    if (button.iconElement) {
-        button.iconElement.innerHTML = getWfmIcon();
-        button.iconElement.style.width = "1.2rem";
-        button.iconElement.style.height = "1.2rem";
-    }
-
-    button.element.addEventListener("click", openWorkflowStudio);
-    return button;
-};
-
-const createSnapshotButton = async () => {
-    const { ComfyButton } = await import("../../scripts/ui/components/button.js");
-
-    const button = new ComfyButton({
-        icon: "snapshot",
-        tooltip: SNAPSHOT_TOOLTIP,
-        app,
-        enabled: true,
-        classList: "comfyui-button comfyui-menu-mobile-collapse",
-    });
-
-    button.element.setAttribute("aria-label", SNAPSHOT_TOOLTIP);
-    button.element.title = SNAPSHOT_TOOLTIP;
-
-    if (button.iconElement) {
-        button.iconElement.innerHTML = getSnapshotIcon();
-        button.iconElement.style.width = "1.2rem";
-        button.iconElement.style.height = "1.2rem";
-    }
-
-    button.element.addEventListener("click", saveCanvasToWorkflowStudio);
-    return button;
-};
-
-const createNodeSetsButton = async () => {
-    const { ComfyButton } = await import("../../scripts/ui/components/button.js");
-
-    const button = new ComfyButton({
-        icon: "node-sets",
-        tooltip: NODE_SETS_TOOLTIP,
-        app,
-        enabled: true,
-        classList: "comfyui-button comfyui-menu-mobile-collapse wfm-node-sets-btn",
-    });
-
-    button.element.setAttribute("aria-label", NODE_SETS_TOOLTIP);
-    button.element.title = NODE_SETS_TOOLTIP;
-
-    if (button.iconElement) {
-        button.iconElement.innerHTML = getNodeSetsIcon();
-        button.iconElement.style.width = "1.2rem";
-        button.iconElement.style.height = "1.2rem";
-    }
-
-    button.element.addEventListener("click", (e) => {
-        e.stopPropagation();
-        togglePanel();
-    });
-
-    return button;
-};
-
-const attachTopMenuButton = async (attempt = 0) => {
-    if (document.querySelector(`.${BUTTON_GROUP_CLASS}`)) {
-        return;
-    }
-
-    // Try settingsGroup first (legacy ComfyUI)
-    const settingsGroup = app.menu?.settingsGroup;
-    // Fallback: find the legacy topbar container used by newer ComfyUI
-    const legacyContainer = document.querySelector('[data-testid="legacy-topbar-container"] .flex');
-
-    if (!settingsGroup?.element?.parentElement && !legacyContainer) {
-        if (attempt >= MAX_ATTACH_ATTEMPTS) {
-            console.warn("Workflow Studio: unable to locate the ComfyUI menu container.");
-            return;
-        }
-
-        requestAnimationFrame(() => attachTopMenuButton(attempt + 1));
-        return;
-    }
-
-    const wfmButton = await createTopMenuButton();
-    const snapshotButton = await createSnapshotButton();
-    const nodeSetsButton = await createNodeSetsButton();
-    const { ComfyButtonGroup } = await import("../../scripts/ui/components/buttonGroup.js");
-
-    const buttonGroup = new ComfyButtonGroup(wfmButton, snapshotButton, nodeSetsButton);
-    buttonGroup.element.classList.add(BUTTON_GROUP_CLASS);
-
-    if (settingsGroup?.element?.parentElement) {
-        settingsGroup.element.before(buttonGroup.element);
-    } else if (legacyContainer) {
-        legacyContainer.prepend(buttonGroup.element);
-    }
 };
 
 app.registerExtension({
