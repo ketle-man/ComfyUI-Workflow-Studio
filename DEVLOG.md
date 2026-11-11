@@ -2,6 +2,48 @@
 
 ---
 
+## v0.9.5（2026-11-11）
+
+### AI TOOL Chat: スキル v2（metadata・同梱スキルの版管理・プロンプトボタン）
+
+- スキルの frontmatter に `metadata:` を追加（`output` prompt/svg の自動チェック＋1回だけ再依頼、`tools`、`temperature`、`think`、`context`: workflow / current-prompt / workflow-detail / logs）。`name`/`description` は Agent Skills（SKILL.md）と互換のまま。
+- 同梱スキルを `py/services/builtin_skills/*.md` に分離し `wfs-version` で版管理。`ai_skills/.builtin_state.json` に版とハッシュを記録し、未編集なら自動更新、編集済みなら残して ↻ ボタンを表示。v0.3.79 版の未編集コピーはハッシュで判別して更新。
+- 同梱スキル6本: T2I Prompt Enhancer / Image to Prompt / Storyboard to Lab / Workflow Doctor（新規）、SVG Icon Generator v2、Skill Creator v3。
+- ```prompt ブロックに「GenerateUIに反映」「このプロンプトで生成」「コピー」。応答は依存なしの Markdown 表示（先に全体をエスケープ）。
+- ワークフロー要約から「今のプロンプト」を既定で外した。「参考のみ・写すな」と書いても gemma4 e4b は 6/6 回で古いネガティブ（pink wear）を新しいプロンプトへ混ぜたため。発言が今のプロンプトに触れたときと `context: [current-prompt]` のときだけ渡す。
+
+### AI TOOL Chat: 生成画像のチェックと修正ループ（意思決定モデル）
+
+- 新規 `static/js/chat-image-check.js`。チャットモデルが依頼を3〜8個の yes/no 項目にし（JSON Schema）、Ollama の画像対応意思決定モデル（既定 d3:4b）が確率で判定。✔≥0.85 / ? 0.3〜0.85 / ✘<0.3。
+- 実測: 生成VLM（gemma4 uncensored e4b）は「剣を持っている」を誤って合格（7/8）。d3:4b・clef-flash・clef は引っかけ含む18/18正解。属性の取り違え（帽子が女の子なのに「男の子が帽子」0.70〜0.79）があるため合格ラインを0.85にし、`expect: no` の逆向き確認項目を加えた。
+- 「足りない点を直して再生成」で未達項目だけを伝えて書き直し・再生成。自動修正0〜3回。SVG も描画して部位ごとにチェック。
+
+### AI TOOL Chat: Workflow Doctor / Storyboard to Lab / フォルダ形式スキル
+
+- 新規 `static/js/chat-context.js`: 未インストールのノード、ComfyUI の一覧に無いファイル・選択肢（近い名前の候補）、切れたリンク、未接続のコア型必須入力、`/history` の直近エラー、ComfyUI ログの最新エラー部分を文脈に入れる。手元77ワークフローで誤検出0（ウィジェット系の必須入力チェックは1/3で誤検出したため除外）。
+- ```labplan → Lab プラン（1シーン=1イテレーション、T2I、seed 固定）。`lab-tab.js` に `openLabPlanData()`。
+- スキルの zip 取り込み（SKILL.md 必須、テキストのみ、スクリプトは展開しない、zip-slip とサイズの検査）。参照ファイルは `read_skill_file` ツールで必要時に読む。
+- Lab: KSampler 列が seed / sampler / scheduler だけ指定のとき「ワークフローの設定のまま」と表示していた不具合を修正。
+
+### AI TOOL: OCR・ペインの折りたたみ
+
+- 新規 `static/js/ocr-tools.js`（Comic Creator の OCR タブから汎用部分を移植）。実測（日英混在・縦書きあり）: LightOnOCR-3 4b 1.1秒（位置付き7.9秒）100%、PaddleOCR-VL-manga 3.9秒100%、unlimited-ocr 14秒100%、PaddleOCR-VL 1.6 / GLM-OCR は縦書きを読み落とし94%。
+- 位置の表示（LightOnOCR / DeepSeek-OCR）、枠クリックで行選択、「翻訳へ送る」「Chatへ送る」。Translation / Settings ペインを細い帯にたためる。
+
+### 修正: 非推奨の import（GitHub issue #3）
+
+- `top_menu_extension.js` の `/scripts/ui/components/button.js`・`buttonGroup.js` の import は、a6f45ef で actionBarButtons に移行して以来呼ばれていない旧メニュー用コードだった。`window.comfyAPI` への置き換えではなく削除。`web/comfyui/*.bak` も削除。
+
+### ドキュメント
+
+- ヘルプ（AI TOOL を12カードに再編、Lab に Storyboard）、マニュアル v0.9.5（v0.9.2〜v0.9.4 の未反映分も追記）、README の TagSpace スクリーンショット、Registry アイコン用に `docs/thumb.png` を 800x400 に縮小。
+
+**検証**: 各機能を ComfyUI_5（:8189）で実機確認（Chrome / Playwright）。単体テスト: スキルサービス35件、JS（解析・チェック・Markdown・OCR・文脈）約50件。
+
+**未確認**: サイドパネル（A タブ）はスキル本文のみ対応（metadata・ボタン・チェックは SPA のみ）。判定の閾値は画像約5枚から決めた値。OpenAI 互換バックエンドでの `read_skill_file` 往復。
+
+---
+
 ## v0.9.4（2026-11-07）
 
 ### Gallery: 3Dモデル対応（GLB / glTF / VRM / PLY / SPZ）

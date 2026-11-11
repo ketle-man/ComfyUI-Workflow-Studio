@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.4-green)
+![Version](https://img.shields.io/badge/version-0.9.5-green)
 
 ## Features (tab -> feature names)
 
@@ -43,8 +43,8 @@ One-click capture, Auto-save as thumbnail, Embedded workflow metadata, Auto-impo
 ### Feeder subtab (v0.3.5 / v0.3.42)
 ImageFeeder node control, Image library, Selection management, Presets, Continuous Run loop, Index sync, Seed, WFS_GalleryFeeder node, Node & group selector, Image grid, After Gen modes, Run / Stop controls
 
-### Lab subtab (v0.3.87 – v0.5.2)
-Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column — Checkpoint / LoRA Single / VAE, Empty state when no matching node exists, Wildcards, Prompt cell extras, Keyframe #1 live-reflect, Bypass checkbox, LoRA node bypass & prompt injection, T2I workflow support, Use generated image for next, Workflow recall, Plan files, Plan Load, Plan JSON tab, Save index image to Output on Run, Index images are self-contained plan files, Eagle integration, Select vs. edit, and keyframe reordering, PG — apply a Prompt tab preset group, Video workflow support, Use generated image for next, now video-aware
+### Lab subtab (v0.3.87 – v0.9.5)
+Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column — Checkpoint / LoRA Single / VAE, Empty state when no matching node exists, Wildcards, Prompt cell extras, Keyframe #1 live-reflect, Bypass checkbox, LoRA node bypass & prompt injection, T2I workflow support, Use generated image for next, Workflow recall, Plan files, Plan Load, Plan JSON tab, Save index image to Output on Run, Index images are self-contained plan files, Eagle integration, Select vs. edit, and keyframe reordering, PG — apply a Prompt tab preset group, Video workflow support, Use generated image for next, now video-aware, Plans from a story
 
 ### Prompt Tab
 3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager, Form / Table toggle, Table view — Presets / Presets Group / Wildcards / Style
@@ -82,8 +82,8 @@ Layer-based image editor, Loading images, Open PSD button, Close button, New but
 ### Video Tab (v0.5.0 – v0.7.4)
 Dedicated video generation UI, independent of GenerateUI, Plan subtab, Base settings row, Edit subtab, Edit: Multi-track, Edit: Audio / BGM, Edit: Text overlays, Edit: Crop, Edit: Convert audio, Edit: Undo / Redo, Edit project persistence, Asset subtab, Project subtab, Two center previews, Register as Asset, First Frame / Last Frame are both optional, Semantic node lookup, not hardcoded IDs, Field highlight color, Load in Video, Frame tab, GIF tab, Playback volume
 
-### AI TOOL Tab (v0.3.14)
-4-pane layout, Translation pane, Chat pane, Chat pane — image generation via Tool Calling, Chat pane — generate_image extra parameters, TOOLS pane (VLM), TOOLS pane — shared Chat attachment, TOOLS pane (Wildcards), Chat pane — image-to-image (I2I), Chat pane — SVG generation, no ComfyUI workflow involved, Chat pane — Skills, Settings pane, Unsloth backend, Decision API client, Settings pane — Chat Image Generation, Settings pane — Chat I2I Generation, Settings pane — Generation, Model unload, Settings shared, Backend support, URL security, Lemonade's other endpoints (not integrated)
+### AI TOOL Tab (v0.3.14 – v0.9.5)
+4-pane layout, Translation pane, Chat pane, Chat pane — image generation via Tool Calling, Chat pane — generate_image extra parameters, TOOLS pane (VLM), TOOLS pane — shared Chat attachment, TOOLS pane (Wildcards), Chat pane — image-to-image (I2I), Chat pane — SVG generation, no ComfyUI workflow involved, Chat pane — Skills, Chat pane — Skills v2, Built-in skills, Chat pane — Image check & refine loop, Chat pane — Workflow Doctor, Chat pane — Storyboard to Lab, Chat pane — Agent Skills folders, TOOLS pane — OCR, Collapsible Translation / Settings panes, Settings pane, Unsloth backend, Decision API client, Settings pane — Chat Image Generation, Settings pane — Chat I2I Generation, Settings pane — Generation, Model unload, Settings shared, Backend support, URL security, Lemonade's other endpoints (not integrated)
 
 ### Workflow Studio Library (ComfyUI Side Panel) (v0.3.9)
 Tab layout (W / N / P / M / I / A), W — Workflows tab, N — Nodes tab, M — Models tab, P — Prompts tab, I — Information tab, A — AI TOOL tab, Drag & drop workflows, Drag & drop nodes, Drag & drop prompts, Send to Canvas, Copy prompts, Double-click, Search, ⚙ Theme settings
