@@ -17,6 +17,7 @@ import {
 import { renderMarkdown } from "./chat-markdown.js";
 import { buildWorkflowDetailContext, buildLogsContext } from "./chat-context.js";
 import { openLabPlanData } from "./lab-tab.js";
+import { listOcrModels, supportsBoxes, runOcr, renderOcrOverlay } from "./ocr-tools.js";
 
 const SETTINGS_KEY = "wfm_ai_settings";
 
@@ -1965,10 +1966,75 @@ function initVlmTab() {
 
     if (!dropEl) return;
 
+    // ---- OCR (task "ocr") ----
+    const ocrOptions = document.getElementById("wfm-ai-ocr-options");
+    const ocrModelSel = document.getElementById("wfm-ai-ocr-model");
+    const ocrBoxesChk = document.getElementById("wfm-ai-ocr-boxes");
+    const ocrBoxesWrap = document.getElementById("wfm-ai-ocr-boxes-wrap");
+    const ocrHint = document.getElementById("wfm-ai-ocr-hint");
+    const ocrOverlay = document.getElementById("wfm-ai-ocr-overlay");
+    const previewImg = document.getElementById("wfm-ai-vlm-preview");
+    let ocrModelsLoaded = false;
+    let ocrBoxes = [];
+
+    const clearOcrOverlay = () => {
+        ocrBoxes = [];
+        if (ocrOverlay) { ocrOverlay.innerHTML = ""; ocrOverlay.style.display = "none"; }
+    };
+    // 枠をクリックすると、結果欄の対応する行を選択する（結果は枠の順に1行ずつ）
+    const pickOcrLine = (idx) => {
+        ocrOverlay?.querySelectorAll(".wfm-ai-ocr-box").forEach((el, i) => el.classList.toggle("is-active", i === idx));
+        const lines = resultEl.value.split("\n");
+        if (idx >= lines.length) return;
+        const start = lines.slice(0, idx).reduce((n, l) => n + l.length + 1, 0);
+        resultEl.focus();
+        resultEl.setSelectionRange(start, start + lines[idx].length);
+    };
+    const drawOcrOverlay = () => {
+        if (ocrOverlay && ocrBoxes.length) renderOcrOverlay(ocrOverlay, previewImg, ocrBoxes, pickOcrLine);
+    };
+    // ペインの開閉・ウィンドウサイズ変更でプレビューの表示サイズが変わったら枠を描き直す
+    if (window.ResizeObserver) new ResizeObserver(drawOcrOverlay).observe(dropEl);
+
+    const updateOcrBoxesUI = () => {
+        const model = ocrModelSel?.value || "";
+        const ok = supportsBoxes(model);
+        if (ocrBoxesChk) ocrBoxesChk.disabled = !ok;
+        ocrBoxesWrap?.classList.toggle("is-disabled", !ok);
+        if (ocrHint) ocrHint.textContent = !model ? t("aiOcrNoModel") : ok ? "" : t("aiOcrNoBoxes");
+    };
+    const loadOcrModels = async () => {
+        if (!ocrModelSel) return;
+        const saved = loadAiSettings();
+        try {
+            const names = await listOcrModels(_ollamaBaseUrl(saved));
+            ocrModelSel.innerHTML = names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+            if (names.includes(saved.ocrModel)) ocrModelSel.value = saved.ocrModel;
+            ocrModelsLoaded = true;
+        } catch (e) {
+            ocrModelSel.innerHTML = "";
+            if (ocrHint) ocrHint.textContent = t("aiOcrListFailed", e.message);
+            return;
+        }
+        if (ocrBoxesChk) ocrBoxesChk.checked = !!saved.ocrShowBoxes;
+        updateOcrBoxesUI();
+    };
+    ocrModelSel?.addEventListener("change", () => { saveAiSettings({ ocrModel: ocrModelSel.value }); updateOcrBoxesUI(); });
+    ocrBoxesChk?.addEventListener("change", () => {
+        saveAiSettings({ ocrShowBoxes: ocrBoxesChk.checked });
+        if (!ocrBoxesChk.checked) clearOcrOverlay();
+    });
+    document.getElementById("wfm-ai-ocr-refresh")?.addEventListener("click", loadOcrModels);
+
     function updateTaskUI() {
         const isWildcard = taskSel?.value === "wildcard";
+        const isOcr = taskSel?.value === "ocr";
         dropEl.style.display = isWildcard ? "none" : "";
         if (wcInputs) wcInputs.style.display = isWildcard ? "" : "none";
+        if (ocrOptions) ocrOptions.style.display = isOcr ? "" : "none";
+        dropEl.classList.toggle("is-ocr", isOcr);
+        if (isOcr && !ocrModelsLoaded) loadOcrModels();
+        if (!isOcr) clearOcrOverlay();
     }
     taskSel?.addEventListener("change", updateTaskUI);
     updateTaskUI();
@@ -1977,6 +2043,7 @@ function initVlmTab() {
         if (!file || !file.type.startsWith("image/")) return;
         const { base64, mimeType } = await fileToBase64(file);
         _toolsImage = { file, base64, mimeType };
+        clearOcrOverlay();
         _syncAttachmentUI();
     };
 
@@ -1991,6 +2058,7 @@ function initVlmTab() {
     });
     clearEl?.addEventListener("click", (e) => {
         e.stopPropagation();
+        clearOcrOverlay();
         _clearToolsImage();
         if (fileInput) fileInput.value = "";
     });
@@ -1998,6 +2066,38 @@ function initVlmTab() {
     runBtn.addEventListener("click", async () => {
         const task = taskSel?.value || "describe";
         const settings = loadAiSettings();
+
+        // OCR は AI TOOL のチャット用モデルではなく、Ollama の OCR モデルを使う
+        if (task === "ocr") {
+            if (!_toolsImage) { showToast(t("aiToastNoImage"), "error"); return; }
+            const model = ocrModelSel?.value || "";
+            if (!model) { showToast(t("aiOcrNoModel"), "error"); return; }
+            const withBoxes = !!ocrBoxesChk?.checked && supportsBoxes(model);
+            runBtn.disabled = true;
+            clearOcrOverlay();
+            resultEl.value = "";
+            statusEl.textContent = t("aiStatusOcrRunning", model);
+            statusEl.className = "wfm-ai-trans-status wfm-ai-status-working";
+            try {
+                const r = await runOcr({ baseUrl: _ollamaBaseUrl(settings), model, base64: _toolsImage.base64, mimeType: _toolsImage.mimeType, withBoxes });
+                resultEl.value = r.text;
+                if (withBoxes && r.boxes.length) {
+                    ocrBoxes = r.boxes;
+                    drawOcrOverlay();
+                }
+                statusEl.textContent = r.text
+                    ? t("aiOcrDone", (r.ms / 1000).toFixed(1), r.text.split("\n").filter(Boolean).length, r.retriedGray)
+                    : t("aiOcrEmpty");
+                statusEl.className = `wfm-ai-trans-status ${r.text ? "wfm-ai-status-ok" : "wfm-ai-status-error"}`;
+            } catch (err) {
+                statusEl.textContent = `${t("aiStatusConnectFail")}${err.message}`;
+                statusEl.className = "wfm-ai-trans-status wfm-ai-status-error";
+                showToast(t("aiToastVlmFailed") + err.message, "error");
+            } finally {
+                runBtn.disabled = false;
+            }
+            return;
+        }
         const { backend = "ollama", backendUrl, model } = settings;
         const url = backendUrl || getAiBackendDefaultUrl(backend);
 
@@ -2061,6 +2161,73 @@ function initVlmTab() {
         if (!text) { showToast(t("aiToastNoCopyText"), "error"); return; }
         navigator.clipboard.writeText(text).then(() => showToast(t("aiToastCopied"), "success"));
     });
+
+    // 結果を Translation / Chat の入力欄へ送る（OCR の結果を翻訳する等）
+    document.getElementById("wfm-ai-vlm-to-trans")?.addEventListener("click", () => {
+        const text = resultEl.value.trim();
+        if (!text) { showToast(t("aiToastNoCopyText"), "error"); return; }
+        const input = document.getElementById("wfm-ai-trans-input");
+        if (!input) return;
+        _setPaneCollapsed("translate", false);
+        input.value = text;
+        input.focus();
+        showToast(t("aiToastSentToTranslation"), "success");
+    });
+    document.getElementById("wfm-ai-vlm-to-chat")?.addEventListener("click", () => {
+        const text = resultEl.value.trim();
+        if (!text) { showToast(t("aiToastNoCopyText"), "error"); return; }
+        const input = document.getElementById("wfm-ai-chat-input");
+        if (!input) return;
+        input.value = input.value.trim() ? `${input.value.trim()}\n\n${text}` : text;
+        input.focus();
+        showToast(t("aiToastSentToChat"), "success");
+    });
+}
+
+// OCR・画像チェックが使う Ollama の URL（AI TOOL のバックエンドが Ollama ならその URL、違えば既定）
+function _ollamaBaseUrl(settings = loadAiSettings()) {
+    return (settings.backend === "ollama" && settings.backendUrl ? settings.backendUrl : "http://localhost:11434").replace(/\/+$/, "");
+}
+
+// ============================================
+// Collapsible panes (Translation / Settings)
+// ============================================
+
+const PANE_COLLAPSE_KEY = "wfm_ai_pane_collapsed";
+// 開いているとき / 閉じているときの矢印（左端の Translation は左へ、右端の Settings は右へたたむ）
+const PANE_ARROWS = { left: ["\u25C0", "\u25B6"], right: ["\u25B6", "\u25C0"] };
+
+function _setPaneCollapsed(name, collapsed, persist = true) {
+    const pane = document.querySelector(`[data-collapse-pane="${name}"]`);
+    const btn = document.querySelector(`[data-collapse-btn="${name}"]`);
+    if (!pane) return;
+    pane.classList.toggle("is-collapsed", collapsed);
+    if (btn) {
+        const arrows = PANE_ARROWS[btn.dataset.dir] || PANE_ARROWS.left;
+        btn.textContent = arrows[collapsed ? 1 : 0];
+        btn.title = collapsed ? t("aiPaneExpand") : t("aiPaneCollapse");
+    }
+    if (persist) {
+        const state = readJsonStorage(PANE_COLLAPSE_KEY);
+        state[name] = collapsed;
+        try { localStorage.setItem(PANE_COLLAPSE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+    }
+}
+
+function initPaneCollapse() {
+    const state = readJsonStorage(PANE_COLLAPSE_KEY);
+    document.querySelectorAll("[data-collapse-pane]").forEach((pane) => {
+        const name = pane.dataset.collapsePane;
+        _setPaneCollapsed(name, !!state[name], false);
+        pane.querySelector(`[data-collapse-btn="${name}"]`)?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            _setPaneCollapsed(name, !pane.classList.contains("is-collapsed"));
+        });
+        // たたんだ細い帯のどこをクリックしても開く
+        pane.addEventListener("click", () => {
+            if (pane.classList.contains("is-collapsed")) _setPaneCollapsed(name, false);
+        });
+    });
 }
 
 // ============================================
@@ -2068,6 +2235,7 @@ function initVlmTab() {
 // ============================================
 
 export function initAiTab() {
+    initPaneCollapse();
     initTranslateTab();
     initChatTab();
     initVlmTab();

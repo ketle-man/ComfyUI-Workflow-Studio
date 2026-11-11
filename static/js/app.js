@@ -375,6 +375,7 @@ function applyI18nToHtml() {
         aiVlmTask.querySelectorAll("option").forEach(opt => {
             if (opt.value === "describe") opt.textContent = t("aiVlmDescribe");
             if (opt.value === "prompt") opt.textContent = t("aiVlmPromptCreate");
+            if (opt.value === "ocr") opt.textContent = t("aiVlmOcr");
         });
     }
     const aiVlmRunBtn = document.getElementById("wfm-ai-vlm-run");
@@ -383,6 +384,17 @@ function applyI18nToHtml() {
     if (aiVlmResult) aiVlmResult.placeholder = t("aiVlmResultPlaceholder");
     const aiVlmCopyBtn = document.getElementById("wfm-ai-vlm-copy");
     if (aiVlmCopyBtn) aiVlmCopyBtn.textContent = t("aiCopyBtn");
+    const aiVlmToTrans = document.getElementById("wfm-ai-vlm-to-trans");
+    if (aiVlmToTrans) aiVlmToTrans.textContent = t("aiVlmToTranslation");
+    const aiVlmToChat = document.getElementById("wfm-ai-vlm-to-chat");
+    if (aiVlmToChat) aiVlmToChat.textContent = t("aiVlmToChat");
+    const aiOcrModelLabel = document.getElementById("wfm-ai-ocr-model-label");
+    if (aiOcrModelLabel) aiOcrModelLabel.textContent = t("aiOcrModelLabel");
+    const aiOcrBoxesLabel = document.getElementById("wfm-ai-ocr-boxes-label");
+    if (aiOcrBoxesLabel) aiOcrBoxesLabel.textContent = t("aiOcrShowBoxes");
+    const aiOcrRefresh = document.getElementById("wfm-ai-ocr-refresh");
+    if (aiOcrRefresh) aiOcrRefresh.title = t("aiOcrRefresh");
+    document.querySelectorAll(".wfm-ai-pane-collapse-btn").forEach((b) => { b.title = t("aiPaneCollapse"); });
     const aiBackendTitle = document.getElementById("wfm-ai-settings-backend-title");
     if (aiBackendTitle) aiBackendTitle.textContent = t("aiSettingsBackend");
     const aiConnTitle = document.getElementById("wfm-ai-settings-conn-title");
@@ -544,7 +556,7 @@ function applyI18nToHtml() {
         "wfm-help-lab-plan-5": "helpLabPlan5", "wfm-help-lab-plan-6": "helpLabPlan6",
         "wfm-help-lab-plan-7": "helpLabPlan7", "wfm-help-lab-plan-8": "helpLabPlan8",
         "wfm-help-lab-plan-9": "helpLabPlan9", "wfm-help-lab-plan-10": "helpLabPlan10",
-        "wfm-help-lab-plan-11": "helpLabPlan11",
+        "wfm-help-lab-plan-11": "helpLabPlan11", "wfm-help-lab-plan-12": "helpLabPlan12",
         "wfm-help-lab-card-results-title": "helpLabCardResultsTitle",
         "wfm-help-lab-results-1": "helpLabResults1", "wfm-help-lab-results-2": "helpLabResults2",
         "wfm-help-lab-results-3": "helpLabResults3",
@@ -636,6 +648,7 @@ function applyI18nToHtml() {
         "wfm-help-ai-10": "helpAi10",
         "wfm-help-ai-11": "helpAi11",
         "wfm-help-ai-12": "helpAi12",
+        "wfm-help-ai-13": "helpAi13",
         "wfm-help-ai-card-layout-title": "helpAiCardLayout",
         "wfm-help-ai-card-translate-title": "helpAiCardTranslate",
         "wfm-help-ai-card-chat-title": "helpAiCardChat",
@@ -644,6 +657,10 @@ function applyI18nToHtml() {
         "wfm-help-ai-card-skilltips-title": "helpAiCardSkillTips",
         "wfm-help-ai-card-tools-title": "helpAiCardTools",
         "wfm-help-ai-card-settings-title": "helpAiCardSettings",
+        "wfm-help-ai-card-skilloptions-title": "helpAiCardSkillOptions",
+        "wfm-help-ai-card-skillsmore-title": "helpAiCardSkillsMore",
+        "wfm-help-ai-card-imagecheck-title": "helpAiCardImageCheck",
+        "wfm-help-ai-card-ocr-title": "helpAiCardOcr",
         "wfm-help-imageedit-title": "helpImageEditTitle",
         "wfm-help-imageedit-tools-title": "helpImageEditToolsTitle",
         "wfm-help-imageedit-layer-title": "helpImageEditLayerTitle",
