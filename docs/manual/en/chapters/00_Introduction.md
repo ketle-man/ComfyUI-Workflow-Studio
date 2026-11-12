@@ -129,7 +129,7 @@ It is written so that you can follow it if you know basic computer operations (c
 
 ## Version and environment covered
 
-- **Workflow Studio**: v0.9.5
+- **Workflow Studio**: v0.9.6
 - **ComfyUI**: the latest version at the time of writing
 - **OS**: Windows (screen examples are from Windows)
 

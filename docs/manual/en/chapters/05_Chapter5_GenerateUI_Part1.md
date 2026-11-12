@@ -168,12 +168,13 @@ If you save it with a name, it is added as a new workflow in the Workflow tab.
 
 Once the first image is out, next look at the **Settings** subtab, where settings that decide how the result turns out are found.
 
-The Settings tab is divided into two blocks, left and right.
+The Settings tab is divided into three columns.
 
 - **KSampler (left)** - settings for how the image is drawn
-- **Latent Image (right)** - settings for the size and number of images
+- **Latent Image (middle)** - settings for the size and number of images
+- **Switches (right, v0.9.6+)** - the on/off settings inside the workflow
 
-Here too, don't forget to press **Apply** on each block after changing values.
+Here too, for KSampler and Latent Image, don't forget to press **Apply** on each block after changing values (the Switches column needs no Apply).
 
 ### KSampler items
 | Item | Meaning | Rule of thumb for beginners |
@@ -199,6 +200,23 @@ Here too, don't forget to press **Apply** on each block after changing values.
 > **Caution**
 > If you stray far from the size the model learned, people tend to come out doubled or the composition falls apart.
 > Even when you want portrait or landscape, adjust so the total pixel count stays about the same (for example 832x1216 for SDXL).
+
+### Switches items (v0.9.6+)
+The "on/off" settings inside the workflow are listed with their node name and item name.
+Clicking a checkbox switches it right away. **You don't need to press Apply**. The new value also shows up in the Raw JSON on the right at once.
+
+Two kinds of items are listed:
+
+- Items whose value is true/false - for example the switch that turns the prompt enhancer (PE) on and off, "Boolean" nodes, and TextGenerate's thinking
+- On/off items with only two choices - enable/disable, on/off, yes/no and so on. For example KSamplerAdvanced's add_noise and DWPreprocessor's detect_hand (whether to detect hands)
+
+The right end of each row shows the current value (true/false, enable/disable and so on).
+Hover over a row to see the node's number and type.
+
+> **Tip**
+> Items wired from another node are not listed. Instead, the source node they are wired from (for example a Boolean node named "Enable PE?") is listed, so switch that one.
+> In workflows where nodes have no names, the node type name (such as ComfySwitchNode) is shown.
+> If the workflow has no on/off items at all, "No true/false settings in this workflow" is shown.
 
 ### Managing the seed (generate panel)
 The seed is managed with the **Seed** field in the generate panel and the pull-down below it.
@@ -232,6 +250,6 @@ This is the shortest path to getting used to image generation.
 > **Summary of this chapter (first half)**
 > - Select in the Workflow tab and press "Load in GenerateUI" to edit in GenerateUI
 > - The basics are the three subtabs Input (prompt), Model (model) and Settings (detailed settings)
-> - After changing the model or Settings values, always press **Apply**. If you forget, it generates with the values from before the change (prompts are reflected automatically)
+> - After changing the model or Settings values, always press **Apply**. If you forget, it generates with the values from before the change (prompts and the Settings Switches column are reflected automatically)
 > - Generate to produce. Alt + Apply reflects and generates in one go
 > - If you set the seed to Fixed, you can keep a picture you like and compare by changing conditions. To use the workflow's seed as it is, use Workflow

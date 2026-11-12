@@ -72,6 +72,7 @@ This means **the custom nodes the workflow needs are not installed**.
 ### You changed a setting but the result did not change
 The most common cause is **forgetting to press Apply**.
 In GenerateUI, after changing the model or Settings values (steps, size and so on), the change is not reflected in the workflow unless you press **Apply** (Chapter 5, section 5-3).
+The Switches column at the right of the Settings tab is the exception: it takes effect the moment you click (Chapter 5, section 5-4).
 Looking at the **Raw JSON** on the right lets you check the values actually reflected.
 
 ### It generates something different from the loaded workflow

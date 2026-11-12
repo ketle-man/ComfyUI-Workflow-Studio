@@ -219,10 +219,14 @@ The workflows you can use in GenerateUI have increased as follows. They are used
 - **FastH3 OmniRef / Pika-H3-Flex** (v0.8.14 and later) - MiniMax H3 reference to video. Treated as video workflows, and also usable in the Video tab (Chapter 11).
 - **Native LoRA stack** - ComfyUI v0.40's nodes that load several LoRAs at once (LoadLoraModel / LoadLoraTextEncoder). Apply, bypass and the Metadata display are supported.
 - **P-H3 Image** (v0.9.4+) - the image-edit and T2I templates. The prompt is shown on the Input tab and can be read by the Metadata tab; there is no negative prompt field. Width and height follow the workflow's wiring, and the prompt upsampler runs as set in the workflow.
+- **MiniMax H3 Image** (v0.9.6+) - ComfyUI's official image-edit and T2I templates. As with P-H3 Image, the prompt is shown on the Input tab and can be read by the Metadata tab and the sidepanel I tab; there is no negative prompt field. The prompt enhancer (PE) can be turned on and off in the Settings tab's Switches column (5-4).
 
 > **Caution**
 > The native LoRA stack nodes are supported **only in API-format workflows**.
 > ComfyUI's own screen cannot yet add rows to this node, so UI-format workflows are not covered.
+
+> **Tip**
+> Workflows containing the **Compare Images** (ImageCompare) node, which compares two images with a slider, used to fail on that node when run from GenerateUI (fixed in v0.9.6).
 
 > **Tip**
 > The Metadata tab and the side panel's **I** tab can also read images made with Nano Banana (v0.8.5 and later).

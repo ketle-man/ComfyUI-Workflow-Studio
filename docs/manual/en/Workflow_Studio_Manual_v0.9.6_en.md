@@ -2,12 +2,12 @@
 
 Don't Be Afraid of Nodes - Generate Images More Easily and Keep Them Organized
 
-- Covers: Workflow Studio v0.9.5
+- Covers: Workflow Studio v0.9.6
 - Author: ketle-man
 - (c) 2026 ketle-man
 
 This is the **text-only edition** (without screenshots) of the Kindle book.
-Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.9.5_en.md`.
+Chapter files are in the `chapters/` folder; the whole book in one file is `Workflow_Studio_Manual_v0.9.6_en.md`.
 Screen examples are omitted, so please use the book together with Workflow Studio's Help tab.
 
 ---
@@ -143,7 +143,7 @@ It is written so that you can follow it if you know basic computer operations (c
 
 ## Version and environment covered
 
-- **Workflow Studio**: v0.9.5
+- **Workflow Studio**: v0.9.6
 - **ComfyUI**: the latest version at the time of writing
 - **OS**: Windows (screen examples are from Windows)
 
@@ -1220,12 +1220,13 @@ If you save it with a name, it is added as a new workflow in the Workflow tab.
 
 Once the first image is out, next look at the **Settings** subtab, where settings that decide how the result turns out are found.
 
-The Settings tab is divided into two blocks, left and right.
+The Settings tab is divided into three columns.
 
 - **KSampler (left)** - settings for how the image is drawn
-- **Latent Image (right)** - settings for the size and number of images
+- **Latent Image (middle)** - settings for the size and number of images
+- **Switches (right, v0.9.6+)** - the on/off settings inside the workflow
 
-Here too, don't forget to press **Apply** on each block after changing values.
+Here too, for KSampler and Latent Image, don't forget to press **Apply** on each block after changing values (the Switches column needs no Apply).
 
 ### KSampler items
 | Item | Meaning | Rule of thumb for beginners |
@@ -1251,6 +1252,23 @@ Here too, don't forget to press **Apply** on each block after changing values.
 > **Caution**
 > If you stray far from the size the model learned, people tend to come out doubled or the composition falls apart.
 > Even when you want portrait or landscape, adjust so the total pixel count stays about the same (for example 832x1216 for SDXL).
+
+### Switches items (v0.9.6+)
+The "on/off" settings inside the workflow are listed with their node name and item name.
+Clicking a checkbox switches it right away. **You don't need to press Apply**. The new value also shows up in the Raw JSON on the right at once.
+
+Two kinds of items are listed:
+
+- Items whose value is true/false - for example the switch that turns the prompt enhancer (PE) on and off, "Boolean" nodes, and TextGenerate's thinking
+- On/off items with only two choices - enable/disable, on/off, yes/no and so on. For example KSamplerAdvanced's add_noise and DWPreprocessor's detect_hand (whether to detect hands)
+
+The right end of each row shows the current value (true/false, enable/disable and so on).
+Hover over a row to see the node's number and type.
+
+> **Tip**
+> Items wired from another node are not listed. Instead, the source node they are wired from (for example a Boolean node named "Enable PE?") is listed, so switch that one.
+> In workflows where nodes have no names, the node type name (such as ComfySwitchNode) is shown.
+> If the workflow has no on/off items at all, "No true/false settings in this workflow" is shown.
 
 ### Managing the seed (generate panel)
 The seed is managed with the **Seed** field in the generate panel and the pull-down below it.
@@ -1284,7 +1302,7 @@ This is the shortest path to getting used to image generation.
 > **Summary of this chapter (first half)**
 > - Select in the Workflow tab and press "Load in GenerateUI" to edit in GenerateUI
 > - The basics are the three subtabs Input (prompt), Model (model) and Settings (detailed settings)
-> - After changing the model or Settings values, always press **Apply**. If you forget, it generates with the values from before the change (prompts are reflected automatically)
+> - After changing the model or Settings values, always press **Apply**. If you forget, it generates with the values from before the change (prompts and the Settings Switches column are reflected automatically)
 > - Generate to produce. Alt + Apply reflects and generates in one go
 > - If you set the seed to Fixed, you can keep a picture you like and compare by changing conditions. To use the workflow's seed as it is, use Workflow
 
@@ -1511,10 +1529,14 @@ The workflows you can use in GenerateUI have increased as follows. They are used
 - **FastH3 OmniRef / Pika-H3-Flex** (v0.8.14 and later) - MiniMax H3 reference to video. Treated as video workflows, and also usable in the Video tab (Chapter 11).
 - **Native LoRA stack** - ComfyUI v0.40's nodes that load several LoRAs at once (LoadLoraModel / LoadLoraTextEncoder). Apply, bypass and the Metadata display are supported.
 - **P-H3 Image** (v0.9.4+) - the image-edit and T2I templates. The prompt is shown on the Input tab and can be read by the Metadata tab; there is no negative prompt field. Width and height follow the workflow's wiring, and the prompt upsampler runs as set in the workflow.
+- **MiniMax H3 Image** (v0.9.6+) - ComfyUI's official image-edit and T2I templates. As with P-H3 Image, the prompt is shown on the Input tab and can be read by the Metadata tab and the sidepanel I tab; there is no negative prompt field. The prompt enhancer (PE) can be turned on and off in the Settings tab's Switches column (5-4).
 
 > **Caution**
 > The native LoRA stack nodes are supported **only in API-format workflows**.
 > ComfyUI's own screen cannot yet add rows to this node, so UI-format workflows are not covered.
+
+> **Tip**
+> Workflows containing the **Compare Images** (ImageCompare) node, which compares two images with a slider, used to fail on that node when run from GenerateUI (fixed in v0.9.6).
 
 > **Tip**
 > The Metadata tab and the side panel's **I** tab can also read images made with Nano Banana (v0.8.5 and later).
@@ -3341,6 +3363,7 @@ This means **the custom nodes the workflow needs are not installed**.
 ### You changed a setting but the result did not change
 The most common cause is **forgetting to press Apply**.
 In GenerateUI, after changing the model or Settings values (steps, size and so on), the change is not reflected in the workflow unless you press **Apply** (Chapter 5, section 5-3).
+The Switches column at the right of the Settings tab is the exception: it takes effect the moment you click (Chapter 5, section 5-4).
 Looking at the **Raw JSON** on the right lets you check the values actually reflected.
 
 ### It generates something different from the loaded workflow

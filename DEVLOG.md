@@ -4,6 +4,10 @@
 
 ## 未リリース
 
+### マニュアル v0.9.6版（ja/en）
+
+- 5-4 Settingsタブを3列（スイッチ列の説明を追加）、5-9 対応表に MiniMax H3 Image と Compare Images 修正の注記、12-3 の Apply 注意にスイッチ列の例外を追記。対象バージョンを v0.9.6 に更新し、全章MD・ZIPを `manual/rebuild_repo_edition.py` で再生成（v0.9.5版は削除）。
+
 ### GenerateUI Settingsタブ: スイッチ列
 
 - KSampler・Latent Imageの右に3列目「スイッチ」を追加。APIワークフロー内のリテラルな true/false 入力（ComfySwitchNode の switch、PrimitiveBoolean の value、TextGenerateV2 の thinking など）をノード名・入力名付きで一覧し、チェックボックスで即時切り替え（Apply不要、Raw JSONへ同期）。リンクされた入力は配列なので対象外で、配線元のPrimitiveBooleanが出る。
