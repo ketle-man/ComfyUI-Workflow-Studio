@@ -125,6 +125,12 @@ function _collectNodeTypes(workflow) {
 // frontend widgets that occupy a widgets_values slot; sent to the API as {"__value__": [...]}.
 const _WIDGET_TYPE_SET = new Set(["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO", "COMFY_DYNAMICCOMBO_V3", "BOUNDING_BOXES"]);
 
+// Required inputs backed by display-only frontend widgets (serialize=false, so no widgets_values
+// slot) -> the value the frontend sends for them in the API prompt.
+const _DISPLAY_WIDGET_DEFAULTS = {
+    IMAGECOMPARE: () => ({ __value__: ["", ""] }),
+};
+
 /**
  * Resolve a possibly-compound object_info type spec (e.g. LTXVEmptyLatentAudio's frame_rate:
  * "FLOAT,INT", a MultiType declaration meaning "widget defaults to FLOAT but also accepts an INT
@@ -998,6 +1004,15 @@ export const comfyWorkflow = {
                 }
             }
 
+            // Display-only frontend widgets (ImageCompare's socketless compare_view) are never
+            // stored in widgets_values, yet the backend requires them. The frontend sends the
+            // widget's initial value, so do the same.
+            for (const [k, spec] of Object.entries(objectInfo[node.type]?.input?.required || {})) {
+                if (!(k in inputs) && _DISPLAY_WIDGET_DEFAULTS[spec?.[0]]) {
+                    inputs[k] = _DISPLAY_WIDGET_DEFAULTS[spec[0]]();
+                }
+            }
+
             api[nodeId] = {
                 class_type: node.type,
                 inputs,
@@ -1284,9 +1299,10 @@ export const comfyWorkflow = {
                 // "prompt" (prompt-enhancer switch chain, Qwen Image 2.1 Turbo) is the positive text,
                 // a linked "negative_prompt" the negative.
                 // TextEncodeFibo2 (Fibo 2.0 Edit) has the same shape, its prompt arriving via a
-                // PreviewAny -> prompt-enhancer switch chain. PH3ImageConditioning (p-h3-image) too,
-                // without a negative prompt.
-                if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning") {
+                // PreviewAny -> prompt-enhancer switch chain. PH3ImageConditioning (p-h3-image) and
+                // MiniMaxH3ImageConditioning (MiniMax-H3-Image) too, without a negative prompt.
+                if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning"
+                    || ct === "MiniMaxH3ImageConditioning") {
                     if (Array.isArray(inputs.prompt)) samplerPositiveRef[inputs.prompt[0]] = true;
                     if (Array.isArray(inputs.negative_prompt)) samplerNegativeRef[inputs.negative_prompt[0]] = true;
                 }
@@ -1533,8 +1549,10 @@ export const comfyWorkflow = {
             // nodes already picked up generically by the load_image_nodes pass below.
             // TextEncodeFibo2 (Fibo 2.0) — same prompt/negative_prompt/images.image_N shape; its
             // negative_prompt is a structured VGL JSON caption (edited as plain text here).
-            // PH3ImageConditioning (p-h3-image) has prompt and images.image_N, no negative_prompt.
-            if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning") {
+            // PH3ImageConditioning (p-h3-image) and MiniMaxH3ImageConditioning (MiniMax-H3-Image) have
+            // prompt and images.image_N, no negative_prompt.
+            if (ct === "TextEncodeQwenImage21" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning"
+                    || ct === "MiniMaxH3ImageConditioning") {
                 if (typeof inputs.prompt === "string") {
                     result.prompt_nodes.push({
                         id, type: ct, title: `${title} [positive]`, role: "positive",
@@ -1717,8 +1735,10 @@ export const comfyWorkflow = {
             // (array link ref) rather than a direct number — leave those as undefined so
             // the settings-tab UI falls back to its default instead of rendering a link ref.
             // TextEncodeFibo2 likewise (0 = Fibo 2.0's trained size for the first image's aspect),
-            // and PH3ImageConditioning (0 = image_1's size, or 2912 without images).
-            if (ct === "TextEncodeMageFlowEdit" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning") {
+            // PH3ImageConditioning (0 = image_1's size, or 2912 without images) and
+            // MiniMaxH3ImageConditioning (0 = image_1's size, or 2048 without images).
+            if (ct === "TextEncodeMageFlowEdit" || ct === "TextEncodeFibo2" || ct === "PH3ImageConditioning"
+                    || ct === "MiniMaxH3ImageConditioning") {
                 result.latent_nodes.push({
                     id, type: ct, title,
                     width: typeof inputs.width === "number" ? inputs.width : undefined,
@@ -1994,6 +2014,7 @@ function _getWidgetMapping(nodeType) {
         TextEncodeQwenImage21: ["prompt", "negative_prompt", "resolution"],
         TextEncodeFibo2: ["prompt", "negative_prompt", "width", "height", "batch_size"],
         PH3ImageConditioning: ["prompt", "width", "height"],
+        MiniMaxH3ImageConditioning: ["prompt", "width", "height"],
         TextEncodeMingImageEdit: ["prompt"],
         EmptyQwenImageLayeredLatentImage: ["width", "height", "layers", "batch_size"],
     };

@@ -2,6 +2,17 @@
 
 ---
 
+## 未リリース
+
+### MiniMax-H3-Image対応
+
+- `MiniMaxH3ImageConditioning`（Comfy-Org の MiniMax H3 Image T2I/Edit テンプレート）をGenerateUI/Metadata/Iタブに追加。入力は `prompt`/`width`/`height`/`images.image_N` で `PH3ImageConditioning` と同形のため同じ扱い（negativeなし、promptはPreviewAny→プロンプト強化スイッチ経由で配線元のユーザープロンプトをpositiveに）。width/height=0は image_1 のサイズ、画像なしなら2048。
+- 修正前はプロンプト欄が空で、Metadataタブもプロンプトを読めなかった。T2I（プロンプト強化オフ、2048x2048）とEdit（プロンプト強化オン、2720x1536）で実生成確認。
+
+### 修正: ImageCompareノードを含むワークフローで検証エラー
+
+- `ImageCompare` の `compare_view`（表示専用の socketless ウィジェット、`widgets_values` に保存されない）がAPI変換で欠落し、`required_input_missing` になっていた。フロントエンドと同じ `{"__value__": ["", ""]}` を補う（`_DISPLAY_WIDGET_DEFAULTS`）。MiniMax H3 Image Edit テンプレートで発覚。
+
 ## v0.9.5（2026-11-11）
 
 ### AI TOOL Chat: スキル v2（metadata・同梱スキルの版管理・プロンプトボタン）

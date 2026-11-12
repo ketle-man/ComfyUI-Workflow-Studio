@@ -38,7 +38,7 @@ Thumbnail / Table views, Thumbnail side panel, Badge filtering, Search, Side pan
 One-click capture, Auto-save as thumbnail, Embedded workflow metadata, Auto-import
 
 ### GenerateUI Tab (v0.3.5)
-6-tab layout, Save button, Input tab, Multi-image I2I for Comic Creator, Model tab, Settings tab, Always-visible Raw JSON, Bypass/Mute node handling, One-click generation, Seed control, Style selector, Create Catalog / Catalog buttons, Batch type selector, Batch tab, UI-to-API conversion, Video workflow support, Eagle integration, Qwen Image 2.1 support, Ming Image support, P-H3 Image support
+6-tab layout, Save button, Input tab, Multi-image I2I for Comic Creator, Model tab, Settings tab, Always-visible Raw JSON, Bypass/Mute node handling, One-click generation, Seed control, Style selector, Create Catalog / Catalog buttons, Batch type selector, Batch tab, UI-to-API conversion, Video workflow support, Eagle integration, Qwen Image 2.1 support, Ming Image support, P-H3 Image support, MiniMax-H3-Image support
 
 ### Feeder subtab (v0.3.5 / v0.3.42)
 ImageFeeder node control, Image library, Selection management, Presets, Continuous Run loop, Index sync, Seed, WFS_GalleryFeeder node, Node & group selector, Image grid, After Gen modes, Run / Stop controls
