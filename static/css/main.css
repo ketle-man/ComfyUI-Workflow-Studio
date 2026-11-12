@@ -6451,3 +6451,48 @@ body {
     max-width: none;
 }
 .wfm-compat-row .wfm-format-badge:empty { display: none; }
+
+/* GenerateUI Settings tab: Switches column (true/false inputs) */
+.wfm-settings-switches {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+.wfm-settings-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border: 1px solid var(--wfm-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+.wfm-settings-switch:hover {
+    background: var(--wfm-surface);
+}
+.wfm-settings-switch-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+.wfm-settings-switch-node {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wfm-settings-switch-key {
+    color: var(--wfm-text-secondary);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wfm-settings-switch-state {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--wfm-text-secondary);
+}

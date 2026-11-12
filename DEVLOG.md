@@ -4,6 +4,13 @@
 
 ## 未リリース
 
+### GenerateUI Settingsタブ: スイッチ列
+
+- KSampler・Latent Imageの右に3列目「スイッチ」を追加。APIワークフロー内のリテラルな true/false 入力（ComfySwitchNode の switch、PrimitiveBoolean の value、TextGenerateV2 の thinking など）をノード名・入力名付きで一覧し、チェックボックスで即時切り替え（Apply不要、Raw JSONへ同期）。リンクされた入力は配列なので対象外で、配線元のPrimitiveBooleanが出る。
+- 選択肢がちょうど enable/disable・enabled/disabled・on/off・true/false・yes/no の2択のCOMBO（KSamplerAdvanced add_noise、DWPreprocessor detect_* など）も対象。object_info を型別取得してから追加描画し、値はそのノード自身の綴りの文字列で書き戻す。DynamicCombo（TextGenerate の sampling_mode）は子入力が変わるため対象外。
+- 保存済みワークフロー347本（App形式5本は読込対象外）をブラウザで順に読み込み、128本・426項目でオン→オフ→元に戻すの往復と Raw JSON 同期を自動検証、失敗・コンソールエラー0。
+- MiniMax H3 Image のT2I（サブグラフ内のプロンプト強化スイッチ）とEdit（PrimitiveBoolean「Enable PE?」）でブラウザ実操作を確認。
+
 ### MiniMax-H3-Image対応
 
 - `MiniMaxH3ImageConditioning`（Comfy-Org の MiniMax H3 Image T2I/Edit テンプレート）をGenerateUI/Metadata/Iタブに追加。入力は `prompt`/`width`/`height`/`images.image_N` で `PH3ImageConditioning` と同形のため同じ扱い（negativeなし、promptはPreviewAny→プロンプト強化スイッチ経由で配線元のユーザープロンプトをpositiveに）。width/height=0は image_1 のサイズ、画像なしなら2048。

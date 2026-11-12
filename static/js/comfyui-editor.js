@@ -3,6 +3,7 @@
  */
 
 import { comfyUI } from "./comfyui-client.js";
+import { comfyWorkflow } from "./comfyui-workflow.js";
 import { syncJsonHighlight } from "./json-highlight.js";
 import { t } from "./i18n.js";
 import { escapeHtml, setupSearchClearBtn } from "./util.js";
@@ -313,6 +314,104 @@ function _syncStackToggleAll(stackModels) {
     const allOff = stackModels.every((m) => _stackActive[m] === false);
     cb.checked = allOn;
     cb.indeterminate = !allOn && !allOff;
+}
+
+// Two-option combos that are really an on/off switch (KSamplerAdvanced add_noise, DWPreprocessor
+// detect_*, ...): [on value, off value], compared case-insensitively.
+const _TOGGLE_COMBO_PAIRS = [["enable", "disable"], ["enabled", "disabled"], ["on", "off"], ["true", "false"], ["yes", "no"]];
+
+function _comboOptions(spec) {
+    if (Array.isArray(spec?.[0])) return spec[0];
+    if (spec?.[0] === "COMBO" && Array.isArray(spec[1]?.options)) return spec[1].options;
+    return null;
+}
+
+/** [onValue, offValue] in the node's own spelling when the combo is an on/off pair, else null */
+function _toggleComboValues(spec) {
+    const opts = _comboOptions(spec);
+    if (!opts || opts.length !== 2 || !opts.every((o) => typeof o === "string")) return null;
+    const lower = opts.map((o) => o.toLowerCase());
+    for (const [on, off] of _TOGGLE_COMBO_PAIRS) {
+        const iOn = lower.indexOf(on), iOff = lower.indexOf(off);
+        if (iOn >= 0 && iOff >= 0) return [opts[iOn], opts[iOff]];
+    }
+    return null;
+}
+
+function _compareNodeIds(a, b) {
+    const x = String(a).split(":").map(Number), y = String(b).split(":").map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+        const d = (x[i] ?? -1) - (y[i] ?? -1);
+        if (d) return d;
+    }
+    return 0;
+}
+
+/**
+ * On/off items of the API workflow for the Settings tab's Switches column: every literal
+ * true/false input (ComfySwitchNode switch, PrimitiveBoolean value, TextGenerate thinking, ...)
+ * plus string combos whose only two options are an on/off pair (needs object_info). Linked
+ * inputs are arrays and never match; their source node shows up instead.
+ */
+function _collectSwitchInputs(workflow, objectInfo = {}) {
+    const out = [];
+    for (const [id, node] of Object.entries(workflow || {})) {
+        if (!node?.class_type || !node.inputs) continue;
+        const info = objectInfo[node.class_type]?.input || {};
+        for (const [key, value] of Object.entries(node.inputs)) {
+            const base = { id, type: node.class_type, title: node._meta?.title || node.class_type, key };
+            if (typeof value === "boolean") {
+                out.push({ ...base, on: value, onValue: true, offValue: false });
+            } else if (typeof value === "string") {
+                const pair = _toggleComboValues(info.required?.[key] || info.optional?.[key]);
+                if (pair && (value === pair[0] || value === pair[1])) {
+                    out.push({ ...base, on: value === pair[0], onValue: pair[0], offValue: pair[1] });
+                }
+            }
+        }
+    }
+    return out.sort((a, b) => _compareNodeIds(a.id, b.id));
+}
+
+let _switchRenderSeq = 0;
+
+/** Fill the Switches column. Booleans show at once; on/off combos follow once object_info is in. */
+async function _renderSwitchColumn(col) {
+    if (!col) return;
+    const seq = ++_switchRenderSeq;
+    const workflow = comfyUI.currentWorkflow;
+    const draw = (items) => {
+        col.innerHTML = items.length ? `<div class="wfm-settings-switches">${items.map((s, i) => `
+            <label class="wfm-settings-switch" title="${escapeHtml(`#${s.id} ${s.type} › ${s.key}`)}">
+                <input type="checkbox" class="wfm-settings-switch-cb" data-index="${i}" ${s.on ? "checked" : ""}>
+                <span class="wfm-settings-switch-text">
+                    <span class="wfm-settings-switch-node">${escapeHtml(s.title)}</span>
+                    <span class="wfm-settings-switch-key">${escapeHtml(s.key)}</span>
+                </span>
+                <span class="wfm-settings-switch-state">${escapeHtml(String(s.on ? s.onValue : s.offValue))}</span>
+            </label>`).join("")}
+        </div>` : `<p class="wfm-placeholder">${t("genSwitchesNone")}</p>`;
+        // Applies immediately (no Apply button): written straight into the API workflow Generate sends
+        col.querySelectorAll(".wfm-settings-switch-cb").forEach((cb) => {
+            cb.addEventListener("change", () => {
+                const s = items[Number(cb.dataset.index)];
+                const node = comfyUI.currentWorkflow?.[s.id];
+                if (!node?.inputs || !(s.key in node.inputs) || Array.isArray(node.inputs[s.key])) return;
+                s.on = cb.checked;
+                node.inputs[s.key] = s.on ? s.onValue : s.offValue;
+                const state = cb.closest(".wfm-settings-switch")?.querySelector(".wfm-settings-switch-state");
+                if (state) state.textContent = String(node.inputs[s.key]);
+                _syncRawJson();
+            });
+        });
+    };
+    draw(_collectSwitchInputs(workflow));
+    const types = [...new Set(Object.values(workflow || {}).map((n) => n?.class_type).filter(Boolean))];
+    let objectInfo = {};
+    try { objectInfo = await comfyWorkflow.getObjectInfoForTypes(types); } catch {}
+    // A newer render (another workflow loaded meanwhile) owns the column now
+    if (seq !== _switchRenderSeq || workflow !== comfyUI.currentWorkflow || !col.isConnected) return;
+    draw(_collectSwitchInputs(workflow, objectInfo));
 }
 
 /** Sync comfyUI.currentWorkflow to Raw JSON textarea + highlight */
@@ -1514,7 +1613,7 @@ export const comfyEditor = {
                     <button class="wfm-btn wfm-btn-sm" id="wfm-settings-sampler-apply" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                     ` : "<p class='wfm-placeholder'>No KSampler node found</p>"}
                 </div>
-                <div style="flex:1;min-width:0;padding-left:14px;">
+                <div style="flex:1;min-width:0;padding:0 14px;border-right:1px solid var(--wfm-border);">
                     <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">Latent Image</h3>
                     ${latent ? `
                     <input type="hidden" id="wfm-settings-latent-id" value="${latent.id}">
@@ -1559,8 +1658,14 @@ export const comfyEditor = {
                     </div>
                     ` : "<p class='wfm-placeholder'>No EmptyLatentImage node found</p>"}
                 </div>
+                <div style="flex:1;min-width:0;padding-left:14px;">
+                    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--wfm-text-secondary);margin:0 0 12px;">${t("genSwitchesTitle")}</h3>
+                    <div id="wfm-settings-switches-col"></div>
+                </div>
             </div>
         `;
+
+        _renderSwitchColumn(document.getElementById("wfm-settings-switches-col"));
 
         document.getElementById("wfm-settings-sampler-apply")?.addEventListener("click", (e) => {
             const ds = document.getElementById("wfm-settings-sampler-id")?.dataset || {};

@@ -315,6 +315,8 @@ const LANGUAGES = {
 
         // -- GenerateUI Input tab: Image sub-panel placeholder --
         i2iPlaceholderTitle: "Placeholder Image",
+        genSwitchesTitle: "Switches",
+        genSwitchesNone: "No true/false settings in this workflow",
         i2iPlaceholderColor: "Color",
         i2iPlaceholderImage: "Image",
         i2iPlaceholderWidth: "Width",
@@ -1054,7 +1056,7 @@ const LANGUAGES = {
         helpGen4: "Input tab: Prompt (left) and Image (right, about 3:2) are shown side by side on one screen (drag-and-drop upload); when the Prompt/Image area gets narrow (about 720px or less) Image wraps under Prompt, and the Raw JSON column can be collapsed to a slim strip at the right edge with its » button (Input tab only; remembered); the Prompt area has Positive Prompt, Negative Prompt, and an Embeddings selector at the bottom — select a model, set Weight (default 1.0), then click Paste to insert (embedding:Name:weight) at the cursor position of the last focused textarea (defaults to Positive if neither is focused); a ↺ button next to each Apply button reverts the textarea to the node's currently applied value; select text (or just place the cursor on a word/parenthesis block) and press Ctrl+↑/↓ to adjust its emphasis weight in (text:weight) syntax by ±0.05 — the parentheses are removed automatically when the weight returns to 1.0",
         helpGen5: "Model tab: Checkpoint, VAE, Diffusion Model (UNETLoader / UnetLoaderGGUF / LoaderGGUF), Text Encoder (CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — type and device selectors; DualCLIP shows two clip selectors) are always shown; ControlNet and Hypernetwork (with Strength field) are collapsed by default since they're used less often — click their header to expand; LoRA (Single/Stack tabs) has its own column to the right; all selectors have a filter; LoRA Stack — Apply writes all active LoRAs to the target node and simultaneously inserts LoRA syntax and CivitAI trigger words into the Positive prompt; re-applying updates the prompt by removing inactive LoRAs and re-adding active ones",
         helpGen28: "Model tab — Highlight color: the label of each model type (Checkpoint, VAE, Diffusion Model, Text Encoder, ControlNet, Hypernetwork) and the LoRA column header turn a distinct color (default bright green) when the loaded workflow actually contains that type of node; this stays visible even while ControlNet/Hypernetwork are collapsed, so you can tell at a glance whether they're in use without expanding them; the color is customizable in the Settings tab",
-        helpGen6: "Settings tab: KSampler and Latent Image side by side, each at 50% width",
+        helpGen6: "Settings tab: KSampler, Latent Image and Switches side by side. Switches lists every true/false value in the workflow (e.g. the prompt enhancer on/off switch, TextGenerate thinking) and every two-choice enable/disable, on/off or yes/no option (e.g. KSamplerAdvanced add_noise, DWPreprocessor detect_hand) with its node name; clicking one toggles it immediately (no Apply needed) and the change shows up in Raw JSON",
         helpGen31: "LTX-2.5 and Wan2.2 video workflows also work when loaded as regular workflows in this tab (not just the dedicated Video tab): Positive/Negative Prompt detection follows LTX-2.5's LTXVDualCFGGuider / LTXVConditioning nodes to find the actual prompt text, and the Settings tab's Latent Image section recognizes Wan2.2's EmptyHunyuanLatentVideo and LTX-2.5's EmptyLTXVLatentVideo nodes (with an added Length (frames) field) instead of showing \"No EmptyLatentImage node found\"; generating from these workflows also gets the same extended timeout as MiniMax H3 video generations",
         helpGen7: "Raw JSON always visible in the right column of each tab — edit directly and Apply to reload the workflow; if the loaded workflow has Bypass or Mute nodes, a note listing them appears above the search bar (Bypass nodes are excluded with their wires reconnected around them; Mute nodes are excluded with no reconnection, matching ComfyUI itself); the search bar highlights matches and scrolls to them without moving the cursor into the editor, so typing right after a search can't accidentally overwrite the JSON — click into the editor first to actually edit",
         helpGen8: "Seed control: random, fixed, increment, decrement, workflow (use the workflow's own seed as-is, without overriding it)",
@@ -2225,6 +2227,8 @@ const LANGUAGES = {
 
         // -- GenerateUIタブ Inputサブタブ: Image内プレースホルダ --
         i2iPlaceholderTitle: "プレースホルダ画像",
+        genSwitchesTitle: "スイッチ",
+        genSwitchesNone: "このワークフローに true/false の項目はありません",
         i2iPlaceholderColor: "色",
         i2iPlaceholderImage: "画像",
         i2iPlaceholderWidth: "幅",
@@ -2964,7 +2968,7 @@ const LANGUAGES = {
         helpGen4: "Inputタブ：Prompt（左）とImage（右、幅は約3:2）を同一画面に並べて表示（ドラッグ&ドロップ対応）。Prompt/Image領域の幅が約720px以下になるとImageがPromptの下へ折り返し、右端のRaw JSONは»ボタンで細い帯に折りたためる（Inputタブのみ・状態は記憶）；PromptエリアにはPositive Prompt・Negative Promptに加え最下部にEmbeddingsセレクタを表示（Filter＋セレクト＋Weight入力＋Pasteボタン）— Pasteは最後にフォーカスしたテキストエリアのカーソル位置に(embedding:Name:weight)を挿入（未フォーカス時はPositiveに追加）；各Applyボタンの左隣の↺ボタンはテキストエリアをノードの現在の適用値に戻す；テキストを選択（または単語・括弧内にカーソルを置くだけでも可）してCtrl+↑/↓を押すと(text:weight)形式で強調weightを±0.05単位で調整（weightが1.0に戻ると括弧を自動解除）",
         helpGen5: "Modelタブ：Checkpoint/VAE/Diffusion Model（UNETLoader / UnetLoaderGGUF / LoaderGGUF対応）/Text Encoder（CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF対応 — typeおよびdevice選択付き、DualCLIPは2段モデル選択）は常時表示；ControlNetとHypernetwork（Strength入力付き）は使用頻度が低いためデフォルトで折りたたみ — 見出しをクリックで展開；LoRA（Single/Stackタブ）は右側に独立した列を表示；すべてのセレクタにフィルタ検索付き；LoRA Stack — Applyで有効な全LoRAを対象ノードに書き込み、同時にLoRA構文とCivitAIトリガーワードをPositiveプロンプトへ挿入；再Applyでは非アクティブなLoRAを削除し、アクティブなLoRAを再追加してプロンプトを更新",
         helpGen28: "Modelタブ — ハイライト色：読み込んだワークフローに実際に該当ノードが含まれる場合、各モデル種別（Checkpoint/VAE/Diffusion Model/Text Encoder/ControlNet/Hypernetwork）のラベルとLoRA列見出しが指定色（デフォルトは明るい緑）で表示される；ControlNet/Hypernetworkが折りたたまれた状態でも色は見えるため、展開しなくても使用有無が一目で分かる；色はSettingsタブでカスタマイズ可能",
-        helpGen6: "Settingsタブ：KSamplerとLatent Imageを横並び（各50%幅）",
+        helpGen6: "Settingsタブ：KSampler・Latent Image・スイッチの3列。スイッチ列にはワークフロー内の true/false の項目（プロンプト強化のオン/オフ、TextGenerateのthinkingなど）と、enable/disable・on/off・yes/no の2択項目（KSamplerAdvancedのadd_noise、DWPreprocessorのdetect_handなど）がノード名付きで並び、クリックで即座に切り替わる（Apply不要、Raw JSONにも反映）",
         helpGen31: "LTX-2.5とWan2.2の動画ワークフローも、専用のVideoタブだけでなく本タブに通常ワークフローとして読み込んだ場合に対応 — Positive/Negative PromptはLTX-2.5のLTXVDualCFGGuider / LTXVConditioningノードをたどって実際のプロンプト文を検出し、SettingsタブのLatent ImageはWan2.2のEmptyHunyuanLatentVideoとLTX-2.5のEmptyLTXVLatentVideoノードを認識（Length（フレーム数）欄も追加表示）して「No EmptyLatentImage node found」にならない；これらのワークフローからの生成もMiniMax H3の動画生成と同じ延長タイムアウトが適用される",
         helpGen7: "Raw JSONを各タブの右列に常時表示 — 直接編集してApplyでワークフロー即時反映；読み込んだワークフローにBypass/Muteノードがある場合、検索バー上部に一覧が表示される（Bypassは除外され配線が再接続される、Muteは除外されるが再接続はされない点はComfyUI本体と同じ）；検索バーはヒット箇所をハイライト表示してスクロールするだけでエディタにカーソルを移動しないため、検索直後にキー入力してもJSONが誤って書き換わることはない — 編集する際はエディタ内をクリックしてから行う",
         helpGen8: "シード管理：ランダム / 固定 / 増加 / 減少 / Workflow（ワークフロー側のシードをそのまま使用）",
@@ -4135,6 +4139,8 @@ const LANGUAGES = {
 
         // -- GenerateUI标签页 Input子标签: Image内占位图 --
         i2iPlaceholderTitle: "占位图片",
+        genSwitchesTitle: "开关",
+        genSwitchesNone: "此工作流中没有 true/false 项",
         i2iPlaceholderColor: "颜色",
         i2iPlaceholderImage: "图片",
         i2iPlaceholderWidth: "宽度",
@@ -4874,7 +4880,7 @@ const LANGUAGES = {
         helpGen4: "Input标签：Prompt（左）与Image（右，宽度约3:2）并排显示在同一画面（支持拖放上传）；当Prompt/Image区域宽度约720px以下时，Image会折行到Prompt下方，右侧的Raw JSON可通过»按钮折叠为细条（仅Input标签，状态会被记住）；Prompt区域显示Positive Prompt、Negative Prompt，以及底部的Embeddings选择器（过滤＋下拉＋权重＋Paste按钮）— Paste将(embedding:Name:weight)插入最后聚焦文本框的光标位置（未聚焦时默认追加到Positive）；每个Apply按钮左侧的↺按钮可将文本框恢复为节点当前已应用的值；选中文字（或将光标置于单词/括号内也可）后按Ctrl+↑/↓，即可以(text:weight)语法以±0.05为单位调整强调权重（权重恢复为1.0时自动去除括号）",
         helpGen5: "Model标签：Checkpoint/VAE/Diffusion Model（支持UNETLoader / UnetLoaderGGUF / LoaderGGUF）/Text Encoder（支持CLIPLoader / DualCLIPLoader / ClipLoaderGGUF / DualClipLoaderGGUF — 含type和device选择器，DualCLIP显示两段模型选择）始终显示；ControlNet和Hypernetwork（带Strength输入）因使用频率较低默认折叠 — 点击标题展开；LoRA（Single/Stack标签）拥有独立的列；所有选择器均含筛选；LoRA Stack — 点击Apply会将所有启用的LoRA写入目标节点，并同时将LoRA语法和CivitAI触发词插入Positive提示词；再次Apply会移除未启用的LoRA并重新添加启用的LoRA以更新提示词",
         helpGen28: "Model标签 — 高亮颜色：当前工作流实际包含某类型节点时（Checkpoint/VAE/Diffusion Model/Text Encoder/ControlNet/Hypernetwork），对应标签及LoRA列标题会以指定颜色（默认亮绿色）显示；即使ControlNet/Hypernetwork处于折叠状态该颜色依然可见，无需展开即可判断是否在使用；颜色可在Settings标签中自定义",
-        helpGen6: "Settings标签：KSampler与Latent Image并排显示（各占50%宽度）",
+        helpGen6: "Settings标签：KSampler、Latent Image与开关三列并排。开关列列出工作流中所有 true/false 项（如提示词增强开关、TextGenerate 的 thinking）以及 enable/disable、on/off、yes/no 二选一项（如 KSamplerAdvanced 的 add_noise、DWPreprocessor 的 detect_hand）并显示节点名，点击即可立即切换（无需 Apply，Raw JSON 同步更新）",
         helpGen31: "LTX-2.5和Wan2.2视频工作流在本标签中作为普通工作流加载时（不仅限于专用的Video标签）也可正常使用 — Positive/Negative Prompt会沿LTX-2.5的LTXVDualCFGGuider / LTXVConditioning节点追溯找到实际提示词文本，Settings标签的Latent Image部分能识别Wan2.2的EmptyHunyuanLatentVideo和LTX-2.5的EmptyLTXVLatentVideo节点（并新增Length（帧数）字段），不再显示\"No EmptyLatentImage node found\"；从这些工作流生成时也会应用与MiniMax H3视频生成相同的延长超时",
         helpGen7: "Raw JSON在每个标签右列常驻显示 — 直接编辑并Apply即时重载工作流；如果加载的工作流包含Bypass或Mute节点，搜索栏上方会显示列表(Bypass节点会被排除但其连线会重新连接；Mute节点会被排除且不重新连接，与ComfyUI本体行为一致)；搜索栏只会高亮匹配项并滚动到该位置，不会将光标移入编辑器，因此搜索后立即按键不会意外覆盖JSON — 需要先点击编辑器内部才能实际编辑",
         helpGen8: "种子管理：随机/固定/递增/递减/Workflow（直接使用工作流自带的种子）",
