@@ -12,6 +12,8 @@ import os
 import sys
 from pathlib import Path
 
+from ..config import is_safe_rel
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -209,6 +211,10 @@ class VideoService:
         base_dir = folder_paths.get_directory_by_type(type_)
         if not base_dir:
             raise ValueError(f"Invalid type: {type_}")
+        # UNC・ドライブ指定・絶対パス・「..」は、結合・resolve() の前に文字列のまま拒否する
+        # (Windows では UNC を resolve() するだけで相手ホストへ資格情報付きで接続するため)
+        if not is_safe_rel(filename) or (subfolder and not is_safe_rel(subfolder)):
+            raise ValueError("Access denied: path outside allowed directory")
         base = Path(base_dir).resolve()
         target = (base / (subfolder or "") / filename).resolve()
         try:

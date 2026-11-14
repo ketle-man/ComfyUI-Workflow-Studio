@@ -219,7 +219,10 @@ class SemanticService:
     # ── 状態 ───────────────────────────────────────────────
 
     def _scope_entries(self, folder: str, recursive: bool) -> list[tuple[str, str, int, float]]:
-        p = Path(folder).resolve()
+        try:
+            p = self.gallery._resolve_untrusted(folder)  # UNC等は resolve() 前に文字列で拒否
+        except ValueError:
+            raise SemanticError("folder_not_allowed", str(folder))
         if not p.is_dir() or not self.gallery._check_path_allowed(p):
             raise SemanticError("folder_not_allowed", str(folder))
         raw = self.gallery._scan_folder_recursive(p) if recursive else self.gallery._scan_folder(p)
@@ -539,7 +542,10 @@ class SemanticService:
 
     def search_similar(self, path: str, folder: str, recursive: bool, limit: int, min_score: float = 0.0) -> list[dict]:
         self._ensure_loaded()
-        p = Path(path).resolve()
+        try:
+            p = self.gallery._resolve_untrusted(path)  # UNC等は resolve() 前に文字列で拒否
+        except ValueError:
+            raise SemanticError("folder_not_allowed", path)
         if not p.is_file() or not self.gallery._check_path_allowed(p):
             raise SemanticError("folder_not_allowed", path)
         ap = p.as_posix()

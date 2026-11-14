@@ -12,7 +12,7 @@ from pathlib import Path
 from aiohttp import web
 
 from ..services.settings_service import SettingsService
-from ..config import DEFAULT_WORKFLOWS_DIR, DATA_DIR, VIDEO_EDIT_PROJECT_DIR
+from ..config import DEFAULT_WORKFLOWS_DIR, DATA_DIR, VIDEO_EDIT_PROJECT_DIR, is_safe_rel
 
 logger = logging.getLogger(__name__)
 
@@ -397,6 +397,10 @@ def _add_video_edit_media_to_zip(zf: zipfile.ZipFile) -> None:
     input_dir = _comfyui_input_dir().resolve()
     seen = set()
     for subfolder, filename in _iter_video_edit_media_refs():
+        # プロジェクトファイルは細工できるため、UNC・絶対パス・「..」は結合・resolve() の前に
+        # 文字列のまま拒否する(Windows では UNC を resolve() するだけで相手ホストへ接続する)
+        if not is_safe_rel(filename) or (subfolder and not is_safe_rel(subfolder)):
+            continue
         src = (input_dir / subfolder / filename).resolve()
         try:
             rel = src.relative_to(input_dir)  # a crafted project file must not reach outside input/
@@ -466,9 +470,15 @@ def _apply_full_backup_zip(zip_source) -> dict:
                 summary["skipped"].append(info.filename)
                 continue
             if info.filename.startswith(_VIDEO_MEDIA_PREFIX):
+                media_rel = info.filename[len(_VIDEO_MEDIA_PREFIX):]
+                # ZIP エントリ名は細工できるため、UNC・絶対パス・「..」は結合・resolve() の前に
+                # 文字列のまま拒否する(Windows では UNC を resolve() するだけで相手ホストへ接続する)
+                if not is_safe_rel(media_rel):
+                    summary["skipped"].append(info.filename)
+                    continue
                 if input_base is None:
                     input_base = _comfyui_input_dir().resolve()
-                target = (input_base / info.filename[len(_VIDEO_MEDIA_PREFIX):]).resolve()
+                target = (input_base / media_rel).resolve()
                 try:
                     target.relative_to(input_base)
                 except ValueError:
@@ -481,6 +491,9 @@ def _apply_full_backup_zip(zip_source) -> dict:
                 with zf.open(info) as src, open(target, "wb") as dst:
                     shutil.copyfileobj(src, dst)
                 summary["media_restored"].append(info.filename)
+                continue
+            if not is_safe_rel(info.filename):
+                summary["skipped"].append(info.filename)
                 continue
             target = (base / info.filename).resolve()
             try:

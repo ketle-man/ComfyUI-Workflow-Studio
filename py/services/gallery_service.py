@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+from ..config import is_safe_rel, resolve_untrusted
+
 logger = logging.getLogger(__name__)
 
 # 動画拡張子（PyAV(av)がコンテナ形式を問わず共通で扱えるため、寸法/再生時間/埋め込み
@@ -270,7 +272,7 @@ class GalleryService:
         """バックグラウンドスレッドで未キャッシュ画像のprompt_cacheを構築する。
         10枚処理するたびに50msスリープしてメインスレッドへの影響を最小化。"""
         try:
-            folder = Path(folder_path).resolve()
+            folder = self._resolve_untrusted(folder_path)
             if not folder.is_dir() or not self._check_path_allowed(folder):
                 return
             entries = self._scan_folder(folder)
@@ -333,13 +335,19 @@ class GalleryService:
                 pass
         return False
 
+    def _resolve_untrusted(self, value) -> Path:
+        """クライアント由来のパスを resolve() の前に文字列のまま検査して返す(拒否時 ValueError)。
+        Windows では UNC パスは resolve() した時点で相手ホストへ資格情報付きで接続してしまうため、
+        UNC は許可ルート自身が UNC の場合のみ、その配下を許す。"""
+        return resolve_untrusted(value, (self._allowed_root, self._comfy_output_root))
+
     # ──────────────────────────────────────────────────────────────
     # フォルダツリー
     # ──────────────────────────────────────────────────────────────
 
     def list_folder_tree(self, root_path: str) -> dict:
         """outputフォルダのフォルダツリーを返す"""
-        root = Path(root_path).resolve()
+        root = self._resolve_untrusted(root_path)
         if not root.is_dir():
             return {"error": f"Directory not found: {root_path}"}
         if self._allowed_root is None:
@@ -484,7 +492,7 @@ class GalleryService:
         recursive: bool = False,
     ) -> list[dict]:
         """指定フォルダ内の画像一覧を返す（recursive=Trueならサブフォルダも含める）"""
-        folder = Path(folder_path).resolve()
+        folder = self._resolve_untrusted(folder_path)
         if not folder.is_dir():
             return []
         if not self._check_path_allowed(folder):
@@ -592,7 +600,7 @@ class GalleryService:
     def save_image_to_folder(self, folder_path: str, filename: str, image_data: str) -> dict:
         """任意フォルダへ画像を保存する（data URL想定、同名なら上書き）。
         Style Catalogのカタログ作成（スタイル名でのファイル保存）で使用。"""
-        folder = Path(folder_path).resolve()
+        folder = self._resolve_untrusted(folder_path)
         if not folder.is_dir():
             return {"ok": False, "error": "Destination folder not found"}
         if not self._check_path_allowed(folder):
@@ -740,7 +748,7 @@ class GalleryService:
 
     def save_image_prompt(self, image_path: str, text: str) -> bool:
         """画像と同名の.txtサイドカーにプロンプトテキストを保存する"""
-        p = Path(image_path).resolve()
+        p = self._resolve_untrusted(image_path)
         if not p.is_file():
             return False
         if not self._check_path_allowed(p):
@@ -758,7 +766,7 @@ class GalleryService:
 
     def get_image_metadata(self, image_path: str) -> dict:
         """PNG/JPEGからメタデータを抽出し、保存済みメタと合わせて返す"""
-        path = Path(image_path).resolve()
+        path = self._resolve_untrusted(image_path)
         if not path.is_file():
             return {"error": "File not found"}
         if not self._check_path_allowed(path):
@@ -1022,7 +1030,7 @@ class GalleryService:
         extractPromptsLiteGraphがトップレベル系統しか拾えないことがあるため、
         プロンプト抽出専用にAPI形式を優先する（Metadataタブのプロンプト抽出と同じ優先順位）。
         """
-        path = Path(image_path).resolve()
+        path = self._resolve_untrusted(image_path)
         if not self._check_path_allowed(path):
             return None
 
@@ -1083,7 +1091,7 @@ class GalleryService:
         """
         from .convert_service import OUTPUT_FORMATS, convert_audio, supports_tags
 
-        p = Path(image_path).resolve()
+        p = self._resolve_untrusted(image_path)
         if not p.is_file():
             return {"ok": False, "error": "File not found"}
         if p.suffix.lower() not in AUDIO_EXTENSIONS | VIDEO_EXTENSIONS:
@@ -1152,7 +1160,7 @@ class GalleryService:
         }
 
     def save_image_meta(self, image_path: str, data: dict) -> bool:
-        resolved = Path(image_path).resolve()
+        resolved = self._resolve_untrusted(image_path)
         if not self._check_path_allowed(resolved):
             logger.warning("save_image_meta: path not allowed: %s", resolved)
             return False
@@ -1162,7 +1170,7 @@ class GalleryService:
         return self.metadata_store.save(str(resolved), data)
 
     def toggle_favorite(self, image_path: str) -> bool:
-        resolved = Path(image_path).resolve()
+        resolved = self._resolve_untrusted(image_path)
         if not self._check_path_allowed(resolved):
             return False
         # get_image_metadata()/list_images() 側はresolve()済みパスをキーにして取得する
@@ -1178,7 +1186,11 @@ class GalleryService:
         """複数画像のお気に入りを一括設定する"""
         ok = fail = 0
         for p in paths:
-            resolved = Path(p).resolve()
+            try:
+                resolved = self._resolve_untrusted(p)
+            except ValueError:
+                fail += 1
+                continue
             if not self._check_path_allowed(resolved):
                 fail += 1
                 continue
@@ -1216,7 +1228,7 @@ class GalleryService:
         return self.metadata_store.delete_group(name)
 
     def add_to_group(self, image_path: str, group_name: str) -> bool:
-        resolved = Path(image_path).resolve()
+        resolved = self._resolve_untrusted(image_path)
         if not self._check_path_allowed(resolved):
             return False
         # get_image_metadata()/list_images() 側はresolve()済みパスをキーにして取得する
@@ -1231,7 +1243,7 @@ class GalleryService:
         return True
 
     def remove_from_group(self, image_path: str, group_name: str) -> bool:
-        resolved = Path(image_path).resolve()
+        resolved = self._resolve_untrusted(image_path)
         if not self._check_path_allowed(resolved):
             return False
         resolved_str = str(resolved)
@@ -1260,7 +1272,7 @@ class GalleryService:
 
     def create_folder(self, parent_path: str, name: str) -> dict:
         """選択フォルダ内に新しいサブフォルダを作成する"""
-        parent = Path(parent_path).resolve()
+        parent = self._resolve_untrusted(parent_path)
         if not parent.is_dir():
             return {"ok": False, "error": "Parent directory not found"}
         if not self._check_path_allowed(parent):
@@ -1282,7 +1294,7 @@ class GalleryService:
     def delete_folder(self, folder_path: str) -> dict:
         """フォルダを再帰的に削除する"""
         import shutil
-        folder = Path(folder_path).resolve()
+        folder = self._resolve_untrusted(folder_path)
         if not folder.is_dir():
             return {"ok": False, "error": "Directory not found"}
         if not self._check_path_allowed(folder):
@@ -1302,7 +1314,11 @@ class GalleryService:
         deleted = []
         errors = []
         for img_path in paths:
-            p = Path(img_path).resolve()
+            try:
+                p = self._resolve_untrusted(img_path)
+            except ValueError:
+                errors.append(f"{Path(img_path).name}: access denied")
+                continue
             if not p.is_file():
                 errors.append(f"{Path(img_path).name}: not found")
                 continue
@@ -1323,7 +1339,7 @@ class GalleryService:
 
     def move_images(self, paths: list, dest_folder: str) -> dict:
         """画像ファイルを別フォルダへ移動する（複数対応）"""
-        dest = Path(dest_folder).resolve()
+        dest = self._resolve_untrusted(dest_folder)
         if not dest.is_dir():
             return {"ok": False, "error": "Destination folder not found", "moved": [], "errors": []}
         if not self._check_path_allowed(dest):
@@ -1331,7 +1347,11 @@ class GalleryService:
         moved = []
         errors = []
         for img_path in paths:
-            p = Path(img_path).resolve()
+            try:
+                p = self._resolve_untrusted(img_path)
+            except ValueError:
+                errors.append(f"{Path(img_path).name}: access denied")
+                continue
             if not p.is_file():
                 errors.append(f"{Path(img_path).name}: not found")
                 continue
@@ -1375,7 +1395,10 @@ class GalleryService:
 
         layers_data = []
         for img_path in paths:
-            p = Path(img_path).resolve()
+            try:
+                p = self._resolve_untrusted(img_path)
+            except ValueError:
+                continue
             if not p.is_file() or p.suffix.lower() not in IMAGE_EXTENSIONS:
                 continue
             if p.suffix.lower() in VIDEO_EXTENSIONS | AUDIO_EXTENSIONS | MODEL3D_EXTENSIONS:
@@ -1543,7 +1566,7 @@ class GalleryService:
         """サーバー上に既にあるPSDファイル(Gallery上のパス)をレイヤー配列に分解する。
         Galleryから直接Image Editへ送る際、アップロードの往復無しで済ませるために使う。
         """
-        p = Path(image_path).resolve()
+        p = self._resolve_untrusted(image_path)
         if not p.is_file() or p.suffix.lower() != ".psd":
             raise ValueError("Not a PSD file")
         if not self._check_path_allowed(p):
@@ -1567,7 +1590,7 @@ class GalleryService:
     def serve_image(self, image_path: str):
         """画像のPathオブジェクトを返す（ルートで使用）。
         PSDはブラウザが直接レンダリングできないため、合成済みPNGにキャッシュ変換して返す。"""
-        p = Path(image_path).resolve()
+        p = self._resolve_untrusted(image_path)
         if not p.is_file():
             return None
         if p.suffix.lower() not in IMAGE_EXTENSIONS:
@@ -1583,10 +1606,14 @@ class GalleryService:
         """.gltfが相対URIで参照する外部ファイル(.bin/テクスチャ)のPathを返す。
         uriはglTF仕様どおりパーセントエンコードされている。"""
         try:
-            p = Path(model_path).resolve()
+            p = self._resolve_untrusted(model_path)
             if p.suffix.lower() != ".gltf" or not p.is_file() or not self._check_path_allowed(p):
                 return None
-            target = (p.parent / unquote(uri)).resolve()
+            # .gltf の外部参照 URI は相対パスのみ(UNC・絶対パス・「..」は結合前に拒否)
+            rel_uri = unquote(uri)
+            if not is_safe_rel(rel_uri):
+                return None
+            target = (p.parent / rel_uri).resolve()
             if target.suffix.lower() not in MODEL3D_ASSET_EXTENSIONS or not target.is_file():
                 return None
         except (OSError, ValueError):
@@ -1608,7 +1635,7 @@ class GalleryService:
         from io import BytesIO
         from PIL import Image
 
-        p = Path(model_path).resolve()
+        p = self._resolve_untrusted(model_path)
         if not p.is_file() or p.suffix.lower() not in MODEL3D_EXTENSIONS:
             return {"ok": False, "error": "Not a 3D model"}
         if not self._check_path_allowed(p):
@@ -1702,7 +1729,7 @@ class GalleryService:
         （元ファイルへのフォールバックはできないため、失敗時はNoneを返す）。
         PSDはpsd_toolsでレイヤーを合成してからJPEGとしてキャッシュする（同様にフォールバック不可）。
         """
-        p = Path(image_path).resolve()
+        p = self._resolve_untrusted(image_path)
         if not p.is_file():
             return None
         if p.suffix.lower() not in IMAGE_EXTENSIONS:

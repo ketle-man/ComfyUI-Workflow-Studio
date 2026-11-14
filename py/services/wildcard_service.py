@@ -83,10 +83,11 @@ class WildcardService:
             return None
         # Normalize to forward slashes and strip leading/trailing slashes
         filename = filename.replace("\\", "/").strip("/")
-        # Validate each path component — block traversal and empty parts
+        # Validate each path component — block traversal, empty parts and drive-relative
+        # names ("C:name"; on Python <=3.11 joinpath would replace the base path with them)
         parts = filename.split("/")
         for p in parts:
-            if not p or p == ".." or p == ".":
+            if not p or p == ".." or p == "." or ":" in p:
                 return None
         ext = Path(parts[-1]).suffix.lstrip(".").lower()
         if ext not in ALLOWED_EXTS:

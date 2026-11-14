@@ -1,8 +1,58 @@
 import os
 import logging
+import re
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# ─── パス検査（クライアント由来のパスを resolve() する前に文字列のまま検査する）───
+# Windows では UNC パス(\\host\share)は resolve()・exists() を呼んだ時点で相手ホストへ
+# Windows アカウントの資格情報付きで接続してしまうため、チェックはパス操作より先に行う。
+
+_DRIVE_RE = re.compile(r"^[A-Za-z]:")
+
+
+def is_unc(value) -> bool:
+    """ネットワーク共有/デバイスパス(\\\\host\\share, //host/share, \\\\?\\ 等)か。"""
+    return str(value or "").replace("/", "\\").startswith("\\\\")
+
+
+def is_safe_rel(rel) -> bool:
+    """相対パスとして安全か。UNC・ドライブ指定・絶対パス・「..」・空セグメントを
+    結合・resolve() より前に文字列のまま拒否する。"""
+    s = str(rel or "")
+    if not s or "\x00" in s:
+        return False
+    if s.startswith(("/", "\\")) or _DRIVE_RE.match(s):
+        return False
+    return not any(part in ("", "..") for part in re.split(r"[/\\]", s))
+
+
+def resolve_untrusted(value, roots=()) -> Path:
+    """クライアント由来の絶対パス文字列を検査してから resolve() して返す。
+
+    ファイルシステムに触れない文字列処理(normpath)だけで「..」を正規化・拒否し、
+    UNC は roots のうち UNC のルート配下に文字列上一致する場合のみ許可する
+    (ギャラリーのルートをネットワーク共有に置いている構成だけを通すため)。
+    拒否時は ValueError。"""
+    s = str(value or "")
+    if not s or "\x00" in s:
+        raise ValueError("Access denied: invalid path")
+    p = Path(os.path.normpath(s))
+    if ".." in p.parts:
+        raise ValueError("Access denied: path traversal")
+    if is_unc(s):
+        for root in roots:
+            if root is None or not is_unc(str(root)):
+                continue
+            try:
+                p.relative_to(Path(root))  # 文字列上の照合(解決しない)
+                return p.resolve()
+            except (ValueError, OSError):
+                continue
+        raise ValueError("Access denied: network path")
+    return p.resolve()
+
 
 # Plugin root directory
 PLUGIN_DIR = Path(__file__).resolve().parent.parent

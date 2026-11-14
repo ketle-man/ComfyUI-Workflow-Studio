@@ -12,6 +12,8 @@ import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from ..config import resolve_untrusted
 from typing import Optional
 from .url_guard import HINT as _URL_HINT, is_allowed_backend_url, urlopen as _guarded_urlopen
 
@@ -456,7 +458,12 @@ class TaggerService:
     _ALLOWED_WRITE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 
     def write_meta_to_file(self, image_path: str, tags: str) -> dict:
-        path = Path(image_path).resolve()
+        try:
+            # UNC(\\host\share)は resolve() した時点で相手ホストへ資格情報付きで
+            # 接続してしまうため、文字列のまま先に拒否する
+            path = resolve_untrusted(image_path)
+        except ValueError:
+            return {"error": "Access denied"}
         if path.suffix.lower() not in self._ALLOWED_WRITE_EXTS:
             return {"error": "Unsupported file type"}
         if not path.is_file():

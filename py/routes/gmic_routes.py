@@ -14,7 +14,7 @@ from pathlib import Path
 from aiohttp import web
 
 from ..services.settings_service import SettingsService
-from ..config import DATA_DIR
+from ..config import DATA_DIR, resolve_untrusted
 
 logger = logging.getLogger(__name__)
 
@@ -153,17 +153,20 @@ async def handle_result(request: web.Request) -> web.Response:
     try:
         body = await request.json()
         result_path = body.get("result_path", "")
-        if not result_path or not os.path.exists(result_path):
-            return web.json_response({"error": f"Result file not found: {result_path}"}, status=404)
 
-        # Path traversal guard: only allow files inside gmic_temp
+        # Path traversal guard: only allow files inside gmic_temp.
+        # UNC(\\host\share)は exists()/resolve() を呼んだ時点で相手ホストへ資格情報付きで
+        # 接続してしまうため、パス操作より先に文字列のまま検査する(resolve_untrusted)。
         allowed_dir = (Path(DATA_DIR) / "gmic_temp").resolve()
         try:
-            Path(result_path).resolve().relative_to(allowed_dir)
+            resolved = resolve_untrusted(result_path)
+            resolved.relative_to(allowed_dir)
         except ValueError:
             return web.json_response({"error": "Access denied: path outside gmic_temp"}, status=403)
+        if not resolved.is_file():
+            return web.json_response({"error": f"Result file not found: {result_path}"}, status=404)
 
-        with open(result_path, "rb") as f:
+        with open(resolved, "rb") as f:
             img_bytes = f.read()
 
         ext = os.path.splitext(result_path)[1].lower()
