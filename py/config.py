@@ -51,6 +51,13 @@ def resolve_untrusted(value, roots=()) -> Path:
             except (ValueError, OSError):
                 continue
         raise ValueError("Access denied: network path")
+    # 受け付ける形はドライブレター絶対パス(Windows)または / 始まり(その他OS)に限る。
+    # ルート相対(\foo)・ドライブ相対(C:foo)・NT デバイス形式(\??\, \.\ 等)・相対パスは拒否する
+    if os.name == "nt":
+        if not re.match(r"^[A-Za-z]:[\\/]", s):
+            raise ValueError("Access denied: invalid path")
+    elif not s.startswith("/"):
+        raise ValueError("Access denied: invalid path")
     return p.resolve()
 
 

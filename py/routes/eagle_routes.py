@@ -9,6 +9,7 @@ import urllib.error
 
 from aiohttp import web
 
+from ..config import is_safe_rel
 from ..services.url_guard import require_backend_url, urlopen as _guarded_urlopen
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,11 @@ def _resolve_local_path(filename, subfolder, type_name):
     if not filename:
         return None
 
+    # subfolder の UNC・ドライブ指定・絶対パス・「..」は、結合より前に文字列のまま拒否する
+    # (別ドライブ/UNC だと下の commonpath が ValueError を投げるため、その前に弾く)
+    if subfolder and not is_safe_rel(subfolder):
+        return None
+
     full_dir = os.path.abspath(os.path.join(base_dir, subfolder or ""))
     # Windowsはパス比較で大文字小文字を区別しないため normcase で正規化してから比較する
     if os.path.commonpath((os.path.normcase(full_dir), os.path.normcase(base_dir))) != os.path.normcase(base_dir):
@@ -62,9 +68,9 @@ def _resolve_absolute_svg_path(abs_path):
     except Exception:
         return None
 
+    # isfile() も UNC(\\host\share)だと相手ホストへ資格情報付きで接続してしまうため、
+    # 文字列処理(abspath/commonpath)だけで ComfyUI 管理下と確認できるまでファイルシステムに触れない
     abs_path = os.path.abspath(abs_path)
-    if not os.path.isfile(abs_path):
-        return None
 
     for type_name in ("output", "temp", "input"):
         base_dir = folder_paths.get_directory_by_type(type_name)
@@ -74,9 +80,9 @@ def _resolve_absolute_svg_path(abs_path):
         try:
             # Windowsはパス比較で大文字小文字を区別しないため normcase で正規化してから比較する
             if os.path.commonpath((os.path.normcase(abs_path), os.path.normcase(base_dir))) == os.path.normcase(base_dir):
-                return abs_path
+                return abs_path if os.path.isfile(abs_path) else None
         except ValueError:
-            # Windowsで異なるドライブレターの場合 commonpath が例外を投げる
+            # Windowsで異なるドライブレターやUNCの場合 commonpath が例外を投げる
             continue
     return None
 
