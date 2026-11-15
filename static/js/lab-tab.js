@@ -19,6 +19,7 @@ import { syncJsonHighlight, syncScroll } from "./json-highlight.js";
 import { _expandWildcardsInWorkflow } from "./generate-tab.js";
 import { pmGroups, getPresetsInGroup } from "./prompt-presets.js";
 import { isVideoFilename, extractLastFrameBlob } from "./video-utils.js";
+import { translateButtonsHtml, attachTranslateButtons, isAutoTranslateOn, translateWorkflowPrompts } from "./prompt-translate.js";
 
 // Checkpoint/LoRA/VAE are three fully independent keyframe timelines — same as
 // Prompt/KSampler — each with its own +/-, its own atIteration sequence, its own
@@ -834,11 +835,17 @@ function _openCellModal(col, idx) {
                 <button type="button" id="wfm-lab-modal-clear" class="wfm-btn wfm-btn-sm">${t("labClearPrompt")}</button>
             </div>
             <div class="wfm-lab-modal-row">
-                <label>Positive</label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <label style="flex:1;">Positive</label>
+                    ${translateButtonsHtml("wfm-lab-modal-positive")}
+                </div>
                 <textarea id="wfm-lab-modal-positive" class="wfm-input" rows="3">${escapeHtml(v.positive || "")}</textarea>
             </div>
             <div class="wfm-lab-modal-row">
-                <label>Negative</label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <label style="flex:1;">Negative</label>
+                    ${translateButtonsHtml("wfm-lab-modal-negative")}
+                </div>
                 <textarea id="wfm-lab-modal-negative" class="wfm-input" rows="3">${escapeHtml(v.negative || "")}</textarea>
             </div>
             <div class="wfm-lab-modal-checkbox">
@@ -915,7 +922,10 @@ function _openCellModal(col, idx) {
             <button id="wfm-lab-modal-save" class="wfm-btn wfm-btn-primary">${t("save")}</button>
         </div>`;
     openModal(`${col} #${idx + 1}`, html);
-    if (col === "prompt") _wireLabPromptModalExtras(idx);
+    if (col === "prompt") {
+        _wireLabPromptModalExtras(idx);
+        attachTranslateButtons(document.getElementById("wfm-lab-modal-fields") || document);
+    }
     if (col === "checkpoint" || col === "vae") _wireLabValueFilter(col);
     if (col === "lora") _wireLabLoraFilter();
 
@@ -1452,6 +1462,10 @@ async function _runLabBatch() {
     // mid-batch (see comfyWorkflow.isVideoWorkflow and generate-tab.js's own use of this).
     const isVideoWf = comfyWorkflow.isVideoWorkflow(comfyUI.currentAnalysis);
 
+    // Settings -> Prompt Translation -> "Lab Run": translate each iteration's prompts
+    // (the plan itself keeps the original text).
+    const autoTranslate = await isAutoTranslateOn("lab");
+
     let completed = 0, failed = 0;
     let prevLoraInjection = null;
     try {
@@ -1465,6 +1479,20 @@ async function _runLabBatch() {
             const { workflow, seed, loraInjection } = _buildWorkflowForIteration(i, chainRef, prevLoraInjection);
             prevLoraInjection = loraInjection;
             const workflowExpanded = await _expandWildcardsInWorkflow(workflow);
+            if (autoTranslate) {
+                try {
+                    if (progressText) progressText.textContent = `[${i}/${_lab.batchCount}] ${t("promptTranslateRunning")}`;
+                    await translateWorkflowPrompts(workflowExpanded, comfyUI.currentAnalysis.prompt_nodes);
+                } catch (err) {
+                    // Do not send untranslated text - stop the batch like GenerateUI does.
+                    // The end-of-batch "stopped" toast replaces this one, so also keep the
+                    // reason in the progress line.
+                    showToast(t("promptTranslateError", err.message), "error");
+                    if (progressText) progressText.textContent = t("promptTranslateError", err.message);
+                    _aborted = true;
+                    break;
+                }
+            }
 
             try {
                 const { images } = await comfyUI.generate(workflowExpanded, {

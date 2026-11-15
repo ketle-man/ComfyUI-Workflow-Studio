@@ -8,6 +8,7 @@ import { syncJsonHighlight } from "./json-highlight.js";
 import { t } from "./i18n.js";
 import { escapeHtml, setupSearchClearBtn } from "./util.js";
 import { showToast } from "./app.js";
+import { translateButtonsHtml, attachTranslateButtons } from "./prompt-translate.js";
 
 // ── Latent Image preset state ─────────────────────────────
 const _LATENT_PRESET_KEY = "wfm_latent_presets";
@@ -645,6 +646,7 @@ export const comfyEditor = {
                         ${nodeOpts}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-revert" title="${t("revertPromptTitle")}">↺</button>
+                    ${translateButtonsHtml("wfm-prompt-pos-text")}
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-pos-apply" title="Apply (Alt+Click: Apply &amp; Generate)">Apply</button>
                 </div>
                 <textarea class="wfm-textarea" id="wfm-prompt-pos-text" rows="6">${positiveNodes[0]?.text || ""}</textarea>
@@ -657,6 +659,7 @@ export const comfyEditor = {
                         ${nodeOpts}
                     </select>
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-neg-revert" title="${t("revertPromptTitle")}">↺</button>
+                    ${translateButtonsHtml("wfm-prompt-neg-text")}
                     <button class="wfm-btn wfm-btn-sm" id="wfm-prompt-neg-apply">Apply</button>
                 </div>
                 <textarea class="wfm-textarea" id="wfm-prompt-neg-text" rows="6">${negativeNodes[0]?.text || ""}</textarea>
@@ -718,6 +721,9 @@ export const comfyEditor = {
             const textKey = promptNode?.textKey || "text";
             ta.value = wfNode.inputs[textKey] ?? "";
         });
+
+        // 🌐 native-language prompt translation (Settings → Prompt Translation)
+        attachTranslateButtons(el);
 
         // Track last focused prompt textarea for Paste button
         ["wfm-prompt-pos-text", "wfm-prompt-neg-text"].forEach((taId) => {

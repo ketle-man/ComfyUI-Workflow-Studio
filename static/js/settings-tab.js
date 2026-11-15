@@ -9,6 +9,7 @@ import { t, getLang, getSummaryLang, setLang, setSummaryLang, getLanguageOptions
 import { getSettings, readJsonStorage, escapeHtml } from "./util.js";
 import { DECISION_BACKENDS, getDecisionSettings, saveDecisionSettings, testDecisionConnection, listDecisionModels } from "./decision-client.js";
 import { initVramSettings } from "./vram-prepare.js";
+import { initPromptTranslateSettings, promptTranslateSettingsHtml } from "./prompt-translate-settings.js";
 
 const SETTINGS_KEY = "wfm_settings";
 
@@ -772,6 +773,9 @@ export async function initSettingsTab() {
             <button class="wfm-btn wfm-btn-primary wfm-btn-sm" id="wfm-settings-default-ckpt-save">${t("save")}</button>
         </details>
 
+        <!-- Prompt Translation (native language -> English, PLaMo 3 Translate via Ollama) -->
+        ${promptTranslateSettingsHtml(serverSettings)}
+
         <!-- CivitAI Settings -->
         <details class="wfm-settings-section">
             <summary class="wfm-settings-summary">${t("civitaiApiKeySetting")}</summary>
@@ -1227,6 +1231,9 @@ export async function initSettingsTab() {
             showToast(`${t("workflowsDirError")}: ${err.message}`, "error");
         }
     });
+
+    // --- Prompt translation ---
+    initPromptTranslateSettings(serverSettings, saveServerSettings);
 
     // --- Windows selector event loop (needs ComfyUI restart) ---
     document.getElementById("wfm-settings-selector-loop")?.addEventListener("change", async (e) => {

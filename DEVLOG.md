@@ -2,6 +2,39 @@
 
 ---
 
+## v0.9.9（2026-11-15）
+
+### プロンプト翻訳（自国語 → 英語、PLaMo 3 Translate）
+
+- 設定タブに「プロンプト翻訳」セクションを新設（既定オフ）。A1111 の prompt translator 拡張と同じく、英数字以外の文字を含む部分だけを翻訳し、カンマ・`(語句:1.2)`・`[ ]`・`{a|b}`・`<lora:...>`・`__wildcard__`・`embedding:`・`BREAK`/`AND` は保護する（`static/js/prompt-translate.js` の `splitPrompt`）。
+- 🌐ボタン（＋「原文」ボタン、Ctrl+Z も可）を GenerateUI の Positive/Negative、Lab プロンプトモーダル、Video Plan のブロックプロンプトに追加。
+- モデルは Ollama 経由。PLaMo は `/api/generate` に `raw:true` で PFML3 プロンプトを直接送る（モデルカード推奨、stop `<|plamo:tag|>`/`<|plamo:bos|>`）。PLaMo 以外の Ollama モデルは `/api/chat` ＋翻訳指示。PLaMo の4サイズはプリセットとして表示し、未取得なら「ダウンロード」（`/api/wfm/translate/pull`、プリセットのみ許可）。
+- 実行場所: GPU（1語句約0.1秒、翻訳後アンロード可）／CPU常駐（`num_gpu:0`＋`keep_alive:-1`、1語句約0.3秒、VRAM 0、GenerateUI表示時に `/warmup` で裏読み込み、デバイス・モデル切替や無効化時は `/unload`）。実測でコールド約4秒の大半は Ollama ランナー起動（CPUでも4.4秒）だったため、常駐でほぼ解消。
+- 「実行時に自動で翻訳する」: GenerateUI Generate（欄の文を置き換え）／Lab Run（各回のAPIワークフローのコピーを翻訳）／Video Plan Run（送信するプロンプトだけ翻訳）。Lab/Video はプランを原文のまま残す。失敗時は生成せず中断し、理由を進行状況欄に残す（終了トーストが上書きするため）。
+- サーバー側に翻訳結果の上限付きキャッシュ（1024件）。設定は `settings.json` の `prompt_translate_*`。
+- 実機確認: Z-Image で Generate 時自動翻訳と Lab Run（2枚）を実生成、Video Plan Run は `/prompt` 送信をブラウザで横取りして英訳の送信を確認。
+
+### 修正: PLaMo を選んだときの各翻訳ボタン
+
+- Prompt タブ AI アシスタント・AI TOOL タブ・サイドパネル A タブの翻訳は、指示文＋本文（または指示の system メッセージ）で送っていたため、PLaMo では指示文まで翻訳される／日本語⇔英語の自動切替になり ZH→EN・EN→ZH・自由入力が誤った言語で出ていた。PLaMo 系モデルのときは先頭 system に `[plamo-translate]` と `target_lang`/`source_lang` を書き本文だけを送る（モデルカードの Ollama/LM Studio 向け方式）。言語名（French・フランス語・français 等）を PLaMo の言語コードに変換する `static/js/plamo-chat.js` を追加（サイドパネルは import できないためインラインコピー）。
+- Prompt タブ AI アシスタントに応答待ちの表示を追加（初回はモデル読み込みで十数秒かかることがある）。
+
+### 修正: Video Plan のプロンプト等がテンプレートの値のまま送られていた
+
+- 新しいフロントエンドで保存したワークフローは、サブグラフのインスタンスノードに名前付きの値のコピー `widgets_values_named` を持ち、`convertUiToApi()` はそちらを優先する。`applyBlockToWorkflow` は `widgets_values` だけを書いていたため、Plan のプロンプト・Duration・Turbo 等が無視されていた（手元の動画テンプレート8本中7本）。書き込み後に `widgets_values_named` へ反映する `_syncNamedWidgetValues` を追加。修正後は12本中11本で反映（残る `minimaax_h3_fast.json` はプロンプトを LiveChatStream から配線で受けるため対象外）。
+
+### ヘルプ
+
+- 設定タブ（helpSettings26）と GenerateUI（helpGen33）にプロンプト翻訳を追加（en/ja/zh）。
+
+## v0.9.8（2026-11-14）
+
+### セキュリティ: クライアントから受け取るパスを解決前に検証
+
+- `py/config.py` に `is_safe_rel` / `resolve_untrusted` を追加。文字列だけで正規化・配下チェックし、UNC・ドライブ相対・NUL 混入を最初の `resolve()`/`exists()` より前に拒否（Windows では UNC を解決した時点でアカウント資格情報付きで相手ホストへ接続するため）。UNC は許可ルート自体が UNC の場合のみ許可。G'MIC 結果・Gallery のパス受け取りに適用（ea44cf4）。
+- 追加の強化: 受け付ける形をドライブレター絶対パス（Windows）または許可された UNC に限定し、NT デバイス形式（`\??\...`、`\.\...`）等を拒否。Eagle の SVG パスで配下チェック前に `os.path.isfile` していた箇所を修正（f39227a）。
+- ※v0.9.8 はリリース時に README バッジと DEVLOG の更新が漏れていたため、v0.9.9 で追記。
+
 ## v0.9.6（2026-11-12）
 
 ### マニュアル v0.9.6版（ja/en）

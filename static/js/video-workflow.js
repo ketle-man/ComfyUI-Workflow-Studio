@@ -397,4 +397,27 @@ export function applyBlockToWorkflow(clone, nodes, params) {
     } else if (nodes.disconnectUnsetFrames && lastFrameSlot !== -1) {
         _disconnectInput(clone, instanceNode, lastFrameSlot);
     }
+
+    // Workflows saved by newer frontends also carry a name-keyed copy of a subgraph
+    // instance's widget values (widgets_values_named), and convertUiToApi() prefers that
+    // copy. Without mirroring the writes above into it, the template's own prompt /
+    // duration / turbo values were sent instead of the Plan's (e.g. minimax_turbo.json).
+    new Set([instanceNode, promptNode, durationNode]).forEach(_syncNamedWidgetValues);
+}
+
+function _syncNamedWidgetValues(node) {
+    const named = node?.widgets_values_named;
+    const values = node?.widgets_values;
+    if (!named || typeof named !== "object" || !Array.isArray(values)) return;
+    const keys = Object.keys(named);
+    if (keys.length === values.length) {
+        // The frontend writes both from the same widget list, so the orders line up.
+        keys.forEach((k, i) => { named[k] = values[i]; });
+        return;
+    }
+    // Lengths differ: fall back to the outer widget inputs' order, the same mapping
+    // convertUiToApi() uses when there is no named copy.
+    (node.inputs || []).filter((inp) => inp.widget).forEach((inp, i) => {
+        if (i < values.length && Object.prototype.hasOwnProperty.call(named, inp.name)) named[inp.name] = values[i];
+    });
 }

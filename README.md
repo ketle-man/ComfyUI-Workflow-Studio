@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.6-green)
+![Version](https://img.shields.io/badge/version-0.9.9-green)
 
 ## Screenshots
 
@@ -257,6 +257,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 - **GenerateUI Model Tab Highlight** (v0.3.98) — pick the color used to mark Checkpoint/VAE/Diffusion Model/Text Encoder/ControlNet/Hypernetwork labels and the LoRA column header in GenerateUI's Model tab when the loaded workflow actually contains that type of node; default bright green; changes apply immediately, Reset Defaults restores it; saved to `localStorage` under `wfm_settings.modelTabActiveColor`; the same color and mechanism also drives the Video tab's field highlighting (v0.5.4, see above)
 - **Wildcard Integration** — link the WFS wildcard directory to ComfyUI-Impact-Pack's `wildcards/` directory (directory junction on Windows, symlink on other OS); existing WFS wildcard files are automatically migrated; requires [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)
 - **G'MIC-Qt Integration** — set the path to `gmic_qt.exe` for the Image Edit Filter tool; download G'MIC-Qt Standalone from `gmic.eu/download.html` (Windows: `gmic_qt-win64.zip`), extract anywhere, then enter the full path to `gmic_qt.exe` and click Save
+- **Prompt Translation (native language → English)** (v0.9.9) — off by default. Adds a 🌐 button to the GenerateUI Positive/Negative prompts, the Lab prompt modal and the Video Plan block prompt that translates only the parts written in your own language into English with a local Ollama model, keeping prompt syntax as it is (commas, `(word:1.2)`, `[ ]`, `{a|b}`, `<lora:...>`, `__wildcards__`, `embedding:name`, `BREAK`); "Original" restores the text. Model: [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b-GGUF) 0.8B / 2B / 8B / 31B (Download button pulls it into Ollama; free for personal and non-commercial use under the PLaMo Community License) or any other Ollama model. Source language auto-detect or one of 51 languages; run on GPU (about 0.1 s per phrase, optionally unloaded after each translation) or **CPU kept loaded** (about 0.3 s per phrase, no VRAM, preloaded when GenerateUI opens). **Translate automatically when running**: GenerateUI Generate (replaces the prompt text), Lab Run and Video Plan Run (translate only what is sent; the plan keeps your text); if translation fails nothing is generated. Server routes: `POST /api/wfm/translate`, `GET /api/wfm/translate/config|models`, `POST /api/wfm/translate/pull|warmup|unload`
 - **Language** — English / Japanese / Chinese
 
 </details>
@@ -650,7 +651,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ### Optional
 
-- **[Ollama](https://ollama.com/)** — for AI chat assistant, translation, and VLM features
+- **[Ollama](https://ollama.com/)** — for AI chat assistant, translation, and VLM features; also runs PLaMo 3 Translate for Settings → Prompt Translation (`ollama pull hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M`, or the Download button there)
 - **[LM Studio](https://lmstudio.ai/)** — alternative backend for translation and VLM (OpenAI-compatible API)
 - **[Lemonade Server](https://lemonade-server.ai/)** — alternative backend for translation, chat, and VLM (OpenAI-compatible API)
 - **[Unsloth](https://unsloth.ai/)** — alternative backend for translation, chat, and VLM (OpenAI-compatible API); needs an API key set via `UNSLOTH_API_KEY` in a `.env` file, or Unsloth's Keyless API access → "Chat and inference" turned on — `pip install -r requirements.txt` for `python-dotenv`

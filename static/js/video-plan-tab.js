@@ -25,6 +25,7 @@ import { isVideoFilename, extractLastFrameBlob } from "./video-utils.js";
 import { locateVideoModelNodes, readTemplateDefaults, applyBlockToWorkflow } from "./video-workflow.js";
 import { VTEMP_GROUP } from "./gallery-tab.js";
 import { setResultPreview } from "./video-preview.js";
+import { translateButtonsHtml, attachTranslateButtons, isAutoTranslateOn, translatePrompt, needsTranslation } from "./prompt-translate.js";
 
 const VIDEO_BLOCK_COLORS = ["#4caf7d", "#3b4b8a", "#8e5cd9", "#e0c341", "#4ac0d9", "#9ad14b", "#e08a3c", "#d9527a"];
 const VIDEO_PLAN_PREFIX = "ws_videoplan_";
@@ -277,7 +278,10 @@ function _blockEditorHtml(block, isFirstBlock) {
                 <span class="wfm-video-color-swatch" style="background:${escapeHtml(block.color)}"></span>
                 <span>color</span>
             </div>
-            <label id="wfm-video-block-prompt-label">Prompt</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <label id="wfm-video-block-prompt-label" style="flex:1;">Prompt</label>
+                ${translateButtonsHtml("wfm-video-block-prompt")}
+            </div>
             <textarea id="wfm-video-block-prompt" class="wfm-textarea" rows="8">${escapeHtml(block.prompt || "")}</textarea>
         </div>
     `;
@@ -385,6 +389,9 @@ function _renderBlockEditor() {
     document.getElementById("wfm-video-block-last-clear")?.addEventListener("click", () => _clearBlockImage("last"));
 
     document.getElementById("wfm-video-block-prompt")?.addEventListener("input", (e) => { block.prompt = e.target.value; });
+    // 🌐 native-language translation (Settings → Prompt Translation); translating fires
+    // "input", so block.prompt follows the translated text.
+    attachTranslateButtons(document.getElementById("wfm-video-block-prompt")?.closest(".wfm-video-block-prompt-col") || document);
 
     // Durationの入力欄はtopbarのbasesettings行に固定配置されている（ブロックエディタの
     // innerHTMLと違って再生成されない）ため、ここでは現在選択中ブロックの値を反映するだけ。
@@ -707,6 +714,10 @@ async function _runVideoPlanBatch() {
     const progressBar = document.getElementById("wfm-video-plan-progress-bar");
     const progressText = document.getElementById("wfm-video-plan-progress-text");
 
+    // Settings -> Prompt Translation -> "Video Plan Run": translate each block's prompt
+    // when sending it (the plan itself keeps the original text).
+    const autoTranslate = await isAutoTranslateOn("video");
+
     let completed = 0, failed = 0;
     let prevGeneratedLastFrameRef = null;
 
@@ -727,9 +738,24 @@ async function _runVideoPlanBatch() {
                 break;
             }
 
+            let prompt = block.prompt;
+            if (autoTranslate && needsTranslation(prompt)) {
+                try {
+                    if (progressText) progressText.textContent = `[${i + 1}/${total}] ${t("promptTranslateRunning")}`;
+                    prompt = await translatePrompt(prompt);
+                } catch (err) {
+                    // The end-of-batch "stopped" toast replaces this one, so also keep the
+                    // reason in the progress line.
+                    showToast(t("promptTranslateError", err.message), "error");
+                    if (progressText) progressText.textContent = t("promptTranslateError", err.message);
+                    _aborted = true;
+                    break;
+                }
+            }
+
             const firstImageFilename = await _resolveFirstImage(block, i, prevGeneratedLastFrameRef);
             applyBlockToWorkflow(clone, nodes, {
-                prompt: block.prompt,
+                prompt,
                 duration: block.duration,
                 aspectRatio: _plan.base_settings.aspect_ratio,
                 megapixels: _plan.base_settings.megapixels,

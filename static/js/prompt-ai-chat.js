@@ -46,30 +46,37 @@ function _stripThinkingTags(text) {
 }
 
 // Ollamaは `think` (bool) と `options.num_predict`、OpenAI互換は `max_tokens` で制御
-function _applyGenOptions(body, backend, cfg) {
+// extra: { temperature, stop, noThink } — 翻訳専用モデル(PLaMo)向けの追加指定
+function _applyGenOptions(body, backend, cfg, extra = {}) {
     if (backend === "ollama") {
-        body.think = !!cfg.thinkingMode;
-        if (cfg.maxTokens > 0) body.options = { ...(body.options || {}), num_predict: cfg.maxTokens };
-    } else if (cfg.maxTokens > 0) {
-        body.max_tokens = cfg.maxTokens;
+        if (!extra.noThink) body.think = !!cfg.thinkingMode;
+        const opts = { ...(body.options || {}) };
+        if (cfg.maxTokens > 0) opts.num_predict = cfg.maxTokens;
+        if (extra.temperature !== undefined) opts.temperature = extra.temperature;
+        if (extra.stop) opts.stop = extra.stop;
+        if (Object.keys(opts).length) body.options = opts;
+    } else {
+        if (cfg.maxTokens > 0) body.max_tokens = cfg.maxTokens;
+        if (extra.temperature !== undefined) body.temperature = extra.temperature;
+        if (extra.stop) body.stop = extra.stop;
     }
     return body;
 }
 
-async function chatWithAi(model, messages) {
+async function chatWithAi(model, messages, extra = {}) {
     const cfg = getPromptAiConfig();
     const { backend, url } = cfg;
     if (backend === "ollama") {
         const res = await fetch(`${url}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(_applyGenOptions({ model, messages, stream: false }, backend, cfg)),
+            body: JSON.stringify(_applyGenOptions({ model, messages, stream: false }, backend, cfg, extra)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const text = (await res.json()).message?.content || "";
         return cfg.thinkingMode ? text : _stripThinkingTags(text);
     } else if (backend === "unsloth") {
-        const body = _applyGenOptions({ model, messages: _toOpenAiMessages(messages), stream: false }, backend, cfg);
+        const body = _applyGenOptions({ model, messages: _toOpenAiMessages(messages), stream: false }, backend, cfg, extra);
         const data = await unslothProxy(url, "/v1/chat/completions", "POST", body);
         const msg = data.choices?.[0]?.message;
         // Unslothはreasoningを別フィールドで返すため<think>タグに畳んで表示に混ぜる
@@ -80,7 +87,7 @@ async function chatWithAi(model, messages) {
         const res = await fetch(`${url}/v1/chat/completions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(_applyGenOptions({ model, messages: _toOpenAiMessages(messages), stream: false }, backend, cfg)),
+            body: JSON.stringify(_applyGenOptions({ model, messages: _toOpenAiMessages(messages), stream: false }, backend, cfg, extra)),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const text = (await res.json()).choices?.[0]?.message?.content || "";
@@ -139,6 +146,25 @@ function addChatMessage(role, content) {
 
     chat.appendChild(msg);
     chat.scrollTop = chat.scrollHeight;
+}
+
+// 応答待ちの間だけ表示するプレースホルダ（初回はモデル読み込みで十数秒かかることがある）
+function _addPendingMessage(text) {
+    const chat = document.getElementById("wfm-ollama-chat");
+    if (!chat) return null;
+    const msg = document.createElement("div");
+    msg.className = "wfm-ollama-msg assistant wfm-ollama-pending";
+    const roleLabel = document.createElement("div");
+    roleLabel.className = "wfm-ollama-msg-role";
+    roleLabel.textContent = "AI";
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "wfm-ollama-msg-content";
+    contentDiv.style.opacity = "0.6";
+    contentDiv.textContent = text;
+    msg.append(roleLabel, contentDiv);
+    chat.appendChild(msg);
+    chat.scrollTop = chat.scrollHeight;
+    return msg;
 }
 
 function clearChat() {
@@ -243,13 +269,16 @@ async function sendMessage() {
     const sendBtn = document.getElementById("wfm-ollama-send-btn");
     if (sendBtn) sendBtn.disabled = true;
 
+    const pending = _addPendingMessage("…");
     try {
         const reply = await chatWithAi(model, ollamaState.chatHistory);
+        pending?.remove();
         addChatMessage("assistant", reply);
         ollamaState.chatHistory.push({ role: "assistant", content: reply });
         ollamaState.attachedImage = null;
         updateAttachmentDisplay();
     } catch (err) {
+        pending?.remove();
         showToast(t("error") + ": " + err.message, "error");
     } finally {
         if (sendBtn) sendBtn.disabled = false;
@@ -281,7 +310,24 @@ async function sendTranslate(direction) {
         .map((id) => document.getElementById(id));
     btns.forEach((b) => { if (b) b.disabled = true; });
 
+    const pending = _addPendingMessage(t("aiTranslating"));
     try {
+        // PLaMo Translate is a translation-only model: anything in the user message is
+        // treated as source text, so an instruction prompt gets translated too, and without
+        // an explicit target it only switches between Japanese and English (ZH→EN / EN→ZH
+        // came out in Japanese). Per its model card, Ollama/LM Studio clients pass the
+        // languages in a leading "[plamo-translate]" system message and send the text alone.
+        if (/plamo/i.test(model)) {
+            const [src, dst] = { ja2en: ["ja", "en"], en2ja: ["en", "ja"], zh2en: ["zh", "en"], en2zh: ["en", "zh"] }[direction];
+            const reply = await chatWithAi(model, [
+                { role: "system", content: `[plamo-translate]\ntarget_lang=${dst}\nsource_lang=${src}` },
+                { role: "user", content: text },
+            ], { temperature: 0, stop: ["<|plamo:tag|>", "<|plamo:bos|>"], noThink: true });
+            pending?.remove();
+            addChatMessage("assistant", reply.replace(/<\|plamo:[a-z_]+\|>/g, "").trim());
+            return;
+        }
+
         const prompts = {
             ja2en: `Translate the following Japanese text into English. Output only the translated text, nothing else.\n\n${text}`,
             en2ja: `以下の英語のテキストを日本語に翻訳してください。翻訳結果のみを出力し、他の説明は不要です。\n\n${text}`,
@@ -291,8 +337,10 @@ async function sendTranslate(direction) {
         const prompt = prompts[direction];
 
         const reply = await chatWithAi(model, [{ role: "user", content: prompt }]);
+        pending?.remove();
         addChatMessage("assistant", reply);
     } catch (err) {
+        pending?.remove();
         showToast(t("error") + ": " + err.message, "error");
     } finally {
         btns.forEach((b) => { if (b) b.disabled = false; });

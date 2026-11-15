@@ -4035,6 +4035,39 @@ const renderInfoTab = (container) => {
 
 const AI_SETTINGS_KEY = "wfm_ai_settings";
 const AI_LANG_NAMES = { ja: "Japanese", en: "English", zh: "Chinese" };
+
+// PLaMo Translate over chat — inline copy of static/js/plamo-chat.js (this file cannot import
+// from static/). PLaMo treats an instruction system prompt as context and the user text as the
+// source, so the languages go in a leading "[plamo-translate]" system message instead.
+const AI_PLAMO_LANGS = ["ar","az","be","bg","bn","ca","ceb","de","en","es","et","eu","fa","fr","gu","he","hi","hr","hu","hy","id","it","ja","jv","ka","kk","km","ko","lt","lv","ml","mr","ms","my","ne","nl","pa","pl","ru","si","sk","sl","sr","sw","ta","te","th","tl","ur","uz","vi","zh"];
+let _aiPlamoNameMap = null;
+function aiIsPlamoModel(model) { return /plamo/i.test(model || ""); }
+function aiPlamoLangCode(nameOrCode) {
+    const key = (nameOrCode || "").trim().toLowerCase();
+    if (!key) return "";
+    if (!_aiPlamoNameMap) {
+        _aiPlamoNameMap = new Map();
+        for (const code of AI_PLAMO_LANGS) {
+            _aiPlamoNameMap.set(code, code);
+            for (const loc of ["en", "ja", "zh", navigator.language, code]) { // `code` adds the endonym
+                try {
+                    const name = new Intl.DisplayNames([loc], { type: "language" }).of(code);
+                    if (name) _aiPlamoNameMap.set(name.toLowerCase(), code);
+                } catch { /* Intl.DisplayNames unavailable */ }
+            }
+        }
+        [["chinese", "zh"], ["中文", "zh"], ["中国語", "zh"], ["filipino", "tl"], ["tagalog", "tl"], ["persian", "fa"], ["farsi", "fa"]]
+            .forEach(([k, v]) => _aiPlamoNameMap.set(k, v));
+    }
+    return _aiPlamoNameMap.get(key) || _aiPlamoNameMap.get(key.split(/[-_]/)[0]) || "";
+}
+function aiBuildPlamoMessages(text, src, dst) {
+    const dstCode = aiPlamoLangCode(dst);
+    if (!dstCode) throw new Error(`PLaMo Translate does not support the target language "${dst}"`);
+    const srcCode = aiPlamoLangCode(src);
+    const header = `[plamo-translate]\ntarget_lang=${dstCode}` + (srcCode && srcCode !== dstCode ? `\nsource_lang=${srcCode}` : "");
+    return [{ role: "system", content: header }, { role: "user", content: text }];
+}
 const AI_BACKEND_DEFAULT_URLS = {
     ollama: "http://localhost:11434",
     lmstudio: "http://localhost:1234",
@@ -4565,7 +4598,7 @@ const setupAiHandlers = (container) => {
         const systemPrompt = `You are a professional translator. Translate the text the user sends${fromPart} into ${dstName}. `
             + `Reply with ONLY the translated text and nothing else: no explanations, no notes, no preamble like "Here is the translation:", `
             + `no surrounding quotes, and do not repeat or echo the original text.`;
-        const messages = [{ role: "system", content: systemPrompt }, { role: "user", content: text }];
+        const plamo = aiIsPlamoModel(model);
 
         const transBtn = container.querySelector("#wfm-nlp-ai-trans-btn");
         const statusEl = container.querySelector("#wfm-nlp-ai-status");
@@ -4576,8 +4609,12 @@ const setupAiHandlers = (container) => {
         outputEl.value = "";
 
         try {
-            const result = await aiCallChat(url, backend, model, messages, c);
-            const cleaned = cleanAiTranslationOutput(result);
+            const messages = plamo
+                ? aiBuildPlamoMessages(text, srcName, dstName)
+                : [{ role: "system", content: systemPrompt }, { role: "user", content: text }];
+            const callCfg = plamo ? { ...c, thinkingMode: false } : c; // PLaMo has no thinking mode
+            const result = await aiCallChat(url, backend, model, messages, callCfg);
+            const cleaned = plamo ? result.replace(/<\|plamo:[a-z_]+\|>/g, "").trim() : cleanAiTranslationOutput(result);
             outputEl.value = cleaned;
             statusEl.textContent = "完了";
             statusEl.className = "wfm-nlp-ai-status wfm-nlp-ai-ok";

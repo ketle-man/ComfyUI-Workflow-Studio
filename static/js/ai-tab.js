@@ -15,6 +15,7 @@ import {
     imageUrlToJpegBase64, svgToJpegBase64, parseSvgParts, svgChecklist, DEFAULT_JUDGE_MODEL,
 } from "./chat-image-check.js";
 import { renderMarkdown } from "./chat-markdown.js";
+import { isPlamoModel, buildPlamoMessages, cleanPlamoOutput } from "./plamo-chat.js";
 import { buildWorkflowDetailContext, buildLogsContext } from "./chat-context.js";
 import { openLabPlanData } from "./lab-tab.js";
 import { listOcrModels, supportsBoxes, runOcr, renderOcrOverlay } from "./ocr-tools.js";
@@ -245,6 +246,8 @@ async function callLLM(url, backend, model, prompt, settings = {}) {
 function buildTranslationMessages(text, srcLang, dstLang, settings) {
     const srcName = srcLang === "free" ? (settings.freeSrcLang || "").trim() : LANG_NAMES[srcLang];
     const dstName = dstLang === "free" ? (settings.freeDstLang || "English").trim() || "English" : LANG_NAMES[dstLang];
+    // PLaMo Translate ignores instruction prompts (see plamo-chat.js)
+    if (isPlamoModel(settings.model)) return buildPlamoMessages(text, srcName, dstName);
     const fromPart = srcName ? ` from ${srcName}` : "";
     const system = `You are a professional translator. Translate the text the user sends${fromPart} into ${dstName}. `
         + `Reply with ONLY the translated text and nothing else: no explanations, no notes, no preamble like "Here is the translation:", `
@@ -342,8 +345,11 @@ function initTranslateTab() {
 
         try {
             const messages = buildTranslationMessages(text, srcLangSel.value, dstLangSel.value, settings);
-            const { content } = await callChat(url, backend, model, messages, undefined, settings);
-            const cleaned = cleanTranslationOutput(content);
+            const plamo = isPlamoModel(model);
+            // PLaMo has no thinking mode and translates deterministically at temperature 0
+            const callSettings = plamo ? { ...settings, thinkingMode: false, temperature: 0 } : settings;
+            const { content } = await callChat(url, backend, model, messages, undefined, callSettings);
+            const cleaned = plamo ? cleanPlamoOutput(content) : cleanTranslationOutput(content);
             outputEl.value = cleaned;
 
             if (srcLangSel.value !== dstLangSel.value && looksUntranslated(text, cleaned)) {

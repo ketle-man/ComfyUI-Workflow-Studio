@@ -12,6 +12,7 @@ import { initFeederTab, refreshFeederNodeList } from "./feeder-tab.js";
 import { initLabTab, refreshLabLiveDefaults } from "./lab-tab.js";
 import { getSettings, readJsonStorage, escapeHtml, getEagleSettings, saveToEagle } from "./util.js";
 import { isVideoFilename } from "./video-utils.js";
+import { autoTranslateBeforeGenerate } from "./prompt-translate.js";
 
 // ============================================
 // Gallery Metadata - ワークフロー保存
@@ -2031,6 +2032,22 @@ async function handleGenerate(workflowOverride = null, genOptions = {}) {
         return;
     }
     if (comfyUI.generating) return;
+
+    // 設定「プロンプト翻訳」で生成前の自動翻訳がオンなら、Positive/Negative欄の自国語部分を英語へ置き換えてから同期する。
+    // 失敗時は未翻訳のまま生成しないよう中断する。
+    if (!workflowOverride) {
+        const genBtnEl = document.getElementById("wfm-gen-generate-btn");
+        if (genBtnEl) genBtnEl.disabled = true;
+        try {
+            await autoTranslateBeforeGenerate();
+        } catch (err) {
+            if (genBtnEl) genBtnEl.disabled = false;
+            const progressText = document.getElementById("wfm-gen-progress-text");
+            if (progressText) progressText.textContent = "";
+            showToast(t("promptTranslateError", err.message), "error");
+            return;
+        }
+    }
 
     // オーバーライド実行時は GenerateUI 側の表示中プロンプトを別ワークフローへ誤って書き込まないよう同期をスキップする
     if (!workflowOverride) comfyEditor.syncToWorkflow();

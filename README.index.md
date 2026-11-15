@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.6-green)
+![Version](https://img.shields.io/badge/version-0.9.9-green)
 
 ## Features (tab -> feature names)
 
@@ -50,7 +50,7 @@ Setting / Results / Plan JSON sub-panels, Per-column keyframes, Model column —
 3-column layout, AI chat assistant, Image attachment, Translation, Prompt presets, Preset Manager, Group management, Clipboard copy, GenUI Set, Wildcard/Style tab bar, Wildcard input toolbar, Wildcard file manager, Style manager, Form / Table toggle, Table view — Presets / Presets Group / Wildcards / Style
 
 ### Settings Tab
-2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, VRAM Management (Ollama), Video Playback Volume, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Language
+2-column layout, Collapsible sections, Theme selection, Theme customization, Workflows directory, Gallery output directory, Eagle connection, CivitAI Host, CivitAI API Key, Default workflow, Default Checkpoint, VRAM Management (Ollama), Video Playback Volume, Data Management, Text Size, RAW JSON Colors, GenerateUI Model Tab Highlight, Wildcard Integration, G'MIC-Qt Integration, Prompt Translation (native language → English), Language
 
 ### Gallery Tab (v0.3.44)
 Output / ImagePrompt / Style_Catalog / Metadata sub-tabs, Image browser, Folder tree root label, Thumbnail / Table views, Folder management, File operations, Download, MP4 video support, MP4 embedded metadata, WebM support, Embedded metadata reading fixes, Audio support, File conversion, Move To folder filter, Semantic Search, Audio waveform colors, Info tab: dimensions & duration, Multi-select, Image Compare, Prompt search, Server-side filtering, Group management, Thumbnail F button, Favorites, Detail panel, Prompt tab, Nanobanana tab, Gemini / Nano Banana nodes, MOSS-Image in GenerateUI, Faster GenerateUI Check / conversion, Partner API nodes in GenerateUI, Workflow viewer, GenUI button, Image Edit button, Send GenUI Image button, Send to LI node button, Send to LV node button, Send CC Layout / Send CC Image buttons, Search clear (✕), Clear all filters (✕ Clear), Workflow auto-save, Output folder configurable, SVG file support, PSD file support, 3D model support, Performance
@@ -171,7 +171,7 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 
 ### Optional
 
-- **[Ollama](https://ollama.com/)** — for AI chat assistant, translation, and VLM features
+- **[Ollama](https://ollama.com/)** — for AI chat assistant, translation, and VLM features; also runs PLaMo 3 Translate for Settings → Prompt Translation (`ollama pull hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M`, or the Download button there)
 - **[LM Studio](https://lmstudio.ai/)** — alternative backend for translation and VLM (OpenAI-compatible API)
 - **[Lemonade Server](https://lemonade-server.ai/)** — alternative backend for translation, chat, and VLM (OpenAI-compatible API)
 - **[Unsloth](https://unsloth.ai/)** — alternative backend for translation, chat, and VLM (OpenAI-compatible API); needs an API key set via `UNSLOTH_API_KEY` in a `.env` file, or Unsloth's Keyless API access → "Chat and inference" turned on — `pip install -r requirements.txt` for `python-dotenv`
