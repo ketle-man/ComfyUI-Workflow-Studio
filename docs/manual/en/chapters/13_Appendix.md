@@ -34,6 +34,7 @@ The main terms that appear in this book, in alphabetical order.
 | Node set | Several nodes and their connections saved together | Chapter 9 |
 | OCR | Reading the text shown in an image | Chapter 10 |
 | Ollama | Software for running local AI easily | Chapter 10 |
+| PLaMo 3 Translate | A translation AI model by Preferred Networks (PFN), used by Prompt Translation | Chapter 5 |
 | Port number | A number for distinguishing which software to communicate with inside one computer | Chapter 2 |
 | Positive prompt | A prompt where you write what you want drawn | Chapter 7 |
 | Preset | A pair of positive and negative prompts saved together | Chapter 7 |
@@ -122,6 +123,7 @@ The main terms that appear in this book, in alphabetical order.
 | --- | --- | --- |
 | Civitai (https://civitai.com/) | Getting models, fetching information | Chapter 6 |
 | Ollama (https://ollama.com/) | Local AI | Chapter 10 |
+| PLaMo 3 Translate (https://huggingface.co/pfnet/plamo-3-translate-2b-GGUF) | Translation model for Prompt Translation | Chapter 5 |
 | LM Studio (https://lmstudio.ai/) | Local AI | Chapter 10 |
 | Lemonade Server (https://lemonade-server.ai/) | Local AI | Chapter 10 |
 | Eagle (https://eagle.cool/) | Image-management software | Chapter 8 |

@@ -232,9 +232,122 @@ The workflows you can use in GenerateUI have increased as follows. They are used
 > The Metadata tab and the side panel's **I** tab can also read images made with Nano Banana (v0.8.5 and later).
 > The prompt appears as one whole entry, not split into Positive/Negative.
 
+## 5-10 Writing prompts in your own language (Prompt Translation, v0.9.9 and later)
+
+Most image generation models were trained on English prompts.
+With **Prompt Translation** turned on, you can write a prompt in your own language and turn it into English with one button.
+Like the translation extensions for Stable Diffusion web UI (A1111), it translates **only the parts written in your own language**.
+
+Translation uses AI running on your PC (**Ollama**) and the translation model **PLaMo 3 Translate**, which supports 51 languages besides English (Japanese, Chinese, Korean, French, German, Spanish, Russian, Thai, Vietnamese and more).
+Your prompts are not sent to an online translation service.
+
+> **What you need first**
+> Install and start **Ollama** (Chapter 10, section 10-1). The translation model can be downloaded from the Settings screen (see below).
+
+### Preparation: turn it on in Settings
+1. In the **Settings** tab, open **Prompt Translation (native language -> English)**.
+2. Check **Enable prompt translation in GenerateUI**.
+3. Choose the model in **Translation model**. Models not yet in Ollama are marked **(not downloaded)**; choose one and press **Download** to pull it into Ollama.
+4. Press **Test**. When the sample prompt comes back in English, you are ready.
+
+PLaMo 3 Translate comes in four sizes.
+
+| Model | Size | Notes |
+| --- | --- | --- |
+| 0.8B | about 0.6 GB | Fastest. Enough for short tags |
+| 2B | about 1.8 GB | Recommended. Translates sentences accurately too |
+| 8B | about 5.3 GB | Higher quality |
+| 31B | about 19.5 GB | Highest quality, for PCs with plenty of memory |
+
+> **Tip**
+> 0.8B sometimes shifts the meaning of a sentence (for example, "the camera follows from behind" in Japanese became "her camera following behind").
+> If you often write prompts as sentences, such as video prompts, choose 2B or larger.
+
+The other settings are:
+
+| Setting | What it does |
+| --- | --- |
+| Source language | Usually leave it at **Auto-detect**. If you always write in one language, choosing it makes detection certain |
+| Ollama URL | Ollama's address. Blank means `http://localhost:11434` |
+| Where to run the translation model | **GPU** or **CPU, kept loaded** (see below) |
+| Translate automatically when running | Translates automatically when you press Generate and so on (see below) |
+
+Other Ollama models (such as the one you use for chat) can also be chosen under **Other Ollama models**. They are sent the text with a "translate into English" instruction.
+
+### Where to run the translation model
+| Where | Time per phrase | Good for |
+| --- | --- | --- |
+| GPU (fastest per translation, uses VRAM) | about 0.1 s | GPUs with VRAM to spare |
+| CPU, kept loaded (no VRAM, no reload wait) | about 0.2-0.3 s | Keeping all VRAM for image generation |
+
+On GPU, turning on **Unload the translation model from VRAM after translating** frees VRAM before image generation (on by default).
+However, every translation then waits **about 4 seconds** while the model loads again.
+
+**CPU, kept loaded** keeps the model in system RAM (about 2.7 GB for 2B).
+It uses no VRAM and is loaded in the background when a workflow is loaded into GenerateUI, so even the first translation does not wait.
+
+> **Tip**
+> When Ollama loads another model (for example the AI TOOL chat model), it may drop the resident translation model.
+> It then loads again automatically at the next translation (that one translation takes a few seconds).
+
+### Using it: translate with the globe button
+With Prompt Translation on, a **globe (🌐)** button appears to the right of the **↺** button of Positive Prompt and Negative Prompt on the Input tab.
+
+1. Write the prompt in your own language. Mixing in English tags is fine.
+
+   ```
+   masterpiece, 夕焼けの海辺に立つ少女、(長い黒髪:1.2), <lora:test_lora:0.8>, {猫耳|狐耳}, 水彩画風
+   ```
+
+2. Press the globe button.
+3. Only the parts in your language become English.
+
+   ```
+   masterpiece, A girl standing by the seaside at sunset, (long black hair:1.2), <lora:test_lora:0.8>, {cat ears|fox ears}, watercolor style
+   ```
+
+The following prompt syntax is kept as it is, without translating:
+
+- Commas and line breaks
+- Weights `(word:1.2)` and `[ ]`
+- Random choice `{A|B}` and wildcards `__name__`
+- LoRA `<lora:name:0.8>` and `embedding:name`
+- `BREAK` and `AND`
+
+After translating, an **Original** button appears. Press it to go back to the text before translation (Ctrl+Z also works).
+
+> **Note**
+> Only parts that contain letters outside ASCII are translated; English-only parts stay as they are.
+> Conversely, an English word that contains an accented letter such as é is translated too.
+
+### Translating automatically when running
+Under **Translate automatically when running** in Settings, checkboxes choose when to translate automatically.
+
+- **GenerateUI - Generate**: pressing Generate replaces the text of the Positive/Negative fields with the translation, then generates
+- **GenerateUI Lab - Run**: a Lab run translates only what is sent. The Lab plan keeps your text
+- **Video Plan - Run**: a Video tab Plan run translates only the prompts that are sent. The plan keeps your text
+
+Because Lab and Video Plan keep your text, you can keep editing the plan in your own language.
+The information saved with the generated images and videos (metadata) records the English prompt that was actually sent.
+
+> **Note**
+> If translation fails while automatic translation is on (for example, Ollama is not running), generation stops so that untranslated text is not sent.
+> For Lab and Video Plan, the reason is shown in the progress line.
+
+### Also in the Lab modal and Video Plan
+The globe button is also on these fields, and works the same way:
+
+- The Positive and Negative fields of the screen that opens when you double-click a cell in Lab's prompt column (5-7)
+- The **Prompt** field of a block in the Video tab's Plan subtab (Chapter 11, section 11-4)
+
+> **Tip**
+> PLaMo 3 Translate is free for personal use, hobbies, research and other non-commercial use (PLaMo Community License).
+> Check the license terms before using it commercially.
+
 > **Summary of this chapter (second half)**
 > - With the Batch subtab, you can generate in bulk while changing the model, prompt, sampler and so on, one kind at a time
 > - Choose the kind with the Batch Queue column checkbox and start with Generate. Turn the check off when done
 > - Feeder is a feature that feeds many images one at a time into a workflow. A dedicated node is required
 > - Lab is an advanced feature that can switch several settings at separate timings
 > - Partner API nodes (Nano Banana and others) run once `COMFY_API_KEY` is set in `.env`. They consume credits
+> - With Prompt Translation on, the globe button turns a prompt written in your own language into English. Prompt syntax is kept, and Generate, Lab and Video Plan runs can translate automatically

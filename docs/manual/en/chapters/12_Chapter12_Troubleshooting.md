@@ -88,6 +88,15 @@ In the **Model** subtab of GenerateUI, choose the model you want to use again an
 
 If you always want to use the same model, the **Default Checkpoint** in the Settings tab is handy (Chapter 11, section 11-5).
 
+### The Prompt Translation globe button does not appear or translation fails
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| No globe button | Prompt Translation is off | In the Settings tab, open **Prompt Translation (native language -> English)** and check **Enable prompt translation in GenerateUI** (Chapter 5, section 5-10) |
+| "Translation error" appears | Ollama is not running, or the translation model is not in Ollama | Start Ollama. If **Translation model** shows **(not downloaded)**, press **Download** |
+| Nothing changes ("Nothing to translate") | The prompt is English (ASCII) only | Only parts with letters outside ASCII are translated; English parts stay as they are |
+| Generation does not start with automatic translation on | Translation failed, so generation stopped instead of sending untranslated text | Same fix as "Translation error". In Lab and Video Plan the reason is shown in the progress line |
+| The translation is off | Small models (0.8B) can shift the meaning of sentences | Choose 2B or larger in **Translation model** |
+
 ### It does not become the same image even with the same settings
 Is the seed mode in the generate panel set to **Random**?
 To make the same image, you need to set the seed to **Workflow** (use the workflow's seed as it is) or **Fixed** (fix it to the value in the Seed field).

@@ -223,6 +223,10 @@ With the buttons shown below the translation result, you can use the result.
 
 When you want to know the meaning of an English prompt, you can conversely translate it with **EN->JA**.
 
+> **Tip**
+> To translate directly in GenerateUI's prompt fields, **Prompt Translation** (the globe button) in Chapter 5, section 5-10 is handy. It turns only the parts in your language into English and keeps weights and LoRA tags.
+> The AI Assistant's translation can also use the translation model **PLaMo 3 Translate** (v0.9.9 and later; before that, the instruction text was translated too, and ZH->EN came out in Japanese).
+
 ### Making prompts while consulting the AI
 Write a question in the input box and press **Send** (or the Enter key) to chat with the AI.
 

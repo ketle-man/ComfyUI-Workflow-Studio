@@ -110,6 +110,11 @@ The screen is divided into four parts, all shown at the same time.
 > Small models sometimes return the original text as it is without translating.
 > In that case a message says the model returned the original text, so try another model.
 
+> **Tip**
+> You can also choose the translation model **PLaMo 3 Translate** (Chapter 5, section 5-10) as the model in Settings (v0.9.9 and later).
+> Besides Japanese, English and Chinese, **Free** accepts language names such as French, フランス語 or français for any language PLaMo supports. A target language PLaMo does not support (such as Portuguese) gives an error.
+> The same applies to the translation in WS Library's A tab.
+
 ### Chat
 Talk in the input box and send with **Enter** (**Shift + Enter** for a line break).
 It remembers the flow of the conversation, so follow-up requests such as "make it a brighter mood" also work.

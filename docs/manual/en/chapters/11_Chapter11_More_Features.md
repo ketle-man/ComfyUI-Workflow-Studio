@@ -155,6 +155,14 @@ You load a matching workflow with **Load in Video** in the Workflow tab and use 
 
 There are also the **Frame** feature, which saves a favorite scene of a video as a still image, and **GIF**, which converts a video to an animated GIF.
 
+> **Tip**
+> The **Prompt** field of a Plan block also has the Prompt Translation globe button (Chapter 5, section 5-10).
+> With **Video Plan - Run** turned on in Settings, you can run the plan with prompts in your own language and send only English.
+
+> **Note**
+> Up to v0.9.8, with workflows saved by newer ComfyUI versions, the prompt, length (Duration) and Turbo settings entered in Plan were not applied, and the values saved in the workflow were used instead (fixed in v0.9.9).
+> Because Plan values are applied now, running the same plan as before may give different results.
+
 ### Register as Asset and audio conversion (v0.8.9 and later)
 - **Register as Asset** - a button in the Video Source panel on the left. It copies a video from your PC into the output folder (`output/video`) and registers it in the "Video Assets" group.
   Once registered, it appears in the Asset subtab list and can be used in Edit and elsewhere.
@@ -203,6 +211,7 @@ Here we mainly introduce items not covered in earlier chapters.
 | CivitAI API Key | For fetching Civitai information (optional) | Chapter 6 |
 | Eagle integration (optional) | Automatically save generated images to Eagle | Chapter 8 |
 | VRAM Management (Ollama) | Unload AI models from memory before generation | Chapter 10 |
+| Prompt Translation (native language -> English) | Turn prompts in your own language into English with the globe button or automatic translation when running | Chapter 5, 5-10 |
 | Data Management | Backing up and restoring settings and data | Below |
 
 ### Default Workflow
