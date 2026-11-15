@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.9-green)
+![Version](https://img.shields.io/badge/version-0.9.10-green)
 
 ## Features (tab -> feature names)
 
@@ -162,6 +162,20 @@ Click the **camera icon** (next to the W button) in ComfyUI's top bar to capture
 5. **Generate** — Hit the Generate button to queue the prompt
 
 ---
+
+## Prompt Translation API
+
+Other front-ends on the same ComfyUI server (e.g. Comic Creator) can use the prompt translator through these endpoints. Other `/api/wfm/translate*` routes are for the Workflow Studio UI only and may change.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/wfm/translate/config` | `{api, config, presets, languages}`. `api` is the API version (currently `1`); a 404 or a missing `api` means Workflow Studio is absent or older than this API. `config` holds the `prompt_translate_*` settings; `languages` maps the accepted language codes to names |
+| `POST /api/wfm/translate/prompt` | Prompt-aware translation. Body: `{"text": "..."}` (or `{"texts": [...]}`, up to 200), optional `target_lang` (default `en`; any PLaMo 3 Translate code such as `ja`, `zh-hans`, `zh-hant`, `ko`; `zh` = `zh-hans`), `source_lang` (default: the Settings value; `auto` = detect), `protect_quotes` (default `false`; keeps the text inside 「」『』“”"" untranslated, for text drawn in the image). Returns `{"status": "success", "translated": "..."}` (or `translations`). Prompt syntax is kept as in the 🌐 button |
+| `POST /api/wfm/translate/warmup` | Preloads the model when CPU-resident mode is selected. Send `{"ignore_enabled": true}` if your front-end has its own on/off switch |
+
+- Settings (model, Ollama URL, GPU / CPU-resident, unload after translating) are shared with Workflow Studio. The server does **not** check `prompt_translate_enabled`: that switch only shows or hides the translation buttons in Workflow Studio, so a client decides on its own whether to offer translation.
+- Errors: HTTP 400 for bad input (unsupported language, more than 30,000 characters in one request, a single sentence over 1,000 characters), HTTP 502 for Ollama errors, including a translation that would be cut at the output token limit. Long text is split at line breaks and sentence ends and translated chunk by chunk; nothing is cut silently.
+- VRAM management (Settings → VRAM Management and the Ollama "Unload Model" buttons) never unloads a model that uses no VRAM (`size_vram == 0`, such as the CPU-resident translator); the response lists it in `kept_cpu`.
 
 ## Requirements
 

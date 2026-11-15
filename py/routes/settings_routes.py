@@ -6,6 +6,7 @@ import json
 import logging
 import shutil
 import tempfile
+import re
 import zipfile
 from pathlib import Path
 
@@ -29,7 +30,29 @@ _DATA_FILES = [
     "gallery_metadata.json",
     "tagger_settings.json",
     "civitai_cache.json",
+    "semantic_settings.json",
 ]
+
+# Browser-side settings (localStorage, same origin as ComfyUI) carried in both backups:
+# workflow/preset groups, badge palette, appearance, AI/decision/VRAM settings, presets...
+# The client collects and restores them; the server only validates and stores them as
+# "__browser_storage" (JSON bundle) or _BROWSER_STORAGE_ENTRY (ZIP).
+_BROWSER_STORAGE_KEY_RE = re.compile(r"^(?:wfm|ie)_[A-Za-z0-9_-]{1,100}$")
+_BROWSER_STORAGE_TRANSIENT = {"wfm_pending_workflow", "wfm_library_filter_request"}
+_BROWSER_STORAGE_MAX = 5 * 1024 * 1024  # localStorage itself is ~5 MB per origin
+_BROWSER_STORAGE_ENTRY = "_browser_storage.json"
+
+
+def _clean_browser_storage(obj) -> dict:
+    """Keep only plugin keys with string values; drop transient keys. Raises on bad size."""
+    if not isinstance(obj, dict):
+        return {}
+    out = {k: v for k, v in obj.items()
+           if isinstance(k, str) and isinstance(v, str)
+           and _BROWSER_STORAGE_KEY_RE.match(k) and k not in _BROWSER_STORAGE_TRANSIENT}
+    if sum(len(k) + len(v) for k, v in out.items()) > _BROWSER_STORAGE_MAX:
+        raise ValueError("browser storage data is too large")
+    return out
 
 
 def setup_routes(app: web.Application):
@@ -45,6 +68,7 @@ def setup_routes(app: web.Application):
     app.router.add_get("/api/wfm/settings/export", handle_export)
     app.router.add_post("/api/wfm/settings/import", handle_import)
     app.router.add_get("/api/wfm/settings/export-full", handle_export_full)
+    app.router.add_post("/api/wfm/settings/export-full", handle_export_full)
     app.router.add_post("/api/wfm/settings/import-full", handle_import_full)
     app.router.add_get("/api/wfm/styles", handle_get_styles)
     app.router.add_post("/api/wfm/styles", handle_create_style)
@@ -267,8 +291,11 @@ async def handle_export(request: web.Request) -> web.Response:
 
 
 def _apply_import_bundle(bundle: dict) -> dict:
-    """Write imported bundle back to individual data files. Returns summary."""
-    summary = {"imported": [], "skipped": []}
+    """Write imported bundle back to individual data files. Returns summary.
+    "__browser_storage" (added by the client on export) is validated and returned for the
+    browser to write into localStorage."""
+    summary = {"imported": [], "skipped": [],
+               "browser_storage": _clean_browser_storage(bundle.get("__browser_storage"))}
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     for filename in _DATA_FILES:
         if filename not in bundle:
@@ -303,7 +330,18 @@ async def handle_import(request: web.Request) -> web.Response:
 # style/) and the SQLite tagger.db that the JSON bundle can't represent. Excludes transient/cache
 # dirs, and wildcard/ specifically because it's typically a symlink into a *different*
 # custom_node's folder (comfyui-impact-pack) rather than this plugin's own data.
-_FULL_BACKUP_EXCLUDE_NAMES = {"gmic_temp", "thumb_cache", "wildcard"}
+# models/ held the ONNX EmbeddingGemma of v0.8.2-v0.8.13 (semantic search now runs on
+# Ollama), so it is a 300 MB leftover, not data.
+_FULL_BACKUP_EXCLUDE_NAMES = {"gmic_temp", "thumb_cache", "wildcard", "models"}
+# Rebuildable caches, opt-in per group (see _build_full_backup_zip). The semantic index is
+# on by default in the UI: rebuilding it re-embeds the whole gallery (Gemini API cost).
+_SEMANTIC_CACHE_NAMES = {"semantic_index.npz"}
+_TAGSPACE_CACHE_PREFIX = "tagspace_"
+
+
+def _is_temp_file(name: str) -> bool:
+    # Atomic-write leftovers such as gallery_metadata.json.tmp / semantic_index.tmp.npz
+    return name.endswith(".tmp") or ".tmp." in name
 
 
 def _add_file_to_zip(zf: zipfile.ZipFile, path: Path, base: Path):
@@ -413,23 +451,33 @@ def _add_video_edit_media_to_zip(zf: zipfile.ZipFile) -> None:
 
 
 def _build_full_backup_zip(include_workflows: bool = False, include_wildcard: bool = False,
-                           include_video_media: bool = False) -> bytes:
+                           include_video_media: bool = False, include_semantic_index: bool = False,
+                           include_tagspace: bool = False, browser_storage: dict = None) -> bytes:
     """Zips everything under DATA_DIR except the excluded names above. Walks
     top-level entries first so an excluded symlinked directory (wildcard/) is never
     even opened, rather than filtering after a recursive walk has already followed it.
-    Optionally also includes the two external folders above under "_external/"."""
+    Optionally also includes the two external folders above under "_external/", the
+    rebuildable caches, and the browser-side settings (_BROWSER_STORAGE_ENTRY)."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for top in sorted(DATA_DIR.iterdir()):
             if top.name in _FULL_BACKUP_EXCLUDE_NAMES or top.is_symlink():
                 continue
             if top.is_file():
+                if _is_temp_file(top.name):
+                    continue
+                if top.name in _SEMANTIC_CACHE_NAMES and not include_semantic_index:
+                    continue
+                if top.name.startswith(_TAGSPACE_CACHE_PREFIX) and not include_tagspace:
+                    continue
                 _add_file_to_zip(zf, top, DATA_DIR)
             elif top.is_dir():
                 for path in top.rglob("*"):
-                    if path.is_dir() or path.is_symlink():
+                    if path.is_dir() or path.is_symlink() or _is_temp_file(path.name):
                         continue
                     _add_file_to_zip(zf, path, DATA_DIR)
+        if browser_storage:
+            zf.writestr(_BROWSER_STORAGE_ENTRY, json.dumps(browser_storage, ensure_ascii=False, indent=2))
 
         if include_workflows:
             _add_external_dir_to_zip(zf, _default_workflows_dir(), "_external/default_workflows")
@@ -455,7 +503,8 @@ def _apply_full_backup_zip(zip_source) -> dict:
     into ComfyUI's input dir instead, but never overwrite an existing file there — a file
     with the same name is assumed to be the same upload (ComfyUI dedupes uploads by renaming),
     and input/ is shared with every other workflow."""
-    summary = {"extracted": [], "skipped": [], "media_restored": [], "media_existing": []}
+    summary = {"extracted": [], "skipped": [], "media_restored": [], "media_existing": [],
+               "browser_storage": {}}
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     base = DATA_DIR.resolve()
     input_base = None
@@ -468,6 +517,18 @@ def _apply_full_backup_zip(zip_source) -> dict:
                 continue
             if info.filename.startswith("_external/"):
                 summary["skipped"].append(info.filename)
+                continue
+            if info.filename == _BROWSER_STORAGE_ENTRY:
+                # Handed back to the browser, which writes it into localStorage.
+                try:
+                    if info.file_size > _BROWSER_STORAGE_MAX * 2:
+                        raise ValueError("too large")
+                    with zf.open(info) as src:
+                        summary["browser_storage"] = _clean_browser_storage(
+                            json.loads(src.read().decode("utf-8")))
+                except Exception as e:
+                    logger.warning("Full backup: browser storage entry ignored: %s", e)
+                    summary["skipped"].append(info.filename)
                 continue
             if info.filename.startswith(_VIDEO_MEDIA_PREFIX):
                 media_rel = info.filename[len(_VIDEO_MEDIA_PREFIX):]
@@ -509,19 +570,29 @@ def _apply_full_backup_zip(zip_source) -> dict:
 
 
 async def handle_export_full(request: web.Request) -> web.Response:
-    """GET /api/wfm/settings/export-full - Download a ZIP of the entire data
+    """GET|POST /api/wfm/settings/export-full - Download a ZIP of the entire data
     directory, including data the flat JSON bundle (handle_export) can't represent.
-    Optional query params include_workflows=1 / include_wildcard=1 additionally bundle
-    ComfyUI's default workflows dir / the Impact Pack's wildcard dir (see
-    _build_full_backup_zip) — both restore-excluded, export-only, manual-copy-back.
-    include_video_media=1 adds the input-dir media referenced by Video Edit projects,
-    which *is* restored (into input/, without overwriting)."""
+    Options (query params for GET, JSON body for POST; "1"/true):
+    include_workflows / include_wildcard additionally bundle ComfyUI's default workflows
+    dir / the Impact Pack's wildcard dir (see _build_full_backup_zip) — both
+    restore-excluded, export-only, manual-copy-back. include_video_media adds the
+    input-dir media referenced by Video Edit projects, which *is* restored (into input/,
+    without overwriting). include_semantic_index / include_tagspace add the rebuildable
+    caches. POST may also carry browser_storage (the page's localStorage settings)."""
     try:
-        include_workflows = request.rel_url.query.get("include_workflows") == "1"
-        include_wildcard = request.rel_url.query.get("include_wildcard") == "1"
-        include_video_media = request.rel_url.query.get("include_video_media") == "1"
+        browser_storage = None
+        if request.method == "POST":
+            body = await request.json()
+            if not isinstance(body, dict):
+                return web.json_response({"error": "body must be a JSON object"}, status=400)
+            opt = lambda k: body.get(k) in (True, 1, "1")
+            browser_storage = _clean_browser_storage(body.get("browser_storage"))
+        else:
+            opt = lambda k: request.rel_url.query.get(k) == "1"
         zip_bytes = await asyncio.to_thread(
-            _build_full_backup_zip, include_workflows, include_wildcard, include_video_media)
+            _build_full_backup_zip, opt("include_workflows"), opt("include_wildcard"),
+            opt("include_video_media"), opt("include_semantic_index"), opt("include_tagspace"),
+            browser_storage)
         return web.Response(
             body=zip_bytes,
             content_type="application/zip",

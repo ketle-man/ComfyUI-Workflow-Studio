@@ -68,6 +68,12 @@ const gb = (mb) => (mb / 1024).toFixed(1);
 
 /** One-line summary of a result (Settings tab status and pre-generation toast) */
 export function describeVramResult(d) {
+    const msg = _describeVramMain(d);
+    // CPU-resident models (size_vram 0, e.g. the prompt translator) are left loaded on purpose.
+    return d.kept_cpu?.length ? msg + " / " + t("vramKeptCpu", d.kept_cpu.join(", ")) : msg;
+}
+
+function _describeVramMain(d) {
     if (d.unloaded.length) {
         let msg = t("vramUnloaded", d.unloaded.map((u) => u.name).join(", "), gb(d.free_before_mb), gb(d.free_after_mb));
         if (d.failed.length) msg += " / " + t("vramFailedModels", d.failed.join(", "));

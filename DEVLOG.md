@@ -2,6 +2,29 @@
 
 ---
 
+## v0.9.10（2026-11-15）
+
+### プロンプト翻訳API（Comic Creator から使うための整備）
+
+- `POST /api/wfm/translate/prompt {text|texts, target_lang?, source_lang?, protect_quotes?, model?}` を追加。記法を残す分割（`split_prompt` / `_rebuild`）をブラウザ側から `translate_service.py` へ移し、GenerateUI・Lab・Video Plan の🌐と自動翻訳もこの API を使うように切り替え（分割の実装を1か所に）。Lab は1回のリクエストにまとめて送る。🌐で変化が無いとき（非ASCIIの `<lora:...>` 名だけ等）は「翻訳する部分がありません」を表示。旧 `POST /api/wfm/translate`（丸ごと翻訳）は互換のため残す。
+- 翻訳先 `target_lang`: PLaMo 3 Translate の53言語（`zh`→`zh-hans`、`zh-tw`→`zh-hant` 等の別名）。キャッシュキーに翻訳先を追加。PLaMo 以外のモデルの指示文も言語名に追従。翻訳元も同じ一覧で検証。
+- `protect_quotes`: 「」『』“”"" の中身を `『QT0』` のようなトークンにして文ごと訳し、元の文字に戻す（画像に描く文字用。トークンが消えたら引用の前後を別々に訳す）。既定オフ（GenerateUI も従来どおり）。例: 「看板に『営業中』と書かれた喫茶店」→ `A coffee shop with a sign that reads "営業中"`。
+- 長文の無言切り捨てを廃止: 1回のモデル呼び出しは最大1000文字（改行→文末で分割して連結）。1リクエスト合計3万文字超・1文1000文字超は 400、出力が `num_predict` に達した（`done_reason == "length"`）ら 502。
+- `GET /api/wfm/translate/config` に `api: 1`（API の版）と `languages` を追加。`POST /api/wfm/translate/warmup` は `{"ignore_enabled": true}` で WFS のオン／オフに関係なく読み込む（独自のオン／オフを持つクライアント用）。サーバーは `prompt_translate_enabled` を見ない方針を README「Prompt Translation API」節に明記。
+- VRAM調整（毎回・「今すぐすべてアンロード」・Ollama のアンロードボタン）で `size_vram == 0` の CPU 常駐モデル（翻訳の CPU モード等）を外さないように。応答に `kept_cpu`、トーストに「CPU常駐のため残しました」（3言語）。
+- 説明文の修正: CPU 常駐の RAM「約2GB」→約2.7GB、「生成UIを開いたとき」→「生成UIにワークフローを読み込んだとき」（設定・ヘルプ・README）。
+- 実機確認: HTTP（記法保持、zh、protect_quotes、各エラー、1619文字の長文分割、旧API、warmup）、VRAM「すべてアンロード」で GPU の 0.8B だけ外れ CPU 常駐の 2B が残る、ブラウザで🌐→翻訳→原文復元と Lab の一括翻訳。
+
+### 設定のデータ管理の監査
+
+- ブラウザ（localStorage）に保存している設定が、どちらのバックアップにも入っていなかった（ワークフロー／プロンプトプリセットのグループ、モデルバッジの配色、外観、AI TOOL・Prompt・Tagger の接続設定、意思決定モデル・VRAM調整の設定、Latent プリセット、Draw パレット等）。JSON エクスポート（`__browser_storage`）とフルバックアップ（`_browser_storage.json`、データフォルダには展開しない）の両方に同梱し、復元時にブラウザへ書き戻して「ページを再読み込み」ボタンを表示。対象は `wfm_*` と `ie_draw_palette_v1`（一時キー `wfm_pending_workflow` / `wfm_library_filter_request` は除外）、規則はサーバー `_clean_browser_storage` とクライアントで共通。
+- JSON エクスポートに `semantic_settings.json`（Gallery セマンティック検索の設定）を追加。
+- フルバックアップから `models/`（v0.8.2〜v0.8.13 の ONNX EmbeddingGemma の残骸、約300MB、v0.8.14 の Ollama 化以降は未使用）と `*.tmp`（アトミック書き込みの途中ファイル）を除外。チェックボックス「Gallery セマンティック検索のインデックス」（既定オン、作り直すと全画像の埋め込み直し＝Gemini では API 費用）と「TagSpace のキャッシュ」（既定オフ、作り直せる）を追加。`export-full` は POST（JSON）にも対応（GET は互換で残す）。実環境で約700MB→108.7MB。
+- 説明文・ヘルプ（dataManagementHint / fullBackupHint / helpSettings8・15・16、3言語＋index.html）と README を更新。
+- 実機確認: ボタン操作で JSON・ZIP のエクスポート内容を検査、ブラウザ設定だけを入れた JSON・ZIP のインポートで書き戻しと不正キーの除外、データファイルが書き換わらないことを確認。
+
+---
+
 ## v0.9.9（2026-11-15）
 
 ### プロンプト翻訳（自国語 → 英語、PLaMo 3 Translate）

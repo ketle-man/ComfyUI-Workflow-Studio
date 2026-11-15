@@ -2,7 +2,8 @@
  * Prompt Translate — type GenerateUI prompts in your own language and translate
  * them into English with a local Ollama model (PLaMo 3 Translate by default).
  *
- * Works like the A1111 prompt-translator extensions: only the parts of a prompt
+ * Works like the A1111 prompt-translator extensions (the splitting runs on the
+ * server, POST /api/wfm/translate/prompt): only the parts of a prompt
  * that contain non-ASCII letters are sent to the model. Prompt syntax such as
  * commas, (weights:1.2), [ ], {a|b}, <lora:...>, __wildcards__,
  * embedding:name and BREAK/AND is kept as it is, so a mixed prompt like
@@ -45,65 +46,46 @@ export function setTranslateConfig(patch) {
 }
 
 // ------------------------------------------------------------
-// Prompt splitting
+// Translation (prompt splitting lives on the server: translate_service.split_prompt)
 // ------------------------------------------------------------
 
-// Spans that are never translated: prompt syntax and delimiters.
-const PROTECTED_RE = /\b(?:BREAK|AND)\b|<[^<>\n]*>|__[^\s_][^\s]*?__|embedding:[^\s,()[\]{}|]+|:\s*-?\d+(?:\.\d+)?|[,\n()[\]{}|]/g;
-// A piece needs translation when it contains a non-ASCII letter (CJK, Cyrillic, accented Latin, ...).
-const NEEDS_TRANSLATION_RE = /(?![\x00-\x7F])\p{L}/u;
-
-/** Split a prompt into [{ text, translate }] pieces. Joining all .text gives back the input. */
-export function splitPrompt(text) {
-    const pieces = [];
-    let last = 0;
-    for (const m of text.matchAll(PROTECTED_RE)) {
-        if (m.index > last) pieces.push(text.slice(last, m.index));
-        pieces.push({ keep: m[0] });
-        last = m.index + m[0].length;
-    }
-    if (last < text.length) pieces.push(text.slice(last));
-    return pieces.map((p) => {
-        if (typeof p !== "string") return { text: p.keep, translate: false };
-        return { text: p, translate: NEEDS_TRANSLATION_RE.test(p) };
-    });
-}
+// Cheap client-side check before calling the server: any non-ASCII letter at all.
+// The server decides which pieces really go to the model (prompt syntax is skipped).
+const NON_ASCII_LETTER_RE = /(?![\x00-\x7F])\p{L}/u;
 
 export function needsTranslation(text) {
-    return splitPrompt(text || "").some((p) => p.translate);
+    return NON_ASCII_LETTER_RE.test(text || "");
 }
 
-// Keep the surrounding whitespace of a piece and tidy the model output for prompt use.
-function _rebuild(source, translated) {
-    const lead = source.match(/^\s*/)[0];
-    const trail = source.match(/\s*$/)[0];
-    const core = source.trim();
-    let out = (translated || "").replace(/\s*\n+\s*/g, " ").trim();
-    // A tag such as "赤いドレス" should not become "Red dress." — drop the final period
-    // unless the source itself was a full sentence.
-    if (!/[。．.!?！？]$/.test(core)) out = out.replace(/[.。]+$/, "");
-    // "少女、(" -> "girl, (" rather than "girl,(" — a Japanese comma needs no space, an English one does.
-    if (!trail && /[,;:]$/.test(out)) out += " ";
-    return lead + out + trail;
-}
-
-/** Translate a whole prompt string. Throws on backend errors. */
-export async function translatePrompt(text) {
-    const pieces = splitPrompt(text || "");
-    const cores = [...new Set(pieces.filter((p) => p.translate).map((p) => p.text.trim()))];
-    if (cores.length === 0) return text;
-
-    const res = await fetch("/api/wfm/translate", {
+async function _postPrompt(body) {
+    const res = await fetch("/api/wfm/translate/prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texts: cores }),
+        body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.status !== "success") {
         throw new Error(data.message || `HTTP ${res.status}`);
     }
-    const map = new Map(cores.map((c, i) => [c, data.translations[i] ?? c]));
-    return pieces.map((p) => (p.translate ? _rebuild(p.text, map.get(p.text.trim())) : p.text)).join("");
+    return data;
+}
+
+/** Translate a whole prompt string, keeping prompt syntax. Throws on backend errors. */
+export async function translatePrompt(text) {
+    if (!needsTranslation(text)) return text;
+    const data = await _postPrompt({ text });
+    return data.translated ?? text;
+}
+
+/** Translate several prompt strings in one request (same order). */
+export async function translatePrompts(texts) {
+    const idx = [];
+    texts.forEach((x, i) => { if (needsTranslation(x)) idx.push(i); });
+    if (idx.length === 0) return texts.slice();
+    const data = await _postPrompt({ texts: idx.map((i) => texts[i]) });
+    const out = texts.slice();
+    idx.forEach((i, k) => { out[i] = data.translations?.[k] ?? texts[i]; });
+    return out;
 }
 
 // Replace textarea text while keeping the browser's Ctrl+Z history where possible.
@@ -179,13 +161,17 @@ export async function isAutoTranslateOn(kind) {
  * Throws on translation failure so the caller can stop the batch.
  */
 export async function translateWorkflowPrompts(workflow, promptNodes) {
+    const targets = [];
     for (const n of promptNodes || []) {
         const inputs = workflow?.[n.id]?.inputs;
         const key = n.textKey || "text";
         if (inputs && typeof inputs[key] === "string" && needsTranslation(inputs[key])) {
-            inputs[key] = await translatePrompt(inputs[key]);
+            targets.push({ inputs, key });
         }
     }
+    if (targets.length === 0) return workflow;
+    const out = await translatePrompts(targets.map((x) => x.inputs[x.key]));
+    targets.forEach((x, i) => { x.inputs[x.key] = out[i]; });
     return workflow;
 }
 
@@ -226,7 +212,8 @@ export function attachTranslateButtons(root = document) {
             const label = btn.textContent;
             btn.textContent = "…";
             try {
-                await translateTextarea(ta);
+                // false = only prompt syntax / unchanged (e.g. a non-ASCII <lora:...> name)
+                if (!(await translateTextarea(ta))) showToast(t("promptTranslateNothing"), "info");
             } catch (err) {
                 showToast(t("promptTranslateError", err.message), "error");
             } finally {

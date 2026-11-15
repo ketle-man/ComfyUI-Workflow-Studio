@@ -430,6 +430,56 @@ export function getSavedTheme() {
     return loadLocalSettings().theme || "";
 }
 
+// ---- Browser-side settings in backups ----
+// Settings kept in localStorage (groups, badge palette, appearance, AI / decision / VRAM
+// settings, presets, ...) travel with both the JSON export and the full backup. Same key
+// rule as the server (_clean_browser_storage in settings_routes.py).
+const BROWSER_STORAGE_KEY_RE = /^(?:wfm|ie)_[A-Za-z0-9_-]{1,100}$/;
+const BROWSER_STORAGE_TRANSIENT = new Set(["wfm_pending_workflow", "wfm_library_filter_request"]);
+
+function collectBrowserStorage() {
+    const out = {};
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && BROWSER_STORAGE_KEY_RE.test(k) && !BROWSER_STORAGE_TRANSIENT.has(k)) {
+                out[k] = localStorage.getItem(k);
+            }
+        }
+    } catch { /* storage unavailable: back up server data only */ }
+    return out;
+}
+
+/** Write restored keys into localStorage; returns how many were written. */
+function restoreBrowserStorage(data) {
+    let n = 0;
+    for (const [k, v] of Object.entries(data || {})) {
+        if (typeof v !== "string" || !BROWSER_STORAGE_KEY_RE.test(k) || BROWSER_STORAGE_TRANSIENT.has(k)) continue;
+        try { localStorage.setItem(k, v); n++; } catch { /* quota: skip */ }
+    }
+    return n;
+}
+
+/** Append "N browser settings restored — Reload" to the data status line. */
+function appendBrowserRestoreNote(statusEl, count) {
+    if (!count) return;
+    statusEl.append(" / " + t("browserStorageRestored", count) + " ");
+    const btn = document.createElement("button");
+    btn.className = "wfm-btn wfm-btn-sm";
+    btn.textContent = t("reloadPage");
+    btn.addEventListener("click", () => location.reload());
+    statusEl.append(btn);
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 export async function initSettingsTab() {
     const container = document.querySelector("#wfm-tab-settings .wfm-settings-container");
     if (!container) return;
@@ -951,6 +1001,14 @@ export async function initSettingsTab() {
                 <label class="wfm-lab-checkbox-label" style="font-size:12px;">
                     <input type="checkbox" id="wfm-settings-backup-include-video-media">
                     ${t("fullBackupIncludeVideoMedia")}
+                </label>
+                <label class="wfm-lab-checkbox-label" style="font-size:12px;">
+                    <input type="checkbox" id="wfm-settings-backup-include-semantic" checked>
+                    ${t("fullBackupIncludeSemantic")}
+                </label>
+                <label class="wfm-lab-checkbox-label" style="font-size:12px;">
+                    <input type="checkbox" id="wfm-settings-backup-include-tagspace">
+                    ${t("fullBackupIncludeTagspace")}
                 </label>
                 <span style="font-size:11px;color:var(--wfm-text-secondary);">${t("fullBackupExternalHint")}</span>
             </div>
@@ -1678,13 +1736,10 @@ export async function initSettingsTab() {
         try {
             const res = await fetch("/api/wfm/settings/export");
             if (!res.ok) throw new Error(await res.text());
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "wfm-data-export.json";
-            a.click();
-            URL.revokeObjectURL(url);
+            const bundle = await res.json();
+            bundle.__browser_storage = collectBrowserStorage();
+            downloadBlob(new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" }),
+                "wfm-data-export.json");
             statusEl.textContent = t("exportSuccess");
             statusEl.style.color = "var(--wfm-success, #4caf50)";
         } catch (e) {
@@ -1711,6 +1766,7 @@ export async function initSettingsTab() {
             const imported = result.imported?.join(", ") || "-";
             statusEl.textContent = t("importSuccess") + ": " + imported;
             statusEl.style.color = "var(--wfm-success, #4caf50)";
+            appendBrowserRestoreNote(statusEl, restoreBrowserStorage(result.browser_storage));
         } catch (e) {
             statusEl.textContent = t("importError") + ": " + e.message;
             statusEl.style.color = "var(--wfm-error, #f44336)";
@@ -1724,15 +1780,24 @@ export async function initSettingsTab() {
             const includeWorkflows = document.getElementById("wfm-settings-backup-include-workflows")?.checked ? "1" : "0";
             const includeWildcard = document.getElementById("wfm-settings-backup-include-wildcard")?.checked ? "1" : "0";
             const includeVideoMedia = document.getElementById("wfm-settings-backup-include-video-media")?.checked ? "1" : "0";
-            const res = await fetch(`/api/wfm/settings/export-full?include_workflows=${includeWorkflows}&include_wildcard=${includeWildcard}&include_video_media=${includeVideoMedia}`);
+            const includeSemantic = document.getElementById("wfm-settings-backup-include-semantic")?.checked ? "1" : "0";
+            const includeTagspace = document.getElementById("wfm-settings-backup-include-tagspace")?.checked ? "1" : "0";
+            statusEl.textContent = t("fullBackupBuilding");
+            statusEl.style.color = "var(--wfm-text-secondary)";
+            const res = await fetch("/api/wfm/settings/export-full", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    include_workflows: includeWorkflows,
+                    include_wildcard: includeWildcard,
+                    include_video_media: includeVideoMedia,
+                    include_semantic_index: includeSemantic,
+                    include_tagspace: includeTagspace,
+                    browser_storage: collectBrowserStorage(),
+                }),
+            });
             if (!res.ok) throw new Error(await res.text());
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "wfm-full-backup.zip";
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadBlob(await res.blob(), "wfm-full-backup.zip");
             statusEl.textContent = t("exportSuccess");
             statusEl.style.color = "var(--wfm-success, #4caf50)";
         } catch (e) {
@@ -1763,6 +1828,7 @@ export async function initSettingsTab() {
             }
             statusEl.textContent = msg;
             statusEl.style.color = "var(--wfm-success, #4caf50)";
+            appendBrowserRestoreNote(statusEl, restoreBrowserStorage(result.browser_storage));
         } catch (e) {
             statusEl.textContent = t("importError") + ": " + e.message;
             statusEl.style.color = "var(--wfm-error, #f44336)";

@@ -143,13 +143,20 @@ def _ollama_bases(urls):
 
 def _prepare(mode, target_mb, bases):
     free_before, free_src = _free_vram_mb()
-    cands, unreachable = [], []
+    cands, unreachable, kept_cpu = [], [], []
     for base in bases:
         try:
             _, raw = _ollama_json(base, "/api/ps", timeout=5)
             for m in json.loads(raw.decode("utf-8")).get("models", []):
-                if m.get("name"):
-                    cands.append({"base": base, "name": m["name"], "vram_mb": int(m.get("size_vram", 0) / _MB)})
+                if not m.get("name"):
+                    continue
+                # size_vram == 0: loaded entirely in system RAM (e.g. the prompt translator's CPU
+                # mode). Unloading it frees no VRAM and only costs a reload on the next use.
+                # (A missing key — older Ollama — is still treated as a candidate.)
+                if "size_vram" in m and not m.get("size_vram"):
+                    kept_cpu.append(m["name"])
+                    continue
+                cands.append({"base": base, "name": m["name"], "vram_mb": int(m.get("size_vram", 0) / _MB)})
         except Exception as e:
             # Ollama not running etc. Normal for the default URL, so not a failure; keep the reason in the
             # log only (the response doesn't reveal the state of caller-chosen local ports)
@@ -181,6 +188,7 @@ def _prepare(mode, target_mb, bases):
         "free_before_mb": round(free_before), "free_after_mb": round(free_after),
         "unloaded": strip(unloaded), "failed": [c["name"] for c in failed],
         "unreachable": unreachable,
+        "kept_cpu": kept_cpu,
         "reached": free_after >= target_mb,
     }
 
@@ -193,6 +201,7 @@ async def handle_prepare(request: web.Request) -> web.Response:
     """POST {mode:'auto'|'all', target_gb, urls:[Ollama URLs]}.
     auto: only when free VRAM is below target_gb, unload the models using the most VRAM until it is reached.
     all: unload every loaded model.
+    Models using no VRAM (size_vram == 0, CPU-resident) are never unloaded; they are listed in kept_cpu.
     The default 127.0.0.1:11434 is always included; other URLs must pass the backend URL guard."""
     # JSON only, so another site can't unload models with a simple (preflight-free) text/plain request
     if request.content_type != "application/json":
