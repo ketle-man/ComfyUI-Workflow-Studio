@@ -1,0 +1,44 @@
+/* Game タブ (実験的機能・ComfyUI-WFS-Games が必要) */
+#wfm-tab-game.active { overflow: hidden; }
+.wfm-game-layout { display: flex; height: 100%; min-height: 0; }
+.wfm-game-layout [hidden] { display: none !important; }
+.wfm-game-side,
+.wfm-game-result { width: 290px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow: auto; }
+.wfm-game-side { border-right: 1px solid var(--wfm-border, #444); }
+.wfm-game-result { border-left: 1px solid var(--wfm-border, #444); width: 320px; }
+.wfm-game-section { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--wfm-border, #444); border-radius: var(--wfm-radius, 6px); background: var(--wfm-surface, transparent); }
+.wfm-game-section-title { font-size: 12px; font-weight: 600; color: var(--wfm-text-secondary, #aaa); text-transform: uppercase; letter-spacing: 0.04em; }
+.wfm-game-list { display: flex; flex-direction: column; gap: 6px; }
+.wfm-game-card { display: flex; flex-direction: column; gap: 3px; padding: 8px; text-align: left; border-radius: var(--wfm-radius-sm, 4px); cursor: pointer; color: var(--wfm-text, #ddd); background: var(--wfm-bg-secondary, #222); border: 1px solid var(--wfm-border, #444); }
+.wfm-game-card:hover { border-color: var(--wfm-primary, #4a9eff); }
+.wfm-game-card.active { border-color: var(--wfm-primary, #4a9eff); box-shadow: 0 0 0 1px var(--wfm-primary, #4a9eff) inset; }
+.wfm-game-card img { width: 100%; max-height: 90px; object-fit: cover; border-radius: 3px; }
+.wfm-game-card-name { font-weight: 600; font-size: 13px; }
+.wfm-game-card-desc { font-size: 11px; color: var(--wfm-text-secondary, #aaa); line-height: 1.4; }
+.wfm-game-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.wfm-game-field > span { color: var(--wfm-text-secondary, #aaa); }
+.wfm-game-field textarea { width: 100%; resize: vertical; box-sizing: border-box; }
+.wfm-game-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.wfm-game-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wfm-game-row select { flex: 1; min-width: 0; }
+.wfm-game-note { font-size: 11px; color: var(--wfm-text-secondary, #aaa); line-height: 1.4; }
+.wfm-game-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.wfm-game-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--wfm-border, #444); }
+.wfm-game-current { font-weight: 600; }
+.wfm-game-spacer { flex: 1; }
+.wfm-game-stage { flex: 1; min-height: 0; position: relative; background: #05060f; overflow: hidden; }
+.wfm-game-stage canvas { display: block; }
+.wfm-game-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #94a3b8; }
+.wfm-game-result-status { font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.wfm-game-result-head { font-size: 20px; font-weight: 700; letter-spacing: 0.05em; }
+.wfm-game-result-head.cleared { color: var(--wfm-success, #2ed573); }
+.wfm-game-result-head.failed { color: var(--wfm-danger, #ff4757); }
+.wfm-game-rewards { display: flex; flex-direction: column; gap: 4px; }
+.wfm-game-reward { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; padding: 4px 6px; border-radius: var(--wfm-radius-sm, 4px); background: var(--wfm-bg-secondary, #222); cursor: pointer; }
+.wfm-game-reward span { word-break: break-word; }
+.wfm-game-reward-src { display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 3px; font-size: 10px; line-height: 16px; vertical-align: 1px; color: var(--wfm-text, #ddd); background: var(--wfm-bg-tertiary, #334); }
+.wfm-game-progress { height: 6px; border-radius: 3px; overflow: hidden; background: var(--wfm-bg-secondary, #333); }
+.wfm-game-progress-bar { height: 100%; width: 0; background: var(--wfm-primary, #4a9eff); transition: width 0.2s; }
+.wfm-game-progress-text { font-size: 11px; color: var(--wfm-text-secondary, #aaa); word-break: break-all; min-height: 14px; }
+.wfm-game-output { display: flex; flex-direction: column; gap: 6px; }
+.wfm-game-output img { width: 100%; border-radius: var(--wfm-radius-sm, 4px); background: #000; }

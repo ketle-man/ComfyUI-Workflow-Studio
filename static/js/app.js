@@ -112,7 +112,7 @@ function initTabs() {
 
 function applyI18nToHtml() {
     // Tab labels
-    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", "image-edit": "tabImageEdit", video: "tabVideo", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger", tagspace: "tabTagSpace" };
+    const tabMap = { workflow: "tabWorkflow", nodes: "tabNodes", models: "tabModels", generate: "tabGenerate", prompt: "tabPrompt", gallery: "tabGallery", "image-edit": "tabImageEdit", video: "tabVideo", settings: "tabSettings", help: "tabHelp", ai: "tabAi", tagger: "tabTagger", tagspace: "tabTagSpace", game: "tabGame" };
     document.querySelectorAll(".wfm-tab").forEach((tab) => {
         const key = tabMap[tab.dataset.tab];
         if (key) tab.textContent = t(key);
@@ -625,6 +625,7 @@ function applyI18nToHtml() {
         "wfm-help-gallery-card-stylecatalog-title": "helpGalleryCardStylecatalog",
         "wfm-help-tagger-title": "helpTaggerTitle",
         "wfm-help-tagspace-title": "helpTagSpaceTitle", "wfm-help-tagspace-card-overview-title": "helpTagSpaceCardOverview", "wfm-help-tagspace-card-use-title": "helpTagSpaceCardUse", "wfm-help-tagspace-1": "helpTagSpace1", "wfm-help-tagspace-2": "helpTagSpace2", "wfm-help-tagspace-3": "helpTagSpace3", "wfm-help-tagspace-4": "helpTagSpace4", "wfm-help-tagspace-5": "helpTagSpace5", "wfm-help-tagspace-6": "helpTagSpace6", "wfm-help-tagspace-7": "helpTagSpace7", "wfm-help-tagspace-8": "helpTagSpace8", "wfm-help-tagspace-9": "helpTagSpace9", "wfm-help-tagspace-10": "helpTagSpace10",
+        "wfm-help-game-title": "helpGameTitle", "wfm-help-game-card-overview-title": "helpGameCardOverview", "wfm-help-game-card-gen-title": "helpGameCardGen", "wfm-help-game-1": "helpGame1", "wfm-help-game-2": "helpGame2", "wfm-help-game-3": "helpGame3", "wfm-help-game-4": "helpGame4", "wfm-help-game-5": "helpGame5", "wfm-help-game-6": "helpGame6", "wfm-help-game-7": "helpGame7", "wfm-help-game-8": "helpGame8",
         "wfm-help-tagger-1": "helpTagger1", "wfm-help-tagger-2": "helpTagger2",
         "wfm-help-tagger-3": "helpTagger3", "wfm-help-tagger-4": "helpTagger4",
         "wfm-help-tagger-5": "helpTagger5", "wfm-help-tagger-6": "helpTagger6",
@@ -889,6 +890,7 @@ import { initMetadataTab } from "./metadata-tab.js";
 import { initAiTab } from "./ai-tab.js";
 import { initTaggerTab } from "./tagger-tab.js";
 import { initTagSpaceTab } from "./tagspace-tab.js";
+import { initGameTab } from "./game-tab.js";
 import { imageEditTab } from "./image-edit-tab.js";
 import { initVideoTab } from "./video-tab.js";
 
@@ -942,6 +944,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initAiTab();
     initTaggerTab();
     initTagSpaceTab();
+    initGameTab(); // ゲームパック(ComfyUI-WFS-Games)があるときだけタブを表示
     imageEditTab.init();
     initVideoTab();
 
