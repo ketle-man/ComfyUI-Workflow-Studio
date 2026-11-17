@@ -755,6 +755,7 @@ const LANGUAGES = {
         tabTagSpace: "TagSpace",
         // --- Game tab (experimental; needs the ComfyUI-WFS-Games pack) ---
         tabGame: "Game",
+        helpGame9: "Turbo Heart: a 1980s-style behind-the-car racer with a pseudo-3D road. 5 races along the coast (seaside highway, autumn mountain pass, desert canyon at sunset, neon city at night, tropical coast at dawn). 8 cars: you start last and must finish in the top 3 to go on — 4th or worse is game over. Steer with ← →, gas with ↑ or Z, brake with ↓ or X, nitro with Space or C (3 per race), pause with Esc or P; a gamepad also works. Pick up the 5 hearts on the road. Mechanic Misaki talks between races, and the images work the same way as in Star Formation (a victory shot per race, a private photo with all 5 hearts, the ending, a defeat scene)",
         gameJobStagePrivate: (n, name) => `STAGE ${n}${name ? " " + name : ""} - PRIVATE ♥`,
         gameAutoGameover: "Also generate an image on game over",
         gameJobGameover: (n, name) => `GAME OVER - STAGE ${n}${name ? " " + name : ""}`,
@@ -2777,6 +2778,7 @@ const LANGUAGES = {
         tabTagSpace: "TagSpace",
         // --- Game タブ (実験的機能・ComfyUI-WFS-Games が必要) ---
         tabGame: "Game",
+        helpGame9: "Turbo Heart: 80年代風の、後ろから見る疑似3Dのレースゲームです。海岸線を巡る全5レース(海岸ハイウェイ・紅葉の峠・夕陽の渓谷・夜のネオンシティ・夜明けの海岸)。8台で走り、最後尾からスタートして3位以内でゴールすると次のレースへ進めます(4位以下はゲームオーバー)。ハンドルは ← →、アクセルは ↑ または Z、ブレーキは ↓ または X、ニトロは Space または C(1レース3回)、一時停止は Esc または P。ゲームパッドも使えます。コース上のハート5個を拾ってください。レースの合間にメカニックのミサキが話し、画像の仕組みは Star Formation と同じです(レースごとの勝利の記念カット、ハート全部でプライベート写真、エンディング、敗北の場面)",
         gameJobStagePrivate: (n, name) => `STAGE ${n}${name ? " " + name : ""} - プライベート♥`,
         gameAutoGameover: "ゲームオーバー時も画像を生成する",
         gameJobGameover: (n, name) => `GAME OVER - STAGE ${n}${name ? " " + name : ""}`,
@@ -4799,6 +4801,7 @@ const LANGUAGES = {
         tabTagSpace: "TagSpace",
         // --- Game 标签页 (实验性功能，需要 ComfyUI-WFS-Games) ---
         tabGame: "Game",
+        helpGame9: "Turbo Heart: 80年代风格的后视角伪3D赛车游戏。沿海岸线共 5 场比赛(海岸公路、红叶山道、夕阳峡谷、夜晚的霓虹城市、黎明海岸)。8 辆车同场竞速，你从最后一位起跑，以前三名完赛才能进入下一场(第四名及以后则游戏结束)。用 ← → 转向，↑ 或 Z 加速，↓ 或 X 刹车，Space 或 C 使用氮气(每场 3 次)，Esc 或 P 暂停；也支持手柄。请收集赛道上的 5 颗心。比赛之间机械师美咲会说话，图像机制与 Star Formation 相同(每场的胜利纪念画面、集齐 5 颗心的私人照片、结局、败北场景)",
         gameJobStagePrivate: (n, name) => `STAGE ${n}${name ? " " + name : ""} - 私人♥`,
         gameAutoGameover: "游戏结束时也生成图像",
         gameJobGameover: (n, name) => `GAME OVER - STAGE ${n}${name ? " " + name : ""}`,
