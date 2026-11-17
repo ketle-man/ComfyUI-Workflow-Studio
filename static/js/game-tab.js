@@ -7,7 +7,7 @@
  * ゲームが host.finish(result) で返した報酬プロンプトから、WFS がワークフローを組み立てて生成する。
  * ゲームは ComfyUI を直接操作しない。
  *
- * 契約の詳細は PLAN_GAME_TAB.md / ComfyUI-WFS-Games の README を参照。
+ * 契約の詳細は ComfyUI-WFS-Games の README を参照。
  */
 
 import { showToast } from "./app.js";
