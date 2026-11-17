@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.10.0（2026-11-17）** — Game タブ（実験的機能・別パッケージ ComfyUI-WFS-Games が必要）
 - **v0.9.10（2026-11-15）** — プロンプト翻訳API（Comic Creator から使うための整備）
 - **v0.9.9（2026-11-15）** — プロンプト翻訳（自国語 → 英語、PLaMo 3 Translate）
 - **v0.9.8（2026-11-14）** — セキュリティ: クライアントから受け取るパスを解決前に検証

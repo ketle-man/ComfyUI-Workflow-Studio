@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.10-green)
+![Version](https://img.shields.io/badge/version-0.10.0-green)
 
 ## Features (tab -> feature names)
 
@@ -76,6 +76,9 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 ### TagSpace Tab (v0.9.0)
 Choose tags visually in a 3D latent space, Build / Update, Choosing tags, Explore, Search with a card's or Gallery image's tags, Make a prompt, Tagger fill, Glow / Twinkle, Hover preview, Requirements
 
+### Game Tab (v0.10.0, experimental)
+Play, then generate, Star Formation, An image at every stage clear, Prompts from the game, Settings, For game authors
+
 ### Image Edit Tab (v0.3.65)
 Layer-based image editor, Loading images, Open PSD button, Close button, New button, Tools, Layer panel, Duplicate layer (⧉), Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
 
@@ -113,6 +116,8 @@ Restart ComfyUI after installation.
 Sample workflows are included in the `workflows/` folder. You can open them directly in ComfyUI via drag & drop, or load them from the Workflow tab.
 
 Samples for the Feeder tab: `ws_sdxl_image_feeder_i2i` / `ws_dwpose_image_feeder` (Image Loop mode, require the `comfyui-image-feeder` custom node) and `ws_sdxl_gallery_feeder_i2i` (v0.8.3, SDXL I2I with the bundled **WFS_GalleryFeeder** node — no extra custom node needed; put images in the `__Feeder__` Gallery group and use the Feeder tab's Gallery mode).
+
+Sample for the Game tab: `ws_game_sdxl_t2i` (v0.10.0, SDXL text-to-image, 1216x832, saves to `output/WFS_Game`) — the Game tab's default workflow. Import it from the Workflow tab (or copy it into ComfyUI's `user/default/workflows`) and change the checkpoint to an SDXL model you have (the sample uses an Illustrious model, which suits the game's 1980s anime prompts).
 
 > **Note:** Some sample workflows require additional custom nodes.
 > If a node is shown as missing (red/unknown) after loading, install the required custom nodes via **ComfyUI Manager** or by cloning the repository from GitHub into your `ComfyUI/custom_nodes/` directory.

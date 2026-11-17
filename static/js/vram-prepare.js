@@ -13,6 +13,8 @@
 
 import { t } from "./i18n.js";
 import { showToast } from "./app.js";
+
+const _showToast = showToast;
 import { readJsonStorage, getAiBackendDefaultUrl } from "./util.js";
 import { getDecisionSettings } from "./decision-client.js";
 
@@ -147,10 +149,14 @@ let _lastShortNote = "";
  * Call right before queuing a generation. Does nothing when the mode is off; never throws.
  * Shows a toast only when something was unloaded, the target can't be reached, or it failed
  * (the same "can't reach target" note isn't repeated across a batch).
+ * quiet: no toast, console only. Used for generation from the Game tab, and whenever the Game
+ * tab is open (the toast would cover the game screen).
  */
-export async function prepareVramForGeneration() {
+export async function prepareVramForGeneration({ quiet = false } = {}) {
     const settings = getVramSettings();
     if (settings.mode === "off") return null;
+    if (!quiet && document.getElementById("wfm-tab-game")?.classList.contains("active")) quiet = true;
+    const showToast = quiet ? (msg) => console.info("[WFS] vram:", msg) : _showToast;
     try {
         const d = await requestVramPrepare(settings.mode, settings.targetGb);
         const short = d.mode === "auto" && !d.reached;

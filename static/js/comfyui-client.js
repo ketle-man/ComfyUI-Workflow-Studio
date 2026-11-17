@@ -211,9 +211,9 @@ export const comfyUI = {
     },
 
     // Generation
-    async queuePrompt(workflow, extraData = null) {
+    async queuePrompt(workflow, extraData = null, { quietVram = false } = {}) {
         // Settings tab "VRAM Management": unload Ollama models to free VRAM (no-op when off, never throws)
-        await prepareVramForGeneration();
+        await prepareVramForGeneration({ quiet: quietVram });
         const body = {
             prompt: workflow,
             client_id: this.clientId,
@@ -349,7 +349,7 @@ export const comfyUI = {
 
     // High-level generate
     async generate(workflow, options = {}) {
-        const { seedMode = "random", seedValue = -1, onProgress, onComplete, onError, timeoutMs } = options;
+        const { seedMode = "random", seedValue = -1, onProgress, onComplete, onError, timeoutMs, quietVram = false } = options;
 
         this.generating = true;
         try {
@@ -379,7 +379,7 @@ export const comfyUI = {
             }
 
             // Queue prompt — pass workflow as extra_pnginfo so SaveImage embeds it in PNG metadata
-            const result = await this.queuePrompt(workflow, { extra_pnginfo: { workflow } });
+            const result = await this.queuePrompt(workflow, { extra_pnginfo: { workflow } }, { quietVram });
             this.currentPromptId = result.prompt_id;
 
             // Track progress

@@ -2,6 +2,23 @@
 
 ---
 
+## v0.10.0（2026-11-17）
+
+### Game タブ（実験的機能・別パッケージ ComfyUI-WFS-Games が必要）
+
+- ゲームをクリアした結果で画像を生成するタブ。ゲーム本体は別パッケージ [ComfyUI-WFS-Games](https://github.com/ketle-man/ComfyUI-WFS-Games)（Phaser 4.2.1 同梱、ノードなし）で配布し、`/wfs_games/manifest` が応答したときだけタブとヘルプページを表示する（Mask Editor One 連携と同じ「ルート疎通」方式）。未インストール環境では従来どおり。
+- ゲームは manifest の `entry`（同一オリジン `/wfs_games/static/` 配下のみ許可）を動的 import し `mount(container, host)` で起動。host は言語・プレイ設定（難易度・BGM・効果音）と `runStart()` / `stageClear(result)` / `finish(result)` を渡す。ゲームは ComfyUI を直接操作しない。
+- 結果パネルは「画像1枚 = カード1枚」。ステージクリア・エンディング・ゲームオーバーごとにカードを追加し、生成はキューで1枚ずつ順番に（プレイは止めない）。カードではゲームから渡されたプロンプトを種類（画風/ヒロイン/シーン/ステージ）付きで確認・除外・編集でき、「再生成」「GenerateUIで開く」。ゲームのネガティブはワークフローのネガティブ（または設定値）に足す。
+- 設定（localStorage `wfm_game_settings`、バックアップ対象）: 生成ワークフロー（既定 `ws_game_sdxl_t2i.json`）、ベースプロンプト、ネガティブ、ステージクリアごと/エンディング/ゲームオーバーの自動生成、難易度・BGM・効果音。旧既定のベースプロンプトは自動で置き換え。
+- サンプルワークフロー `workflows/ws_game_sdxl_t2i.json`（SDXL T2I、1216x832、出力 `WFS_Game/`）を同梱。Game タブの既定。
+- 生成は既存の `convertUiToApi` → `analyzeWorkflow` → ポジティブノードへ書き込み → `_expandWildcardsInWorkflow` → `comfyUI.generate` を再利用。
+- VRAM 調整: `prepareVramForGeneration({ quiet })` と `comfyUI.generate(..., { quietVram })` を追加。Game タブからの生成と Game タブ表示中はトーストを出さずコンソールにだけ出す（ゲーム画面を隠さない）。
+- 第一弾「Star Formation」（パック側）: 80年代（アーケード/MSX2/PC-8801）風の縦シューティング。全5ステージ・ステージごとのボス（WARNING とボス BGM）、ナビゲーターのリナとの ADV 風会話、PSG 風のオリジナル BGM、ドット絵・DotGothic16・走査線。ステージクリアで勝利の記念カット、各ステージ5個のハートを全部取るとプライベート写真（ステージごとに露出が増え、上限は水着。ネガティブで制限）、全クリアでエンディング、ゲームオーバーで敗北シーンを生成。
+- en/ja/zh の文言とヘルプページ、企画書 `PLAN_GAME_TAB.md`（企画・ライブラリ選定・類似ノード調査・実装記録）。
+- 実機確認: Playwright で検出/非表示、操作・一時停止、各ボスの動き、アイテム、ステージごと・エンディング・ゲームオーバー・プライベート写真の実生成、VRAM 調整でモデルがアンロードされてもトーストが出ないこと。
+
+---
+
 ## v0.9.10（2026-11-15）
 
 ### プロンプト翻訳API（Comic Creator から使うための整備）

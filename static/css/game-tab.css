@@ -40,5 +40,17 @@
 .wfm-game-progress { height: 6px; border-radius: 3px; overflow: hidden; background: var(--wfm-bg-secondary, #333); }
 .wfm-game-progress-bar { height: 100%; width: 0; background: var(--wfm-primary, #4a9eff); transition: width 0.2s; }
 .wfm-game-progress-text { font-size: 11px; color: var(--wfm-text-secondary, #aaa); word-break: break-all; min-height: 14px; }
-.wfm-game-output { display: flex; flex-direction: column; gap: 6px; }
-.wfm-game-output img { width: 100%; border-radius: var(--wfm-radius-sm, 4px); background: #000; }
+.wfm-game-jobs { display: flex; flex-direction: column; gap: 8px; }
+.wfm-game-job { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--wfm-border, #444); border-radius: var(--wfm-radius, 6px); background: var(--wfm-surface, transparent); }
+.wfm-game-job-gameover { border-color: var(--wfm-danger, #ff4757); }
+.wfm-game-job-gameover .wfm-game-job-title { color: var(--wfm-danger, #ff4757); }
+.wfm-game-job-head { display: flex; align-items: baseline; gap: 8px; }
+.wfm-game-job-title { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfm-game-job-status { flex: none; font-size: 11px; color: var(--wfm-text-secondary, #aaa); }
+.wfm-game-job-status[data-status="done"] { color: var(--wfm-success, #2ed573); }
+.wfm-game-job-status[data-status="failed"] { color: var(--wfm-danger, #ff4757); white-space: normal; }
+.wfm-game-job-img { width: 100%; border-radius: var(--wfm-radius-sm, 4px); background: #000; }
+.wfm-game-job-details summary { cursor: pointer; font-size: 12px; color: var(--wfm-text-secondary, #aaa); }
+.wfm-game-job-details[open] { display: flex; flex-direction: column; gap: 6px; }
+.wfm-game-job-private { border-color: #f472b6; }
+.wfm-game-job-private .wfm-game-job-title { color: #f472b6; }

@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.9.10-green)
+![Version](https://img.shields.io/badge/version-0.10.0-green)
 
 ## Screenshots
 
@@ -440,6 +440,18 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 </details>
 
 <details>
+<summary><h3>Game Tab (v0.10.0, experimental)</h3></summary>
+
+- **Play, then generate** — a tab for mini games that end in image generation. The games come from a separate pack, [ComfyUI-WFS-Games](https://github.com/ketle-man/ComfyUI-WFS-Games); the tab appears only when the pack is installed (Workflow Studio checks `/wfs_games/manifest` on start), so without it nothing changes
+- **Star Formation** (first game) — a 1980s-style vertical shooter (arcade / MSX2 / PC-8801 look: pixel sprites, pixel font, scanlines, chiptune music) built on Phaser 4. 5 stages, each ending with a boss (WARNING, boss music; big and tough / fast with fast shots / radial bursts / flashing straight-line ram / a giant carrier launching small fighters). Navigator Rina talks between stages in an adventure-game style window
+- **An image at every stage clear** — a card is added to the Result panel and a victory shot of Rina with that stage in the background is generated in the background while you keep playing (one at a time, in order). Five flashing enemies per stage drop hearts; catch all 5 and that stage's image becomes a private photo of Rina instead (more casual clothes each stage, up to a swimsuit — the game adds negative tags so it goes no further). Clearing all 5 stages adds the ending scene; a game over adds a defeat scene (screen darkens, her call goes unanswered)
+- **Prompts from the game** — each card lists the prompts the game returned with their kind (Style / Heroine / Scene / Stage); uncheck or edit them and Regenerate, or **Open in GenerateUI**. The game's negative tags are added to the workflow's negative prompt
+- **Settings** — the workflow used for generation (default `ws_game_sdxl_t2i.json`, an SDXL text-to-image workflow included in `workflows/` — import it and set your checkpoint; output in `output/WFS_Game`), base prompt, negative prompt, and whether to generate at each stage clear / the ending / on game over automatically; difficulty, music and sound effects. VRAM Management notices are not shown while the Game tab is open
+- **For game authors** — a game is an ES module with `mount(container, host)`; it reports results through `host.stageClear()` / `host.finish()` and never calls ComfyUI itself — Workflow Studio builds the prompt and runs the generation. See the pack's README and `PLAN_GAME_TAB.md`
+
+</details>
+
+<details>
 <summary><h3>Image Edit Tab (v0.3.65)</h3></summary>
 
 - **Layer-based image editor** — compose images with multiple layers (Image, Text, Draw, Mask types) and export the composite as PNG or a fully layered PSD
@@ -595,6 +607,8 @@ Restart ComfyUI after installation.
 Sample workflows are included in the `workflows/` folder. You can open them directly in ComfyUI via drag & drop, or load them from the Workflow tab.
 
 Samples for the Feeder tab: `ws_sdxl_image_feeder_i2i` / `ws_dwpose_image_feeder` (Image Loop mode, require the `comfyui-image-feeder` custom node) and `ws_sdxl_gallery_feeder_i2i` (v0.8.3, SDXL I2I with the bundled **WFS_GalleryFeeder** node — no extra custom node needed; put images in the `__Feeder__` Gallery group and use the Feeder tab's Gallery mode).
+
+Sample for the Game tab: `ws_game_sdxl_t2i` (v0.10.0, SDXL text-to-image, 1216x832, saves to `output/WFS_Game`) — the Game tab's default workflow. Import it from the Workflow tab (or copy it into ComfyUI's `user/default/workflows`) and change the checkpoint to an SDXL model you have (the sample uses an Illustrious model, which suits the game's 1980s anime prompts).
 
 > **Note:** Some sample workflows require additional custom nodes.
 > If a node is shown as missing (red/unknown) after loading, install the required custom nodes via **ComfyUI Manager** or by cloning the repository from GitHub into your `ComfyUI/custom_nodes/` directory.

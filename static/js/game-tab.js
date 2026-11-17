@@ -31,7 +31,9 @@ const DEFAULT_SETTINGS = {
     // 画風・キャラ・シーンはゲームが報酬プロンプトとして渡すので、ここは品質タグだけ
     basePrompt: "masterpiece, best quality",
     negativePrompt: "",
-    autoGenerate: false,
+    generateEachStage: true,   // ステージクリアごとに画像を生成する
+    autoGenerateEnding: true,  // 全クリア時のエンディング画像も自動で生成する
+    autoGenerateGameover: true, // ゲームオーバー時の敗北画像も自動で生成する
 };
 
 const state = {
@@ -39,11 +41,9 @@ const state = {
     opened: false,
     handle: null,        // mount() の戻り値
     mountToken: 0,
-    result: null,
-    selectedRewards: new Set(),
-    generating: false,
-    lastApiWorkflow: null,
-    lastImageUrl: null,
+    jobs: [],            // 画像1枚ごとのカード { id, kind, title, result, selected, el, status, apiWf, imageUrl }
+    jobSeq: 0,
+    queue: Promise.resolve(), // 生成は1枚ずつ順番に行う
 };
 
 const $ = (id) => document.getElementById(id);
@@ -162,7 +162,9 @@ function renderShell() {
                         <span>${escapeHtml(t("gameNegativePrompt"))}</span>
                         <textarea id="wfm-game-negative-prompt" class="wfm-textarea" rows="2" placeholder="${escapeHtml(t("gameNegativePlaceholder"))}"></textarea>
                     </label>
+                    <label class="wfm-game-check"><input type="checkbox" id="wfm-game-each-stage"> ${escapeHtml(t("gameEachStage"))}</label>
                     <label class="wfm-game-check"><input type="checkbox" id="wfm-game-auto-generate"> ${escapeHtml(t("gameAutoGenerate"))}</label>
+                    <label class="wfm-game-check"><input type="checkbox" id="wfm-game-auto-gameover"> ${escapeHtml(t("gameAutoGameover"))}</label>
                 </div>
             </aside>
             <section class="wfm-game-main">
@@ -176,25 +178,10 @@ function renderShell() {
             <aside class="wfm-game-result" id="wfm-game-result">
                 <div class="wfm-game-section-title">${escapeHtml(t("gameResultTitle"))}</div>
                 <div class="wfm-game-result-status" id="wfm-game-result-status">${escapeHtml(t("gameResultEmpty"))}</div>
-                <div class="wfm-game-rewards" id="wfm-game-rewards"></div>
-                <label class="wfm-game-field" id="wfm-game-prompt-wrap" hidden>
-                    <span>${escapeHtml(t("gameFinalPrompt"))}</span>
-                    <textarea id="wfm-game-final-prompt" class="wfm-textarea" rows="5"></textarea>
-                </label>
-                <div class="wfm-game-row" id="wfm-game-gen-row" hidden>
-                    <button type="button" id="wfm-game-generate" class="wfm-btn wfm-btn-primary">${escapeHtml(t("gameGenerate"))}</button>
+                <div class="wfm-game-row" id="wfm-game-end-row" hidden>
+                    <button type="button" id="wfm-game-play-again" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gamePlayAgain"))}</button>
                 </div>
-                <div class="wfm-game-progress" id="wfm-game-progress" hidden>
-                    <div class="wfm-game-progress-bar" id="wfm-game-progress-bar"></div>
-                </div>
-                <div class="wfm-game-progress-text" id="wfm-game-progress-text"></div>
-                <div class="wfm-game-output" id="wfm-game-output" hidden>
-                    <img id="wfm-game-output-img" alt="">
-                    <div class="wfm-game-row">
-                        <button type="button" id="wfm-game-open-generate" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gameOpenInGenerateUI"))}</button>
-                        <button type="button" id="wfm-game-play-again" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gamePlayAgain"))}</button>
-                    </div>
-                </div>
+                <div class="wfm-game-jobs" id="wfm-game-jobs"></div>
             </aside>
         </div>`;
 
@@ -203,7 +190,9 @@ function renderShell() {
     $("wfm-game-bgm").checked = s.bgm !== false;
     $("wfm-game-base-prompt").value = s.basePrompt;
     $("wfm-game-negative-prompt").value = s.negativePrompt;
-    $("wfm-game-auto-generate").checked = !!s.autoGenerate;
+    $("wfm-game-each-stage").checked = s.generateEachStage !== false;
+    $("wfm-game-auto-generate").checked = s.autoGenerateEnding !== false;
+    $("wfm-game-auto-gameover").checked = s.autoGenerateGameover !== false;
     markSelectedGame();
 }
 
@@ -253,19 +242,31 @@ function bindShell() {
     $("wfm-game-bgm").addEventListener("change", (e) => { saveSettings({ bgm: e.target.checked }); mountCurrentGame(); });
     $("wfm-game-workflow").addEventListener("change", (e) => saveSettings({ workflow: e.target.value }));
     $("wfm-game-workflow-reload").addEventListener("click", loadWorkflowOptions);
-    $("wfm-game-base-prompt").addEventListener("change", (e) => { saveSettings({ basePrompt: e.target.value }); refreshFinalPrompt(); });
+    $("wfm-game-base-prompt").addEventListener("change", (e) => {
+        saveSettings({ basePrompt: e.target.value });
+        state.jobs.forEach((job) => { if (job.status === "idle" || job.status === "queued") refreshJobPrompt(job); });
+    });
     $("wfm-game-negative-prompt").addEventListener("change", (e) => saveSettings({ negativePrompt: e.target.value }));
-    $("wfm-game-auto-generate").addEventListener("change", (e) => saveSettings({ autoGenerate: e.target.checked }));
+    $("wfm-game-each-stage").addEventListener("change", (e) => saveSettings({ generateEachStage: e.target.checked }));
+    $("wfm-game-auto-generate").addEventListener("change", (e) => saveSettings({ autoGenerateEnding: e.target.checked }));
+    $("wfm-game-auto-gameover").addEventListener("change", (e) => saveSettings({ autoGenerateGameover: e.target.checked }));
     $("wfm-game-restart").addEventListener("click", restartGame);
     $("wfm-game-play-again").addEventListener("click", restartGame);
-    $("wfm-game-generate").addEventListener("click", () => generateFromResult());
-    $("wfm-game-open-generate").addEventListener("click", openInGenerateUI);
-    $("wfm-game-rewards").addEventListener("change", (e) => {
+    const jobs = $("wfm-game-jobs");
+    jobs.addEventListener("change", (e) => {
         const cb = e.target.closest("input[data-reward-idx]");
-        if (!cb) return;
+        const job = jobOf(e.target);
+        if (!cb || !job) return;
         const idx = Number(cb.dataset.rewardIdx);
-        if (cb.checked) state.selectedRewards.add(idx); else state.selectedRewards.delete(idx);
-        refreshFinalPrompt();
+        if (cb.checked) job.selected.add(idx); else job.selected.delete(idx);
+        refreshJobPrompt(job);
+    });
+    jobs.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-act]");
+        const job = jobOf(e.target);
+        if (!btn || !job) return;
+        if (btn.dataset.act === "generate") enqueueJob(job);
+        else if (btn.dataset.act === "open") openInGenerateUI(job);
     });
 }
 
@@ -281,15 +282,15 @@ function unmountGame() {
 }
 
 function resetResult() {
-    state.result = null;
-    state.selectedRewards = new Set();
-    $("wfm-game-result-status").textContent = t("gameResultEmpty");
-    $("wfm-game-rewards").innerHTML = "";
-    $("wfm-game-prompt-wrap").hidden = true;
-    $("wfm-game-gen-row").hidden = true;
-    $("wfm-game-output").hidden = true;
-    $("wfm-game-progress").hidden = true;
-    $("wfm-game-progress-text").textContent = "";
+    // 生成中・待機中のジョブはそのまま続く(カードだけ消える)。画像は出力フォルダに残る
+    state.jobs.forEach((job) => { job.removed = true; if (job.imageUrl) URL.revokeObjectURL(job.imageUrl); });
+    state.jobs = [];
+    const jobs = $("wfm-game-jobs");
+    if (jobs) jobs.innerHTML = "";
+    const st = $("wfm-game-result-status");
+    if (st) st.textContent = t("gameResultEmpty");
+    const end = $("wfm-game-end-row");
+    if (end) end.hidden = true;
 }
 
 async function mountCurrentGame() {
@@ -311,7 +312,9 @@ async function mountCurrentGame() {
             apiVersion: HOST_API_VERSION,
             lang: getLang(),
             settings: { difficulty: s.difficulty, sound: s.sound !== false, bgm: s.bgm !== false },
-            finish: (result) => { if (token === state.mountToken) onGameFinished(game, result); },
+            runStart: () => { if (token === state.mountToken) resetResult(); },
+            stageClear: (result) => { if (token === state.mountToken) onStageClear(result); },
+            finish: (result) => { if (token === state.mountToken) onGameFinished(result); },
         };
         const handle = await mod.mount(stage, host);
         if (token !== state.mountToken) { try { handle?.unmount?.(); } catch { /* ignore */ } return; }
@@ -347,72 +350,112 @@ function sanitizeResult(raw) {
             weight: Number.isFinite(Number(x.weight)) ? Number(x.weight) : 1,
             source: typeof x.source === "string" ? x.source : "clear",
         }));
+    const kind = ["stage", "ending", "gameover"].includes(r.kind) ? r.kind : (r.cleared ? "ending" : "gameover");
+    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     return {
+        kind,
+        bonus: !!r.bonus, // アイテムを全部取ったステージ(プライベート写真)
         negative: typeof r.negative === "string" ? r.negative.trim().slice(0, 500) : "",
         cleared: !!r.cleared,
-        score: Number.isFinite(Number(r.score)) ? Number(r.score) : 0,
-        stage: r.stage,
-        stagesTotal: r.stagesTotal,
+        score: num(r.score),
+        stage: num(r.stage),
+        stagesTotal: num(r.stagesTotal),
+        stageName: typeof r.stageName === "string" ? r.stageName.slice(0, 100) : "",
         rewards,
     };
 }
 
-function onGameFinished(game, raw) {
+function onStageClear(raw) {
     const result = sanitizeResult(raw);
-    state.result = result;
-    state.selectedRewards = new Set(result.rewards.map((_, i) => i));
+    const job = result.bonus
+        ? addJob(result, t("gameJobStagePrivate", result.stage, result.stageName), "private")
+        : addJob(result, t("gameJobStage", result.stage, result.stageName));
+    if (loadSettings().generateEachStage !== false) enqueueJob(job);
+}
 
+function onGameFinished(raw) {
+    const result = sanitizeResult(raw);
+    const cleared = result.kind === "ending";
     $("wfm-game-result-status").innerHTML = `
-        <div class="wfm-game-result-head ${result.cleared ? "cleared" : "failed"}">${escapeHtml(result.cleared ? t("gameCleared") : t("gameOverLabel"))}</div>
+        <div class="wfm-game-result-head ${cleared ? "cleared" : "failed"}">${escapeHtml(cleared ? t("gameCleared") : t("gameOverLabel"))}</div>
         <div>${escapeHtml(t("gameScore", result.score))}</div>`;
-
-    // 第一弾(クリア生成)はゲームオーバー時には生成しない
-    if (!result.cleared) {
-        $("wfm-game-rewards").innerHTML = `<div class="wfm-game-note">${escapeHtml(t("gameOverNoGenerate"))}</div>`;
-        return;
+    $("wfm-game-end-row").hidden = false;
+    const s = loadSettings();
+    if (cleared) {
+        const job = addJob(result, t("gameJobEnding"));
+        if (s.autoGenerateEnding !== false) enqueueJob(job);
+    } else if (result.rewards.length) {
+        // ゲームオーバー: 負けたステージを背景にした敗北の場面(クリア済みステージの画像は残る)
+        const job = addJob(result, t("gameJobGameover", result.stage, result.stageName), "gameover");
+        if (s.autoGenerateGameover !== false) enqueueJob(job);
     }
-
-    $("wfm-game-rewards").innerHTML = result.rewards.length
-        ? `<div class="wfm-game-note">${escapeHtml(t("gameRewardsTitle"))}</div>` + result.rewards.map((r, i) => `
-            <label class="wfm-game-reward">
-                <input type="checkbox" data-reward-idx="${i}" checked>
-                <span><span class="wfm-game-reward-src">${escapeHtml(sourceLabel(r.source))}</span>${escapeHtml(r.text)}</span>
-            </label>`).join("")
-        : `<div class="wfm-game-note">${escapeHtml(t("gameNoRewards"))}</div>`;
-    if (result.negative) {
-        $("wfm-game-rewards").insertAdjacentHTML("beforeend",
-            `<div class="wfm-game-note">${escapeHtml(t("gameNegativeFromGame"))}: ${escapeHtml(result.negative)}</div>`);
-    }
-    $("wfm-game-prompt-wrap").hidden = false;
-    $("wfm-game-gen-row").hidden = false;
-    refreshFinalPrompt();
-
-    if (loadSettings().autoGenerate) generateFromResult();
 }
 
-function sourceLabel(src) {
-    const key = { style: "gameSrcStyle", character: "gameSrcCharacter", scene: "gameSrcScene", clear: "gameSrcClear", enemy: "gameSrcEnemy", bonus: "gameSrcBonus" }[src];
-    return key ? t(key) : src;
+// ---- image cards ----
+
+function jobOf(el) {
+    const card = el.closest?.(".wfm-game-job");
+    return card ? state.jobs.find((j) => String(j.id) === card.dataset.jobId) : null;
 }
 
-function joinUnique(...parts) {
-    const seen = new Set();
-    const out = [];
-    for (const part of parts) {
-        for (const tag of (part || "").split(",")) {
-            const v = tag.trim();
-            const k = v.toLowerCase();
-            if (v && !seen.has(k)) { seen.add(k); out.push(v); }
-        }
-    }
-    return out.join(", ");
+function addJob(result, title, variant = "") {
+    const job = {
+        id: ++state.jobSeq, kind: result.kind, title, result,
+        selected: new Set(result.rewards.map((_, i) => i)),
+        status: "idle", apiWf: null, imageUrl: null, el: null,
+    };
+    const el = document.createElement("div");
+    el.className = variant ? `wfm-game-job wfm-game-job-${variant}` : "wfm-game-job";
+    el.dataset.jobId = String(job.id);
+    el.innerHTML = `
+        <div class="wfm-game-job-head">
+            <span class="wfm-game-job-title">${escapeHtml(title)}</span>
+            <span class="wfm-game-job-status" data-role="status"></span>
+        </div>
+        <div class="wfm-game-progress" data-role="progress" hidden><div class="wfm-game-progress-bar" data-role="bar"></div></div>
+        <img class="wfm-game-job-img" data-role="img" alt="" hidden>
+        <details class="wfm-game-job-details">
+            <summary>${escapeHtml(t("gamePromptDetails"))}</summary>
+            <div class="wfm-game-rewards">
+                ${result.rewards.map((r, i) => `
+                    <label class="wfm-game-reward">
+                        <input type="checkbox" data-reward-idx="${i}" checked>
+                        <span><span class="wfm-game-reward-src">${escapeHtml(sourceLabel(r.source))}</span>${escapeHtml(r.text)}</span>
+                    </label>`).join("")}
+                ${result.negative ? `<div class="wfm-game-note">${escapeHtml(t("gameNegativeFromGame"))}: ${escapeHtml(result.negative)}</div>` : ""}
+            </div>
+            <label class="wfm-game-field">
+                <span>${escapeHtml(t("gameFinalPrompt"))}</span>
+                <textarea class="wfm-textarea" data-role="prompt" rows="4"></textarea>
+            </label>
+        </details>
+        <div class="wfm-game-row">
+            <button type="button" class="wfm-btn wfm-btn-sm wfm-btn-primary" data-act="generate">${escapeHtml(t("gameGenerate"))}</button>
+            <button type="button" class="wfm-btn wfm-btn-sm" data-act="open" hidden>${escapeHtml(t("gameOpenInGenerateUI"))}</button>
+        </div>`;
+    job.el = el;
+    state.jobs.push(job);
+    $("wfm-game-jobs")?.prepend(el); // 新しいものを上に
+    refreshJobPrompt(job);
+    setJobStatus(job, "idle");
+    return job;
 }
 
-function formatReward(r) {
-    return r.weight !== 1 ? `(${r.text}:${r.weight})` : r.text;
+const part = (job, role) => job.el.querySelector(`[data-role="${role}"]`);
+
+function setJobStatus(job, status, text = "") {
+    job.status = status;
+    const label = { idle: "", queued: t("gameJobQueued"), running: t("gameGenerating"), done: t("gameJobDone"), failed: t("gameGenerateFailed", "") }[status] ?? "";
+    const st = part(job, "status");
+    st.textContent = text || label;
+    st.dataset.status = status;
+    part(job, "progress").hidden = status !== "running";
+    const gen = job.el.querySelector('button[data-act="generate"]');
+    gen.disabled = status === "queued" || status === "running";
+    gen.textContent = job.imageUrl || status === "failed" ? t("gameRegenerate") : t("gameGenerate");
 }
 
-function buildPrompt() {
+function buildPrompt(job) {
     const s = loadSettings();
     const parts = [];
     const seen = new Set();
@@ -425,16 +468,83 @@ function buildPrompt() {
         parts.push(v);
     };
     push(s.basePrompt);
-    (state.result?.rewards || []).forEach((r, i) => { if (state.selectedRewards.has(i)) push(formatReward(r)); });
+    job.result.rewards.forEach((r, i) => { if (job.selected.has(i)) push(formatReward(r)); });
     return parts.join(", ");
 }
 
-function refreshFinalPrompt() {
-    const ta = $("wfm-game-final-prompt");
-    if (ta && state.result?.cleared) ta.value = buildPrompt();
+function refreshJobPrompt(job) {
+    part(job, "prompt").value = buildPrompt(job);
 }
 
-async function buildWorkflow(prompt) {
+function enqueueJob(job) {
+    if (job.status === "queued" || job.status === "running") return;
+    setJobStatus(job, "queued");
+    state.queue = state.queue.then(() => runJob(job)).catch(() => {});
+}
+
+async function runJob(job) {
+    if (job.removed) return;
+    const prompt = (part(job, "prompt").value || buildPrompt(job)).trim();
+    if (!prompt) { setJobStatus(job, "failed", t("gameEmptyPrompt")); return; }
+    setJobStatus(job, "running");
+    const bar = part(job, "bar");
+    bar.style.width = "0%";
+    try {
+        const wf = await buildWorkflow(prompt, job.result.negative);
+        job.apiWf = wf;
+        const expanded = await _expandWildcardsInWorkflow(wf);
+        const { images } = await comfyUI.generate(expanded, {
+            seedMode: "random",
+            quietVram: true, // VRAM 調整のトーストでゲーム画面を隠さない
+            onProgress: (pct) => {
+                bar.style.width = `${(pct * 100).toFixed(1)}%`;
+                part(job, "status").textContent = `${t("gameGenerating")} ${(pct * 100).toFixed(0)}%`;
+            },
+        });
+        const img = images.filter((x) => x.type !== "temp")[0] || images[0];
+        if (!img) throw new Error(t("gameNoImage"));
+        const blob = await comfyUI.getImageBlob(img);
+        if (job.imageUrl) URL.revokeObjectURL(job.imageUrl);
+        job.imageUrl = URL.createObjectURL(blob);
+        if (job.removed) { URL.revokeObjectURL(job.imageUrl); return; }
+        const el = part(job, "img");
+        el.src = job.imageUrl;
+        el.title = t("gameGenerated", [img.subfolder, img.filename].filter(Boolean).join("/"));
+        el.hidden = false;
+        job.el.querySelector('button[data-act="open"]').hidden = false;
+        setJobStatus(job, "done");
+    } catch (e) {
+        console.error("[WFS Game] generation failed", e);
+        if (!job.removed) {
+            setJobStatus(job, "failed", t("gameGenerateFailed", e.message));
+            showToast(t("gameGenerateFailed", e.message), "error");
+        }
+    }
+}
+
+function sourceLabel(src) {
+    const key = { style: "gameSrcStyle", character: "gameSrcCharacter", scene: "gameSrcScene", clear: "gameSrcClear", enemy: "gameSrcEnemy", bonus: "gameSrcBonus" }[src];
+    return key ? t(key) : src;
+}
+
+function joinUnique(...parts) {
+    const seen = new Set();
+    const out = [];
+    for (const p of parts) {
+        for (const tag of (p || "").split(",")) {
+            const v = tag.trim();
+            const k = v.toLowerCase();
+            if (v && !seen.has(k)) { seen.add(k); out.push(v); }
+        }
+    }
+    return out.join(", ");
+}
+
+function formatReward(r) {
+    return r.weight !== 1 ? `(${r.text}:${r.weight})` : r.text;
+}
+
+async function buildWorkflow(prompt, gameNegative) {
     const s = loadSettings();
     if (!s.workflow) throw new Error(t("gameNoWorkflow"));
     const res = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(s.workflow)}`);
@@ -455,59 +565,15 @@ async function buildWorkflow(prompt) {
         // 設定のネガティブ(空ならワークフロー自身のもの)に、ゲームが渡したネガティブを足す
         const key = neg.textKey || "text";
         const base = s.negativePrompt.trim() || (typeof wf[neg.id].inputs[key] === "string" ? wf[neg.id].inputs[key] : "");
-        wf[neg.id].inputs[key] = joinUnique(base, state.result?.negative);
+        wf[neg.id].inputs[key] = joinUnique(base, gameNegative);
     }
     return wf;
 }
 
-async function generateFromResult() {
-    if (state.generating || !state.result?.cleared) return;
-    const prompt = ($("wfm-game-final-prompt")?.value || buildPrompt()).trim();
-    if (!prompt) { showToast(t("gameEmptyPrompt"), "error"); return; }
-
-    const btn = $("wfm-game-generate");
-    const bar = $("wfm-game-progress-bar");
-    const text = $("wfm-game-progress-text");
-    state.generating = true;
-    btn.disabled = true;
-    $("wfm-game-progress").hidden = false;
-    bar.style.width = "0%";
-    text.textContent = t("gameGenerating");
-    try {
-        const wf = await buildWorkflow(prompt);
-        state.lastApiWorkflow = wf;
-        const expanded = await _expandWildcardsInWorkflow(wf);
-        const { images } = await comfyUI.generate(expanded, {
-            seedMode: "random",
-            onProgress: (pct) => {
-                bar.style.width = `${(pct * 100).toFixed(1)}%`;
-                text.textContent = `${t("gameGenerating")} ${(pct * 100).toFixed(0)}%`;
-            },
-        });
-        const out = images.filter((img) => img.type !== "temp");
-        const img = out[0] || images[0];
-        if (!img) throw new Error(t("gameNoImage"));
-        const blob = await comfyUI.getImageBlob(img);
-        if (state.lastImageUrl) URL.revokeObjectURL(state.lastImageUrl);
-        state.lastImageUrl = URL.createObjectURL(blob);
-        $("wfm-game-output-img").src = state.lastImageUrl;
-        $("wfm-game-output").hidden = false;
-        bar.style.width = "100%";
-        text.textContent = t("gameGenerated", [img.subfolder, img.filename].filter(Boolean).join("/"));
-    } catch (e) {
-        console.error("[WFS Game] generation failed", e);
-        text.textContent = t("gameGenerateFailed", e.message);
-        showToast(t("gameGenerateFailed", e.message), "error");
-    } finally {
-        state.generating = false;
-        btn.disabled = false;
-    }
-}
-
-async function openInGenerateUI() {
-    if (!state.lastApiWorkflow) return;
+async function openInGenerateUI(job) {
+    if (!job?.apiWf) return;
     const { loadWorkflowIntoEditor } = await import("./generate-tab.js");
-    const ok = await loadWorkflowIntoEditor(structuredClone(state.lastApiWorkflow), loadSettings().workflow);
+    const ok = await loadWorkflowIntoEditor(structuredClone(job.apiWf), loadSettings().workflow);
     if (ok !== false) document.querySelector('.wfm-tab[data-tab="generate"]')?.click();
 }
 

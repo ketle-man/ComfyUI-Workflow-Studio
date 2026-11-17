@@ -1,0 +1,116 @@
+{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ],
+      "seed": 636718080453780,
+      "steps": 20,
+      "cfg": 8,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1
+    },
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "Illustrious\\IllustriousStyle_v22.safetensors"
+    },
+    "_meta": {
+      "title": "CheckpointLoaderSimple"
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1216,
+      "height": 832,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "EmptyLatentImage"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "4",
+        1
+      ],
+      "text": "masterpiece, best quality, outer space scenery"
+    },
+    "_meta": {
+      "title": "Positive Prompt (Game)"
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "4",
+        1
+      ],
+      "text": "lowres, worst quality, bad quality, text, watermark, signature"
+    },
+    "_meta": {
+      "title": "Negative Prompt (Game)"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "10",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "WFS_Game/game"
+    },
+    "_meta": {
+      "title": "SaveImage"
+    }
+  },
+  "10": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "sdxl_vae.safetensors"
+    },
+    "_meta": {
+      "title": "VAELoader"
+    }
+  }
+}
