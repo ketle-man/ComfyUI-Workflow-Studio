@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.10.0-green)
+![Version](https://img.shields.io/badge/version-0.10.1-green)
 
 ## Screenshots
 
@@ -440,10 +440,11 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 </details>
 
 <details>
-<summary><h3>Game Tab (v0.10.0, experimental)</h3></summary>
+<summary><h3>Game Tab (v0.10.0 – v0.10.1, experimental)</h3></summary>
 
 - **Play, then generate** — a tab for mini games that end in image generation. The games come from a separate pack, [ComfyUI-WFS-Games](https://github.com/ketle-man/ComfyUI-WFS-Games); the tab appears only when the pack is installed (Workflow Studio checks `/wfs_games/manifest` on start), so without it nothing changes
 - **Star Formation** (first game) — a 1980s-style vertical shooter (arcade / MSX2 / PC-8801 look: pixel sprites, pixel font, scanlines, chiptune music) built on Phaser 4. 5 stages, each ending with a boss (WARNING, boss music; big and tough / fast with fast shots / radial bursts / flashing straight-line ram / a giant carrier launching small fighters). Navigator Rina talks between stages in an adventure-game style window
+- **Turbo Heart** (second game, pack v0.2.0) — a 1980s-style behind-the-car racer with a pseudo-3D road and city-pop style chiptune music. 5 races (seaside highway, autumn mountain pass, desert canyon, neon city at night, tropical coast at dawn); 8 cars, start last, top 3 to advance. Nitro, speed lines, overtakes, tire squeal; obstacles (cardboard boxes, an oil slick, sometimes a person crossing — hitting them ends the game). Mechanic Misaki talks between races, and the images work the same way as in Star Formation
 - **An image at every stage clear** — a card is added to the Result panel and a victory shot of Rina with that stage in the background is generated in the background while you keep playing (one at a time, in order). Five flashing enemies per stage drop hearts; catch all 5 and that stage's image becomes a private photo of Rina instead (more casual clothes each stage, up to a swimsuit — the game adds negative tags so it goes no further). Clearing all 5 stages adds the ending scene; a game over adds a defeat scene (screen darkens, her call goes unanswered)
 - **Prompts from the game** — each card lists the prompts the game returned with their kind (Style / Heroine / Scene / Stage); uncheck or edit them and Regenerate, or **Open in GenerateUI**. The game's negative tags are added to the workflow's negative prompt
 - **Settings** — the workflow used for generation (default `ws_game_sdxl_t2i.json`, an SDXL text-to-image workflow included in `workflows/` — import it and set your checkpoint; output in `output/WFS_Game`), base prompt, negative prompt, and whether to generate at each stage clear / the ending / on game over automatically; difficulty, music and sound effects. VRAM Management notices are not shown while the Game tab is open

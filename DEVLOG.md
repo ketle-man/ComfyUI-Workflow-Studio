@@ -2,6 +2,16 @@
 
 ---
 
+## v0.10.1（2026-11-18）
+
+### Game タブ: 第2弾 Turbo Heart に対応(ゲームパック ComfyUI-WFS-Games v0.2.0)
+
+- ヘルプページに Turbo Heart の項目を追加(英日中): 操作、全5レース、8台で3位以内なら次へ、コース上のハート5個、障害物(ダンボール・オイル・道を渡る人)、画像の仕組みは Star Formation と同じ。
+- README の Game タブ節に Turbo Heart を追加。WFS 側のコード変更はなし(Host API はそのまま使える)。
+- 企画書 PLAN_GAME_TAB.md はリポジトリ外で管理するようにした(.gitignore に追加し、履歴からも削除)。
+
+---
+
 ## v0.10.0（2026-11-17）
 
 ### Game タブ（実験的機能・別パッケージ ComfyUI-WFS-Games が必要）

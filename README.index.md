@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.10.0-green)
+![Version](https://img.shields.io/badge/version-0.10.1-green)
 
 ## Features (tab -> feature names)
 
@@ -76,8 +76,8 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 ### TagSpace Tab (v0.9.0)
 Choose tags visually in a 3D latent space, Build / Update, Choosing tags, Explore, Search with a card's or Gallery image's tags, Make a prompt, Tagger fill, Glow / Twinkle, Hover preview, Requirements
 
-### Game Tab (v0.10.0, experimental)
-Play, then generate, Star Formation, An image at every stage clear, Prompts from the game, Settings, For game authors
+### Game Tab (v0.10.0 – v0.10.1, experimental)
+Play, then generate, Star Formation, Turbo Heart, An image at every stage clear, Prompts from the game, Settings, For game authors
 
 ### Image Edit Tab (v0.3.65)
 Layer-based image editor, Loading images, Open PSD button, Close button, New button, Tools, Layer panel, Duplicate layer (⧉), Layer lock, Text quality, Export, Canvas navigation, Undo / Redo
