@@ -117,6 +117,7 @@ function renderShell() {
     const root = $("wfm-tab-game");
     const s = loadSettings();
     const games = state.manifest.games;
+    // 左ペイン: ゲーム選択のみ / 中央: ゲーム / 右ペイン: タブ (結果 / 設定 = プレイ設定 + 画像生成設定)
     root.innerHTML = `
         <div class="wfm-game-layout">
             <aside class="wfm-game-side">
@@ -131,6 +132,28 @@ function renderShell() {
                             </button>`).join("")}
                     </div>
                 </div>
+            </aside>
+            <section class="wfm-game-main">
+                <div class="wfm-game-toolbar">
+                    <span class="wfm-game-current" id="wfm-game-current"></span>
+                    <span class="wfm-game-spacer"></span>
+                    <button type="button" id="wfm-game-restart" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gameRestart"))}</button>
+                </div>
+                <div class="wfm-game-stage" id="wfm-game-stage"></div>
+            </section>
+            <aside class="wfm-game-result" id="wfm-game-result">
+                <div class="wfm-side-tab-nav" id="wfm-game-pane-nav">
+                    <button type="button" class="wfm-side-tab-btn active" data-game-pane="result">${escapeHtml(t("gameResultTitle"))}</button>
+                    <button type="button" class="wfm-side-tab-btn" data-game-pane="settings">${escapeHtml(t("gameSettingsTab"))}</button>
+                </div>
+                <div class="wfm-game-pane" data-game-pane="result">
+                    <div class="wfm-game-result-status" id="wfm-game-result-status">${escapeHtml(t("gameResultEmpty"))}</div>
+                    <div class="wfm-game-row" id="wfm-game-end-row" hidden>
+                        <button type="button" id="wfm-game-play-again" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gamePlayAgain"))}</button>
+                    </div>
+                    <div class="wfm-game-jobs" id="wfm-game-jobs"></div>
+                </div>
+                <div class="wfm-game-pane" data-game-pane="settings" hidden>
                 <div class="wfm-game-section">
                     <div class="wfm-game-section-title">${escapeHtml(t("gamePlaySettings"))}</div>
                     <label class="wfm-game-field">
@@ -166,22 +189,7 @@ function renderShell() {
                     <label class="wfm-game-check"><input type="checkbox" id="wfm-game-auto-generate"> ${escapeHtml(t("gameAutoGenerate"))}</label>
                     <label class="wfm-game-check"><input type="checkbox" id="wfm-game-auto-gameover"> ${escapeHtml(t("gameAutoGameover"))}</label>
                 </div>
-            </aside>
-            <section class="wfm-game-main">
-                <div class="wfm-game-toolbar">
-                    <span class="wfm-game-current" id="wfm-game-current"></span>
-                    <span class="wfm-game-spacer"></span>
-                    <button type="button" id="wfm-game-restart" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gameRestart"))}</button>
                 </div>
-                <div class="wfm-game-stage" id="wfm-game-stage"></div>
-            </section>
-            <aside class="wfm-game-result" id="wfm-game-result">
-                <div class="wfm-game-section-title">${escapeHtml(t("gameResultTitle"))}</div>
-                <div class="wfm-game-result-status" id="wfm-game-result-status">${escapeHtml(t("gameResultEmpty"))}</div>
-                <div class="wfm-game-row" id="wfm-game-end-row" hidden>
-                    <button type="button" id="wfm-game-play-again" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gamePlayAgain"))}</button>
-                </div>
-                <div class="wfm-game-jobs" id="wfm-game-jobs"></div>
             </aside>
         </div>`;
 
@@ -227,7 +235,17 @@ async function loadWorkflowOptions() {
     sel.value = s.workflow;
 }
 
+// 右ペインのタブ (結果 / 設定)
+function showPane(name) {
+    document.querySelectorAll("#wfm-game-pane-nav .wfm-side-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.gamePane === name));
+    document.querySelectorAll("#wfm-game-result .wfm-game-pane").forEach((p) => { p.hidden = p.dataset.gamePane !== name; });
+}
+
 function bindShell() {
+    $("wfm-game-pane-nav").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-game-pane]");
+        if (btn) showPane(btn.dataset.gamePane);
+    });
     $("wfm-game-list").addEventListener("click", (e) => {
         const card = e.target.closest(".wfm-game-card");
         if (!card) return;
@@ -436,6 +454,7 @@ function addJob(result, title, variant = "") {
     job.el = el;
     state.jobs.push(job);
     $("wfm-game-jobs")?.prepend(el); // 新しいものを上に
+    showPane("result"); // 設定タブを開いていても、新しい画像カードが見えるようにする
     refreshJobPrompt(job);
     setJobStatus(job, "idle");
     return job;
