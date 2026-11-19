@@ -2,6 +2,7 @@
 
 Condensed version-by-version index of DEVLOG.md (each line: version + one-line summary of what changed and why). Full rationale, code details, and "How to apply" lessons live in the excluded DEVLOG.md itself; this index exists so graphify can extract a queryable semantic node per release without feeding the full log to the local Ollama model. Regenerate with `python tools/generate_doc_index.py devlog` whenever DEVLOG.md changes.
 
+- **v0.10.3（2026-11-19）** — Game タブ: 第5弾・第6弾のヘルプ(ゲームパック ComfyUI-WFS-Games v0.4.0)
 - **v0.10.2（2026-11-18）** — Game タブ: 右ペインを「結果 / 設定」のタブに、第3弾・第4弾に対応(ゲームパック ComfyUI-WFS-Games v0.3.0)
 - **v0.10.1（2026-11-18）** — Game タブ: 第2弾 Turbo Heart に対応(ゲームパック ComfyUI-WFS-Games v0.2.0)
 - **v0.10.0（2026-11-17）** — Game タブ（実験的機能・別パッケージ ComfyUI-WFS-Games が必要）
