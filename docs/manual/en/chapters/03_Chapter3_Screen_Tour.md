@@ -25,6 +25,7 @@ It is enough to learn the tabs marked with a star under "Often used" first.
 | Video | Video generation and video editing | | Chapter 11 |
 | Tagger | Automatically generating tags (prompts) from images | | Chapter 11 |
 | TagSpace | Showing tags, prompts and generated images in 3D by closeness of meaning, and picking tags | | Chapter 11 |
+| Game | Playing mini games and generating images from what you clear (shown only when the game pack is installed) | | Chapter 11 |
 | Settings | Language, theme, folders and other settings | | This chapter, Chapter 11 |
 | Help | Feature list, shortcuts, troubleshooting | | This chapter |
 | AI TOOL | Translation, chat, image analysis and text reading (OCR) with local AI | | Chapter 10 |
@@ -38,6 +39,8 @@ If the number of tabs makes you lose your way, it helps to think of them in thes
   Tabs for actually making images and videos, or touching them up.
 - **Support** - AI TOOL / Tagger / TagSpace / Settings / Help
   Tabs that help with work in other tabs, or hold overall settings.
+
+The **Game** tab is a special tab for making images while you play. It appears only when the separate game pack is installed (Chapter 11, section 11-8).
 
 > **Tip**
 > The tabs are connected to each other.

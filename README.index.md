@@ -133,12 +133,12 @@ Sample for the Game tab: `ws_game_sdxl_t2i` (v0.10.0, SDXL text-to-image, 1216x8
 
 ## Manual
 
-A beginner-oriented manual (covers v0.9.9, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
+A beginner-oriented manual (covers v0.10.3, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
 
-- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.9.9_en.zip`
-- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.9.9.zip`
+- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.10.3_en.zip`
+- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.10.3.zip`
 
-An EPUB edition with screenshots (Japanese and English, v0.9.9) is available on [Google Drive](https://drive.google.com/drive/folders/14mOHcnLYrFgNrOo6fy7ELyFjjWrAoU-_?usp=sharing).
+An EPUB edition with screenshots (Japanese and English, v0.10.3) is available on [Google Drive](https://drive.google.com/drive/folders/14mOHcnLYrFgNrOo6fy7ELyFjjWrAoU-_?usp=sharing).
 
 ---
 

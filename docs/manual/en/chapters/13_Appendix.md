@@ -133,6 +133,7 @@ The main terms that appear in this book, in alphabetical order.
 | --- | --- | --- |
 | ComfyUI Comic Creator (https://github.com/ketle-man/comfyui-comic-creator) | Manga making. Works with the Gallery and image generation | Chapter 11 |
 | comfyui-image-feeder (https://github.com/ketle-man/comfyui-image-feeder) | Feeder's Image Loop mode | Chapter 5 |
+| ComfyUI-WFS-Games (https://github.com/ketle-man/ComfyUI-WFS-Games) | The game pack for the Game tab | Chapter 11 |
 | comfyui-mask-editor-one (https://github.com/ketle-man/comfyui-mask-editor-one) | Advanced masking and background removal in Image Edit | Chapter 11 |
 | ComfyUI-Impact-Pack (https://github.com/ltdrdata/ComfyUI-Impact-Pack) | Curly-brace-style wildcards | Chapter 7 |
 | ComfyUI-Lora-Manager | Managing LoRAs; placing LoRAs together from the WS Library | Chapter 9 |

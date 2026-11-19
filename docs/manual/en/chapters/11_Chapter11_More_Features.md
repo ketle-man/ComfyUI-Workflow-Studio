@@ -229,6 +229,17 @@ to a file (Export), and read it back to restore it (Import).
 
 With **Full Backup (ZIP)**, you can back up everything together, including folder-based data such as styles and Lab plans.
 
+Since v0.9.10, the settings kept in the browser (groups, badge colors, appearance, AI and VRAM Management settings, presets, the Game tab settings and so on)
+are included in both the JSON export and the full backup.
+After an import (restore), press the **Reload page** button that appears to apply the browser settings, and then restart ComfyUI.
+
+In the full backup, checkboxes choose whether to include these:
+
+| Checkbox | Contents |
+| --- | --- |
+| Include the Gallery semantic search index | On by default. Rebuilding it re-embeds every image (with Gemini this costs API usage) |
+| Include the TagSpace cache | Off by default. Large, and can be rebuilt in the TagSpace tab |
+
 > **Tip**
 > Always take a backup before buying a new computer or reinstalling ComfyUI.
 > The information you spent time organizing can be carried over as it is to the new environment.
@@ -346,6 +357,126 @@ A card's whole prompt can be read under **Full prompt**.
 
 ---
 
+## 11-8 Game - play a game, and make images from what you clear (v0.10.0 and later, experimental)
+
+The **Game** tab lets you play mini games in the style of 1980s computer games.
+Each time you clear a stage, a "victory shot" of that game's heroine is generated automatically with ComfyUI.
+Generation runs in the background while you play, so you never have to stop.
+
+The games themselves come in a separate package, **ComfyUI-WFS-Games** (the game pack).
+Without the game pack, neither the Game tab nor the "Game Tab" page of the Help tab is shown (nothing else changes).
+
+### Preparation 1: install the game pack
+The game pack is not registered in ComfyUI Manager. Install it in one of these ways.
+
+- **With git**: open a command prompt in the `ComfyUI/custom_nodes` folder and run:
+
+```
+git clone https://github.com/ketle-man/ComfyUI-WFS-Games
+```
+
+- **With a ZIP**: download the latest ZIP from the GitHub releases page (https://github.com/ketle-man/ComfyUI-WFS-Games/releases)
+  and extract it into `ComfyUI/custom_nodes`. Name the folder `ComfyUI-WFS-Games`.
+
+Restart ComfyUI and open Workflow Studio; the **Game** tab appears to the right of the TagSpace tab.
+The game pack needs Workflow Studio v0.10.0 or later.
+
+### Preparation 2: prepare a workflow for the images
+The Game tab generates images with the workflow chosen in its settings. The default is **`ws_game_sdxl_t2i`**, a sample made for the Game tab
+(an SDXL (Illustrious) text-to-image workflow, 1216x832, saved to `ComfyUI/output/WFS_Game`).
+
+The Checkpoint saved in the sample is often not on your computer, so set it to your own model:
+
+1. Import `ws_game_sdxl_t2i.png` from the `workflows` folder into the Workflow tab, as in Chapter 4, section 4-8.
+2. Load the imported workflow into GenerateUI, choose one of your SDXL Checkpoints under **Model** and press **Apply** (Chapter 5).
+3. Save it under a name with **Save** (Chapter 5, "Saving the workflow you generated with").
+4. In the **Settings** tab on the right of the Game tab, choose the saved workflow under **Workflow**.
+   If it is not in the list, press the **Reload workflow list** button next to it.
+
+Other text-to-image workflows work too, as long as they have a positive prompt node.
+
+> **Caution**
+> If the Checkpoint saved in the workflow is not on your computer, the game's images fail with an error.
+> Generate once in GenerateUI and choose a workflow that works.
+
+### The screen
+| Place | Contents |
+| --- | --- |
+| **Games** on the left | The installed games. Click one to start it in the center |
+| Center | The game. **Restart** at the top right goes back to the title screen |
+| **Result** tab on the right | Cards for the generated images (newest on top) |
+| **Settings** tab on the right | Play settings and image generation settings |
+
+**Click** the game screen to send the keyboard to the game (keys pressed there do not affect the rest of Workflow Studio).
+The game pauses when you switch to another tab or window.
+
+### When images are generated
+| When | Card | Image |
+| --- | --- | --- |
+| You clear a stage | A card for that stage | A victory shot of the heroine with that stage in the background |
+| You caught all 5 hearts in the stage | A pink card (PERFECT!) | Instead of the victory shot, a private photo of the heroine off duty in casual clothes |
+| You clear every stage | ENDING | The ending scene |
+| Game over | A red GAME OVER card | A defeat scene of the heroine, with the stage where you fell in the background |
+
+Images are made one at a time, in order. The seed is random every time.
+They are saved in `ComfyUI/output/WFS_Game`. Starting a new game from the title screen clears the cards in the Result tab (the images stay).
+
+What the heroine wears in a private photo differs by game and stage. The game adds negative tags so that it never goes beyond a swimsuit.
+
+### What you can do with a card
+- Open **Prompt** to see the prompts the game gave, each marked with its kind (**Style**, **Heroine**, **Scene**, **Stage**).
+  Uncheck any you don't want or edit **Prompt to generate (editable)**, then press **Regenerate** to make it again.
+- **Open in GenerateUI** loads the workflow with that card's prompt into GenerateUI.
+  Handy when you want to remake it there with another size or model.
+
+### The Settings tab
+| Item | Contents |
+| --- | --- |
+| Difficulty | Easy, Normal or Hard. Lives and so on change by game |
+| Music, Sound effects | On or off |
+| Workflow | The workflow used to generate images (Preparation 2 above) |
+| Base prompt | Words added before the prompts the game gives |
+| Negative prompt | If empty, the workflow's own negative is used. The negative the game adds is appended to it |
+| Generate an image at each stage clear / Also generate the ending image automatically / Also generate an image on game over | When off, images are generated only when you press **Generate** on a card |
+
+Changing the play settings (difficulty, music, sound effects) restarts the game.
+The settings are saved in the browser and included in the Settings tab's backups (section 11-5).
+
+> **Tip**
+> While the Game tab is open, VRAM Management messages (toasts) are not shown, so they never cover the game.
+
+### The games (game pack v0.4.1)
+| Game | Genre | Heroine | Contents |
+| --- | --- | --- | --- |
+| Star Formation | Vertical shooter | Rina | 5 stages, each ending with a boss. Enemies flashing yellow drop hearts |
+| Turbo Heart | Racing | Misaki | 5 races. 8 cars; finish in the top 3 to go on. Nitro and obstacles |
+| Prompt Typer | Typing | (none) | 10 stages. What you type, typos included, becomes the image prompt. 85% correct clears a stage |
+| Sky Heart | Into-the-screen shooter | Hikari | 5 stages with bosses. An altimeter, hearts in the air and on the ground, power-ups |
+| Smash Heart | Tennis | Nanami | Matches against 5 rivals, 4 games each. No music; racket hits and the umpire's calls set the mood |
+| Knight Heart | Side-scrolling action | Kanon | 5 stages with bosses. Speed up on slopes, slide while running, jump farther the faster you run |
+
+Every game except Prompt Typer has 5 hearts per stage (race, match).
+Prompt Typer generates an image after every stage whether you clear it or not (when typing in Japanese or Chinese, use an image model that understands that language).
+
+### Controls
+| Game | Controls |
+| --- | --- |
+| Star Formation | ← → (A D) move, Space or Z shoots |
+| Turbo Heart | ← → steer, ↑ or Z accelerates, ↓ or X brakes, Space or C nitro (3 per race) |
+| Prompt Typer | Type the words. After a stage, Enter goes on, R retries, Q gives up. On the title, ↑ ↓ picks the language and ← → the start stage |
+| Sky Heart | Arrow keys or WASD move, hold Space or Z to shoot |
+| Smash Heart | Arrow keys move, Z or Space hits, X lobs. Hold ← → at contact to aim. Serve: Z to toss, Z again to hit |
+| Knight Heart | ← → move, Space or X jumps, Z or C attacks (↑+attack throws straight up, ↓+attack in the air straight down), ↓ while running slides |
+
+Every game pauses with **Esc** or **P**. A gamepad also works (except in Prompt Typer).
+The detailed rules of each game are on the **Game Tab** page of the Help tab.
+
+> **Tip**
+> On game over in Knight Heart you can choose to **retry the stage** or **give up**.
+> The defeat scene is generated only when you give up. While paused, **R** restarts the stage for one life.
+
+---
+
 > **Summary of this chapter**
 > - In the Nodes tab you can list and organize installed nodes, and use them in the WS Library
 > - Tagger automatically generates tags from images. A model and extra packages must be prepared
@@ -354,3 +485,4 @@ A card's whole prompt can be read under **Full prompt**.
 > - "Default Checkpoint" and "Data Management (backup)" in the Settings tab are especially handy
 > - Combined with Comic Creator by the same author, you can make manga from generated images
 > - TagSpace lays out your tags, prompts and generated images in 3D by closeness of meaning, so you can browse it and pick tags for a prompt
+> - In the Game tab you play the game pack's mini games, and an image of the heroine is generated automatically each time you clear a stage

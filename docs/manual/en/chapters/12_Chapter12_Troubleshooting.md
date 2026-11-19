@@ -197,6 +197,16 @@ Run the installation command shown in the error message in the Python that Comfy
 The cause is a missing Comfy API key in `.env`. Write `COMFY_API_KEY=your key` (issued at platform.comfy.org) in the plugin's `.env` and restart ComfyUI (Chapter 5, section 5-8).
 `.env` is read only at startup.
 
+### The Game tab is missing, or a game does not work
+| Symptom | Cause | What to do |
+| --- | --- | --- |
+| There is no Game tab | The game pack (ComfyUI-WFS-Games) is not installed, or ComfyUI was not restarted after installing it | Install it as in Chapter 11, section 11-8, and restart ComfyUI. Workflow Studio v0.10.0 or later is needed |
+| Keys do not move the game | The keyboard is not on the game screen | Click the game screen once |
+| "No workflow is selected in the Game settings." is shown | The Workflow in the Settings tab is empty | Choose one under **Workflow** in the Settings tab (Chapter 11, section 11-8, Preparation 2) |
+| "The workflow has no positive prompt node." is shown | No node to write the prompt into was found in the chosen workflow | Choose a text-to-image workflow |
+| A card shows an error and no image | The workflow's Checkpoint is not on your computer | Change it to your own model in GenerateUI, save it, and choose that workflow (Chapter 11, section 11-8, Preparation 2) |
+| A game still behaves the old way after an update | The browser remembers old files | Reload the page with **Ctrl+F5** |
+
 ### ComfyUI freezes (no tab responds)
 On Windows, ComfyUI can stop responding (generation included), for example after switching a Models tab list with many preview images.
 In the Settings tab, under **Windows Stability (Event Loop)**, turn on **Use the Selector event loop on Windows (restart required)** and restart ComfyUI.
