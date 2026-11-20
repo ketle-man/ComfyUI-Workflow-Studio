@@ -4,7 +4,7 @@
 .wfm-game-layout [hidden] { display: none !important; }
 .wfm-game-side,
 .wfm-game-result { width: 290px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow: auto; }
-.wfm-game-side { border-right: 1px solid var(--wfm-border, #444); }
+.wfm-game-side { border-right: 1px solid var(--wfm-border, #444); width: 180px; }
 .wfm-game-result { border-left: 1px solid var(--wfm-border, #444); width: 320px; padding: 0; gap: 0; overflow: hidden; }
 /* 右ペインのタブ (結果 / 設定)。タブ本体の見た目は main.css の .wfm-side-tab-nav / .wfm-side-tab-btn */
 .wfm-game-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow: auto; }
@@ -56,3 +56,12 @@
 .wfm-game-job-details[open] { display: flex; flex-direction: column; gap: 6px; }
 .wfm-game-job-private { border-color: #f472b6; }
 .wfm-game-job-private .wfm-game-job-title { color: #f472b6; }
+/* 右ペイン(結果タブ)のゲーム説明 */
+.wfm-game-desc { flex: none; padding: 6px 8px; border: 1px solid var(--wfm-border, #444); border-radius: var(--wfm-radius-sm, 4px); background: var(--wfm-bg-secondary, #222); font-size: 12px; }
+.wfm-game-desc > summary { cursor: pointer; font-weight: 600; color: var(--wfm-text, #ddd); }
+.wfm-game-desc-body { margin-top: 6px; line-height: 1.5; color: var(--wfm-text-secondary, #aaa); max-height: 65vh; overflow-y: auto; }
+.wfm-game-desc-body p { margin: 0 0 8px; }
+.wfm-game-desc-body p:last-child { margin-bottom: 0; }
+/* ワースト写真(NG集) */
+.wfm-game-job-worst { border-color: #94a3b8; border-style: dashed; }
+.wfm-game-job-worst .wfm-game-job-title { color: #94a3b8; }

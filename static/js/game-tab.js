@@ -117,7 +117,7 @@ function renderShell() {
     const root = $("wfm-tab-game");
     const s = loadSettings();
     const games = state.manifest.games;
-    // 左ペイン: ゲーム選択のみ / 中央: ゲーム / 右ペイン: タブ (結果 / 設定 = プレイ設定 + 画像生成設定)
+    // 左ペイン: ゲームのタイトル一覧のみ / 右ペインの結果タブの先頭に選んだゲームの説明 / 中央: ゲーム / 右ペイン: タブ (結果 / 設定 = プレイ設定 + 画像生成設定)
     root.innerHTML = `
         <div class="wfm-game-layout">
             <aside class="wfm-game-side">
@@ -125,10 +125,8 @@ function renderShell() {
                     <div class="wfm-game-section-title">${escapeHtml(t("gameListTitle"))}</div>
                     <div class="wfm-game-list" id="wfm-game-list">
                         ${games.map((g) => `
-                            <button type="button" class="wfm-game-card" data-game-id="${escapeHtml(g.id)}">
-                                ${g.thumbnail ? `<img src="${escapeHtml(g.thumbnail)}" alt="">` : ""}
+                            <button type="button" class="wfm-game-card" data-game-id="${escapeHtml(g.id)}" title="${escapeHtml(localized(g.name, g.id))}">
                                 <span class="wfm-game-card-name">${escapeHtml(localized(g.name, g.id))}</span>
-                                <span class="wfm-game-card-desc">${escapeHtml(localized(g.description))}</span>
                             </button>`).join("")}
                     </div>
                 </div>
@@ -147,6 +145,10 @@ function renderShell() {
                     <button type="button" class="wfm-side-tab-btn" data-game-pane="settings">${escapeHtml(t("gameSettingsTab"))}</button>
                 </div>
                 <div class="wfm-game-pane" data-game-pane="result">
+                    <details class="wfm-game-desc" id="wfm-game-desc">
+                        <summary id="wfm-game-desc-title"></summary>
+                        <div class="wfm-game-desc-body" id="wfm-game-desc-body"></div>
+                    </details>
                     <div class="wfm-game-result-status" id="wfm-game-result-status">${escapeHtml(t("gameResultEmpty"))}</div>
                     <div class="wfm-game-row" id="wfm-game-end-row" hidden>
                         <button type="button" id="wfm-game-play-again" class="wfm-btn wfm-btn-sm">${escapeHtml(t("gamePlayAgain"))}</button>
@@ -211,6 +213,12 @@ function markSelectedGame() {
     });
     const cur = $("wfm-game-current");
     if (cur) cur.textContent = g ? localized(g.name, g.id) : "";
+    // 右ペイン(結果タブ)にゲームの説明
+    const title = $("wfm-game-desc-title");
+    const body = $("wfm-game-desc-body");
+    if (title) title.textContent = g ? t("gameAboutTitle", localized(g.name, g.id)) : "";
+    // 改行ごとに段落にする(概要 / 【操作】 / 【画像生成】)
+    if (body) body.innerHTML = g ? localized(g.description).split(/\n+/).filter(Boolean).map((p) => `<p>${escapeHtml(p)}</p>`).join("") : "";
 }
 
 async function loadWorkflowOptions() {
@@ -373,6 +381,8 @@ function sanitizeResult(raw) {
     return {
         kind,
         bonus: !!r.bonus, // アイテムを全部取ったステージ(プライベート写真)
+        worst: !!r.worst, // ステージでいちばん点数の低かった写真(NG集)
+        photoScore: Number.isFinite(Number(r.photoScore)) && r.photoScore !== null ? Number(r.photoScore) : null,
         negative: typeof r.negative === "string" ? r.negative.trim().slice(0, 500) : "",
         cleared: !!r.cleared,
         score: num(r.score),
@@ -385,9 +395,11 @@ function sanitizeResult(raw) {
 
 function onStageClear(raw) {
     const result = sanitizeResult(raw);
-    const job = result.bonus
-        ? addJob(result, t("gameJobStagePrivate", result.stage, result.stageName), "private")
-        : addJob(result, t("gameJobStage", result.stage, result.stageName));
+    const job = result.worst
+        ? addJob(result, t("gameJobStageWorst", result.stage, result.stageName, result.photoScore), "worst")
+        : result.bonus
+            ? addJob(result, t("gameJobStagePrivate", result.stage, result.stageName), "private")
+            : addJob(result, t("gameJobStage", result.stage, result.stageName));
     if (loadSettings().generateEachStage !== false) enqueueJob(job);
 }
 
@@ -455,6 +467,8 @@ function addJob(result, title, variant = "") {
     state.jobs.push(job);
     $("wfm-game-jobs")?.prepend(el); // 新しいものを上に
     showPane("result"); // 設定タブを開いていても、新しい画像カードが見えるようにする
+    const desc = $("wfm-game-desc");
+    if (desc) desc.open = false; // ゲームの説明はたたんで、画像カードを上に出す
     refreshJobPrompt(job);
     setJobStatus(job, "idle");
     return job;
