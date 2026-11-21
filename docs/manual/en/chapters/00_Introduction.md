@@ -84,7 +84,7 @@ Together with the supporting features, it makes moving between the two screens s
 - **Local AI integration** - translating prompts from Japanese, creating prompts and tags from images
 - **Tagger and Video** - automatic tag generation from images, and video generation with simple editing
 - **TagSpace** - lays out your own prompts, tags and generated images in a 3D space by closeness of meaning, so you can browse it and pick tags
-- **Game** (experimental) - play the mini games of a separate pack, and an image of the heroine is generated each time you clear a stage
+- **Game** (experimental) - play the mini games of a separate pack, and an image of the heroine is generated each time you clear a stage (9 games in game pack v0.6.0)
 
 ---
 
@@ -130,7 +130,7 @@ It is written so that you can follow it if you know basic computer operations (c
 
 ## Version and environment covered
 
-- **Workflow Studio**: v0.10.3 (game pack ComfyUI-WFS-Games for the Game tab: v0.4.1)
+- **Workflow Studio**: v0.10.5 (game pack ComfyUI-WFS-Games for the Game tab: v0.6.0)
 - **ComfyUI**: the latest version at the time of writing
 - **OS**: Windows (screen examples are from Windows)
 

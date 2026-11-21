@@ -359,8 +359,8 @@ A card's whole prompt can be read under **Full prompt**.
 
 ## 11-8 Game - play a game, and make images from what you clear (v0.10.0 and later, experimental)
 
-The **Game** tab lets you play mini games in the style of 1980s computer games.
-Each time you clear a stage, a "victory shot" of that game's heroine is generated automatically with ComfyUI.
+The **Game** tab lets you play mini games, mostly in the style of 1980s computer games.
+Each time you clear a stage, a "victory shot" of that game's heroine is generated automatically with ComfyUI (when and what is generated differs a little by game).
 Generation runs in the background while you play, so you never have to stop.
 
 The games themselves come in a separate package, **ComfyUI-WFS-Games** (the game pack).
@@ -402,13 +402,16 @@ Other text-to-image workflows work too, as long as they have a positive prompt n
 ### The screen
 | Place | Contents |
 | --- | --- |
-| **Games** on the left | The installed games. Click one to start it in the center |
+| **Games** on the left | The titles of the installed games. Click one to start it in the center |
 | Center | The game. **Restart** at the top right goes back to the title screen |
-| **Result** tab on the right | Cards for the generated images (newest on top) |
+| **Result** tab on the right | At the top, **About ...** for the selected game (click to open). Below it, cards for the generated images (newest on top) |
 | **Settings** tab on the right | Play settings and image generation settings |
 
 **Click** the game screen to send the keyboard to the game (keys pressed there do not affect the rest of Workflow Studio).
 The game pauses when you switch to another tab or window.
+
+**About ...** is collapsed at first. Open it to read the game's overview, **[Controls]** and **[Images]** (when and what images are generated) (v0.10.4 and later).
+Open it before you play a game for the first time.
 
 ### When images are generated
 | When | Card | Image |
@@ -417,6 +420,15 @@ The game pauses when you switch to another tab or window.
 | You caught all 5 hearts in the stage | A pink card (PERFECT!) | Instead of the victory shot, a private photo of the heroine off duty in casual clothes |
 | You clear every stage | ENDING | The ending scene |
 | Game over | A red GAME OVER card | A defeat scene of the heroine, with the stage where you fell in the background |
+| You clear a stage in Shutter Heart | A gray dashed card (STAGE n - WORST SHOT (score)) | The lowest-scoring photo of that stage (v0.10.4 and later) |
+
+This is the basic pattern; some games differ as below. See **[Images]** in **About ...** on the Result tab for details.
+
+- **Prompt Typer**: an image after every stage, cleared or not.
+- **Shutter Heart**: the photo you pick on the contact sheet (one above the target score) is generated, together with the worst shot.
+- **Dungeon Heart**: an image when you beat each floor's boss (your current equipment and the finishing spell appear in it).
+- **Variant Heart**: the weapon that finished the boss (machine gun, missile, beam rifle or beam saber) appears in the image.
+- **Knight Heart, Dungeon Heart, Variant Heart**: on game over you choose to continue or give up. The defeat scene is generated only when you give up.
 
 Images are made one at a time, in order. The seed is random every time.
 They are saved in `ComfyUI/output/WFS_Game`. Starting a new game from the title screen clears the cards in the Result tab (the images stay).
@@ -445,7 +457,7 @@ The settings are saved in the browser and included in the Settings tab's backups
 > **Tip**
 > While the Game tab is open, VRAM Management messages (toasts) are not shown, so they never cover the game.
 
-### The games (game pack v0.4.1)
+### The games (game pack v0.6.0)
 | Game | Genre | Heroine | Contents |
 | --- | --- | --- | --- |
 | Star Formation | Vertical shooter | Rina | 5 stages, each ending with a boss. Enemies flashing yellow drop hearts |
@@ -454,6 +466,9 @@ The settings are saved in the browser and included in the Settings tab's backups
 | Sky Heart | Into-the-screen shooter | Hikari | 5 stages with bosses. An altimeter, hearts in the air and on the ground, power-ups |
 | Smash Heart | Tennis | Nanami | Matches against 5 rivals, 4 games each. No music; racket hits and the umpire's calls set the mood |
 | Knight Heart | Side-scrolling action | Kanon | 5 stages with bosses. Speed up on slopes, slide while running, jump farther the faster you run |
+| Shutter Heart | Photographer | Yui | Shoot in 5 locations. The framing (viewfinder position, zoom, tilt, camera height), the shooting spot and her random pose and expression become the prompt. Shoot when her biorhythm lines up for a BEST SHOT |
+| Dungeon Heart | First-person 3D dungeon RPG | Sera | 5 floors with bosses. Turn-based command battles and magic. The equipment you find changes her portrait and the generated image. Save and retry |
+| Variant Heart | All-direction shooter | Tsubasa | 5 stages with bosses. The mech, enemies and scenery are drawn with voxel sprite stacking. Transform between fighter (fast; gun and missiles) and robot (slow but sturdy; beam rifle and beam saber) |
 
 Every game except Prompt Typer has 5 hearts per stage (race, match).
 Prompt Typer generates an image after every stage whether you clear it or not (when typing in Japanese or Chinese, use an image model that understands that language).
@@ -467,13 +482,16 @@ Prompt Typer generates an image after every stage whether you clear it or not (w
 | Sky Heart | Arrow keys or WASD move, hold Space or Z to shoot |
 | Smash Heart | Arrow keys move, Z or Space hits, X lobs. Hold ← → at contact to aim. Serve: Z to toss, Z again to hit |
 | Knight Heart | ← → move, Space or X jumps, Z or C attacks (↑+attack throws straight up, ↓+attack in the air straight down), ↓ while running slides |
+| Shutter Heart | Q / E (or 1-3) shooting spot, arrow keys move the viewfinder, Z / X zoom, A / D tilt, W / S camera height, Space shutter (picks a photo on the contact sheet) |
+| Dungeon Heart | ↑ ↓ move, ← → turn, Q / E strafe, Space / Z / Enter examine and decide, X menu (magic, items, equipment) and cancel |
+| Variant Heart | C or Shift transforms. Fighter: ← → (A D) turn left / right (it always flies forward), hold Z or Space for the machine gun, X missiles. Robot: arrow keys (WASD) move, Z or Space beam rifle, X beam saber |
 
-Every game pauses with **Esc** or **P**. A gamepad also works (except in Prompt Typer).
+Every game pauses with **Esc** or **P**. A gamepad also works (except in Prompt Typer and Dungeon Heart).
 The detailed rules of each game are on the **Game Tab** page of the Help tab.
 
 > **Tip**
-> On game over in Knight Heart you can choose to **retry the stage** or **give up**.
-> The defeat scene is generated only when you give up. While paused, **R** restarts the stage for one life.
+> On game over in Knight Heart and Variant Heart you can choose to **retry the stage** or **give up** (in Dungeon Heart: retry **from the last save** or give up).
+> The defeat scene is generated only when you give up. In Knight Heart, **R** while paused restarts the stage for one life.
 
 ---
 

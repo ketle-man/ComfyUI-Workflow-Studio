@@ -27,7 +27,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.10.4-green)
+![Version](https://img.shields.io/badge/version-0.10.5-green)
 
 ## Features (tab -> feature names)
 
@@ -76,7 +76,7 @@ Model Browser, Thumbnail / Table views, Table column sort, Search & Filter, User
 ### TagSpace Tab (v0.9.0)
 Choose tags visually in a 3D latent space, Build / Update, Choosing tags, Explore, Search with a card's or Gallery image's tags, Make a prompt, Tagger fill, Glow / Twinkle, Hover preview, Requirements
 
-### Game Tab (v0.10.0 – v0.10.3, experimental)
+### Game Tab (v0.10.0 – v0.10.5, experimental)
 Game list and How to play, Play, then generate, Star Formation, Turbo Heart, Prompt Typer, Sky Heart, Smash Heart, Shutter Heart, Dungeon Heart, Variant Heart, Knight Heart, An image at every stage clear, Prompts from the game, Settings, For game authors
 
 ### Image Edit Tab (v0.3.65)
@@ -133,12 +133,12 @@ Sample for the Game tab: `ws_game_sdxl_t2i` (v0.10.0, SDXL text-to-image, 1216x8
 
 ## Manual
 
-A beginner-oriented manual (covers v0.10.3, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
+A beginner-oriented manual (covers v0.10.5, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
 
-- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.10.3_en.zip`
-- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.10.3.zip`
+- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.10.5_en.zip`
+- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.10.5.zip`
 
-An EPUB edition with screenshots (Japanese and English, v0.10.3) is available on [Google Drive](https://drive.google.com/drive/folders/14mOHcnLYrFgNrOo6fy7ELyFjjWrAoU-_?usp=sharing).
+An EPUB edition with screenshots (Japanese and English, v0.10.5) is available on [Google Drive](https://drive.google.com/drive/folders/14mOHcnLYrFgNrOo6fy7ELyFjjWrAoU-_?usp=sharing).
 
 ---
 

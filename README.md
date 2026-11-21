@@ -23,7 +23,7 @@ A comprehensive workflow, asset management, and generation UI plugin for [ComfyU
 - Built-in AI tools (translation and more)
 
 ![Workflow Studio](https://img.shields.io/badge/ComfyUI-Custom_Node-blue)
-![Version](https://img.shields.io/badge/version-0.10.4-green)
+![Version](https://img.shields.io/badge/version-0.10.5-green)
 
 ## Screenshots
 
@@ -440,7 +440,7 @@ An experimental batch generator: runs the workflow currently loaded in GenerateU
 </details>
 
 <details>
-<summary><h3>Game Tab (v0.10.0 – v0.10.3, experimental)</h3></summary>
+<summary><h3>Game Tab (v0.10.0 – v0.10.5, experimental)</h3></summary>
 
 - **Game list and How to play** — the left pane lists the game titles; the selected game's overview, controls and image timing are in a collapsible "About" section at the top of the Result tab
 - **Play, then generate** — a tab for mini games that end in image generation. The games come from a separate pack, [ComfyUI-WFS-Games](https://github.com/ketle-man/ComfyUI-WFS-Games); the tab appears only when the pack is installed (Workflow Studio checks `/wfs_games/manifest` on start), so without it nothing changes
@@ -633,12 +633,12 @@ Sample for the Game tab: `ws_game_sdxl_t2i` (v0.10.0, SDXL text-to-image, 1216x8
 
 ## Manual
 
-A beginner-oriented manual (covers v0.10.3, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
+A beginner-oriented manual (covers v0.10.5, text-only edition without screenshots) is available in [`docs/manual/`](docs/manual/):
 
-- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.10.3_en.zip`
-- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.10.3.zip`
+- English: [`docs/manual/en/`](docs/manual/en/) — ZIP: `Workflow_Studio_Manual_v0.10.5_en.zip`
+- 日本語: [`docs/manual/`](docs/manual/) — ZIP: `Workflow_Studio_Manual_v0.10.5.zip`
 
-An EPUB edition with screenshots (Japanese and English, v0.10.3) is available on [Google Drive](https://drive.google.com/drive/folders/14mOHcnLYrFgNrOo6fy7ELyFjjWrAoU-_?usp=sharing).
+An EPUB edition with screenshots (Japanese and English, v0.10.5) is available on [Google Drive](https://drive.google.com/drive/folders/14mOHcnLYrFgNrOo6fy7ELyFjjWrAoU-_?usp=sharing).
 
 ---
 
